@@ -13,9 +13,11 @@ function emptyDefect() { return { id: genId(), description: '', severity: 'minor
 const state = {
   category: null,
   subcategory: null,
-  poNumber: '', factoryCode: '', date: todayStr(), pointCheckRate: '', qaLead: '',
+  poNumber: '', factoryCode: '', date: todayStr(), qaLead: '',
   creator: '', productTitle: '', qaType: 'pre_production',
-  lotSize: '', inspectionLevel: 'II', majorAql: 2.5, minorAql: 4.0,
+  poQuantity: '', inspectionLevel: 'II', majorAql: 2.5, minorAql: 4.0,
+  productRisk: 'medium', actualSpotCheckPercent: '',
+  inspectionLevelTouched: false,
   materials: '', printingMethod: '',
   categoryData: {
     fit: '',
@@ -152,6 +154,55 @@ function computeAqlPlan({ lotSize, inspectionLevel, majorAql, minorAql }) {
     critical: { sampleSize, ac: 0, re: 1, codeLetterUsed: codeLetter },
     major: majorPlan, minor: minorPlan
   };
+}
+
+/* ---------------- AQL RECOMMENDATION (mirrors lib/aqlRecommendation.js) ---------------- */
+
+function getUnitCost(category, subcategory) {
+  const unitCosts = CONFIG.unitCosts;
+  if (!unitCosts) return null;
+  if (category === 'other') return unitCosts.otherCategoryFlat;
+  const catCosts = unitCosts.categories && unitCosts.categories[category];
+  if (!catCosts) return null;
+  if (subcategory && catCosts[subcategory] !== undefined) return catCosts[subcategory];
+  return catCosts.other !== undefined ? catCosts.other : null;
+}
+function computeOrderValue(category, subcategory, poQuantity) {
+  const qty = parseInt(poQuantity, 10);
+  const cost = getUnitCost(category, subcategory);
+  if (isNaN(qty) || qty < 1 || cost === null || cost === undefined) return null;
+  return qty * cost;
+}
+function getPoSizeBand(orderValue) {
+  const cfg = CONFIG.aqlRecommendation;
+  if (orderValue === null || orderValue === undefined || !cfg) return null;
+  const band = cfg.poSizeBands.find((b) => orderValue >= b.min && (b.max === null || orderValue < b.max));
+  return band ? band.key : null;
+}
+function getCreatorTier(creatorName) {
+  const cfg = CONFIG.creatorTiers;
+  if (!cfg) return null;
+  if (creatorName && cfg.tiers[creatorName] !== undefined) return cfg.tiers[creatorName];
+  return cfg.defaultTier;
+}
+function getAqlRecommendation() {
+  const orderValue = computeOrderValue(state.category, state.subcategory, state.poQuantity);
+  if (orderValue === null) return null;
+  const poSizeBand = getPoSizeBand(orderValue);
+  if (!poSizeBand) return null;
+  const tier = getCreatorTier(state.creator);
+  if (!tier) return null;
+  const cfg = CONFIG.aqlRecommendation;
+  const tierTable = cfg && cfg.table[String(tier)];
+  const cell = tierTable && tierTable[state.productRisk] && tierTable[state.productRisk][poSizeBand];
+  if (!cell) return null;
+  return { orderValue, poSizeBand, tier, pointCheck: cell.pointCheck, inspectionLevel: cell.inspectionLevel };
+}
+function levelNumberToRoman(n) { return n === 1 ? 'I' : n === 2 ? 'II' : 'III'; }
+function syncInspectionLevelToRecommendation() {
+  if (state.inspectionLevelTouched) return;
+  const rec = getAqlRecommendation();
+  if (rec) state.inspectionLevel = levelNumberToRoman(rec.inspectionLevel);
 }
 
 /* ---------------- DEFECT COLLECTION (mirrors lib/passFail.js) ---------------- */
@@ -310,7 +361,7 @@ function validateStep(s) {
     required.forEach((f) => {
       if (!state[f] || !String(state[f]).trim()) { markError(f); ok = false; }
     });
-    if (!state.lotSize || parseInt(state.lotSize, 10) < 2) { markError('lotSize'); ok = false; }
+    if (!state.poQuantity || parseInt(state.poQuantity, 10) < 2) { markError('poQuantity'); ok = false; }
     if (!ok) showToast('Please fill in all required fields / 请填写所有必填项', true);
   } else if (name === 'inspectionDetails') {
     ok = validateChecklistStepGeneric(name);
@@ -350,7 +401,7 @@ function getAllValidationProblems() {
   ['poNumber', 'factoryCode', 'date', 'qaLead'].forEach((f) => {
     if (!state[f] || !String(state[f]).trim()) problems.push(bi(f));
   });
-  if (!state.lotSize || parseInt(state.lotSize, 10) < 2) problems.push(bi('lotSize'));
+  if (!state.poQuantity || parseInt(state.poQuantity, 10) < 2) problems.push(bi('poQuantity'));
 
   const detailDefs = checklistDefsForStep('inspectionDetails');
   const sizingDefs = state.category === 'apparel' ? [] : checklistDefsForStep('sizing');
@@ -398,8 +449,8 @@ function computeOverallResult() {
   const allDefects = collectAllDefects();
   const { critical: criticalCount, major: majorCount, minor: minorCount } = sumDefectsBySeverity(allDefects);
 
-  const plan = state.lotSize ? computeAqlPlan({
-    lotSize: state.lotSize, inspectionLevel: state.inspectionLevel, majorAql: state.majorAql, minorAql: state.minorAql
+  const plan = state.poQuantity ? computeAqlPlan({
+    lotSize: state.poQuantity, inspectionLevel: state.inspectionLevel, majorAql: state.majorAql, minorAql: state.minorAql
   }) : null;
 
   let aql;
@@ -508,7 +559,6 @@ function renderOrderInfoStep() {
       ${selectFieldWithOther('factoryCode', 'factoryCode', state.factoryCode, OPTIONS.factoryCodes || [], { required: true })}
       <div class="field-row">
         <div style="flex:1">${dateField('date', 'date', state.date, { required: true })}</div>
-        <div style="flex:1">${selectField('pointCheckRate', 'pointCheckRate', state.pointCheckRate, OPTIONS.pointCheckRates || [], {})}</div>
       </div>
       ${selectFieldWithOther('qaLead', 'qaLead', state.qaLead, OPTIONS.qaLeads || [], { required: true })}
       <div class="field-row">
@@ -526,11 +576,17 @@ function renderOrderInfoStep() {
 
     <div class="card">
       <div class="section-title">${biBlockHtml('aqlReferenceTitle', 'AQL Sampling Reference')}</div>
-      ${numberField('lotSize', 'lotSize', state.lotSize, { required: true, placeholderKey: 'lotSizePlaceholder' })}
+      ${numberField('poQuantity', 'poQuantity', state.poQuantity, { required: true, placeholderKey: 'poQuantityPlaceholder' })}
+      <div class="field">
+        <label class="field-label">${biBlockHtml('productRisk', 'Product Complexity/Risk')}</label>
+        <div class="segmented">
+          ${['high', 'medium', 'low'].map((r) => `<div class="segmented-option ${state.productRisk === r ? 'selected' : ''}" data-seg="productRisk" data-val="${r}">${escapeHtml(bi('risk' + r.charAt(0).toUpperCase() + r.slice(1)).en)}<span class="zh">${escapeHtml(bi('risk' + r.charAt(0).toUpperCase() + r.slice(1)).zh)}</span></div>`).join('')}
+        </div>
+      </div>
       <div class="field">
         <label class="field-label">${biBlockHtml('inspectionLevel', 'Inspection Level')}</label>
         <div class="segmented">
-          ${['I', 'II', 'III'].map((lvl) => `<div class="segmented-option ${state.inspectionLevel === lvl ? 'selected' : ''}" data-seg="inspectionLevel" data-val="${lvl}">${lvl}</div>`).join('')}
+          ${['I', 'II', 'III'].map((lvl) => `<div class="segmented-option ${state.inspectionLevel === lvl ? 'selected' : ''}" data-seg-level="${lvl}">${lvl}</div>`).join('')}
         </div>
       </div>
       <div class="field-row">
@@ -548,8 +604,9 @@ function renderOrderInfoStep() {
 }
 
 function renderAqlLivePreview() {
-  const plan = state.lotSize ? computeAqlPlan({
-    lotSize: state.lotSize, inspectionLevel: state.inspectionLevel, majorAql: state.majorAql, minorAql: state.minorAql
+  syncInspectionLevelToRecommendation();
+  const plan = state.poQuantity ? computeAqlPlan({
+    lotSize: state.poQuantity, inspectionLevel: state.inspectionLevel, majorAql: state.majorAql, minorAql: state.minorAql
   }) : null;
   if (!plan) {
     return `<div class="section-help" style="margin-top:8px;">${escapeHtml(bi('aqlNeedLotSize').en)}<br/>${escapeHtml(bi('aqlNeedLotSize').zh)}</div>`;
@@ -1038,12 +1095,23 @@ function renderReviewStep() {
     ${renderAqlTallyCard()}
 
     <div class="card">
+      <div class="section-title">${biBlockHtml('actualSpotCheckPercent', 'Actual Spot Check Percentage')}</div>
+      <div class="section-help">${escapeHtml(bi('actualSpotCheckHelp').en)}<br/>${escapeHtml(bi('actualSpotCheckHelp').zh)}</div>
+      <div class="field">
+        <select data-bind="actualSpotCheckPercent">
+          <option value="">${escapeHtml(bi('selectPlaceholder').en)} / ${escapeHtml(bi('selectPlaceholder').zh)}</option>
+          ${(OPTIONS.pointCheckRates || []).map((o) => `<option value="${escapeHtml(o)}" ${state.actualSpotCheckPercent === o ? 'selected' : ''}>${escapeHtml(o)}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+
+    <div class="card">
       <div class="review-block">
         <div class="review-block-title">${bi('poInfo').en} / ${bi('poInfo').zh}</div>
         ${reviewRow('poNumber', state.poNumber)}
         ${reviewRow('factoryCode', state.factoryCode)}
         ${reviewRow('date', state.date)}
-        ${reviewRow('lotSize', state.lotSize)}
+        ${reviewRow('poQuantity', state.poQuantity)}
         ${reviewRow('qaLead', state.qaLead)}
         ${reviewRow('creator', state.creator)}
         <div class="review-row"><span class="k">Category / 类别</span><span class="v">${escapeHtml(catLabel.en)} ${escapeHtml(catLabel.zh)}</span></div>
@@ -1092,6 +1160,9 @@ function attachStepHandlers(name) {
       state[el.getAttribute('data-bind-live')] = e.target.value;
       const preview = document.getElementById('aqlLivePreview');
       if (preview) preview.innerHTML = renderAqlLivePreview();
+      document.querySelectorAll('[data-seg-level]').forEach((btn) => {
+        btn.classList.toggle('selected', btn.getAttribute('data-seg-level') === state.inspectionLevel);
+      });
     });
   });
 
@@ -1119,6 +1190,13 @@ function attachStepHandlers(name) {
     document.querySelectorAll('[data-seg]').forEach((el) => {
       el.addEventListener('click', () => {
         state[el.getAttribute('data-seg')] = el.getAttribute('data-val');
+        render();
+      });
+    });
+    document.querySelectorAll('[data-seg-level]').forEach((el) => {
+      el.addEventListener('click', () => {
+        state.inspectionLevel = el.getAttribute('data-seg-level');
+        state.inspectionLevelTouched = true;
         render();
       });
     });
@@ -1339,12 +1417,13 @@ async function submitReport() {
       poNumber: state.poNumber,
       factoryCode: state.factoryCode,
       date: state.date,
-      pointCheckRate: state.pointCheckRate,
       qaLead: state.qaLead,
       creator: state.creator,
       productTitle: state.productTitle,
       qaType: state.qaType,
-      lotSize: state.lotSize,
+      poQuantity: state.poQuantity,
+      productRisk: state.productRisk,
+      actualSpotCheckPercent: state.actualSpotCheckPercent,
       inspectionLevel: state.inspectionLevel,
       majorAql: state.majorAql,
       minorAql: state.minorAql,
@@ -1420,9 +1499,10 @@ function resetApp() {
   otherModeFlags.qaLead = false;
   Object.assign(state, {
     category: null, subcategory: null,
-    poNumber: '', factoryCode: '', date: todayStr(), pointCheckRate: '', qaLead: '',
+    poNumber: '', factoryCode: '', date: todayStr(), qaLead: '',
     creator: '', productTitle: '', qaType: 'pre_production',
-    lotSize: '', inspectionLevel: 'II', majorAql: 2.5, minorAql: 4.0,
+    poQuantity: '', inspectionLevel: 'II', majorAql: 2.5, minorAql: 4.0,
+    productRisk: 'medium', actualSpotCheckPercent: '', inspectionLevelTouched: false,
     materials: '', printingMethod: '',
     categoryData: {
       fit: '', sizeRows: [],

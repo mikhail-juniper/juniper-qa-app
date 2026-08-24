@@ -225,3 +225,39 @@ team are:
 
 I'm happy to help with either of those once you're ready.
 
+
+---
+
+## AQL recommendation is now automatic
+
+Instead of manually picking Inspection Level and a Point Check %, the app now
+recommends both automatically based on your actual company policy:
+
+- **PO Quantity** (renamed from Lot Size) x a rough per-unit cost (by category/
+  subcategory, see `config/unitCosts.json`) estimates the **Order Value**.
+- Order Value buckets into a **PO Size** band (>$20k, $5-20k, <$5k).
+- The selected **Creator** maps to a **QA Tier** (1/2/3) via `config/creatorTiers.json`
+  - all 218 creators from your Creator_List_QA.xlsx are pre-loaded, with a default
+  tier of 2 for anyone not listed.
+- **Product Complexity/Risk** (High/Medium/Low) is a new required field you set per
+  report.
+- Tier x Risk x PO Size looks up a recommended Inspection Level + Point Check % range
+  in `config/aqlRecommendation.json` (this is the reduced form of your spreadsheet -
+  every creator sharing a tier had identical recommendations, so it collapses to a
+  clean 27-cell table instead of 218 rows).
+
+The recommended Inspection Level auto-fills the existing Inspection Level control,
+but you can still override it manually if needed - once you touch it, the app stops
+auto-following the recommendation for that report.
+
+**Actual Spot Check Percentage** moved out of the top Order Info section to the
+Review step, since it's the real, as-inspected number (which may differ from the
+recommendation during busy periods) rather than an upfront input.
+
+All three new datasets (Creator Tiers, the AQL Recommendation table, and Unit Costs)
+are editable from the Settings page (gear icon on the category screen) - no code
+changes needed if tiers, policy, or costs change.
+
+**"Additional Issues" is now framed as "Tolerance & Placement Issues"** - for finer
+issues like an off-center graphic or a slightly misaligned print, since the sections
+above already cover major issues like material and construction.

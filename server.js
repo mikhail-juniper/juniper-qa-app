@@ -8,20 +8,22 @@ const nodemailer = require('nodemailer');
 
 const { buildPdf } = require('./lib/pdfBuilder');
 const { computeOverallResult } = require('./lib/passFail');
+const { getRecommendation } = require('./lib/aqlRecommendation');
 const fits = require('./config/fits.json');
 const i18n = require('./config/i18n.json');
 const categories = require('./config/categories.json');
 const aqlTable = require('./config/aql.json');
 
 const OPTIONS_PATH = path.join(__dirname, 'config', 'options.json');
+const CREATOR_TIERS_PATH = path.join(__dirname, 'config', 'creatorTiers.json');
+const AQL_RECOMMENDATION_PATH = path.join(__dirname, 'config', 'aqlRecommendation.json');
+const UNIT_COSTS_PATH = path.join(__dirname, 'config', 'unitCosts.json');
 const EDITABLE_OPTION_LISTS = ['creators', 'factoryCodes', 'qaLeads'];
 
-function loadOptions() {
-  return JSON.parse(fs.readFileSync(OPTIONS_PATH, 'utf8'));
-}
-function saveOptions(newOptions) {
-  fs.writeFileSync(OPTIONS_PATH, JSON.stringify(newOptions, null, 2));
-}
+function loadJson(p) { return JSON.parse(fs.readFileSync(p, 'utf8')); }
+function saveJson(p, data) { fs.writeFileSync(p, JSON.stringify(data, null, 2)); }
+function loadOptions() { return loadJson(OPTIONS_PATH); }
+function saveOptions(newOptions) { saveJson(OPTIONS_PATH, newOptions); }
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -40,15 +42,102 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/submissions', express.static(path.join(__dirname, 'submissions')));
 
 // Serve the fit library + translations + dropdown options + category tree + AQL
-// reference table to the frontend
+// reference table + creator tiers + recommendation table + unit costs to the frontend
 app.get('/api/config', (req, res) => {
   res.json({
     fits,
     i18n,
     options: loadOptions(),
     categories,
-    aql: aqlTable
+    aql: aqlTable,
+    creatorTiers: loadJson(CREATOR_TIERS_PATH),
+    aqlRecommendation: loadJson(AQL_RECOMMENDATION_PATH),
+    unitCosts: loadJson(UNIT_COSTS_PATH)
   });
+});
+
+// ---- Settings: creator tiers (name -> 1/2/3) ----
+app.get('/api/creator-tiers', (req, res) => res.json(loadJson(CREATOR_TIERS_PATH)));
+app.post('/api/creator-tiers', (req, res) => {
+  try {
+    const current = loadJson(CREATOR_TIERS_PATH);
+    const body = req.body || {};
+    if (body.tiers && typeof body.tiers === 'object') {
+      const cleaned = {};
+      Object.entries(body.tiers).forEach(([name, tier]) => {
+        const n = String(name).trim();
+        const t = parseInt(tier, 10);
+        if (n && [1, 2, 3].includes(t)) cleaned[n] = t;
+      });
+      current.tiers = cleaned;
+    }
+    if (body.defaultTier && [1, 2, 3].includes(parseInt(body.defaultTier, 10))) {
+      current.defaultTier = parseInt(body.defaultTier, 10);
+    }
+    saveJson(CREATOR_TIERS_PATH, current);
+    res.json({ ok: true, creatorTiers: current });
+  } catch (err) {
+    console.error('Failed to save creator tiers:', err);
+    res.status(500).json({ error: 'Failed to save creator tiers', detail: String(err.message || err) });
+  }
+});
+
+// ---- Settings: AQL recommendation table (Tier x Risk x PO Size) ----
+app.get('/api/aql-recommendation', (req, res) => res.json(loadJson(AQL_RECOMMENDATION_PATH)));
+app.post('/api/aql-recommendation', (req, res) => {
+  try {
+    const current = loadJson(AQL_RECOMMENDATION_PATH);
+    const body = req.body || {};
+    if (body.table && typeof body.table === 'object') {
+      ['1', '2', '3'].forEach((tier) => {
+        if (!body.table[tier]) return;
+        ['high', 'medium', 'low'].forEach((risk) => {
+          if (!body.table[tier][risk]) return;
+          ['>20k', '5-20k', '<5k'].forEach((band) => {
+            const cell = body.table[tier][risk][band];
+            if (cell && cell.pointCheck && [1, 2, 3].includes(parseInt(cell.inspectionLevel, 10))) {
+              current.table[tier][risk][band] = {
+                pointCheck: String(cell.pointCheck).trim(),
+                inspectionLevel: parseInt(cell.inspectionLevel, 10)
+              };
+            }
+          });
+        });
+      });
+    }
+    saveJson(AQL_RECOMMENDATION_PATH, current);
+    res.json({ ok: true, aqlRecommendation: current });
+  } catch (err) {
+    console.error('Failed to save AQL recommendation table:', err);
+    res.status(500).json({ error: 'Failed to save AQL recommendation table', detail: String(err.message || err) });
+  }
+});
+
+// ---- Settings: unit costs (category/subcategory -> $) ----
+app.get('/api/unit-costs', (req, res) => res.json(loadJson(UNIT_COSTS_PATH)));
+app.post('/api/unit-costs', (req, res) => {
+  try {
+    const current = loadJson(UNIT_COSTS_PATH);
+    const body = req.body || {};
+    if (body.categories && typeof body.categories === 'object') {
+      Object.entries(body.categories).forEach(([cat, subs]) => {
+        if (!current.categories[cat] || typeof subs !== 'object') return;
+        Object.entries(subs).forEach(([sub, cost]) => {
+          const n = parseFloat(cost);
+          if (!isNaN(n) && n >= 0) current.categories[cat][sub] = n;
+        });
+      });
+    }
+    if (body.otherCategoryFlat !== undefined) {
+      const n = parseFloat(body.otherCategoryFlat);
+      if (!isNaN(n) && n >= 0) current.otherCategoryFlat = n;
+    }
+    saveJson(UNIT_COSTS_PATH, current);
+    res.json({ ok: true, unitCosts: current });
+  } catch (err) {
+    console.error('Failed to save unit costs:', err);
+    res.status(500).json({ error: 'Failed to save unit costs', detail: String(err.message || err) });
+  }
 });
 
 // ---- Settings: read/update the editable dropdown option lists ----
@@ -101,7 +190,11 @@ app.post('/api/submit', upload.any(), async (req, res) => {
 
     const submissionId = uuidv4();
     const overallResult = computeOverallResult(payload, fits);
-    const pdfBuffer = await buildPdf(payload, filesByField, fits, i18n, overallResult, categories);
+    const recommendation = getRecommendation(
+      { category: payload.category, subcategory: payload.subcategory, poQuantity: payload.poQuantity, creator: payload.creator, risk: payload.productRisk },
+      { unitCosts: loadJson(UNIT_COSTS_PATH), aqlRecConfig: loadJson(AQL_RECOMMENDATION_PATH), creatorTiersConfig: loadJson(CREATOR_TIERS_PATH) }
+    );
+    const pdfBuffer = await buildPdf(payload, filesByField, fits, i18n, overallResult, categories, recommendation);
 
     const fileSafePo = (payload.poNumber || 'QA-Report').replace(/[^a-z0-9\-_]+/gi, '_');
     const pdfFilename = `${fileSafePo}_QA_Report_${submissionId.slice(0, 8)}.pdf`;
