@@ -1,0 +1,129 @@
+{
+  "_readme": "PLACEHOLDER DATA. Replace the 'standard' values below with your real approved measurements per size, in inches. Do not delete a size row, just fill in the numbers. 'points' defines which measurement columns show up on the QA form for that fit (must match the keys used in each size's 'standard' object). Add new fits by copying an existing block and giving it a unique key.",
+  "toleranceInches": 0.5,
+  "fits": {
+    "hoodie_standard": {
+      "label_en": "Hoodie - Standard Fit",
+      "label_zh": "连帽卫衣 - 标准版型",
+      "points": ["chest", "length", "sleeve"],
+      "pointLabels": {
+        "chest": { "en": "Chest Width", "zh": "胸宽" },
+        "length": { "en": "Length", "zh": "衣长" },
+        "sleeve": { "en": "Sleeve Length", "zh": "袖长" }
+      },
+      "sizes": {
+        "Youth XS": { "chest": 0, "length": 0, "sleeve": 0 },
+        "Youth S":  { "chest": 0, "length": 0, "sleeve": 0 },
+        "Youth M":  { "chest": 0, "length": 0, "sleeve": 0 },
+        "Youth L":  { "chest": 0, "length": 0, "sleeve": 0 },
+        "Youth XL": { "chest": 0, "length": 0, "sleeve": 0 },
+        "Adult XS": { "chest": 0, "length": 0, "sleeve": 0 },
+        "Adult S":  { "chest": 0, "length": 0, "sleeve": 0 },
+        "Adult M":  { "chest": 0, "length": 0, "sleeve": 0 },
+        "Adult L":  { "chest": 0, "length": 0, "sleeve": 0 },
+        "Adult XL": { "chest": 0, "length": 0, "sleeve": 0 },
+        "Adult 2XL":{ "chest": 0, "length": 0, "sleeve": 0 },
+        "Adult 3XL":{ "chest": 0, "length": 0, "sleeve": 0 }
+      }
+    },
+    "hoodie_oversized": {
+      "label_en": "Hoodie - Oversized Fit",
+      "label_zh": "连帽卫衣 - 宽松版型",
+      "points": ["chest", "length", "sleeve"],
+      "pointLabels": {
+        "chest": { "en": "Chest Width", "zh": "胸宽" },
+        "length": { "en": "Length", "zh": "衣长" },
+        "sleeve": { "en": "Sleeve Length", "zh": "袖长" }
+      },
+      "sizes": {
+        "Adult S":  { "chest": 0, "length": 0, "sleeve": 0 },
+        "Adult M":  { "chest": 0, "length": 0, "sleeve": 0 },
+        "Adult L":  { "chest": 0, "length": 0, "sleeve": 0 },
+        "Adult XL": { "chest": 0, "length": 0, "sleeve": 0 },
+        "Adult 2XL":{ "chest": 0, "length": 0, "sleeve": 0 }
+      }
+    },
+    "tshirt_standard": {
+      "label_en": "T-Shirt - Standard Fit",
+      "label_zh": "T恤 - 标准版型",
+      "points": ["chest", "length", "sleeve"],
+      "pointLabels": {
+        "chest": { "en": "Chest Width", "zh": "胸宽" },
+        "length": { "en": "Length", "zh": "衣长" },
+        "sleeve": { "en": "Sleeve Length", "zh": "袖长" }
+      },
+      "sizes": {
+        "Youth XS": { "chest": 0, "length": 0, "sleeve": 0 },
+        "Youth S":  { "chest": 0, "length": 0, "sleeve": 0 },
+        "Youth M":  { "chest": 0, "length": 0, "sleeve": 0 },
+        "Youth L":  { "chest": 0, "length": 0, "sleeve": 0 },
+        "Youth XL": { "chest": 0, "length": 0, "sleeve": 0 },
+        "Adult S":  { "chest": 0, "length": 0, "sleeve": 0 },
+        "Adult M":  { "chest": 0, "length": 0, "sleeve": 0 },
+        "Adult L":  { "chest": 0, "length": 0, "sleeve": 0 },
+        "Adult XL": { "chest": 0, "length": 0, "sleeve": 0 },
+        "Adult 2XL":{ "chest": 0, "length": 0, "sleeve": 0 }
+      }
+    },
+    "tshirt_oversized": {
+      "label_en": "T-Shirt - Oversized Fit",
+      "label_zh": "T恤 - 宽松版型",
+      "points": ["chest", "length", "sleeve"],
+      "pointLabels": {
+        "chest": { "en": "Chest Width", "zh": "胸宽" },
+        "length": { "en": "Length", "zh": "衣长" },
+        "sleeve": { "en": "Sleeve Length", "zh": "袖长" }
+      },
+      "sizes": {
+        "Adult S":  { "chest": 0, "length": 0, "sleeve": 0 },
+        "Adult M":  { "chest": 0, "length": 0, "sleeve": 0 },
+        "Adult L":  { "chest": 0, "length": 0, "sleeve": 0 },
+        "Adult XL": { "chest": 0, "length": 0, "sleeve": 0 }
+      }
+    },
+    "sweater_standard": {
+      "label_en": "Sweater - Standard Fit",
+      "label_zh": "毛衣 - 标准版型",
+      "points": ["sleeve", "width", "length"],
+      "pointLabels": {
+        "sleeve": { "en": "Sleeve", "zh": "袖长" },
+        "width": { "en": "Width", "zh": "胸宽" },
+        "length": { "en": "Length", "zh": "衣长" }
+      },
+      "sizes": {
+        "Youth XS": { "sleeve": 0, "width": 0, "length": 0 },
+        "Youth S":  { "sleeve": 0, "width": 0, "length": 0 },
+        "Youth M":  { "sleeve": 0, "width": 0, "length": 0 },
+        "Youth L":  { "sleeve": 0, "width": 0, "length": 0 },
+        "Youth XL": { "sleeve": 0, "width": 0, "length": 0 },
+        "Adult XS": { "sleeve": 0, "width": 0, "length": 0 },
+        "Adult S":  { "sleeve": 0, "width": 0, "length": 0 },
+        "Adult M":  { "sleeve": 0, "width": 0, "length": 0 },
+        "Adult L":  { "sleeve": 0, "width": 0, "length": 0 },
+        "Adult XL": { "sleeve": 0, "width": 0, "length": 0 },
+        "Adult 2XL":{ "sleeve": 0, "width": 0, "length": 0 },
+        "Adult 3XL":{ "sleeve": 0, "width": 0, "length": 0 }
+      }
+    },
+    "sweatpants_standard": {
+      "label_en": "Sweatpants - Standard Fit",
+      "label_zh": "运动裤 - 标准版型",
+      "points": ["waist", "inseam", "length"],
+      "pointLabels": {
+        "waist": { "en": "Waist", "zh": "腰围" },
+        "inseam": { "en": "Inseam", "zh": "内长" },
+        "length": { "en": "Length", "zh": "裤长" }
+      },
+      "sizes": {
+        "Youth XS": { "waist": 0, "inseam": 0, "length": 0 },
+        "Youth S":  { "waist": 0, "inseam": 0, "length": 0 },
+        "Youth M":  { "waist": 0, "inseam": 0, "length": 0 },
+        "Youth L":  { "waist": 0, "inseam": 0, "length": 0 },
+        "Adult S":  { "waist": 0, "inseam": 0, "length": 0 },
+        "Adult M":  { "waist": 0, "inseam": 0, "length": 0 },
+        "Adult L":  { "waist": 0, "inseam": 0, "length": 0 },
+        "Adult XL": { "waist": 0, "inseam": 0, "length": 0 }
+      }
+    }
+  }
+}
