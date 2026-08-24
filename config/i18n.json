@@ -106,5 +106,17 @@
   "selectFitRequired": { "en": "Please select a fit and enter at least one measurement", "zh": "请选择版型并至少输入一项测量值" },
   "reviewIssuesTitle": { "en": "Before you submit", "zh": "提交前请检查" },
   "allChecksRequired": { "en": "Please mark Pass, Fail, or N/A for every check", "zh": "请为每项检查选择合格、不合格或不适用" },
-  "sizingPhotos": { "en": "Sizing Photos", "zh": "尺寸照片" }
+  "sizingPhotos": { "en": "Sizing Photos", "zh": "尺寸照片" },
+  "processingPhotos": { "en": "Processing photo(s)...", "zh": "正在处理照片..." },
+  "photoTooLarge": { "en": "That photo could not be processed. Please try a different one.", "zh": "该照片无法处理，请尝试其他照片。" },
+  "other": { "en": "Other", "zh": "其他" },
+  "otherPlaceholder": { "en": "Enter value", "zh": "请输入" },
+  "settingsTitle": { "en": "Settings", "zh": "设置" },
+  "manageDropdowns": { "en": "Manage Dropdown Lists", "zh": "管理下拉列表" },
+  "manageDropdownsHelp": { "en": "Add or remove options for Factory Code, Creator/Brand, and QA/QC Lead. Changes apply immediately for everyone using this app.", "zh": "添加或删除工厂代码、创作者/品牌方、QA/QC负责人的选项。更改将立即对所有使用此应用的人生效。" },
+  "addOption": { "en": "Add", "zh": "添加" },
+  "saveSettings": { "en": "Save Changes", "zh": "保存更改" },
+  "settingsSaved": { "en": "Settings saved", "zh": "设置已保存" },
+  "settingsSaveError": { "en": "Failed to save settings", "zh": "保存设置失败" },
+  "backToApp": { "en": "Back to App", "zh": "返回应用" }
 }

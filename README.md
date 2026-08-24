@@ -86,6 +86,20 @@ need — flag it and we'll adjust before moving to the real deployment.
   required fail-photos are attached, and (for Apparel) a fit is picked with at least
   one measurement entered. Anything still missing shows up in a red list on the Review
   screen.
+- **"Other" option** on Factory Code, Creator/Brand, and QA/QC Lead dropdowns — picking
+  it reveals a text box for a one-off custom value. That value is only used for that
+  report; if it should be a permanent option going forward, add it via Settings (see
+  below).
+- **Settings page** — a gear icon on the first screen (category selection) opens
+  `settings.html`, where you can add or remove entries in the Factory Code,
+  Creator/Brand, and QA/QC Lead lists. Changes save to `config/options.json` on the
+  server and apply immediately for everyone using the app - no redeploy needed. Point
+  Check Rate isn't editable here since it's a fixed 10-100% scale.
+- **Mobile photo uploads** now get resized and compressed in the browser before being
+  held in memory or uploaded (down to roughly 100-400KB each, from several MB straight
+  off a phone camera). This should fix the low-memory crash when adding new photos on
+  a phone. If it still happens on a particular device, let me know - it likely means
+  that device needs an even smaller size cap than the current default.
 
 ---
 

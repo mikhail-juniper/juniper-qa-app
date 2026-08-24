@@ -34,6 +34,11 @@ const state = {
 let step = 0;
 const STEPS = ['category', 'orderInfo', 'inspectionDetails', 'sizing', 'photos', 'issues', 'review'];
 
+// Tracks whether the person has chosen "Other" for a given field and is typing a
+// custom value - kept outside `state` since it's pure UI state, not submitted data.
+const otherModeFlags = { factoryCode: false, creator: false, qaLead: false };
+const OTHER_VALUE = '__other__';
+
 // Maps each checklist item to the section-photo bucket it requires a photo in when failed.
 const CHECKLIST_SECTION_MAP = {
   fabricColorMatch: 'fabric', fabricWeightMatch: 'fabric',
@@ -343,6 +348,9 @@ function renderCategoryStep() {
     { key: 'other', icon: '📦', labelKey: 'other' }
   ];
   return `
+    <div style="display:flex; justify-content:flex-end; margin-bottom:4px;">
+      <a href="settings.html" class="settings-link" title="Settings">⚙️ ${escapeHtml(bi('settingsTitle').en)}</a>
+    </div>
     <div class="step-eyebrow">${biHtml('step', 'Step')} 1 / 7</div>
     <div class="step-title">Select Product Category<span class="zh">选择产品类别</span></div>
     <div class="category-grid">
@@ -371,14 +379,14 @@ function renderOrderInfoStep() {
     <div class="step-title">Order Information<span class="zh">订单信息</span></div>
     <div class="card">
       ${textField('poNumber', 'poNumber', state.poNumber, { required: true, placeholderKey: 'poNumberPlaceholder' })}
-      ${selectField('factoryCode', 'factoryCode', state.factoryCode, OPTIONS.factoryCodes || [], { required: true })}
+      ${selectFieldWithOther('factoryCode', 'factoryCode', state.factoryCode, OPTIONS.factoryCodes || [], { required: true })}
       <div class="field-row">
         <div style="flex:1">${dateField('date', 'date', state.date, { required: true })}</div>
         <div style="flex:1">${selectField('pointCheckRate', 'pointCheckRate', state.pointCheckRate, OPTIONS.pointCheckRates || [], {})}</div>
       </div>
-      ${selectField('qaLead', 'qaLead', state.qaLead, OPTIONS.qaLeads || [], { required: true })}
+      ${selectFieldWithOther('qaLead', 'qaLead', state.qaLead, OPTIONS.qaLeads || [], { required: true })}
       <div class="field-row">
-        <div style="flex:1">${selectField('creator', 'creator', state.creator, OPTIONS.creators || [], {})}</div>
+        <div style="flex:1">${selectFieldWithOther('creator', 'creator', state.creator, OPTIONS.creators || [], {})}</div>
         <div style="flex:1">${textField('productTitle', 'productTitle', state.productTitle, {})}</div>
       </div>
       <div class="field">
@@ -426,6 +434,26 @@ function selectField(id, i18nKey, value, optionsList, opts = {}) {
         <option value="">${escapeHtml(ph.en)} / ${escapeHtml(ph.zh)}</option>
         ${opts_html}
       </select>
+    </div>
+  `;
+}
+
+function selectFieldWithOther(id, i18nKey, value, optionsList, opts = {}) {
+  const l = bi(i18nKey);
+  const ph = bi('selectPlaceholder');
+  const otherLabel = bi('other');
+  const isOther = otherModeFlags[id] || (!!value && !optionsList.includes(value));
+  const opts_html = optionsList.map((o) => `<option value="${escapeHtml(o)}" ${!isOther && value === o ? 'selected' : ''}>${escapeHtml(o)}</option>`).join('');
+  const otherPh = bi('otherPlaceholder');
+  return `
+    <div class="field" data-field="${id}">
+      <label class="field-label">${escapeHtml(l.en)} <span class="zh">${escapeHtml(l.zh)}</span>${opts.required ? '<span class="required">*</span>' : ''}</label>
+      <select data-select-other="${id}">
+        <option value="">${escapeHtml(ph.en)} / ${escapeHtml(ph.zh)}</option>
+        ${opts_html}
+        <option value="${OTHER_VALUE}" ${isOther ? 'selected' : ''}>${escapeHtml(otherLabel.en)} / ${escapeHtml(otherLabel.zh)}</option>
+      </select>
+      ${isOther ? `<input type="text" data-other-text="${id}" value="${escapeHtml(value || '')}" placeholder="${escapeHtml(otherPh.en)} / ${escapeHtml(otherPh.zh)}" style="margin-top:8px;" />` : ''}
     </div>
   `;
 }
@@ -840,6 +868,25 @@ function attachStepHandlers(name) {
         render();
       });
     });
+    document.querySelectorAll('[data-select-other]').forEach((el) => {
+      el.addEventListener('change', (e) => {
+        const id = el.getAttribute('data-select-other');
+        if (e.target.value === OTHER_VALUE) {
+          otherModeFlags[id] = true;
+          state[id] = '';
+        } else {
+          otherModeFlags[id] = false;
+          state[id] = e.target.value;
+        }
+        render();
+      });
+    });
+    document.querySelectorAll('[data-other-text]').forEach((el) => {
+      el.addEventListener('input', (e) => {
+        const id = el.getAttribute('data-other-text');
+        state[id] = e.target.value;
+      });
+    });
   }
 
   if (name === 'inspectionDetails' || name === 'sizing') {
@@ -944,14 +991,33 @@ function updateSizeCellInPlace(ridx, point) {
 
 function attachPhotoHandlers() {
   document.querySelectorAll('[data-photo-input]').forEach((el) => {
-    el.addEventListener('change', (e) => {
+    el.addEventListener('change', async (e) => {
       const fieldId = el.getAttribute('data-photo-input');
       const files = Array.from(e.target.files || []);
+      if (!files.length) return;
       const arr = getPhotoArray(fieldId);
-      files.forEach((f) => {
-        f._url = URL.createObjectURL(f);
-        arr.push(f);
-      });
+
+      // Reset the input immediately so the same photo can be re-picked later if needed,
+      // and so iOS releases its reference to the original (often very large) capture.
+      el.value = '';
+
+      showToast(bi('processingPhotos').en + ' / ' + bi('processingPhotos').zh);
+      for (const f of files) {
+        try {
+          const compressed = await compressImage(f);
+          compressed._url = URL.createObjectURL(compressed);
+          arr.push(compressed);
+        } catch (err) {
+          console.error('Photo compression failed, storing original', err);
+          try {
+            f._url = URL.createObjectURL(f);
+            arr.push(f);
+          } catch (e2) {
+            console.error('Could not store photo at all', e2);
+            showToast(bi('photoTooLarge').en + ' / ' + bi('photoTooLarge').zh, true);
+          }
+        }
+      }
       render();
     });
   });
@@ -960,9 +1026,65 @@ function attachPhotoHandlers() {
       const fieldId = el.getAttribute('data-photo-remove');
       const idx = parseInt(el.getAttribute('data-photo-idx'), 10);
       const arr = getPhotoArray(fieldId);
+      const removed = arr[idx];
+      if (removed && removed._url) {
+        URL.revokeObjectURL(removed._url);
+      }
       arr.splice(idx, 1);
       render();
     });
+  });
+}
+
+/**
+ * Downscales and re-compresses a photo on a canvas before it's kept in memory or
+ * uploaded. Phone cameras can produce 4000px+ / 5-15MB images; holding several of
+ * those as raw Files (plus their preview object URLs) is what was crashing mobile
+ * browsers with an out-of-memory error. Resizing to a reasonable max dimension and
+ * re-encoding as JPEG cuts that down to roughly 100-400KB per photo, while staying
+ * plenty sharp for QA documentation.
+ */
+function compressImage(file, maxDim = 1600, quality = 0.8) {
+  return new Promise((resolve, reject) => {
+    if (!file.type || !file.type.startsWith('image/')) {
+      resolve(file);
+      return;
+    }
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round(height * (maxDim / width));
+            width = maxDim;
+          } else {
+            width = Math.round(width * (maxDim / height));
+            height = maxDim;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob((blob) => {
+          URL.revokeObjectURL(objectUrl);
+          if (!blob) { reject(new Error('canvas produced no blob')); return; }
+          blob.name = (file.name || 'photo').replace(/\.\w+$/, '') + '.jpg';
+          resolve(blob);
+        }, 'image/jpeg', quality);
+      } catch (err) {
+        URL.revokeObjectURL(objectUrl);
+        reject(err);
+      }
+    };
+    img.onerror = (err) => {
+      URL.revokeObjectURL(objectUrl);
+      reject(err);
+    };
+    img.src = objectUrl;
   });
 }
 
@@ -1066,6 +1188,9 @@ function renderSuccessScreen(result = {}) {
 }
 
 function resetApp() {
+  otherModeFlags.factoryCode = false;
+  otherModeFlags.creator = false;
+  otherModeFlags.qaLead = false;
   Object.assign(state, {
     category: null,
     poNumber: '', factoryCode: '', date: todayStr(), pointCheckRate: '', qaLead: '',

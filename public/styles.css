@@ -563,3 +563,39 @@ input:focus, select:focus, textarea:focus {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* --- Settings page --- */
+.settings-link {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--jc-teal-dark);
+  text-decoration: none;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--jc-mint-light);
+}
+.settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.settings-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  background: var(--jc-mint-light);
+  border-radius: 8px;
+  font-size: 13.5px;
+}
+.settings-remove {
+  background: none;
+  border: none;
+  color: var(--jc-fail);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 6px;
+  flex-shrink: 0;
+}
+

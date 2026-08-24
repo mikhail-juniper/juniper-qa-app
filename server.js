@@ -10,7 +10,16 @@ const { buildPdf } = require('./lib/pdfBuilder');
 const { computeOverallResult } = require('./lib/passFail');
 const fits = require('./config/fits.json');
 const i18n = require('./config/i18n.json');
-const options = require('./config/options.json');
+
+const OPTIONS_PATH = path.join(__dirname, 'config', 'options.json');
+const EDITABLE_OPTION_LISTS = ['creators', 'factoryCodes', 'qaLeads'];
+
+function loadOptions() {
+  return JSON.parse(fs.readFileSync(OPTIONS_PATH, 'utf8'));
+}
+function saveOptions(newOptions) {
+  fs.writeFileSync(OPTIONS_PATH, JSON.stringify(newOptions, null, 2));
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -30,7 +39,34 @@ app.use('/submissions', express.static(path.join(__dirname, 'submissions')));
 
 // Serve the fit library + translations + dropdown options to the frontend
 app.get('/api/config', (req, res) => {
-  res.json({ fits, i18n, options });
+  res.json({ fits, i18n, options: loadOptions() });
+});
+
+// ---- Settings: read/update the editable dropdown option lists ----
+// (creators, factoryCodes, qaLeads - pointCheckRates is a fixed scale, not editable here)
+app.get('/api/options', (req, res) => {
+  res.json(loadOptions());
+});
+
+app.post('/api/options', (req, res) => {
+  try {
+    const current = loadOptions();
+    const body = req.body || {};
+    EDITABLE_OPTION_LISTS.forEach((key) => {
+      if (Array.isArray(body[key])) {
+        const cleaned = body[key]
+          .map((v) => String(v).trim())
+          .filter((v) => v.length > 0);
+        // de-dupe while preserving order
+        current[key] = [...new Set(cleaned)];
+      }
+    });
+    saveOptions(current);
+    res.json({ ok: true, options: current });
+  } catch (err) {
+    console.error('Failed to save options:', err);
+    res.status(500).json({ error: 'Failed to save options', detail: String(err.message || err) });
+  }
 });
 
 app.get('/health', (req, res) => res.json({ ok: true }));
