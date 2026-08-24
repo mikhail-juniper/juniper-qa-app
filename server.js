@@ -10,6 +10,8 @@ const { buildPdf } = require('./lib/pdfBuilder');
 const { computeOverallResult } = require('./lib/passFail');
 const fits = require('./config/fits.json');
 const i18n = require('./config/i18n.json');
+const categories = require('./config/categories.json');
+const aqlTable = require('./config/aql.json');
 
 const OPTIONS_PATH = path.join(__dirname, 'config', 'options.json');
 const EDITABLE_OPTION_LISTS = ['creators', 'factoryCodes', 'qaLeads'];
@@ -37,9 +39,16 @@ app.use(express.static(path.join(__dirname, 'public')));
 // or locking this down before a real production deployment.
 app.use('/submissions', express.static(path.join(__dirname, 'submissions')));
 
-// Serve the fit library + translations + dropdown options to the frontend
+// Serve the fit library + translations + dropdown options + category tree + AQL
+// reference table to the frontend
 app.get('/api/config', (req, res) => {
-  res.json({ fits, i18n, options: loadOptions() });
+  res.json({
+    fits,
+    i18n,
+    options: loadOptions(),
+    categories,
+    aql: aqlTable
+  });
 });
 
 // ---- Settings: read/update the editable dropdown option lists ----
@@ -92,7 +101,7 @@ app.post('/api/submit', upload.any(), async (req, res) => {
 
     const submissionId = uuidv4();
     const overallResult = computeOverallResult(payload, fits);
-    const pdfBuffer = await buildPdf(payload, filesByField, fits, i18n, overallResult);
+    const pdfBuffer = await buildPdf(payload, filesByField, fits, i18n, overallResult, categories);
 
     const fileSafePo = (payload.poNumber || 'QA-Report').replace(/[^a-z0-9\-_]+/gi, '_');
     const pdfFilename = `${fileSafePo}_QA_Report_${submissionId.slice(0, 8)}.pdf`;

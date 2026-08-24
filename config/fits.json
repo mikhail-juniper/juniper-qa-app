@@ -85,7 +85,8 @@
           "width": 30.3,
           "sleeve": 38.4
         }
-      }
+      },
+      "group": "crewnecks"
     },
     "crewnecks_drop_shoulder": {
       "label_en": "Crewneck - Drop Shoulder",
@@ -170,7 +171,8 @@
           "width": 30.3,
           "sleeve": 38.4
         }
-      }
+      },
+      "group": "crewnecks"
     },
     "crewnecks_raglan_sleeves": {
       "label_en": "Crewneck - Raglan Sleeves",
@@ -255,7 +257,8 @@
           "width": 30.3,
           "sleeve": 38.4
         }
-      }
+      },
+      "group": "crewnecks"
     },
     "crewnecks_oversized": {
       "label_en": "Crewneck - Oversized",
@@ -340,7 +343,8 @@
           "width": 33.3,
           "sleeve": 38.4
         }
-      }
+      },
+      "group": "crewnecks"
     },
     "t_shirt_standard": {
       "label_en": "T-Shirt - Standard",
@@ -416,7 +420,8 @@
           "length": 35.0,
           "width": 32.0
         }
-      }
+      },
+      "group": "t_shirt"
     },
     "t_shirt_longsleeve": {
       "label_en": "T-Shirt - Longsleeve",
@@ -511,7 +516,8 @@
           "width": 32.0,
           "sleeve": 0.0
         }
-      }
+      },
+      "group": "t_shirt"
     },
     "t_shirt_oversized": {
       "label_en": "T-Shirt - Oversized",
@@ -579,7 +585,8 @@
           "length": 33.0,
           "width": 29.0
         }
-      }
+      },
+      "group": "t_shirt"
     },
     "t_shirt_streetwear_tee": {
       "label_en": "T-Shirt - Streetwear Tee",
@@ -647,7 +654,8 @@
           "length": 32.0,
           "width": 26.5
         }
-      }
+      },
+      "group": "t_shirt"
     },
     "t_shirt_cropped_tee": {
       "label_en": "T-Shirt - Cropped Tee",
@@ -715,7 +723,8 @@
           "length": 24.0,
           "width": 28.0
         }
-      }
+      },
+      "group": "t_shirt"
     },
     "t_shirt_women_s_e_sports": {
       "label_en": "T-Shirt - Women's E-Sports",
@@ -783,7 +792,8 @@
           "length": 25.0,
           "width": 28.5
         }
-      }
+      },
+      "group": "t_shirt"
     },
     "t_shirt_collared_shirt": {
       "label_en": "T-Shirt - Collared Shirt",
@@ -868,7 +878,8 @@
           "width": 28.0,
           "sleeve": 38.0
         }
-      }
+      },
+      "group": "t_shirt"
     },
     "t_shirt_golf_tee": {
       "label_en": "T-Shirt - Golf Tee",
@@ -936,7 +947,8 @@
           "length": 31.5,
           "width": 24.0
         }
-      }
+      },
+      "group": "t_shirt"
     },
     "t_shirt_standard_tank_top": {
       "label_en": "T-Shirt - Standard Tank Top",
@@ -1021,7 +1033,8 @@
           "width": 14.5,
           "armholeDepth": 14.5
         }
-      }
+      },
+      "group": "t_shirt"
     },
     "hoodie_standard": {
       "label_en": "Hoodie - Standard",
@@ -1106,7 +1119,8 @@
           "width": 29.96,
           "sleeve": 37.99
         }
-      }
+      },
+      "group": "hoodie"
     },
     "hoodie_drop_shoulder": {
       "label_en": "Hoodie - Drop Shoulder",
@@ -1191,7 +1205,8 @@
           "width": 29.96,
           "sleeve": 37.99
         }
-      }
+      },
+      "group": "hoodie"
     },
     "hoodie_raglan_sleeve": {
       "label_en": "Hoodie - Raglan Sleeve",
@@ -1276,7 +1291,8 @@
           "width": 29.96,
           "sleeve": 37.99
         }
-      }
+      },
+      "group": "hoodie"
     },
     "hoodie_hidden_pockets_2": {
       "label_en": "Hoodie - Hidden Pockets (2)",
@@ -1361,7 +1377,8 @@
           "width": 29.96,
           "sleeve": 37.99
         }
-      }
+      },
+      "group": "hoodie"
     },
     "hoodie_no_pocket_standard": {
       "label_en": "Hoodie - No Pocket Standard",
@@ -1446,7 +1463,8 @@
           "width": 29.96,
           "sleeve": 37.99
         }
-      }
+      },
+      "group": "hoodie"
     },
     "hoodie_oversized": {
       "label_en": "Hoodie - Oversized",
@@ -1531,7 +1549,8 @@
           "width": 32.87,
           "sleeve": 38.98
         }
-      }
+      },
+      "group": "hoodie"
     },
     "hoodie_split_sleeves": {
       "label_en": "Hoodie - Split Sleeves",
@@ -1616,7 +1635,8 @@
           "width": 29.96,
           "sleeve": 37.99
         }
-      }
+      },
+      "group": "hoodie"
     },
     "varsity_jacket": {
       "label_en": "Varsity Jacket",
@@ -1737,7 +1757,8 @@
           },
           "sleeve": 37.0
         }
-      }
+      },
+      "group": "jacket"
     },
     "bomber_jacket": {
       "label_en": "Bomber Jacket",
@@ -1858,7 +1879,8 @@
           },
           "sleeve": 37.0
         }
-      }
+      },
+      "group": "jacket"
     },
     "fleece_jacket": {
       "label_en": "Fleece Jacket",
@@ -1979,7 +2001,8 @@
           },
           "sleeve": 37.0
         }
-      }
+      },
+      "group": "jacket"
     },
     "panelled_fleece_jacket": {
       "label_en": "Panelled Fleece Jacket",
@@ -2100,7 +2123,8 @@
           },
           "sleeve": 37.0
         }
-      }
+      },
+      "group": "jacket"
     },
     "sherpa_jacket_youth": {
       "label_en": "Sherpa Jacket Youth",
@@ -2150,7 +2174,8 @@
           "width": 23.0,
           "sleeve": 31.0
         }
-      }
+      },
+      "group": "jacket"
     },
     "hat_standard": {
       "label_en": "Hat - Standard",
@@ -2177,7 +2202,8 @@
             "max": 24.0
           }
         }
-      }
+      },
+      "group": "hat"
     }
   }
 }

@@ -1,15 +1,21 @@
 /* Juniper QA/QC Report - frontend wizard (vanilla JS, no build step) */
 
-let CONFIG = { fits: { fits: {}, toleranceInches: 0.5 }, i18n: {}, options: {} };
+let CONFIG = { fits: { fits: {}, toleranceInches: 0.5 }, i18n: {}, options: {}, categories: { categories: {} }, aql: null };
 let I18N = {};
 let OPTIONS = {};
 
-function emptyChecklistEntry() { return { status: '', notes: '' }; }
+let idCounter = 0;
+function genId() { idCounter += 1; return `d${Date.now().toString(36)}${idCounter}`; }
+
+function emptyChecklistEntry() { return { status: '', notes: '', defects: [] }; }
+function emptyDefect() { return { id: genId(), description: '', severity: 'minor', unitsAffected: 1, photos: [] }; }
 
 const state = {
   category: null,
+  subcategory: null,
   poNumber: '', factoryCode: '', date: todayStr(), pointCheckRate: '', qaLead: '',
   creator: '', productTitle: '', qaType: 'pre_production',
+  lotSize: '', inspectionLevel: 'II', majorAql: 2.5, minorAql: 4.0,
   materials: '', printingMethod: '',
   categoryData: {
     fit: '',
@@ -25,29 +31,23 @@ const state = {
     packagingCardMatch: emptyChecklistEntry(),
     bagTagsCorrect: emptyChecklistEntry(),
     customNotes: '',
-    sectionPhotos: { fabric: [], embroidery: [], printing: [], washTag: [], sizing: [], packaging: [] }
+    sectionPhotos: { sizing: [] }
   },
   photos: { general: [], tags: [] },
-  issues: []
+  additionalIssues: []
 };
 
 let step = 0;
 const STEPS = ['category', 'orderInfo', 'inspectionDetails', 'sizing', 'photos', 'issues', 'review'];
+const CATEGORY_ORDER = ['apparel', 'plush', 'bags', 'accessories', 'other'];
+const CHECKLIST_KEYS = [
+  'fabricColorMatch', 'fabricWeightMatch', 'embroideryColorMatch', 'embroideryDimMatch',
+  'printColorMatch', 'printDimMatch', 'washTagMatch', 'generalSizingMatch',
+  'packagingCardMatch', 'bagTagsCorrect'
+];
 
-// Tracks whether the person has chosen "Other" for a given field and is typing a
-// custom value - kept outside `state` since it's pure UI state, not submitted data.
 const otherModeFlags = { factoryCode: false, creator: false, qaLead: false };
 const OTHER_VALUE = '__other__';
-
-// Maps each checklist item to the section-photo bucket it requires a photo in when failed.
-const CHECKLIST_SECTION_MAP = {
-  fabricColorMatch: 'fabric', fabricWeightMatch: 'fabric',
-  embroideryColorMatch: 'embroidery', embroideryDimMatch: 'embroidery',
-  printColorMatch: 'printing', printDimMatch: 'printing',
-  washTagMatch: 'washTag',
-  generalSizingMatch: 'sizing',
-  packagingCardMatch: 'packaging', bagTagsCorrect: 'packaging'
-};
 
 function todayStr() {
   const d = new Date();
@@ -59,17 +59,14 @@ function bi(key, fallback) {
   if (!e) return { en: fallback || key, zh: '' };
   return { en: e.en, zh: e.zh };
 }
-
 function biHtml(key, fallback, tag = 'span') {
   const e = bi(key, fallback);
   return `${escapeHtml(e.en)} <${tag} class="zh">${escapeHtml(e.zh)}</${tag}>`;
 }
-
 function biBlockHtml(key, fallback) {
   const e = bi(key, fallback);
   return `${escapeHtml(e.en)}<span class="zh">${escapeHtml(e.zh)}</span>`;
 }
-
 function escapeHtml(str) {
   if (str === undefined || str === null) return '';
   return String(str).replace(/[&<>"']/g, (m) => ({
@@ -92,7 +89,6 @@ function isOutOfTolerance(standard, measured, tol) {
   if (isNaN(std) || std === 0) return false;
   return Math.abs(measured - std) > tol;
 }
-
 function formatStandard(standard) {
   if (standard === undefined || standard === null) return '-';
   if (typeof standard === 'object') {
@@ -102,6 +98,91 @@ function formatStandard(standard) {
   const n = parseFloat(standard);
   if (isNaN(n) || n === 0) return '-';
   return `${n}"`;
+}
+
+/* ---------------- AQL HELPERS (mirror lib/aql.js) ---------------- */
+
+const AQL_KEY_PAIRS = [
+  [0.065, '0.065'], [0.10, '0.10'], [0.15, '0.15'], [0.25, '0.25'], [0.40, '0.40'],
+  [0.65, '0.65'], [1.0, '1.0'], [1.5, '1.5'], [2.5, '2.5'], [4.0, '4.0'], [6.5, '6.5']
+];
+function resolveAqlKey(aqlValue) {
+  const n = parseFloat(aqlValue);
+  if (isNaN(n)) return null;
+  const found = AQL_KEY_PAIRS.find(([num]) => Math.abs(num - n) < 0.0001);
+  return found ? found[1] : null;
+}
+function getCodeLetter(lotSize, level) {
+  if (!CONFIG.aql) return null;
+  const n = parseInt(lotSize, 10);
+  if (isNaN(n) || n < 2) return null;
+  const row = CONFIG.aql.tableA.rows.find((r) => n >= r.lotMin && (r.lotMax === null || n <= r.lotMax));
+  return row ? row[level] : null;
+}
+function getPlan(codeLetter, aqlValue) {
+  if (!CONFIG.aql || !codeLetter) return null;
+  const order = CONFIG.aql.codeLetterOrder;
+  const idx = order.indexOf(codeLetter);
+  if (idx === -1) return null;
+  const aqlKey = resolveAqlKey(aqlValue);
+  if (!aqlKey) return null;
+  const cellAt = (i) => {
+    const letter = order[i];
+    const row = CONFIG.aql.tableB[letter];
+    if (!row) return null;
+    const plan = row.plans[aqlKey];
+    if (!plan) return null;
+    return { sampleSize: row.sampleSize, ac: plan[0], re: plan[1], codeLetterUsed: letter };
+  };
+  const exact = cellAt(idx);
+  if (exact) return exact;
+  for (let i = idx - 1; i >= 0; i--) { const hit = cellAt(i); if (hit) return hit; }
+  for (let i = idx + 1; i < order.length; i++) { const hit = cellAt(i); if (hit) return hit; }
+  return null;
+}
+function computeAqlPlan({ lotSize, inspectionLevel, majorAql, minorAql }) {
+  const codeLetter = getCodeLetter(lotSize, inspectionLevel);
+  if (!codeLetter) return null;
+  const majorPlan = getPlan(codeLetter, majorAql);
+  const minorPlan = getPlan(codeLetter, minorAql);
+  if (!majorPlan || !minorPlan) return null;
+  const sampleSize = Math.max(majorPlan.sampleSize, minorPlan.sampleSize);
+  return {
+    lotSize: parseInt(lotSize, 10), inspectionLevel, codeLetter, sampleSize, majorAql, minorAql,
+    critical: { sampleSize, ac: 0, re: 1, codeLetterUsed: codeLetter },
+    major: majorPlan, minor: minorPlan
+  };
+}
+
+/* ---------------- DEFECT COLLECTION (mirrors lib/passFail.js) ---------------- */
+
+function collectAllDefects() {
+  const all = [];
+  CHECKLIST_KEYS.forEach((key) => {
+    const item = state.categoryData[key];
+    if (item && Array.isArray(item.defects)) item.defects.forEach((d) => all.push(d));
+  });
+  state.additionalIssues.forEach((d) => all.push(d));
+  return all;
+}
+function sumDefectsBySeverity(defects) {
+  const sums = { minor: 0, major: 0, critical: 0 };
+  defects.forEach((d) => {
+    const n = parseInt(d.unitsAffected, 10);
+    const qty = isNaN(n) || n < 1 ? 1 : n;
+    if (sums[d.severity] !== undefined) sums[d.severity] += qty;
+  });
+  return sums;
+}
+function findDefectById(id) {
+  for (const key of CHECKLIST_KEYS) {
+    const item = state.categoryData[key];
+    if (item && item.defects) {
+      const found = item.defects.find((d) => d.id === id);
+      if (found) return found;
+    }
+  }
+  return state.additionalIssues.find((d) => d.id === id) || null;
 }
 
 async function loadConfig() {
@@ -122,19 +203,16 @@ function showToast(msg, isError = false) {
   t.className = 'toast' + (isError ? ' error' : '');
   setTimeout(() => { t.className = 'toast hidden'; }, 3800);
 }
-
 function updateProgress() {
   const pct = Math.round(((step) / (STEPS.length - 1)) * 100);
   document.getElementById('progressFill').style.width = Math.max(8, pct) + '%';
 }
-
 function goTo(newStep) {
   step = newStep;
   updateProgress();
   render();
   window.scrollTo(0, 0);
 }
-
 function next() {
   if (!validateStep(step)) return;
   if (step < STEPS.length - 1) goTo(step + 1);
@@ -146,43 +224,74 @@ function back() {
 /* ---------------- VALIDATION ---------------- */
 
 function checklistDefsForStep(name) {
-  // Returns [ [stateKey, i18nKey, sectionKey], ... ] relevant to the given step + category.
   if (name === 'inspectionDetails') {
     return [
-      ['fabricColorMatch', 'fabricColorMatch', 'fabric'],
-      ['fabricWeightMatch', 'fabricWeightMatch', 'fabric'],
-      ['embroideryColorMatch', 'embroideryColorMatch', 'embroidery'],
-      ['embroideryDimMatch', 'embroideryDimMatch', 'embroidery'],
-      ['printColorMatch', 'printColorMatch', 'printing'],
-      ['printDimMatch', 'printDimMatch', 'printing'],
-      ['washTagMatch', 'washTagMatch', 'washTag'],
-      ['packagingCardMatch', 'packagingCardMatch', 'packaging'],
-      ['bagTagsCorrect', 'bagTagsCorrect', 'packaging']
+      ['fabricColorMatch', 'fabricColorMatch'], ['fabricWeightMatch', 'fabricWeightMatch'],
+      ['embroideryColorMatch', 'embroideryColorMatch'], ['embroideryDimMatch', 'embroideryDimMatch'],
+      ['printColorMatch', 'printColorMatch'], ['printDimMatch', 'printDimMatch'],
+      ['washTagMatch', 'washTagMatch'],
+      ['packagingCardMatch', 'packagingCardMatch'], ['bagTagsCorrect', 'bagTagsCorrect']
     ];
   }
   if (name === 'sizing' && state.category !== 'apparel') {
-    return [['generalSizingMatch', 'generalSizingMatch', 'sizing']];
+    return [['generalSizingMatch', 'generalSizingMatch']];
   }
   return [];
 }
-
 function findMissingChecklistStatuses(name) {
   return checklistDefsForStep(name).filter(([key]) => !state.categoryData[key].status);
 }
-
-function findMissingRequiredPhotos(name) {
-  return checklistDefsForStep(name).filter(([key, , sectionKey]) => {
+function findChecklistItemsMissingDefects(name) {
+  return checklistDefsForStep(name).filter(([key]) => {
     const entry = state.categoryData[key];
-    return entry.status === 'fail' && state.categoryData.sectionPhotos[sectionKey].length === 0;
+    return entry.status === 'fail' && (!entry.defects || entry.defects.length === 0);
   });
 }
-
+function findIncompleteDefects(defectList) {
+  return defectList.filter((d) => !d.description || !d.description.trim() || !d.photos || d.photos.length === 0);
+}
 function apparelSizingIncomplete() {
   if (state.category !== 'apparel') return false;
   if (!state.categoryData.fit) return true;
   const rows = state.categoryData.sizeRows || [];
   const hasAnyMeasurement = rows.some((r) => r.measured && Object.values(r.measured).some((v) => v !== '' && v !== undefined));
   return !hasAnyMeasurement;
+}
+function currentCategoryDef() {
+  return (CONFIG.categories && CONFIG.categories.categories) ? CONFIG.categories.categories[state.category] : null;
+}
+function categoryHasSubcategories() {
+  const def = currentCategoryDef();
+  return !!(def && def.subcategories && def.subcategories.length);
+}
+
+function validateChecklistStepGeneric(name) {
+  let ok = true;
+  const missingStatus = findMissingChecklistStatuses(name);
+  const missingDefects = findChecklistItemsMissingDefects(name);
+  missingStatus.forEach(([key]) => markChecklistError(key));
+  missingDefects.forEach(([key]) => markChecklistError(key));
+
+  const relevantDefects = checklistDefsForStep(name)
+    .filter(([key]) => state.categoryData[key].status === 'fail')
+    .flatMap(([key]) => state.categoryData[key].defects || []);
+  const incomplete = findIncompleteDefects(relevantDefects);
+  incomplete.forEach((d) => markDefectError(d.id));
+
+  if (incomplete.some((d) => !d.photos || d.photos.length === 0)) {
+    showToast(bi('photoRequiredForDefect').en + ' / ' + bi('photoRequiredForDefect').zh, true);
+    ok = false;
+  } else if (incomplete.length) {
+    showToast(bi('descriptionRequiredForDefect').en + ' / ' + bi('descriptionRequiredForDefect').zh, true);
+    ok = false;
+  } else if (missingDefects.length) {
+    showToast(bi('defectRequiredForFail').en + ' / ' + bi('defectRequiredForFail').zh, true);
+    ok = false;
+  } else if (missingStatus.length) {
+    showToast(bi('allChecksRequired').en + ' / ' + bi('allChecksRequired').zh, true);
+    ok = false;
+  }
+  return ok;
 }
 
 function validateStep(s) {
@@ -192,24 +301,19 @@ function validateStep(s) {
 
   if (name === 'category') {
     if (!state.category) { showToast('Please select a product category / 请选择产品类别', true); ok = false; }
+    else if (categoryHasSubcategories() && !state.subcategory) {
+      showToast(bi('selectSubcategory').en + ' / ' + bi('selectSubcategory').zh, true);
+      ok = false;
+    }
   } else if (name === 'orderInfo') {
     const required = ['poNumber', 'factoryCode', 'date', 'qaLead'];
     required.forEach((f) => {
       if (!state[f] || !String(state[f]).trim()) { markError(f); ok = false; }
     });
+    if (!state.lotSize || parseInt(state.lotSize, 10) < 2) { markError('lotSize'); ok = false; }
     if (!ok) showToast('Please fill in all required fields / 请填写所有必填项', true);
   } else if (name === 'inspectionDetails') {
-    const missingStatus = findMissingChecklistStatuses(name);
-    const missingPhotos = findMissingRequiredPhotos(name);
-    missingStatus.forEach(([key]) => markChecklistError(key));
-    missingPhotos.forEach(([, , sectionKey]) => markSectionPhotoError(sectionKey));
-    if (missingPhotos.length) {
-      showToast(bi('photoRequiredForFail').en + ' / ' + bi('photoRequiredForFail').zh, true);
-      ok = false;
-    } else if (missingStatus.length) {
-      showToast(bi('allChecksRequired').en + ' / ' + bi('allChecksRequired').zh, true);
-      ok = false;
-    }
+    ok = validateChecklistStepGeneric(name);
   } else if (name === 'sizing') {
     if (state.category === 'apparel') {
       if (apparelSizingIncomplete()) {
@@ -217,22 +321,11 @@ function validateStep(s) {
         ok = false;
       }
     } else {
-      const missingStatus = findMissingChecklistStatuses(name);
-      const missingPhotos = findMissingRequiredPhotos(name);
-      missingStatus.forEach(([key]) => markChecklistError(key));
-      missingPhotos.forEach(([, , sectionKey]) => markSectionPhotoError(sectionKey));
-      if (missingPhotos.length) {
-        showToast(bi('photoRequiredForFail').en + ' / ' + bi('photoRequiredForFail').zh, true);
-        ok = false;
-      } else if (missingStatus.length) {
-        showToast(bi('allChecksRequired').en + ' / ' + bi('allChecksRequired').zh, true);
-        ok = false;
-      }
+      ok = validateChecklistStepGeneric(name);
     }
   }
   return ok;
 }
-
 function markError(fieldId) {
   const el = document.querySelector(`[data-field="${fieldId}"]`);
   if (el) el.classList.add('has-error');
@@ -241,21 +334,23 @@ function markChecklistError(key) {
   const el = document.querySelector(`[data-checklist="${key}"]`);
   if (el) el.classList.add('has-error');
 }
-function markSectionPhotoError(sectionKey) {
-  const el = document.querySelector(`[data-section-photos="${sectionKey}"]`);
+function markDefectError(id) {
+  const el = document.querySelector(`[data-defect-card="${id}"]`);
   if (el) el.classList.add('has-error');
 }
 function clearErrors() {
   document.querySelectorAll('.has-error').forEach((el) => el.classList.remove('has-error'));
 }
 
-/** Full validation across the whole report - used to gate the final Submit button. */
 function getAllValidationProblems() {
   const problems = [];
   if (!state.category) problems.push(bi('selectCategory'));
+  else if (categoryHasSubcategories() && !state.subcategory) problems.push(bi('selectSubcategory'));
+
   ['poNumber', 'factoryCode', 'date', 'qaLead'].forEach((f) => {
     if (!state[f] || !String(state[f]).trim()) problems.push(bi(f));
   });
+  if (!state.lotSize || parseInt(state.lotSize, 10) < 2) problems.push(bi('lotSize'));
 
   const detailDefs = checklistDefsForStep('inspectionDetails');
   const sizingDefs = state.category === 'apparel' ? [] : checklistDefsForStep('sizing');
@@ -264,15 +359,18 @@ function getAllValidationProblems() {
   const missingStatus = allDefs.filter(([key]) => !state.categoryData[key].status);
   if (missingStatus.length) problems.push(bi('allChecksRequired'));
 
-  const missingPhotos = allDefs.filter(([key, , sectionKey]) => {
+  const missingDefects = allDefs.filter(([key]) => {
     const entry = state.categoryData[key];
-    return entry.status === 'fail' && state.categoryData.sectionPhotos[sectionKey].length === 0;
+    return entry.status === 'fail' && (!entry.defects || entry.defects.length === 0);
   });
-  if (missingPhotos.length) problems.push(bi('photoRequiredForFail'));
+  if (missingDefects.length) problems.push(bi('defectRequiredForFail'));
 
-  if (state.category === 'apparel' && apparelSizingIncomplete()) {
-    problems.push(bi('selectFitRequired'));
-  }
+  const allLoggedDefects = collectAllDefects();
+  const incomplete = findIncompleteDefects(allLoggedDefects);
+  if (incomplete.some((d) => !d.photos || d.photos.length === 0)) problems.push(bi('photoRequiredForDefect'));
+  else if (incomplete.length) problems.push(bi('descriptionRequiredForDefect'));
+
+  if (state.category === 'apparel' && apparelSizingIncomplete()) problems.push(bi('selectFitRequired'));
 
   return problems;
 }
@@ -297,27 +395,37 @@ function computeOverallResult() {
     }
   }
 
-  const minorCount = state.issues.filter((i) => i.severity === 'minor').length;
-  const majorCriticalCount = state.issues.filter((i) => i.severity === 'major' || i.severity === 'critical').length;
-  if (minorCount >= 3) reasons.push('minor');
-  if (majorCriticalCount >= 1) reasons.push('major');
+  const allDefects = collectAllDefects();
+  const { critical: criticalCount, major: majorCount, minor: minorCount } = sumDefectsBySeverity(allDefects);
 
-  return { overall: reasons.length ? 'fail' : 'pass', reasons };
+  const plan = state.lotSize ? computeAqlPlan({
+    lotSize: state.lotSize, inspectionLevel: state.inspectionLevel, majorAql: state.majorAql, minorAql: state.minorAql
+  }) : null;
+
+  let aql;
+  if (plan) {
+    if (criticalCount > plan.critical.ac) reasons.push('aqlCritical');
+    if (majorCount > plan.major.ac) reasons.push('aqlMajor');
+    if (minorCount > plan.minor.ac) reasons.push('aqlMinor');
+    aql = { ...plan, criticalCount, majorCount, minorCount, isFallback: false };
+  } else {
+    if (minorCount >= 3) reasons.push('minor');
+    if (majorCount + criticalCount >= 1) reasons.push('major');
+    aql = { criticalCount, majorCount, minorCount, isFallback: true };
+  }
+
+  return { overall: reasons.length ? 'fail' : 'pass', reasons, aql };
 }
 
 /* ---------------- PHOTO STORAGE HELPERS ---------------- */
-// fieldId scheme: "general" | "tags" | "section:fabric" | "issue:0"
 
 function getPhotoArray(fieldId) {
   if (fieldId === 'general') return state.photos.general;
   if (fieldId === 'tags') return state.photos.tags;
-  if (fieldId.startsWith('section:')) {
-    const key = fieldId.split(':')[1];
-    return state.categoryData.sectionPhotos[key];
-  }
-  if (fieldId.startsWith('issue:')) {
-    const idx = parseInt(fieldId.split(':')[1], 10);
-    return state.issues[idx].photos;
+  if (fieldId === 'section:sizing') return state.categoryData.sectionPhotos.sizing;
+  if (fieldId.startsWith('defect:')) {
+    const d = findDefectById(fieldId.split(':')[1]);
+    return d ? d.photos : [];
   }
   return [];
 }
@@ -333,47 +441,65 @@ function render() {
   else if (name === 'inspectionDetails') html = renderInspectionDetailsStep();
   else if (name === 'sizing') html = renderSizingStep();
   else if (name === 'photos') html = renderPhotosStep();
-  else if (name === 'issues') html = renderIssuesStep();
+  else if (name === 'issues') html = renderAdditionalIssuesStep();
   else if (name === 'review') html = renderReviewStep();
 
   root.innerHTML = html;
   attachStepHandlers(name);
 }
 
-/* ---- Step 0: Category ---- */
+/* ---- Step 0: Category + Subcategory ---- */
 function renderCategoryStep() {
-  const options = [
-    { key: 'apparel', icon: '👕', labelKey: 'apparel' },
-    { key: 'plush', icon: '🧸', labelKey: 'plush' },
-    { key: 'other', icon: '📦', labelKey: 'other' }
-  ];
+  const cats = (CONFIG.categories && CONFIG.categories.categories) || {};
+  const orderedKeys = CATEGORY_ORDER.filter((k) => cats[k]);
+
+  const catCards = orderedKeys.map((key) => {
+    const c = cats[key];
+    const sel = state.category === key ? 'selected' : '';
+    return `<div class="category-option ${sel}" data-cat="${key}">
+      <div class="category-icon">${c.icon || '📦'}</div>
+      <div>
+        <div class="category-label-en">${escapeHtml(c.label_en)}</div>
+        <div class="category-label-zh">${escapeHtml(c.label_zh)}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  let subcatBlock = '';
+  if (categoryHasSubcategories()) {
+    const def = currentCategoryDef();
+    const chips = def.subcategories.map((s) => {
+      const sel = state.subcategory === s.key ? 'selected' : '';
+      return `<div class="segmented-option ${sel}" data-subcat="${s.key}" style="flex: 0 0 auto; min-width: 110px;">
+        ${escapeHtml(s.label_en)}<span class="zh">${escapeHtml(s.label_zh)}</span>
+      </div>`;
+    }).join('');
+    subcatBlock = `
+      <div class="card" style="margin-top:14px;">
+        <div class="section-title">${biBlockHtml('selectSubcategory', 'Select Type')}</div>
+        <div class="segmented" style="flex-wrap:wrap;">${chips}</div>
+      </div>
+    `;
+  }
+
   return `
     <div style="display:flex; justify-content:flex-end; margin-bottom:4px;">
       <a href="settings.html" class="settings-link" title="Settings">⚙️ ${escapeHtml(bi('settingsTitle').en)}</a>
     </div>
     <div class="step-eyebrow">${biHtml('step', 'Step')} 1 / 7</div>
     <div class="step-title">Select Product Category<span class="zh">选择产品类别</span></div>
-    <div class="category-grid">
-      ${options.map((o) => {
-        const l = bi(o.labelKey);
-        const sel = state.category === o.key ? 'selected' : '';
-        return `<div class="category-option ${sel}" data-cat="${o.key}">
-          <div class="category-icon">${o.icon}</div>
-          <div>
-            <div class="category-label-en">${escapeHtml(l.en)}</div>
-            <div class="category-label-zh">${escapeHtml(l.zh)}</div>
-          </div>
-        </div>`;
-      }).join('')}
-    </div>
+    <div class="category-grid">${catCards}</div>
+    ${subcatBlock}
     <div class="nav-buttons">
       <button class="btn btn-primary" id="btnNext">${biBlockHtml('next', 'Next')}</button>
     </div>
   `;
 }
 
-/* ---- Step 1: Order Info ---- */
+/* ---- Step 1: Order Info (+ AQL setup) ---- */
 function renderOrderInfoStep() {
+  const aqlOptions = (CONFIG.aql && CONFIG.aql.aqlColumns) || [0.065, 0.10, 0.15, 0.25, 0.40, 0.65, 1.0, 1.5, 2.5, 4.0, 6.5];
+
   return `
     <div class="step-eyebrow">${biHtml('step', 'Step')} 2 / 7</div>
     <div class="step-title">Order Information<span class="zh">订单信息</span></div>
@@ -397,9 +523,55 @@ function renderOrderInfoStep() {
         </div>
       </div>
     </div>
+
+    <div class="card">
+      <div class="section-title">${biBlockHtml('aqlReferenceTitle', 'AQL Sampling Reference')}</div>
+      ${numberField('lotSize', 'lotSize', state.lotSize, { required: true, placeholderKey: 'lotSizePlaceholder' })}
+      <div class="field">
+        <label class="field-label">${biBlockHtml('inspectionLevel', 'Inspection Level')}</label>
+        <div class="segmented">
+          ${['I', 'II', 'III'].map((lvl) => `<div class="segmented-option ${state.inspectionLevel === lvl ? 'selected' : ''}" data-seg="inspectionLevel" data-val="${lvl}">${lvl}</div>`).join('')}
+        </div>
+      </div>
+      <div class="field-row">
+        <div style="flex:1">${selectNumberField('majorAql', 'majorAql', state.majorAql, aqlOptions)}</div>
+        <div style="flex:1">${selectNumberField('minorAql', 'minorAql', state.minorAql, aqlOptions)}</div>
+      </div>
+      <div id="aqlLivePreview">${renderAqlLivePreview()}</div>
+    </div>
+
     <div class="nav-buttons">
       <button class="btn btn-secondary" id="btnBack">${biBlockHtml('back', 'Back')}</button>
       <button class="btn btn-primary" id="btnNext">${biBlockHtml('next', 'Next')}</button>
+    </div>
+  `;
+}
+
+function renderAqlLivePreview() {
+  const plan = state.lotSize ? computeAqlPlan({
+    lotSize: state.lotSize, inspectionLevel: state.inspectionLevel, majorAql: state.majorAql, minorAql: state.minorAql
+  }) : null;
+  if (!plan) {
+    return `<div class="section-help" style="margin-top:8px;">${escapeHtml(bi('aqlNeedLotSize').en)}<br/>${escapeHtml(bi('aqlNeedLotSize').zh)}</div>`;
+  }
+  return `
+    <div class="aql-preview">
+      <div class="aql-preview-row">
+        <span>${escapeHtml(bi('aqlCodeLetter').en)} <span class="zh">${escapeHtml(bi('aqlCodeLetter').zh)}</span></span>
+        <strong>${escapeHtml(plan.codeLetter)}</strong>
+      </div>
+      <div class="aql-preview-row">
+        <span>${escapeHtml(bi('aqlSampleSize').en)} <span class="zh">${escapeHtml(bi('aqlSampleSize').zh)}</span></span>
+        <strong>${plan.sampleSize}</strong>
+      </div>
+      <table class="aql-preview-table">
+        <thead><tr><th></th><th>${escapeHtml(bi('aqlAccept').en)}</th><th>${escapeHtml(bi('aqlReject').en)}</th></tr></thead>
+        <tbody>
+          <tr><td>${escapeHtml(bi('aqlCritical').en)}</td><td>${plan.critical.ac}</td><td>${plan.critical.re}</td></tr>
+          <tr><td>${escapeHtml(bi('aqlMajor').en)} (${plan.majorAql})</td><td>${plan.major.ac}</td><td>${plan.major.re}</td></tr>
+          <tr><td>${escapeHtml(bi('aqlMinor').en)} (${plan.minorAql})</td><td>${plan.minor.ac}</td><td>${plan.minor.re}</td></tr>
+        </tbody>
+      </table>
     </div>
   `;
 }
@@ -411,6 +583,16 @@ function textField(id, i18nKey, value, opts = {}) {
     <div class="field" data-field="${id}">
       <label class="field-label">${escapeHtml(l.en)} <span class="zh">${escapeHtml(l.zh)}</span>${opts.required ? '<span class="required">*</span>' : ''}</label>
       <input type="text" data-bind="${id}" value="${escapeHtml(value || '')}" placeholder="${escapeHtml(ph.en)} / ${escapeHtml(ph.zh)}" />
+    </div>
+  `;
+}
+function numberField(id, i18nKey, value, opts = {}) {
+  const l = bi(i18nKey);
+  const ph = opts.placeholderKey ? bi(opts.placeholderKey) : { en: '', zh: '' };
+  return `
+    <div class="field" data-field="${id}">
+      <label class="field-label">${escapeHtml(l.en)} <span class="zh">${escapeHtml(l.zh)}</span>${opts.required ? '<span class="required">*</span>' : ''}</label>
+      <input type="number" min="2" step="1" inputmode="numeric" data-bind-live="${id}" value="${escapeHtml(value || '')}" placeholder="${escapeHtml(ph.en)} / ${escapeHtml(ph.zh)}" />
     </div>
   `;
 }
@@ -437,7 +619,16 @@ function selectField(id, i18nKey, value, optionsList, opts = {}) {
     </div>
   `;
 }
-
+function selectNumberField(id, i18nKey, value, optionsList) {
+  const l = bi(i18nKey);
+  const opts_html = optionsList.map((o) => `<option value="${o}" ${parseFloat(value) === o ? 'selected' : ''}>${o}</option>`).join('');
+  return `
+    <div class="field" data-field="${id}">
+      <label class="field-label">${escapeHtml(l.en)} <span class="zh">${escapeHtml(l.zh)}</span></label>
+      <select data-bind-live="${id}">${opts_html}</select>
+    </div>
+  `;
+}
 function selectFieldWithOther(id, i18nKey, value, optionsList, opts = {}) {
   const l = bi(i18nKey);
   const ph = bi('selectPlaceholder');
@@ -465,7 +656,7 @@ function segOption(groupName, value, i18nKey, current) {
   </div>`;
 }
 
-/* ---- Step 2: Inspection Details (fabric/embroidery/printing/washTag/packaging) ---- */
+/* ---- Step 2: Inspection Details ---- */
 function renderInspectionDetailsStep() {
   const cd = state.categoryData;
   let body = `
@@ -481,11 +672,11 @@ function renderInspectionDetailsStep() {
     </div>
   `;
 
-  body += checklistCard('fabricSection', [['fabricColorMatch', 'fabricColorMatch'], ['fabricWeightMatch', 'fabricWeightMatch']], 'fabric');
-  body += checklistCard('embroiderySection', [['embroideryColorMatch', 'embroideryColorMatch'], ['embroideryDimMatch', 'embroideryDimMatch']], 'embroidery');
-  body += checklistCard('printingSection', [['printColorMatch', 'printColorMatch'], ['printDimMatch', 'printDimMatch']], 'printing');
-  body += checklistCard('washTagSection', [['washTagMatch', 'washTagMatch']], 'washTag');
-  body += checklistCard('packagingSection', [['packagingCardMatch', 'packagingCardMatch'], ['bagTagsCorrect', 'bagTagsCorrect']], 'packaging');
+  body += checklistCard('fabricSection', [['fabricColorMatch', 'fabricColorMatch'], ['fabricWeightMatch', 'fabricWeightMatch']]);
+  body += checklistCard('embroiderySection', [['embroideryColorMatch', 'embroideryColorMatch'], ['embroideryDimMatch', 'embroideryDimMatch']]);
+  body += checklistCard('printingSection', [['printColorMatch', 'printColorMatch'], ['printDimMatch', 'printDimMatch']]);
+  body += checklistCard('washTagSection', [['washTagMatch', 'washTagMatch']]);
+  body += checklistCard('packagingSection', [['packagingCardMatch', 'packagingCardMatch'], ['bagTagsCorrect', 'bagTagsCorrect']]);
 
   if (state.category === 'other') {
     body += `<div class="card">
@@ -508,9 +699,15 @@ function renderInspectionDetailsStep() {
 }
 
 function checklistItem(key, i18nKey) {
-  const cd = state.categoryData;
-  const entry = cd[key];
+  const entry = state.categoryData[key];
   const l = bi(i18nKey);
+  const defectsBlock = entry.status === 'fail' ? `
+    <div class="defects-block">
+      <div class="defects-label">${biBlockHtml('defectsFound', 'Defects Found')}</div>
+      ${(entry.defects || []).map((d) => defectCard(d, key)).join('')}
+      <button type="button" class="add-defect-btn" data-add-defect="${key}">${escapeHtml(bi('addDefect').en)} <span class="zh">${escapeHtml(bi('addDefect').zh)}</span></button>
+    </div>
+  ` : '';
   return `
     <div class="checklist-row" data-checklist="${key}">
       <div class="checklist-question">${escapeHtml(l.en)}<span class="zh">${escapeHtml(l.zh)}</span></div>
@@ -526,26 +723,66 @@ function checklistItem(key, i18nKey) {
       <div class="checklist-notes">
         <textarea data-checklist-notes="${key}" placeholder="${escapeHtml(bi('notesPlaceholder').en)} / ${escapeHtml(bi('notesPlaceholder').zh)}">${escapeHtml(entry.notes)}</textarea>
       </div>
+      ${defectsBlock}
     </div>
   `;
 }
 
-function checklistCard(sectionKey, rows, photoSectionKey) {
-  const anyFailNoPhoto = rows.some(([k]) => state.categoryData[k].status === 'fail') && state.categoryData.sectionPhotos[photoSectionKey].length === 0;
+function defectCard(d, ownerKey) {
+  const missingDesc = !d.description || !d.description.trim();
+  const missingPhoto = !d.photos || d.photos.length === 0;
+  return `
+    <div class="defect-card" data-defect-card="${d.id}" data-owner="${ownerKey || ''}">
+      <div class="field">
+        <label class="field-label">${biBlockHtml('defectDescription', 'Defect Description')}${missingDesc ? '<span class="required">*</span>' : ''}</label>
+        <textarea data-defect-field="description" data-defect-id="${d.id}" placeholder="${escapeHtml(bi('defectDescriptionPlaceholder').en)} / ${escapeHtml(bi('defectDescriptionPlaceholder').zh)}">${escapeHtml(d.description)}</textarea>
+      </div>
+      <div class="field-row">
+        <div style="flex:1">
+          <label class="field-label">${biBlockHtml('severity')}</label>
+          <div class="segmented">
+            ${['minor', 'major', 'critical'].map((s) => {
+              const sl = bi(s);
+              const sel = d.severity === s ? 'selected' : '';
+              return `<div class="segmented-option ${sel}" data-defect-severity="${d.id}" data-val="${s}">${escapeHtml(sl.en)}<span class="zh">${escapeHtml(sl.zh)}</span></div>`;
+            }).join('')}
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label">${biBlockHtml('unitsAffected', 'Units Affected')}</label>
+        <input type="number" min="1" step="1" inputmode="numeric" value="${escapeHtml(d.unitsAffected)}" data-defect-units="${d.id}" style="max-width:120px;" />
+      </div>
+      <div class="field">
+        <label class="field-label">${biBlockHtml('defectPhotos', 'Defect Photos')}${missingPhoto ? '<span class="required">*</span>' : ''}</label>
+        ${photoGrid('defect:' + d.id, true)}
+      </div>
+      <button type="button" class="remove-defect-btn" data-remove-defect="${d.id}">${escapeHtml(bi('removeIssue').en)} / ${escapeHtml(bi('removeIssue').zh)}</button>
+    </div>
+  `;
+}
+
+function checklistCard(sectionKey, rows) {
   return `
     <div class="card">
       <div class="section-title">${biBlockHtml(sectionKey)}</div>
       ${rows.map(([k, lk]) => checklistItem(k, lk)).join('')}
-      <div class="section-photos-block" data-section-photos="${photoSectionKey}">
-        <div class="section-photos-label">${biBlockHtml('sectionPhotos', 'Section Photos')}${anyFailNoPhoto ? ' <span class="required">*</span>' : ''}</div>
-        <div class="section-help" style="margin-bottom:6px;">${escapeHtml(bi('sectionPhotosHelp').en)} / ${escapeHtml(bi('sectionPhotosHelp').zh)}</div>
-        ${photoGrid('section:' + photoSectionKey, true)}
-      </div>
     </div>
   `;
 }
 
 /* ---- Step 3: Sizing ---- */
+function fitsForCurrentSubcategory() {
+  const allFits = CONFIG.fits.fits || {};
+  const def = currentCategoryDef();
+  const sub = def && (def.subcategories || []).find((s) => s.key === state.subcategory);
+  const group = sub ? sub.fitGroup : null;
+  if (!group) return allFits;
+  const filtered = {};
+  Object.keys(allFits).forEach((key) => { if (allFits[key].group === group) filtered[key] = allFits[key]; });
+  return Object.keys(filtered).length ? filtered : allFits;
+}
+
 function renderSizingStep() {
   let body = '';
   if (state.category === 'apparel') {
@@ -556,7 +793,7 @@ function renderSizingStep() {
       body += renderSizingPhotosCard();
     }
   } else {
-    body += checklistCard('sizingSection', [['generalSizingMatch', 'generalSizingMatch']], 'sizing');
+    body += checklistCard('sizingSection', [['generalSizingMatch', 'generalSizingMatch']]);
   }
 
   return `
@@ -569,9 +806,8 @@ function renderSizingStep() {
     </div>
   `;
 }
-
 function renderFitPicker() {
-  const fits = CONFIG.fits.fits || {};
+  const fits = fitsForCurrentSubcategory();
   const options = Object.keys(fits).map((key) => {
     const f = fits[key];
     const sel = state.categoryData.fit === key ? 'selected' : '';
@@ -589,7 +825,6 @@ function renderFitPicker() {
     </div>
   `;
 }
-
 function renderReferenceChart() {
   const fitDef = CONFIG.fits.fits[state.categoryData.fit];
   if (!fitDef) return '';
@@ -602,7 +837,6 @@ function renderReferenceChart() {
     const cells = fitDef.points.map((p) => `<td>${escapeHtml(formatStandard(std[p]))}</td>`).join('');
     return `<tr><td class="size-name">${escapeHtml(sizeName)}</td>${cells}</tr>`;
   }).join('');
-
   return `
     <div class="card">
       <div class="section-title">${biBlockHtml('referenceChart', 'Approved Reference Chart')}</div>
@@ -616,7 +850,6 @@ function renderReferenceChart() {
     </div>
   `;
 }
-
 function renderSizeEntryTable() {
   const fitDef = CONFIG.fits.fits[state.categoryData.fit];
   if (!fitDef) return '';
@@ -650,10 +883,7 @@ function renderSizeEntryTable() {
         </td>
       `;
     }).join('');
-    return `<tr>
-      <td class="size-name">${escapeHtml(row.size)}</td>
-      ${cells}
-    </tr>`;
+    return `<tr><td class="size-name">${escapeHtml(row.size)}</td>${cells}</tr>`;
   }).join('');
 
   return `
@@ -669,10 +899,9 @@ function renderSizeEntryTable() {
     </div>
   `;
 }
-
 function renderSizingPhotosCard() {
   return `
-    <div class="card" data-section-photos="sizing">
+    <div class="card">
       <div class="section-title">${biBlockHtml('sizingPhotos', 'Sizing Photos')}</div>
       <div class="section-help">${escapeHtml(bi('sectionPhotosHelp').en)} / ${escapeHtml(bi('sectionPhotosHelp').zh)}</div>
       ${photoGrid('section:sizing', true)}
@@ -702,7 +931,6 @@ function renderPhotosStep() {
     </div>
   `;
 }
-
 function photoGrid(fieldId, compact) {
   const arr = getPhotoArray(fieldId);
   const thumbs = arr.map((file, idx) => `
@@ -725,56 +953,64 @@ function photoGrid(fieldId, compact) {
   `;
 }
 
-/* ---- Step 5: Issues ---- */
-function renderIssuesStep() {
-  const issuesHtml = state.issues.map((issue, idx) => `
-    <div class="issue-card">
-      <div class="issue-card-header">
-        <div class="issue-number">${bi('issuesSection').en} #${idx + 1}</div>
-        <button class="remove-issue-btn" data-remove-issue="${idx}">${escapeHtml(bi('removeIssue').en)} / ${escapeHtml(bi('removeIssue').zh)}</button>
-      </div>
-      <div class="field">
-        <label class="field-label">${biBlockHtml('issueDescription')}</label>
-        <textarea data-issue-field="description" data-issue-idx="${idx}" placeholder="${escapeHtml(bi('issueDescriptionPlaceholder').en)} / ${escapeHtml(bi('issueDescriptionPlaceholder').zh)}">${escapeHtml(issue.description)}</textarea>
-      </div>
-      <div class="field">
-        <label class="field-label">${biBlockHtml('severity')}</label>
-        <div class="segmented">
-          ${['minor', 'major', 'critical'].map((s) => {
-            const sl = bi(s);
-            const sel = issue.severity === s ? 'selected' : '';
-            return `<div class="segmented-option ${sel}" data-issue-severity="${idx}" data-val="${s}">
-              ${escapeHtml(sl.en)}<span class="zh">${escapeHtml(sl.zh)}</span>
-            </div>`;
-          }).join('')}
-        </div>
-      </div>
-      <div class="field">
-        <label class="field-label">${biBlockHtml('issuePhotos')}</label>
-        ${photoGrid('issue:' + idx)}
-      </div>
-    </div>
-  `).join('');
+/* ---- Step 5: Additional Issues (catch-all) ---- */
+function renderAdditionalIssuesStep() {
+  const issuesHtml = state.additionalIssues.map((issue) => defectCard(issue, null)).join('');
 
   return `
     <div class="step-eyebrow">${biHtml('step', 'Step')} 6 / 7</div>
-    <div class="step-title">Issues<span class="zh">问题记录</span></div>
-    <div class="section-help" style="margin-bottom:14px;">${escapeHtml(bi('issuesHelp').en)}<br/>${escapeHtml(bi('issuesHelp').zh)}</div>
-    ${state.issues.length === 0 ? `<div class="no-issues-note">${escapeHtml(bi('noIssues').en)} / ${escapeHtml(bi('noIssues').zh)}</div>` : issuesHtml}
-    <button class="add-issue-btn" id="btnAddIssue">${escapeHtml(bi('addIssue').en)} / ${escapeHtml(bi('addIssue').zh)}</button>
+    <div class="step-title">${biBlockHtml('additionalIssuesSection', 'Additional Issues')}</div>
+    <div class="section-help" style="margin-bottom:14px;">${escapeHtml(bi('additionalIssuesHelp').en)}<br/>${escapeHtml(bi('additionalIssuesHelp').zh)}</div>
+    ${state.additionalIssues.length === 0 ? `<div class="no-issues-note">${escapeHtml(bi('noIssues').en)} / ${escapeHtml(bi('noIssues').zh)}</div>` : issuesHtml}
+    <button class="add-issue-btn" id="btnAddIssue">${escapeHtml(bi('addDefect').en)} / ${escapeHtml(bi('addDefect').zh)}</button>
+    <div id="issuesAqlLive">${renderAqlTallyCard()}</div>
     <div class="nav-buttons">
       <button class="btn btn-secondary" id="btnBack">${biBlockHtml('back', 'Back')}</button>
       <button class="btn btn-primary" id="btnNext">${biBlockHtml('next', 'Next')}</button>
     </div>
   `;
 }
+function renderAqlTallyCard() {
+  const result = computeOverallResult();
+  const aql = result.aql;
+  if (!aql || aql.isFallback) {
+    return `<div class="section-help" style="margin-top:14px;">${escapeHtml(bi('aqlFallbackNotice').en)}<br/>${escapeHtml(bi('aqlFallbackNotice').zh)}</div>`;
+  }
+  const row = (labelKey, aqlSuffix, count, ac, re) => {
+    const exceeded = count > ac;
+    return `<tr class="${exceeded ? 'exceeded' : ''}"><td>${escapeHtml(bi(labelKey).en)}${aqlSuffix}</td><td>${count}</td><td>${ac}</td><td>${re}</td></tr>`;
+  };
+  return `
+    <div class="card" style="margin-top:14px;">
+      <div class="section-title">${biBlockHtml('aqlReferenceTitle', 'AQL Sampling Reference')}</div>
+      <div class="section-help">${escapeHtml(bi('aqlCodeLetter').en)}: <strong>${aql.codeLetter}</strong> &nbsp;•&nbsp; ${escapeHtml(bi('aqlSampleSize').en)}: <strong>${aql.sampleSize}</strong></div>
+      <table class="aql-preview-table" style="margin-top:8px;">
+        <thead><tr><th></th><th>${escapeHtml(bi('defectTally').en)}</th><th>${escapeHtml(bi('aqlAccept').en)}</th><th>${escapeHtml(bi('aqlReject').en)}</th></tr></thead>
+        <tbody>
+          ${row('aqlCritical', '', aql.criticalCount, aql.critical.ac, aql.critical.re)}
+          ${row('aqlMajor', ` (${aql.majorAql})`, aql.majorCount, aql.major.ac, aql.major.re)}
+          ${row('aqlMinor', ` (${aql.minorAql})`, aql.minorCount, aql.minor.ac, aql.minor.re)}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
 
 /* ---- Step 6: Review ---- */
 function renderReviewStep() {
-  const catLabel = bi(state.category);
+  const catDef = currentCategoryDef();
+  const catLabel = catDef ? { en: catDef.label_en, zh: catDef.label_zh } : bi(state.category);
+  let subLabel = null;
+  if (catDef && state.subcategory) {
+    const sub = (catDef.subcategories || []).find((s) => s.key === state.subcategory);
+    if (sub) subLabel = { en: sub.label_en, zh: sub.label_zh };
+  }
   const qaTypeLabel = state.qaType === 'production' ? bi('production') : bi('prePro');
   const result = computeOverallResult();
-  const reasonKeyMap = { tolerance: 'resultReasonTolerance', minor: 'resultReasonMinor', major: 'resultReasonMajor' };
+  const reasonKeyMap = {
+    tolerance: 'resultReasonTolerance', minor: 'resultReasonMinor', major: 'resultReasonMajor',
+    aqlCritical: 'resultReasonAqlCritical', aqlMajor: 'resultReasonAqlMajor', aqlMinor: 'resultReasonAqlMinor'
+  };
   const resultLabel = result.overall === 'pass' ? bi('resultPass') : bi('resultFail');
   const problems = getAllValidationProblems();
 
@@ -799,6 +1035,7 @@ function renderReviewStep() {
     </div>
 
     ${problemsBlock}
+    ${renderAqlTallyCard()}
 
     <div class="card">
       <div class="review-block">
@@ -806,10 +1043,11 @@ function renderReviewStep() {
         ${reviewRow('poNumber', state.poNumber)}
         ${reviewRow('factoryCode', state.factoryCode)}
         ${reviewRow('date', state.date)}
-        ${reviewRow('pointCheckRate', state.pointCheckRate)}
+        ${reviewRow('lotSize', state.lotSize)}
         ${reviewRow('qaLead', state.qaLead)}
         ${reviewRow('creator', state.creator)}
         <div class="review-row"><span class="k">Category / 类别</span><span class="v">${escapeHtml(catLabel.en)} ${escapeHtml(catLabel.zh)}</span></div>
+        ${subLabel ? `<div class="review-row"><span class="k">Type / 类型</span><span class="v">${escapeHtml(subLabel.en)} ${escapeHtml(subLabel.zh)}</span></div>` : ''}
         <div class="review-row"><span class="k">${bi('qaType').en}</span><span class="v">${escapeHtml(qaTypeLabel.en)} ${escapeHtml(qaTypeLabel.zh)}</span></div>
       </div>
       <div class="review-block">
@@ -818,8 +1056,8 @@ function renderReviewStep() {
         <div class="review-row"><span class="k">${bi('tagPhotos').en}</span><span class="v">${state.photos.tags.length}</span></div>
       </div>
       <div class="review-block">
-        <div class="review-block-title">${bi('issuesSection').en} / ${bi('issuesSection').zh}</div>
-        <div class="review-row"><span class="k">Total</span><span class="v">${state.issues.length}</span></div>
+        <div class="review-block-title">${bi('additionalIssuesSection').en} / ${bi('additionalIssuesSection').zh}</div>
+        <div class="review-row"><span class="k">Total</span><span class="v">${state.additionalIssues.length}</span></div>
       </div>
     </div>
     <div class="nav-buttons">
@@ -845,9 +1083,15 @@ function attachStepHandlers(name) {
 
   document.querySelectorAll('[data-bind]').forEach((el) => {
     const evt = (el.tagName === 'SELECT') ? 'change' : 'input';
+    el.addEventListener(evt, (e) => setStateValue(el.getAttribute('data-bind'), e.target.value));
+  });
+
+  document.querySelectorAll('[data-bind-live]').forEach((el) => {
+    const evt = (el.tagName === 'SELECT') ? 'change' : 'input';
     el.addEventListener(evt, (e) => {
-      const path = el.getAttribute('data-bind');
-      setStateValue(path, e.target.value);
+      state[el.getAttribute('data-bind-live')] = e.target.value;
+      const preview = document.getElementById('aqlLivePreview');
+      if (preview) preview.innerHTML = renderAqlLivePreview();
     });
   });
 
@@ -855,6 +1099,17 @@ function attachStepHandlers(name) {
     document.querySelectorAll('.category-option').forEach((el) => {
       el.addEventListener('click', () => {
         state.category = el.getAttribute('data-cat');
+        state.subcategory = null;
+        state.categoryData.fit = '';
+        state.categoryData.sizeRows = [];
+        render();
+      });
+    });
+    document.querySelectorAll('[data-subcat]').forEach((el) => {
+      el.addEventListener('click', () => {
+        state.subcategory = el.getAttribute('data-subcat');
+        state.categoryData.fit = '';
+        state.categoryData.sizeRows = [];
         render();
       });
     });
@@ -863,29 +1118,20 @@ function attachStepHandlers(name) {
   if (name === 'orderInfo') {
     document.querySelectorAll('[data-seg]').forEach((el) => {
       el.addEventListener('click', () => {
-        const group = el.getAttribute('data-seg');
-        state[group] = el.getAttribute('data-val');
+        state[el.getAttribute('data-seg')] = el.getAttribute('data-val');
         render();
       });
     });
     document.querySelectorAll('[data-select-other]').forEach((el) => {
       el.addEventListener('change', (e) => {
         const id = el.getAttribute('data-select-other');
-        if (e.target.value === OTHER_VALUE) {
-          otherModeFlags[id] = true;
-          state[id] = '';
-        } else {
-          otherModeFlags[id] = false;
-          state[id] = e.target.value;
-        }
+        if (e.target.value === OTHER_VALUE) { otherModeFlags[id] = true; state[id] = ''; }
+        else { otherModeFlags[id] = false; state[id] = e.target.value; }
         render();
       });
     });
     document.querySelectorAll('[data-other-text]').forEach((el) => {
-      el.addEventListener('input', (e) => {
-        const id = el.getAttribute('data-other-text');
-        state[id] = e.target.value;
-      });
+      el.addEventListener('input', (e) => { state[el.getAttribute('data-other-text')] = e.target.value; });
     });
   }
 
@@ -893,16 +1139,18 @@ function attachStepHandlers(name) {
     document.querySelectorAll('[data-checklist-status]').forEach((el) => {
       el.addEventListener('click', () => {
         const key = el.getAttribute('data-checklist-status');
-        state.categoryData[key].status = el.getAttribute('data-val');
+        const val = el.getAttribute('data-val');
+        state.categoryData[key].status = val;
+        if (val === 'fail' && state.categoryData[key].defects.length === 0) {
+          state.categoryData[key].defects.push(emptyDefect());
+        }
         render();
       });
     });
     document.querySelectorAll('[data-checklist-notes]').forEach((el) => {
-      el.addEventListener('input', (e) => {
-        const key = el.getAttribute('data-checklist-notes');
-        state.categoryData[key].notes = e.target.value;
-      });
+      el.addEventListener('input', (e) => { state.categoryData[el.getAttribute('data-checklist-notes')].notes = e.target.value; });
     });
+    attachDefectHandlers();
     attachPhotoHandlers();
   }
 
@@ -915,7 +1163,6 @@ function attachStepHandlers(name) {
         render();
       });
     }
-    // Targeted, in-place updates for size inputs so the page never jumps/scrolls.
     document.querySelectorAll('[data-size-row]').forEach((el) => {
       el.addEventListener('input', (e) => {
         const ridx = parseInt(el.getAttribute('data-size-row'), 10);
@@ -926,50 +1173,65 @@ function attachStepHandlers(name) {
     });
   }
 
-  if (name === 'photos') {
-    attachPhotoHandlers();
-  }
+  if (name === 'photos') attachPhotoHandlers();
 
   if (name === 'issues') {
     const addBtn = document.getElementById('btnAddIssue');
     if (addBtn) addBtn.addEventListener('click', () => {
-      state.issues.push({ description: '', severity: 'minor', photos: [] });
+      state.additionalIssues.push(emptyDefect());
       render();
     });
-    document.querySelectorAll('[data-remove-issue]').forEach((el) => {
-      el.addEventListener('click', () => {
-        const idx = parseInt(el.getAttribute('data-remove-issue'), 10);
-        state.issues.splice(idx, 1);
-        render();
-      });
-    });
-    document.querySelectorAll('[data-issue-field]').forEach((el) => {
-      el.addEventListener('input', (e) => {
-        const idx = parseInt(el.getAttribute('data-issue-idx'), 10);
-        const field = el.getAttribute('data-issue-field');
-        state.issues[idx][field] = e.target.value;
-      });
-    });
-    document.querySelectorAll('[data-issue-severity]').forEach((el) => {
-      el.addEventListener('click', () => {
-        const idx = parseInt(el.getAttribute('data-issue-severity'), 10);
-        state.issues[idx].severity = el.getAttribute('data-val');
-        render();
-      });
-    });
+    attachDefectHandlers();
     attachPhotoHandlers();
   }
 }
 
-function setStateValue(path, value) {
-  if (path.startsWith('cd.')) {
-    state.categoryData[path.slice(3)] = value;
-  } else {
-    state[path] = value;
-  }
+function attachDefectHandlers() {
+  document.querySelectorAll('[data-add-defect]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const key = el.getAttribute('data-add-defect');
+      state.categoryData[key].defects.push(emptyDefect());
+      render();
+    });
+  });
+  document.querySelectorAll('[data-remove-defect]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const id = el.getAttribute('data-remove-defect');
+      CHECKLIST_KEYS.forEach((key) => {
+        const item = state.categoryData[key];
+        const idx = item.defects.findIndex((d) => d.id === id);
+        if (idx > -1) item.defects.splice(idx, 1);
+      });
+      const aIdx = state.additionalIssues.findIndex((d) => d.id === id);
+      if (aIdx > -1) state.additionalIssues.splice(aIdx, 1);
+      render();
+    });
+  });
+  document.querySelectorAll('[data-defect-field]').forEach((el) => {
+    el.addEventListener('input', (e) => {
+      const d = findDefectById(el.getAttribute('data-defect-id'));
+      if (d) d[el.getAttribute('data-defect-field')] = e.target.value;
+    });
+  });
+  document.querySelectorAll('[data-defect-severity]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const d = findDefectById(el.getAttribute('data-defect-severity'));
+      if (d) { d.severity = el.getAttribute('data-val'); render(); }
+    });
+  });
+  document.querySelectorAll('[data-defect-units]').forEach((el) => {
+    el.addEventListener('input', (e) => {
+      const d = findDefectById(el.getAttribute('data-defect-units'));
+      if (d) d.unitsAffected = e.target.value;
+    });
+  });
 }
 
-/** Updates a single size-chart cell's tolerance styling without re-rendering the page. */
+function setStateValue(path, value) {
+  if (path.startsWith('cd.')) state.categoryData[path.slice(3)] = value;
+  else state[path] = value;
+}
+
 function updateSizeCellInPlace(ridx, point) {
   const fitDef = CONFIG.fits.fits[state.categoryData.fit];
   if (!fitDef) return;
@@ -979,7 +1241,6 @@ function updateSizeCellInPlace(ridx, point) {
   const measuredVal = row.measured[point] !== undefined ? row.measured[point] : '';
   const measuredNum = parseFloat(measuredVal);
   const outOfTol = isOutOfTolerance(standard[point], measuredVal === '' ? null : measuredNum, tol);
-
   const cell = document.getElementById(`sizecell_${ridx}_${point}`);
   if (!cell) return;
   const input = cell.querySelector('input');
@@ -996,11 +1257,7 @@ function attachPhotoHandlers() {
       const files = Array.from(e.target.files || []);
       if (!files.length) return;
       const arr = getPhotoArray(fieldId);
-
-      // Reset the input immediately so the same photo can be re-picked later if needed,
-      // and so iOS releases its reference to the original (often very large) capture.
       el.value = '';
-
       showToast(bi('processingPhotos').en + ' / ' + bi('processingPhotos').zh);
       for (const f of files) {
         try {
@@ -1009,13 +1266,8 @@ function attachPhotoHandlers() {
           arr.push(compressed);
         } catch (err) {
           console.error('Photo compression failed, storing original', err);
-          try {
-            f._url = URL.createObjectURL(f);
-            arr.push(f);
-          } catch (e2) {
-            console.error('Could not store photo at all', e2);
-            showToast(bi('photoTooLarge').en + ' / ' + bi('photoTooLarge').zh, true);
-          }
+          try { f._url = URL.createObjectURL(f); arr.push(f); }
+          catch (e2) { showToast(bi('photoTooLarge').en + ' / ' + bi('photoTooLarge').zh, true); }
         }
       }
       render();
@@ -1027,68 +1279,46 @@ function attachPhotoHandlers() {
       const idx = parseInt(el.getAttribute('data-photo-idx'), 10);
       const arr = getPhotoArray(fieldId);
       const removed = arr[idx];
-      if (removed && removed._url) {
-        URL.revokeObjectURL(removed._url);
-      }
+      if (removed && removed._url) URL.revokeObjectURL(removed._url);
       arr.splice(idx, 1);
       render();
     });
   });
 }
 
-/**
- * Downscales and re-compresses a photo on a canvas before it's kept in memory or
- * uploaded. Phone cameras can produce 4000px+ / 5-15MB images; holding several of
- * those as raw Files (plus their preview object URLs) is what was crashing mobile
- * browsers with an out-of-memory error. Resizing to a reasonable max dimension and
- * re-encoding as JPEG cuts that down to roughly 100-400KB per photo, while staying
- * plenty sharp for QA documentation.
- */
 function compressImage(file, maxDim = 1600, quality = 0.8) {
   return new Promise((resolve, reject) => {
-    if (!file.type || !file.type.startsWith('image/')) {
-      resolve(file);
-      return;
-    }
+    if (!file.type || !file.type.startsWith('image/')) { resolve(file); return; }
     const objectUrl = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
       try {
         let { width, height } = img;
         if (width > maxDim || height > maxDim) {
-          if (width > height) {
-            height = Math.round(height * (maxDim / width));
-            width = maxDim;
-          } else {
-            width = Math.round(width * (maxDim / height));
-            height = maxDim;
-          }
+          if (width > height) { height = Math.round(height * (maxDim / width)); width = maxDim; }
+          else { width = Math.round(width * (maxDim / height)); height = maxDim; }
         }
         const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
         canvas.toBlob((blob) => {
           URL.revokeObjectURL(objectUrl);
           if (!blob) { reject(new Error('canvas produced no blob')); return; }
           blob.name = (file.name || 'photo').replace(/\.\w+$/, '') + '.jpg';
           resolve(blob);
         }, 'image/jpeg', quality);
-      } catch (err) {
-        URL.revokeObjectURL(objectUrl);
-        reject(err);
-      }
+      } catch (err) { URL.revokeObjectURL(objectUrl); reject(err); }
     };
-    img.onerror = (err) => {
-      URL.revokeObjectURL(objectUrl);
-      reject(err);
-    };
+    img.onerror = (err) => { URL.revokeObjectURL(objectUrl); reject(err); };
     img.src = objectUrl;
   });
 }
 
 /* ---------------- SUBMIT ---------------- */
+
+function serializeDefect(d) {
+  return { id: d.id, description: d.description, severity: d.severity, unitsAffected: d.unitsAffected };
+}
 
 async function submitReport() {
   const problems = getAllValidationProblems();
@@ -1102,8 +1332,10 @@ async function submitReport() {
   btn.innerHTML = `<span class="spinner"></span>${escapeHtml(bi('submitting').en)}`;
 
   try {
+    const cd = state.categoryData;
     const payload = {
       category: state.category,
+      subcategory: state.subcategory,
       poNumber: state.poNumber,
       factoryCode: state.factoryCode,
       date: state.date,
@@ -1112,37 +1344,32 @@ async function submitReport() {
       creator: state.creator,
       productTitle: state.productTitle,
       qaType: state.qaType,
+      lotSize: state.lotSize,
+      inspectionLevel: state.inspectionLevel,
+      majorAql: state.majorAql,
+      minorAql: state.minorAql,
       materials: state.materials,
       printingMethod: state.printingMethod,
       categoryData: {
-        fit: state.categoryData.fit,
-        sizeRows: state.categoryData.sizeRows,
-        fabricColorMatch: state.categoryData.fabricColorMatch,
-        fabricWeightMatch: state.categoryData.fabricWeightMatch,
-        embroideryColorMatch: state.categoryData.embroideryColorMatch,
-        embroideryDimMatch: state.categoryData.embroideryDimMatch,
-        printColorMatch: state.categoryData.printColorMatch,
-        printDimMatch: state.categoryData.printDimMatch,
-        washTagMatch: state.categoryData.washTagMatch,
-        generalSizingMatch: state.categoryData.generalSizingMatch,
-        packagingCardMatch: state.categoryData.packagingCardMatch,
-        bagTagsCorrect: state.categoryData.bagTagsCorrect,
-        customNotes: state.categoryData.customNotes
+        fit: cd.fit,
+        sizeRows: cd.sizeRows,
+        ...Object.fromEntries(CHECKLIST_KEYS.map((key) => [key, {
+          status: cd[key].status, notes: cd[key].notes,
+          defects: (cd[key].defects || []).map(serializeDefect)
+        }])),
+        customNotes: cd.customNotes
       },
-      issues: state.issues.map((i) => ({ description: i.description, severity: i.severity }))
+      additionalIssues: state.additionalIssues.map(serializeDefect)
     };
 
     const formData = new FormData();
     formData.append('payload', JSON.stringify(payload));
     state.photos.general.forEach((f) => formData.append('photo_general', f, f.name));
     state.photos.tags.forEach((f) => formData.append('photo_tags', f, f.name));
-    Object.keys(state.categoryData.sectionPhotos).forEach((sectionKey) => {
-      state.categoryData.sectionPhotos[sectionKey].forEach((f) => {
-        formData.append(`photo_section_${sectionKey === 'washTag' ? 'washtag' : sectionKey}`, f, f.name);
-      });
-    });
-    state.issues.forEach((issue, idx) => {
-      issue.photos.forEach((f) => formData.append(`photo_issue_${idx}`, f, f.name));
+    state.categoryData.sectionPhotos.sizing.forEach((f) => formData.append('photo_section_sizing', f, f.name));
+
+    collectAllDefects().forEach((d) => {
+      (d.photos || []).forEach((f) => formData.append(`photo_defect_${d.id}`, f, f.name));
     });
 
     const res = await fetch('/api/submit', { method: 'POST', body: formData });
@@ -1192,9 +1419,10 @@ function resetApp() {
   otherModeFlags.creator = false;
   otherModeFlags.qaLead = false;
   Object.assign(state, {
-    category: null,
+    category: null, subcategory: null,
     poNumber: '', factoryCode: '', date: todayStr(), pointCheckRate: '', qaLead: '',
     creator: '', productTitle: '', qaType: 'pre_production',
+    lotSize: '', inspectionLevel: 'II', majorAql: 2.5, minorAql: 4.0,
     materials: '', printingMethod: '',
     categoryData: {
       fit: '', sizeRows: [],
@@ -1209,10 +1437,10 @@ function resetApp() {
       packagingCardMatch: emptyChecklistEntry(),
       bagTagsCorrect: emptyChecklistEntry(),
       customNotes: '',
-      sectionPhotos: { fabric: [], embroidery: [], printing: [], washTag: [], sizing: [], packaging: [] }
+      sectionPhotos: { sizing: [] }
     },
     photos: { general: [], tags: [] },
-    issues: []
+    additionalIssues: []
   });
   goTo(0);
 }

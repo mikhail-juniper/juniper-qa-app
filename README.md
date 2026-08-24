@@ -100,6 +100,45 @@ need — flag it and we'll adjust before moving to the real deployment.
   off a phone camera). This should fix the low-memory crash when adding new photos on
   a phone. If it still happens on a particular device, let me know - it likely means
   that device needs an even smaller size cap than the current default.
+- **Product categories now have a two-level structure**: Apparel (Hoodie, T-Shirt,
+  Sweatshirt, Hat, Other), Plush Toys (Standard, Mini, Electronic), Bags (Backpack,
+  Lunchbox, Purse, Tote, Other), Accessories (Keychain, Pin, Notebook/Sketchbook,
+  Other), and Other. Only Apparel's subcategories link to real measurement charts
+  (`config/fits.json`), since that's the only category with real spreadsheet data.
+  One thing to flag: your Apparel subcategory list didn't include "Jacket," but we do
+  have real Jacket measurements from your spreadsheet - I mapped Apparel → "Other" to
+  show the full fit list including Jacket as a fallback. Let me know if Jacket should
+  be its own subcategory instead.
+- **Real AQL sampling (ANSI/ASQ Z1.4 / ISO 2859-1)** replaces the old ad-hoc pass/fail
+  rule. On the Order Info step, enter the **Lot Size** (total units in the PO) and pick
+  an **Inspection Level** (defaults to General II, the standard choice) and **AQL
+  values** for Major/Minor defects (defaults 2.5/4.0, the industry standard - Critical
+  is always zero-tolerance, Accept 0/Reject 1). As soon as a lot size is entered, the
+  app shows the exact sample size code letter, required sample size, and Accept/Reject
+  thresholds for reference during the physical inspection. That same reference re-
+  appears live on the Issues step (updating as you log defects) and on the Review step,
+  and the full breakdown is now a section in the generated PDF. If a chosen AQL/lot
+  size combination requires more units than the sample size implies (edge case where
+  the underlying published table has no direct entry and points to a different sample
+  size), the app inspects at the larger of the two implied sample sizes - a
+  conservative, standard-referenced simplification of applying the full arrow logic
+  by hand. If no lot size is entered, the app falls back to the old simple heuristic
+  (3+ minor issues, or 1+ major/critical issue) so it still works, but this is meant as
+  a stopgap, not the primary way to use it now.
+- **Defects are now logged inline, where they're found** — each section (Fabric,
+  Embroidery, Printing, Washing Tags, Sizing, Packaging) opens a small defect log
+  right there when you mark it "Fail": description, severity, **units affected**, and
+  a photo, all in one place. You can log more than one defect per section - matches
+  how an inspection actually happens on the floor, noting the problem the moment you
+  find it rather than reconstructing a list afterward.
+- **"Additional Issues" (last step before Review) is now a catch-all**, not the
+  primary place defects get counted - for anything that doesn't fit neatly into a
+  section above.
+- **The AQL tally sums units affected, not the number of log entries.** This fixes a
+  real gap in the first version: logging "found a defect across 20 units" as one
+  entry only counted as 1 toward the AQL threshold. It now correctly counts as 20.
+  Every defect requires a "Units Affected" count (defaults to 1) alongside its
+  description and photo.
 
 ---
 
