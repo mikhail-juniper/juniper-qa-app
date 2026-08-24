@@ -179,6 +179,11 @@ html, body {
   transition: border-color 0.15s, background 0.15s;
 }
 .category-option:active { transform: scale(0.99); }
+.category-option.has-subcat-open {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom: none;
+}
 .category-option.selected {
   border-color: var(--jc-teal);
   background: var(--jc-mint-light);
@@ -193,6 +198,13 @@ html, body {
 }
 .category-label-en { font-family: 'Lexend Deca', sans-serif; font-weight: 600; font-size: 15.5px; }
 .category-label-zh { font-size: 13px; color: var(--jc-muted); }
+.subcategory-inline {
+  background: var(--jc-mint-light);
+  border: 2px solid var(--jc-teal);
+  border-top: none;
+  border-radius: 0 0 var(--radius) var(--radius);
+  padding: 14px;
+}
 
 /* --- Form fields --- */
 .field { margin-bottom: 16px; }
@@ -470,6 +482,51 @@ input:focus, select:focus, textarea:focus {
 .size-table td.out-of-tol { background: var(--jc-fail-bg); }
 .size-table input.out-of-tol { border-color: var(--jc-fail); color: var(--jc-fail); font-weight: 700; }
 .size-table .tol-flag { color: var(--jc-fail); font-size: 10px; font-weight: 700; display: block; margin-top: 3px; }
+
+/* --- Per-size cards (apparel sizing entry, each with its own photos) --- */
+.size-card {
+  border: 1.5px solid var(--jc-border);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  margin-top: 12px;
+  background: #fafbfa;
+}
+.size-card-header {
+  font-family: 'Lexend Deca', sans-serif;
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--jc-teal-dark);
+  margin-bottom: 10px;
+}
+.size-point-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: 10px;
+}
+.size-point-field {
+  background: #fff;
+  border: 1px solid var(--jc-border);
+  border-radius: 8px;
+  padding: 8px;
+}
+.size-point-field.out-of-tol { background: var(--jc-fail-bg); border-color: var(--jc-fail); }
+.size-point-label { display: block; font-size: 11px; font-weight: 600; margin-bottom: 2px; }
+.size-point-field .std-val { font-size: 10px; color: var(--jc-muted); display: block; margin-bottom: 4px; }
+.size-point-field input {
+  width: 100%;
+  padding: 6px;
+  font-size: 14px;
+  text-align: center;
+  border: 1.5px solid var(--jc-border);
+  border-radius: 6px;
+}
+.size-point-field input.out-of-tol { border-color: var(--jc-fail); color: var(--jc-fail); font-weight: 700; }
+.size-point-field .tol-flag { color: var(--jc-fail); font-size: 9.5px; font-weight: 700; display: block; margin-top: 3px; }
+.size-card-photos {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--jc-border);
+}
 
 /* --- Issues --- */
 .issue-card {

@@ -261,3 +261,45 @@ changes needed if tiers, policy, or costs change.
 **"Additional Issues" is now framed as "Tolerance & Placement Issues"** - for finer
 issues like an off-center graphic or a slightly misaligned print, since the sections
 above already cover major issues like material and construction.
+
+---
+
+## Pre-Production vs Production Sample now work differently
+
+- **Top section of Order Info** (PO Number, Factory Code, Date, QA Lead, Creator,
+  Product Title, QA Type, PO Quantity, Product Complexity/Risk) is always filled in
+  regardless of QA Type.
+- **Pre-Production Sample**: AQL sampling doesn't apply at all - the whole AQL card is
+  replaced with a short note. You still go through every inspection section, just on
+  a handful of hand-checked units (at least one per size).
+- **Production Sample**: the full AQL card appears, showing:
+  1. A **recommendation** (Creator Tier, Estimated Order Value, recommended Point
+     Check % and Inspection Level) computed live from Creator + PO Quantity + Risk.
+  2. A **reference threshold table** for that recommendation (informational).
+  3. An **Actual Spot Check %** field (required for Production) - once filled in,
+  4. An **Actual Thresholds** table appears, using the real number of units checked
+     (PO Quantity x Actual %) to determine Accept/Reject - not the theoretical
+     recommended sample size. Checking fewer units than recommended (e.g. during a
+     busy period) correctly tightens the allowable defect count, and vice versa.
+
+One nuance worth knowing: the published AQL standard has a ceiling for a given AQL
+value - checking far more units than the standard's own table defines for that AQL
+doesn't keep expanding the allowed defect count indefinitely (that's a property of
+the real ANSI/ASQ Z1.4 table itself, not a shortcut on my end).
+
+## Other changes this round
+
+- **Category → Subcategory** now displays inline - selecting a category shows its
+  subcategory chips directly attached below that card, not below the whole list.
+- **General section photos are back**, alongside the per-defect photos from last
+  time - each inspection section (Fabric, Embroidery, Printing, Washing Tags, Sizing,
+  Packaging) now has both a general documentation photo area (always available) and
+  the required photo(s) on any logged defect.
+- **Apparel sizing now has a photo box per size** instead of one shared "Sizing
+  Photos" area - easier to keep organized when checking multiple sizes.
+- **Tolerance guidance placeholders** added for Plush, Bags, Accessories, and Other on
+  the Sizing step - these are clearly marked as placeholder text and need your real
+  numbers; apparel's real tolerance already comes from the measurement chart itself.
+- **"Additional Issues" → "Tolerance & Placement Issues"** - reframed as the spot for
+  finer issues like an off-center graphic or slightly misaligned print, since the
+  sections above already cover major issues like material and construction.

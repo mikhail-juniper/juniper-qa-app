@@ -135,7 +135,6 @@
   "aqlMinor": { "en": "Minor", "zh": "轻微" },
   "aqlAccept": { "en": "Accept ≤", "zh": "合格 ≤" },
   "aqlReject": { "en": "Reject ≥", "zh": "不合格 ≥" },
-  "aqlNeedLotSize": { "en": "Enter a lot size above to calculate the required sample size and AQL thresholds.", "zh": "请在上方输入批量以计算所需样本数量及AQL标准。" },
   "aqlFallbackNotice": { "en": "No lot size was entered, so a simplified pass/fail rule was used instead of AQL sampling.", "zh": "未输入批量，因此使用了简化的合格/不合格规则，而非AQL抽样标准。" },
   "defectTally": { "en": "Found", "zh": "数量" },
   "resultReasonAqlCritical": { "en": "Critical defects exceed the AQL accept threshold", "zh": "致命缺陷数量超出AQL合格标准" },
@@ -173,5 +172,19 @@
   "manageAqlTableHelp": { "en": "For each Tier, Risk, and PO Size combination, set the recommended Point Check % range and Inspection Level.", "zh": "为每个等级、风险及订单规模组合设置建议的抽检比例范围及检验水平。" },
   "manageUnitCosts": { "en": "Unit Costs", "zh": "单件成本" },
   "manageUnitCostsHelp": { "en": "Rough per-unit cost used to estimate PO order value (PO Quantity x unit cost), which determines the PO Size band above.", "zh": "用于估算订单价值（订单数量 x 单件成本）的大致单件成本，从而确定上方的订单规模区间。" },
-  "defaultTierLabel": { "en": "Default Tier (for creators not listed)", "zh": "默认等级（适用于未列出的创作者）" }
+  "defaultTierLabel": { "en": "Default Tier (for creators not listed)", "zh": "默认等级（适用于未列出的创作者）" },
+  "aqlNeedLotSize": { "en": "Enter a PO quantity above to calculate the required sample size and AQL thresholds.", "zh": "请在上方输入订单数量以计算所需样本数量及AQL标准。" },
+  "aqlPreProductionNotice": { "en": "Pre-Production Sample: AQL sampling doesn't apply here. Check a few units by hand, at least one of each size, using the same sections below.", "zh": "产前样品：此处不适用AQL抽样。请手动检查少量样品（每个尺码至少一件），并按照下方相同的检查项目进行。" },
+  "recommendationReferenceTitle": { "en": "Recommended Spot Check % & Reference Thresholds", "zh": "建议抽检比例及参考标准" },
+  "actualDeterminationTitle": { "en": "Actual Thresholds (based on your entered spot check %)", "zh": "实际标准（根据所填抽检比例计算）" },
+  "actualCount": { "en": "Units Actually Checked", "zh": "实际检查件数" },
+  "enterActualSpotCheckFirst": { "en": "Enter the actual spot check % below to see the real Accept/Reject thresholds that will determine pass/fail.", "zh": "请在下方输入实际抽检比例，以查看决定合格/不合格的实际标准。" },
+  "actualSpotCheckRequired": { "en": "Actual Spot Check % is required for a Production Sample", "zh": "量产样品必须填写实际抽检比例" },
+  "sectionPhotosGeneral": { "en": "Section Photos", "zh": "本项照片" },
+  "sizingPhotosForSize": { "en": "Photos for this size", "zh": "该尺码照片" },
+  "toleranceGuidancePlush": { "en": "Placeholder guidance: general dimensions (height, width) should be within about ±0.5 in of the approved sample. Please confirm the real tolerance with your team.", "zh": "占位参考：整体尺寸（高度、宽度）应与已批准样品相差不超过约0.5英寸。请与团队确认真实公差标准。" },
+  "toleranceGuidanceBags": { "en": "Placeholder guidance: overall dimensions should be within about ±0.5 in of the approved sample; strap/handle length within about ±0.25 in. Please confirm the real tolerance with your team.", "zh": "占位参考：整体尺寸应与已批准样品相差不超过约0.5英寸；背带/提手长度相差不超过约0.25英寸。请与团队确认真实公差标准。" },
+  "toleranceGuidanceAccessories": { "en": "Placeholder guidance: dimensions should be within about ±0.125 in of the approved sample. Please confirm the real tolerance with your team.", "zh": "占位参考：尺寸应与已批准样品相差不超过约0.125英寸。请与团队确认真实公差标准。" },
+  "toleranceGuidanceOther": { "en": "No standard tolerance defined yet for this category - use your judgment and compare against the approved sample.", "zh": "该类别尚无标准公差参考，请凭经验并与已批准样品进行比对。" },
+  "toleranceReferenceTitle": { "en": "Tolerance Reference", "zh": "公差参考" }
 }

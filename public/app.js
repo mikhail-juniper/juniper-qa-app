@@ -33,7 +33,7 @@ const state = {
     packagingCardMatch: emptyChecklistEntry(),
     bagTagsCorrect: emptyChecklistEntry(),
     customNotes: '',
-    sectionPhotos: { sizing: [] }
+    sectionPhotos: { fabric: [], embroidery: [], printing: [], washTag: [], packaging: [], sizing: [] }
   },
   photos: { general: [], tags: [] },
   additionalIssues: []
@@ -205,6 +205,35 @@ function syncInspectionLevelToRecommendation() {
   if (rec) state.inspectionLevel = levelNumberToRoman(rec.inspectionLevel);
 }
 
+function getEffectiveCodeLetterFromCount(actualCount) {
+  if (!CONFIG.aql) return null;
+  const order = CONFIG.aql.codeLetterOrder;
+  let best = null;
+  for (const letter of order) {
+    const row = CONFIG.aql.tableB[letter];
+    if (row.sampleSize <= actualCount) best = letter;
+    else break;
+  }
+  return best;
+}
+function computeActualAqlPlan() {
+  const qty = parseInt(state.poQuantity, 10);
+  const pct = parseFloat(String(state.actualSpotCheckPercent).replace('%', ''));
+  if (isNaN(qty) || qty < 1 || isNaN(pct) || pct <= 0) return null;
+  const actualCount = Math.round(qty * (pct / 100));
+  if (actualCount < 2) return null;
+  const codeLetter = getEffectiveCodeLetterFromCount(actualCount);
+  if (!codeLetter) return null;
+  const majorPlan = getPlan(codeLetter, state.majorAql);
+  const minorPlan = getPlan(codeLetter, state.minorAql);
+  if (!majorPlan || !minorPlan) return null;
+  return {
+    actualCount, codeLetter, majorAql: state.majorAql, minorAql: state.minorAql,
+    critical: { sampleSize: actualCount, ac: 0, re: 1, codeLetterUsed: codeLetter },
+    major: majorPlan, minor: minorPlan
+  };
+}
+
 /* ---------------- DEFECT COLLECTION (mirrors lib/passFail.js) ---------------- */
 
 function collectAllDefects() {
@@ -362,6 +391,10 @@ function validateStep(s) {
       if (!state[f] || !String(state[f]).trim()) { markError(f); ok = false; }
     });
     if (!state.poQuantity || parseInt(state.poQuantity, 10) < 2) { markError('poQuantity'); ok = false; }
+    if (state.qaType === 'production' && !state.actualSpotCheckPercent) {
+      markError('actualSpotCheckPercent');
+      ok = false;
+    }
     if (!ok) showToast('Please fill in all required fields / 请填写所有必填项', true);
   } else if (name === 'inspectionDetails') {
     ok = validateChecklistStepGeneric(name);
@@ -402,6 +435,7 @@ function getAllValidationProblems() {
     if (!state[f] || !String(state[f]).trim()) problems.push(bi(f));
   });
   if (!state.poQuantity || parseInt(state.poQuantity, 10) < 2) problems.push(bi('poQuantity'));
+  if (state.qaType === 'production' && !state.actualSpotCheckPercent) problems.push(bi('actualSpotCheckRequired'));
 
   const detailDefs = checklistDefsForStep('inspectionDetails');
   const sizingDefs = state.category === 'apparel' ? [] : checklistDefsForStep('sizing');
@@ -449,20 +483,21 @@ function computeOverallResult() {
   const allDefects = collectAllDefects();
   const { critical: criticalCount, major: majorCount, minor: minorCount } = sumDefectsBySeverity(allDefects);
 
-  const plan = state.poQuantity ? computeAqlPlan({
-    lotSize: state.poQuantity, inspectionLevel: state.inspectionLevel, majorAql: state.majorAql, minorAql: state.minorAql
-  }) : null;
-
   let aql;
-  if (plan) {
-    if (criticalCount > plan.critical.ac) reasons.push('aqlCritical');
-    if (majorCount > plan.major.ac) reasons.push('aqlMajor');
-    if (minorCount > plan.minor.ac) reasons.push('aqlMinor');
-    aql = { ...plan, criticalCount, majorCount, minorCount, isFallback: false };
+  if (state.qaType === 'pre_production') {
+    aql = { criticalCount, majorCount, minorCount, isFallback: true, isPreProduction: true };
   } else {
-    if (minorCount >= 3) reasons.push('minor');
-    if (majorCount + criticalCount >= 1) reasons.push('major');
-    aql = { criticalCount, majorCount, minorCount, isFallback: true };
+    const actualPlan = state.actualSpotCheckPercent ? computeActualAqlPlan() : null;
+    if (actualPlan) {
+      if (criticalCount > actualPlan.critical.ac) reasons.push('aqlCritical');
+      if (majorCount > actualPlan.major.ac) reasons.push('aqlMajor');
+      if (minorCount > actualPlan.minor.ac) reasons.push('aqlMinor');
+      aql = { ...actualPlan, criticalCount, majorCount, minorCount, isFallback: false, isActual: true };
+    } else {
+      if (minorCount >= 3) reasons.push('minor');
+      if (majorCount + criticalCount >= 1) reasons.push('major');
+      aql = { criticalCount, majorCount, minorCount, isFallback: true };
+    }
   }
 
   return { overall: reasons.length ? 'fail' : 'pass', reasons, aql };
@@ -473,7 +508,8 @@ function computeOverallResult() {
 function getPhotoArray(fieldId) {
   if (fieldId === 'general') return state.photos.general;
   if (fieldId === 'tags') return state.photos.tags;
-  if (fieldId === 'section:sizing') return state.categoryData.sectionPhotos.sizing;
+  if (fieldId.startsWith('section:')) return state.categoryData.sectionPhotos[fieldId.split(':')[1]];
+  if (fieldId.startsWith('sizerow:')) return state.categoryData.sizeRows[parseInt(fieldId.split(':')[1], 10)].photos;
   if (fieldId.startsWith('defect:')) {
     const d = findDefectById(fieldId.split(':')[1]);
     return d ? d.photos : [];
@@ -507,31 +543,32 @@ function renderCategoryStep() {
   const catCards = orderedKeys.map((key) => {
     const c = cats[key];
     const sel = state.category === key ? 'selected' : '';
-    return `<div class="category-option ${sel}" data-cat="${key}">
+    const cardHtml = `<div class="category-option ${sel} ${key === state.category && c.subcategories && c.subcategories.length ? 'has-subcat-open' : ''}" data-cat="${key}">
       <div class="category-icon">${c.icon || '📦'}</div>
       <div>
         <div class="category-label-en">${escapeHtml(c.label_en)}</div>
         <div class="category-label-zh">${escapeHtml(c.label_zh)}</div>
       </div>
     </div>`;
-  }).join('');
 
-  let subcatBlock = '';
-  if (categoryHasSubcategories()) {
-    const def = currentCategoryDef();
-    const chips = def.subcategories.map((s) => {
-      const sel = state.subcategory === s.key ? 'selected' : '';
-      return `<div class="segmented-option ${sel}" data-subcat="${s.key}" style="flex: 0 0 auto; min-width: 110px;">
-        ${escapeHtml(s.label_en)}<span class="zh">${escapeHtml(s.label_zh)}</span>
-      </div>`;
-    }).join('');
-    subcatBlock = `
-      <div class="card" style="margin-top:14px;">
-        <div class="section-title">${biBlockHtml('selectSubcategory', 'Select Type')}</div>
-        <div class="segmented" style="flex-wrap:wrap;">${chips}</div>
-      </div>
-    `;
-  }
+    let inlineSubcatBlock = '';
+    if (key === state.category && c.subcategories && c.subcategories.length) {
+      const chips = c.subcategories.map((s) => {
+        const subSel = state.subcategory === s.key ? 'selected' : '';
+        return `<div class="segmented-option ${subSel}" data-subcat="${s.key}" style="flex: 0 0 auto; min-width: 100px;">
+          ${escapeHtml(s.label_en)}<span class="zh">${escapeHtml(s.label_zh)}</span>
+        </div>`;
+      }).join('');
+      inlineSubcatBlock = `
+        <div class="subcategory-inline">
+          <div class="section-photos-label">${biBlockHtml('selectSubcategory', 'Select Type')}</div>
+          <div class="segmented" style="flex-wrap:wrap;">${chips}</div>
+        </div>
+      `;
+    }
+
+    return `<div>${cardHtml}${inlineSubcatBlock}</div>`;
+  }).join('');
 
   return `
     <div style="display:flex; justify-content:flex-end; margin-bottom:4px;">
@@ -540,7 +577,6 @@ function renderCategoryStep() {
     <div class="step-eyebrow">${biHtml('step', 'Step')} 1 / 7</div>
     <div class="step-title">Select Product Category<span class="zh">选择产品类别</span></div>
     <div class="category-grid">${catCards}</div>
-    ${subcatBlock}
     <div class="nav-buttons">
       <button class="btn btn-primary" id="btnNext">${biBlockHtml('next', 'Next')}</button>
     </div>
@@ -549,8 +585,6 @@ function renderCategoryStep() {
 
 /* ---- Step 1: Order Info (+ AQL setup) ---- */
 function renderOrderInfoStep() {
-  const aqlOptions = (CONFIG.aql && CONFIG.aql.aqlColumns) || [0.065, 0.10, 0.15, 0.25, 0.40, 0.65, 1.0, 1.5, 2.5, 4.0, 6.5];
-
   return `
     <div class="step-eyebrow">${biHtml('step', 'Step')} 2 / 7</div>
     <div class="step-title">Order Information<span class="zh">订单信息</span></div>
@@ -572,10 +606,6 @@ function renderOrderInfoStep() {
           ${segOption('qaType', 'production', 'production', state.qaType)}
         </div>
       </div>
-    </div>
-
-    <div class="card">
-      <div class="section-title">${biBlockHtml('aqlReferenceTitle', 'AQL Sampling Reference')}</div>
       ${numberField('poQuantity', 'poQuantity', state.poQuantity, { required: true, placeholderKey: 'poQuantityPlaceholder' })}
       <div class="field">
         <label class="field-label">${biBlockHtml('productRisk', 'Product Complexity/Risk')}</label>
@@ -583,7 +613,66 @@ function renderOrderInfoStep() {
           ${['high', 'medium', 'low'].map((r) => `<div class="segmented-option ${state.productRisk === r ? 'selected' : ''}" data-seg="productRisk" data-val="${r}">${escapeHtml(bi('risk' + r.charAt(0).toUpperCase() + r.slice(1)).en)}<span class="zh">${escapeHtml(bi('risk' + r.charAt(0).toUpperCase() + r.slice(1)).zh)}</span></div>`).join('')}
         </div>
       </div>
-      <div class="field">
+    </div>
+
+    <div id="aqlSection">${renderAqlSection()}</div>
+
+    <div class="nav-buttons">
+      <button class="btn btn-secondary" id="btnBack">${biBlockHtml('back', 'Back')}</button>
+      <button class="btn btn-primary" id="btnNext">${biBlockHtml('next', 'Next')}</button>
+    </div>
+  `;
+}
+
+/** The whole conditional AQL card - hidden for Pre-Production, full recommendation
+ *  + reference + actual-spot-check flow for Production. Re-rendered into
+ *  #aqlSection whenever PO Quantity / Risk / Creator / QA Type / AQL settings change,
+ *  without a full page re-render (keeps focus/scroll stable while typing). */
+function renderAqlSection() {
+  if (state.qaType === 'pre_production') {
+    return `
+      <div class="card">
+        <div class="section-title">${biBlockHtml('aqlReferenceTitle', 'AQL Sampling Reference')}</div>
+        <div class="section-help">${escapeHtml(bi('aqlPreProductionNotice').en)}<br/>${escapeHtml(bi('aqlPreProductionNotice').zh)}</div>
+      </div>
+    `;
+  }
+
+  const aqlOptions = (CONFIG.aql && CONFIG.aql.aqlColumns) || [0.065, 0.10, 0.15, 0.25, 0.40, 0.65, 1.0, 1.5, 2.5, 4.0, 6.5];
+  syncInspectionLevelToRecommendation();
+  const rec = getAqlRecommendation();
+
+  const recBlock = rec ? `
+    <div class="aql-preview">
+      <div class="aql-preview-row"><span>${escapeHtml(bi('creatorTierLabel').en)} <span class="zh">${escapeHtml(bi('creatorTierLabel').zh)}</span></span><strong>Tier ${rec.tier}</strong></div>
+      <div class="aql-preview-row"><span>${escapeHtml(bi('orderValue').en)} <span class="zh">${escapeHtml(bi('orderValue').zh)}</span></span><strong>$${rec.orderValue.toLocaleString()}</strong></div>
+      <div class="aql-preview-row"><span>${escapeHtml(bi('recommendedPointCheck').en)} <span class="zh">${escapeHtml(bi('recommendedPointCheck').zh)}</span></span><strong>${escapeHtml(rec.pointCheck)}</strong></div>
+      <div class="aql-preview-row"><span>${escapeHtml(bi('recommendedInspectionLevel').en)} <span class="zh">${escapeHtml(bi('recommendedInspectionLevel').zh)}</span></span><strong>General ${rec.inspectionLevel}</strong></div>
+    </div>
+  ` : `<div class="section-help" style="margin-top:8px;">${escapeHtml(bi('needMoreInfoForRecommendation').en)}<br/>${escapeHtml(bi('needMoreInfoForRecommendation').zh)}</div>`;
+
+  const referencePlan = state.poQuantity ? computeAqlPlan({
+    lotSize: state.poQuantity, inspectionLevel: state.inspectionLevel, majorAql: state.majorAql, minorAql: state.minorAql
+  }) : null;
+  const referenceTable = referencePlan ? aqlThresholdTableHtml(referencePlan) : `<div class="section-help" style="margin-top:8px;">${escapeHtml(bi('aqlNeedLotSize').en)}<br/>${escapeHtml(bi('aqlNeedLotSize').zh)}</div>`;
+
+  const actualPlan = computeActualAqlPlan();
+  const actualBlock = state.actualSpotCheckPercent
+    ? (actualPlan
+      ? `
+        <div class="section-title" style="margin-top:14px;">${biBlockHtml('actualDeterminationTitle', 'Actual Thresholds')}</div>
+        <div class="section-help">${escapeHtml(bi('actualCount').en)}: <strong>${actualPlan.actualCount}</strong></div>
+        ${aqlThresholdTableHtml(actualPlan)}
+      `
+      : `<div class="section-help" style="margin-top:10px;">${escapeHtml(bi('aqlNeedLotSize').en)}</div>`)
+    : `<div class="section-help" style="margin-top:10px;">${escapeHtml(bi('enterActualSpotCheckFirst').en)}<br/>${escapeHtml(bi('enterActualSpotCheckFirst').zh)}</div>`;
+
+  return `
+    <div class="card">
+      <div class="section-title">${biBlockHtml('aqlRecommendationTitle', 'AQL Recommendation')}</div>
+      ${recBlock}
+
+      <div class="field" style="margin-top:14px;">
         <label class="field-label">${biBlockHtml('inspectionLevel', 'Inspection Level')}</label>
         <div class="segmented">
           ${['I', 'II', 'III'].map((lvl) => `<div class="segmented-option ${state.inspectionLevel === lvl ? 'selected' : ''}" data-seg-level="${lvl}">${lvl}</div>`).join('')}
@@ -593,43 +682,35 @@ function renderOrderInfoStep() {
         <div style="flex:1">${selectNumberField('majorAql', 'majorAql', state.majorAql, aqlOptions)}</div>
         <div style="flex:1">${selectNumberField('minorAql', 'minorAql', state.minorAql, aqlOptions)}</div>
       </div>
-      <div id="aqlLivePreview">${renderAqlLivePreview()}</div>
+
+      <div class="section-title" style="margin-top:14px;">${biBlockHtml('recommendationReferenceTitle', 'Reference Thresholds')}</div>
+      ${referenceTable}
     </div>
 
-    <div class="nav-buttons">
-      <button class="btn btn-secondary" id="btnBack">${biBlockHtml('back', 'Back')}</button>
-      <button class="btn btn-primary" id="btnNext">${biBlockHtml('next', 'Next')}</button>
+    <div class="card">
+      <div class="section-title">${biBlockHtml('actualSpotCheckPercent', 'Actual Spot Check Percentage')}<span class="required">*</span></div>
+      <div class="section-help">${escapeHtml(bi('actualSpotCheckHelp').en)}<br/>${escapeHtml(bi('actualSpotCheckHelp').zh)}</div>
+      <div class="field" data-field="actualSpotCheckPercent">
+        <select data-bind-live="actualSpotCheckPercent">
+          <option value="">${escapeHtml(bi('selectPlaceholder').en)} / ${escapeHtml(bi('selectPlaceholder').zh)}</option>
+          ${(OPTIONS.pointCheckRates || []).map((o) => `<option value="${escapeHtml(o)}" ${state.actualSpotCheckPercent === o ? 'selected' : ''}>${escapeHtml(o)}</option>`).join('')}
+        </select>
+      </div>
+      ${actualBlock}
     </div>
   `;
 }
 
-function renderAqlLivePreview() {
-  syncInspectionLevelToRecommendation();
-  const plan = state.poQuantity ? computeAqlPlan({
-    lotSize: state.poQuantity, inspectionLevel: state.inspectionLevel, majorAql: state.majorAql, minorAql: state.minorAql
-  }) : null;
-  if (!plan) {
-    return `<div class="section-help" style="margin-top:8px;">${escapeHtml(bi('aqlNeedLotSize').en)}<br/>${escapeHtml(bi('aqlNeedLotSize').zh)}</div>`;
-  }
+function aqlThresholdTableHtml(plan) {
   return `
-    <div class="aql-preview">
-      <div class="aql-preview-row">
-        <span>${escapeHtml(bi('aqlCodeLetter').en)} <span class="zh">${escapeHtml(bi('aqlCodeLetter').zh)}</span></span>
-        <strong>${escapeHtml(plan.codeLetter)}</strong>
-      </div>
-      <div class="aql-preview-row">
-        <span>${escapeHtml(bi('aqlSampleSize').en)} <span class="zh">${escapeHtml(bi('aqlSampleSize').zh)}</span></span>
-        <strong>${plan.sampleSize}</strong>
-      </div>
-      <table class="aql-preview-table">
-        <thead><tr><th></th><th>${escapeHtml(bi('aqlAccept').en)}</th><th>${escapeHtml(bi('aqlReject').en)}</th></tr></thead>
-        <tbody>
-          <tr><td>${escapeHtml(bi('aqlCritical').en)}</td><td>${plan.critical.ac}</td><td>${plan.critical.re}</td></tr>
-          <tr><td>${escapeHtml(bi('aqlMajor').en)} (${plan.majorAql})</td><td>${plan.major.ac}</td><td>${plan.major.re}</td></tr>
-          <tr><td>${escapeHtml(bi('aqlMinor').en)} (${plan.minorAql})</td><td>${plan.minor.ac}</td><td>${plan.minor.re}</td></tr>
-        </tbody>
-      </table>
-    </div>
+    <table class="aql-preview-table">
+      <thead><tr><th></th><th>${escapeHtml(bi('aqlAccept').en)}</th><th>${escapeHtml(bi('aqlReject').en)}</th></tr></thead>
+      <tbody>
+        <tr><td>${escapeHtml(bi('aqlCritical').en)}</td><td>${plan.critical.ac}</td><td>${plan.critical.re}</td></tr>
+        <tr><td>${escapeHtml(bi('aqlMajor').en)} (${plan.majorAql})</td><td>${plan.major.ac}</td><td>${plan.major.re}</td></tr>
+        <tr><td>${escapeHtml(bi('aqlMinor').en)} (${plan.minorAql})</td><td>${plan.minor.ac}</td><td>${plan.minor.re}</td></tr>
+      </tbody>
+    </table>
   `;
 }
 
@@ -729,11 +810,11 @@ function renderInspectionDetailsStep() {
     </div>
   `;
 
-  body += checklistCard('fabricSection', [['fabricColorMatch', 'fabricColorMatch'], ['fabricWeightMatch', 'fabricWeightMatch']]);
-  body += checklistCard('embroiderySection', [['embroideryColorMatch', 'embroideryColorMatch'], ['embroideryDimMatch', 'embroideryDimMatch']]);
-  body += checklistCard('printingSection', [['printColorMatch', 'printColorMatch'], ['printDimMatch', 'printDimMatch']]);
-  body += checklistCard('washTagSection', [['washTagMatch', 'washTagMatch']]);
-  body += checklistCard('packagingSection', [['packagingCardMatch', 'packagingCardMatch'], ['bagTagsCorrect', 'bagTagsCorrect']]);
+  body += checklistCard('fabricSection', [['fabricColorMatch', 'fabricColorMatch'], ['fabricWeightMatch', 'fabricWeightMatch']], 'fabric');
+  body += checklistCard('embroiderySection', [['embroideryColorMatch', 'embroideryColorMatch'], ['embroideryDimMatch', 'embroideryDimMatch']], 'embroidery');
+  body += checklistCard('printingSection', [['printColorMatch', 'printColorMatch'], ['printDimMatch', 'printDimMatch']], 'printing');
+  body += checklistCard('washTagSection', [['washTagMatch', 'washTagMatch']], 'washTag');
+  body += checklistCard('packagingSection', [['packagingCardMatch', 'packagingCardMatch'], ['bagTagsCorrect', 'bagTagsCorrect']], 'packaging');
 
   if (state.category === 'other') {
     body += `<div class="card">
@@ -819,11 +900,18 @@ function defectCard(d, ownerKey) {
   `;
 }
 
-function checklistCard(sectionKey, rows) {
+function checklistCard(sectionKey, rows, photoSectionKey) {
   return `
     <div class="card">
       <div class="section-title">${biBlockHtml(sectionKey)}</div>
       ${rows.map(([k, lk]) => checklistItem(k, lk)).join('')}
+      ${photoSectionKey ? `
+        <div class="section-photos-block">
+          <div class="section-photos-label">${biBlockHtml('sectionPhotosGeneral', 'Section Photos')}</div>
+          <div class="section-help" style="margin-bottom:6px;">${escapeHtml(bi('sectionPhotosHelp').en)} / ${escapeHtml(bi('sectionPhotosHelp').zh)}</div>
+          ${photoGrid('section:' + photoSectionKey, true)}
+        </div>
+      ` : ''}
     </div>
   `;
 }
@@ -847,10 +935,10 @@ function renderSizingStep() {
     if (state.categoryData.fit) {
       body += renderReferenceChart();
       body += renderSizeEntryTable();
-      body += renderSizingPhotosCard();
     }
   } else {
-    body += checklistCard('sizingSection', [['generalSizingMatch', 'generalSizingMatch']]);
+    body += renderToleranceGuidance();
+    body += checklistCard('sizingSection', [['generalSizingMatch', 'generalSizingMatch']], 'sizing');
   }
 
   return `
@@ -914,48 +1002,63 @@ function renderSizeEntryTable() {
   const cd = state.categoryData;
 
   if (!cd.sizeRows.length || cd._fitForRows !== cd.fit) {
-    cd.sizeRows = Object.keys(fitDef.sizes).map((size) => ({ size, measured: {} }));
+    cd.sizeRows = Object.keys(fitDef.sizes).map((size) => ({ size, measured: {}, photos: [] }));
     cd._fitForRows = cd.fit;
   }
 
-  const pointCols = fitDef.points.map((p) => {
-    const pl = fitDef.pointLabels[p] || { en: p, zh: '' };
-    return `<th>${escapeHtml(pl.en)}<span class="zh">${escapeHtml(pl.zh)}</span></th>`;
-  }).join('');
-
-  const rows = cd.sizeRows.map((row, ridx) => {
+  const cards = cd.sizeRows.map((row, ridx) => {
     const standard = fitDef.sizes[row.size] || {};
-    const cells = fitDef.points.map((p) => {
+    const pointFields = fitDef.points.map((p) => {
+      const pl = fitDef.pointLabels[p] || { en: p, zh: '' };
       const std = standard[p];
       const measuredVal = row.measured[p] !== undefined ? row.measured[p] : '';
       const measuredNum = parseFloat(measuredVal);
       const outOfTol = isOutOfTolerance(std, measuredVal === '' ? null : measuredNum, tol);
       return `
-        <td class="${outOfTol ? 'out-of-tol' : ''}" id="sizecell_${ridx}_${p}">
+        <div class="size-point-field ${outOfTol ? 'out-of-tol' : ''}" id="sizecell_${ridx}_${p}">
+          <label class="size-point-label">${escapeHtml(pl.en)} <span class="zh">${escapeHtml(pl.zh)}</span></label>
           <span class="std-val">${escapeHtml(bi('standard').en)}: ${escapeHtml(formatStandard(std))}</span>
           <input type="number" step="0.1" inputmode="decimal" value="${escapeHtml(measuredVal)}"
             class="${outOfTol ? 'out-of-tol' : ''}"
             data-size-row="${ridx}" data-size-point="${p}" placeholder="0.0" />
           <span class="tol-flag" style="display:${outOfTol ? 'inline' : 'none'}">${escapeHtml(bi('outOfTolerance').en)}</span>
-        </td>
+        </div>
       `;
     }).join('');
-    return `<tr><td class="size-name">${escapeHtml(row.size)}</td>${cells}</tr>`;
+
+    return `
+      <div class="size-card">
+        <div class="size-card-header">${escapeHtml(row.size)}</div>
+        <div class="size-point-grid">${pointFields}</div>
+        <div class="size-card-photos">
+          <div class="section-photos-label">${biBlockHtml('sizingPhotosForSize', 'Photos for this size')}</div>
+          ${photoGrid('sizerow:' + ridx, true)}
+        </div>
+      </div>
+    `;
   }).join('');
 
   return `
     <div class="card">
       <div class="section-title">${biBlockHtml('enterMeasurements', 'Enter Measurements')}</div>
       <div class="section-help">${escapeHtml(bi('sizeChartHelp').en)}<br/>${escapeHtml(bi('sizeChartHelp').zh)}</div>
-      <div class="size-table-wrap">
-        <table class="size-table">
-          <thead><tr><th>${escapeHtml(bi('size').en)}<span class="zh">${escapeHtml(bi('size').zh)}</span></th>${pointCols}</tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
+      ${cards}
     </div>
   `;
 }
+function renderToleranceGuidance() {
+  const catDef = currentCategoryDef();
+  const key = catDef && catDef.toleranceGuidanceKey;
+  if (!key) return '';
+  const text = bi(key);
+  return `
+    <div class="card" style="background:var(--jc-warn-bg); border-color:#F0D9A8;">
+      <div class="section-title" style="color:var(--jc-warn);">${biBlockHtml('toleranceReferenceTitle', 'Tolerance Reference')}</div>
+      <div class="section-help" style="color:var(--jc-warn);">${escapeHtml(text.en)}<br/>${escapeHtml(text.zh)}</div>
+    </div>
+  `;
+}
+
 function renderSizingPhotosCard() {
   return `
     <div class="card">
@@ -1030,6 +1133,9 @@ function renderAdditionalIssuesStep() {
 function renderAqlTallyCard() {
   const result = computeOverallResult();
   const aql = result.aql;
+  if (aql && aql.isPreProduction) {
+    return `<div class="section-help" style="margin-top:14px;">${escapeHtml(bi('aqlPreProductionNotice').en)}<br/>${escapeHtml(bi('aqlPreProductionNotice').zh)}</div>`;
+  }
   if (!aql || aql.isFallback) {
     return `<div class="section-help" style="margin-top:14px;">${escapeHtml(bi('aqlFallbackNotice').en)}<br/>${escapeHtml(bi('aqlFallbackNotice').zh)}</div>`;
   }
@@ -1039,8 +1145,8 @@ function renderAqlTallyCard() {
   };
   return `
     <div class="card" style="margin-top:14px;">
-      <div class="section-title">${biBlockHtml('aqlReferenceTitle', 'AQL Sampling Reference')}</div>
-      <div class="section-help">${escapeHtml(bi('aqlCodeLetter').en)}: <strong>${aql.codeLetter}</strong> &nbsp;•&nbsp; ${escapeHtml(bi('aqlSampleSize').en)}: <strong>${aql.sampleSize}</strong></div>
+      <div class="section-title">${biBlockHtml('actualDeterminationTitle', 'Actual Thresholds')}</div>
+      <div class="section-help">${escapeHtml(bi('actualCount').en)}: <strong>${aql.actualCount}</strong> &nbsp;•&nbsp; ${escapeHtml(bi('aqlCodeLetter').en)}: <strong>${aql.codeLetter}</strong></div>
       <table class="aql-preview-table" style="margin-top:8px;">
         <thead><tr><th></th><th>${escapeHtml(bi('defectTally').en)}</th><th>${escapeHtml(bi('aqlAccept').en)}</th><th>${escapeHtml(bi('aqlReject').en)}</th></tr></thead>
         <tbody>
@@ -1095,17 +1201,6 @@ function renderReviewStep() {
     ${renderAqlTallyCard()}
 
     <div class="card">
-      <div class="section-title">${biBlockHtml('actualSpotCheckPercent', 'Actual Spot Check Percentage')}</div>
-      <div class="section-help">${escapeHtml(bi('actualSpotCheckHelp').en)}<br/>${escapeHtml(bi('actualSpotCheckHelp').zh)}</div>
-      <div class="field">
-        <select data-bind="actualSpotCheckPercent">
-          <option value="">${escapeHtml(bi('selectPlaceholder').en)} / ${escapeHtml(bi('selectPlaceholder').zh)}</option>
-          ${(OPTIONS.pointCheckRates || []).map((o) => `<option value="${escapeHtml(o)}" ${state.actualSpotCheckPercent === o ? 'selected' : ''}>${escapeHtml(o)}</option>`).join('')}
-        </select>
-      </div>
-    </div>
-
-    <div class="card">
       <div class="review-block">
         <div class="review-block-title">${bi('poInfo').en} / ${bi('poInfo').zh}</div>
         ${reviewRow('poNumber', state.poNumber)}
@@ -1141,6 +1236,32 @@ function reviewRow(key, value) {
 
 /* ---------------- EVENT HANDLERS ---------------- */
 
+function attachDataBindLiveHandlers(root = document) {
+  root.querySelectorAll('[data-bind-live]').forEach((el) => {
+    const evt = (el.tagName === 'SELECT') ? 'change' : 'input';
+    el.addEventListener(evt, (e) => {
+      state[el.getAttribute('data-bind-live')] = e.target.value;
+      refreshAqlSection();
+    });
+  });
+}
+function attachSegLevelHandlers(root = document) {
+  root.querySelectorAll('[data-seg-level]').forEach((el) => {
+    el.addEventListener('click', () => {
+      state.inspectionLevel = el.getAttribute('data-seg-level');
+      state.inspectionLevelTouched = true;
+      refreshAqlSection();
+    });
+  });
+}
+function refreshAqlSection() {
+  const section = document.getElementById('aqlSection');
+  if (!section) return;
+  section.innerHTML = renderAqlSection();
+  attachDataBindLiveHandlers(section);
+  attachSegLevelHandlers(section);
+}
+
 function attachStepHandlers(name) {
   const btnBack = document.getElementById('btnBack');
   if (btnBack) btnBack.addEventListener('click', back);
@@ -1154,17 +1275,8 @@ function attachStepHandlers(name) {
     el.addEventListener(evt, (e) => setStateValue(el.getAttribute('data-bind'), e.target.value));
   });
 
-  document.querySelectorAll('[data-bind-live]').forEach((el) => {
-    const evt = (el.tagName === 'SELECT') ? 'change' : 'input';
-    el.addEventListener(evt, (e) => {
-      state[el.getAttribute('data-bind-live')] = e.target.value;
-      const preview = document.getElementById('aqlLivePreview');
-      if (preview) preview.innerHTML = renderAqlLivePreview();
-      document.querySelectorAll('[data-seg-level]').forEach((btn) => {
-        btn.classList.toggle('selected', btn.getAttribute('data-seg-level') === state.inspectionLevel);
-      });
-    });
-  });
+  attachDataBindLiveHandlers(document);
+  attachSegLevelHandlers(document);
 
   if (name === 'category') {
     document.querySelectorAll('.category-option').forEach((el) => {
@@ -1193,13 +1305,7 @@ function attachStepHandlers(name) {
         render();
       });
     });
-    document.querySelectorAll('[data-seg-level]').forEach((el) => {
-      el.addEventListener('click', () => {
-        state.inspectionLevel = el.getAttribute('data-seg-level');
-        state.inspectionLevelTouched = true;
-        render();
-      });
-    });
+    attachSegLevelHandlers(document);
     document.querySelectorAll('[data-select-other]').forEach((el) => {
       el.addEventListener('change', (e) => {
         const id = el.getAttribute('data-select-other');
@@ -1431,7 +1537,7 @@ async function submitReport() {
       printingMethod: state.printingMethod,
       categoryData: {
         fit: cd.fit,
-        sizeRows: cd.sizeRows,
+        sizeRows: (cd.sizeRows || []).map((row) => ({ size: row.size, measured: row.measured })),
         ...Object.fromEntries(CHECKLIST_KEYS.map((key) => [key, {
           status: cd[key].status, notes: cd[key].notes,
           defects: (cd[key].defects || []).map(serializeDefect)
@@ -1445,10 +1551,17 @@ async function submitReport() {
     formData.append('payload', JSON.stringify(payload));
     state.photos.general.forEach((f) => formData.append('photo_general', f, f.name));
     state.photos.tags.forEach((f) => formData.append('photo_tags', f, f.name));
-    state.categoryData.sectionPhotos.sizing.forEach((f) => formData.append('photo_section_sizing', f, f.name));
+    Object.keys(state.categoryData.sectionPhotos).forEach((sectionKey) => {
+      state.categoryData.sectionPhotos[sectionKey].forEach((f) => {
+        formData.append(`photo_section_${sectionKey === 'washTag' ? 'washtag' : sectionKey}`, f, f.name);
+      });
+    });
 
     collectAllDefects().forEach((d) => {
       (d.photos || []).forEach((f) => formData.append(`photo_defect_${d.id}`, f, f.name));
+    });
+    (state.categoryData.sizeRows || []).forEach((row, ridx) => {
+      (row.photos || []).forEach((f) => formData.append(`photo_sizerow_${ridx}`, f, f.name));
     });
 
     const res = await fetch('/api/submit', { method: 'POST', body: formData });
@@ -1517,7 +1630,7 @@ function resetApp() {
       packagingCardMatch: emptyChecklistEntry(),
       bagTagsCorrect: emptyChecklistEntry(),
       customNotes: '',
-      sectionPhotos: { sizing: [] }
+      sectionPhotos: { fabric: [], embroidery: [], printing: [], washTag: [], packaging: [], sizing: [] }
     },
     photos: { general: [], tags: [] },
     additionalIssues: []
