@@ -247,6 +247,20 @@ input:focus, select:focus, textarea:focus {
 .field.has-error textarea {
   border-color: var(--jc-fail);
 }
+.checklist-row.has-error {
+  background: var(--jc-fail-bg);
+  border-radius: 8px;
+  padding-left: 8px;
+  padding-right: 8px;
+  margin-left: -8px;
+  margin-right: -8px;
+}
+.section-photos-block.has-error,
+.card.has-error {
+  outline: 2px solid var(--jc-fail);
+  outline-offset: 2px;
+  border-radius: 10px;
+}
 
 .field-row { display: flex; gap: 10px; }
 .field-row .field { flex: 1; }
@@ -382,74 +396,36 @@ input:focus, select:focus, textarea:focus {
 .ref-chart-table th .zh { display: block; font-weight: 500; font-size: 9.5px; }
 .ref-chart-table td.size-name { font-weight: 700; text-align: left; background: #fafbfa; }
 
-/* --- Easier size entry: card per size with steppers --- */
-.size-entry-card {
-  border: 1.5px solid var(--jc-border);
-  border-radius: var(--radius-sm);
-  padding: 14px;
-  margin-top: 12px;
-  background: #fafcfa;
-}
-.size-entry-card.out-of-tol { border-color: var(--jc-fail); background: var(--jc-fail-bg); }
-.size-entry-header {
-  font-weight: 700;
-  font-size: 14.5px;
-  margin-bottom: 10px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.size-entry-header .flag {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--jc-fail);
-  background: #fff;
-  border: 1px solid var(--jc-fail);
-  border-radius: 6px;
-  padding: 2px 8px;
-}
-.size-entry-point { margin-bottom: 10px; }
-.size-entry-point:last-child { margin-bottom: 0; }
-.size-entry-point-label {
+/* --- Size chart entry (classic table, matches app.js render) --- */
+.size-table-wrap { overflow-x: auto; margin-top: 12px; -webkit-overflow-scrolling: touch; border-radius: 10px; border: 1px solid var(--jc-border); }
+.size-table { border-collapse: collapse; width: 100%; min-width: 480px; }
+.size-table th, .size-table td {
+  border-bottom: 1px solid var(--jc-border);
+  padding: 8px 6px;
   font-size: 12.5px;
-  font-weight: 600;
-  margin-bottom: 6px;
-  display: flex;
-  justify-content: space-between;
-}
-.size-entry-point-label .std {
-  font-weight: 500;
-  color: var(--jc-muted);
-  font-size: 11.5px;
-}
-.stepper {
-  display: flex;
-  align-items: stretch;
-  gap: 8px;
-}
-.stepper-btn {
-  width: 44px;
-  flex-shrink: 0;
-  border: 1.5px solid var(--jc-border);
-  background: #fff;
-  border-radius: var(--radius-sm);
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--jc-teal-dark);
-  display: flex; align-items: center; justify-content: center;
-  cursor: pointer;
-  user-select: none;
-}
-.stepper-btn:active { background: var(--jc-mint-light); }
-.stepper input {
-  flex: 1;
   text-align: center;
-  font-size: 18px;
-  font-weight: 700;
-  padding: 10px 4px;
+  vertical-align: top;
 }
-.stepper input.out-of-tol { color: var(--jc-fail); border-color: var(--jc-fail); }
-.tol-flag-inline { color: var(--jc-fail); font-size: 11px; font-weight: 700; text-align: center; margin-top: 4px; }
+.size-table th {
+  background: var(--jc-mint-light);
+  color: var(--jc-teal-dark);
+  font-weight: 700;
+}
+.size-table th .zh { display: block; font-weight: 500; font-size: 11px; color: var(--jc-muted-light); }
+.size-table td.size-name { font-weight: 700; text-align: left; background: #fafbfa; vertical-align: middle; }
+.size-table input {
+  width: 68px;
+  padding: 7px;
+  font-size: 15px;
+  text-align: center;
+  border: 1.5px solid var(--jc-border);
+  border-radius: 6px;
+  margin-top: 4px;
+}
+.size-table .std-val { font-size: 10.5px; color: var(--jc-muted); display: block; }
+.size-table td.out-of-tol { background: var(--jc-fail-bg); }
+.size-table input.out-of-tol { border-color: var(--jc-fail); color: var(--jc-fail); font-weight: 700; }
+.size-table .tol-flag { color: var(--jc-fail); font-size: 10px; font-weight: 700; display: block; margin-top: 3px; }
 
 /* --- Issues --- */
 .issue-card {

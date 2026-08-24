@@ -65,19 +65,27 @@ need — flag it and we'll adjust before moving to the real deployment.
 
 ## What's still placeholder / to confirm before going live
 
-- **`config/fits.json`** — All standard measurements are set to `0` right now
-  (meaning "not flagging" in test mode). Once you have real approved measurements per
-  size/fit, fill those in and the tolerance flagging will use real numbers. This file
-  is plain JSON, so anyone on your team can edit it directly, no code needed. Comments
-  at the top of the file explain the format.
+- **`config/fits.json`** — now populated with real approved measurements imported
+  from `Juniper - Size Charts.xlsx` for Crewnecks (4 fits), T-Shirt (9 fits), Hoodie
+  (7 fits), Jacket (5 fits), and Hat (1 fit) — 26 fits total. Jacket width and Hat
+  circumference are stored as approved ranges (e.g. "47-48.5 in") rather than a single
+  target number, and the tolerance check treats a measurement as out-of-range only if
+  it falls outside that range by more than the 0.5" buffer. Socks, Slippers, Onesie,
+  Shorts, and Sweatpants/Joggers were intentionally left out of this round (either no
+  data yet, or a different sizing model like shoe sizes) — let me know if you want
+  those added next.
 - **`config/options.json`** — the dropdown lists for Creator/Brand, Factory Code, Point
-  Check Rate, and QA/QC Lead. Also plain JSON, easy to edit directly (add/remove/reorder
-  entries any time).
-- **Chinese translations** — in `config/i18n.json`, one line per label. Easy to edit
-  directly if anything needs correcting.
-- **Pass/Fail logic** — currently: FAIL if any apparel measurement is out of tolerance,
-  FAIL if there are 3+ minor issues, FAIL if there's 1+ major/critical issue, otherwise
-  PASS. This lives in `lib/passFail.js` if you want to adjust the thresholds later.
+  Check Rate, and QA/QC Lead. Plain JSON, easy to edit directly.
+- **Chinese translations** — in `config/i18n.json`, one line per label.
+- **Pass/Fail logic** — FAIL if any apparel measurement is out of tolerance, FAIL if
+  3+ minor issues, FAIL if 1+ major/critical issue, otherwise PASS. Lives in
+  `lib/passFail.js`.
+- **Fail requires a photo** — marking any check as "Fail" makes that section's photo
+  upload required before moving on or submitting.
+- **The form won't let you submit** until every check has a Pass/Fail/N-A selected, any
+  required fail-photos are attached, and (for Apparel) a fit is picked with at least
+  one measurement entered. Anything still missing shows up in a red list on the Review
+  screen.
 
 ---
 

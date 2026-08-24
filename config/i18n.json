@@ -100,5 +100,11 @@
   "resultReasonMinor": { "en": "3 or more minor issues found", "zh": "发现3个或以上轻微问题" },
   "resultReasonMajor": { "en": "One or more major/critical issues found", "zh": "存在1个或以上严重/紧急问题" },
   "noIssuesReason": { "en": "No blocking issues found", "zh": "未发现影响判定的问题" },
-  "selectPlaceholder": { "en": "Select...", "zh": "请选择..." }
+  "selectPlaceholder": { "en": "Select...", "zh": "请选择..." },
+  "photoRequiredForFail": { "en": "A photo is required for any check marked Fail", "zh": "标记为不合格的检查项必须上传照片" },
+  "validationIncomplete": { "en": "Please complete all required items before submitting", "zh": "请在提交前完成所有必填项目" },
+  "selectFitRequired": { "en": "Please select a fit and enter at least one measurement", "zh": "请选择版型并至少输入一项测量值" },
+  "reviewIssuesTitle": { "en": "Before you submit", "zh": "提交前请检查" },
+  "allChecksRequired": { "en": "Please mark Pass, Fail, or N/A for every check", "zh": "请为每项检查选择合格、不合格或不适用" },
+  "sizingPhotos": { "en": "Sizing Photos", "zh": "尺寸照片" }
 }
