@@ -1,7 +1,10 @@
 /* Juniper QA/QC Report - frontend wizard (vanilla JS, no build step) */
 
-let CONFIG = { fits: { fits: {}, toleranceInches: 0.5 }, i18n: {} };
+let CONFIG = { fits: { fits: {}, toleranceInches: 0.5 }, i18n: {}, options: {} };
 let I18N = {};
+let OPTIONS = {};
+
+function emptyChecklistEntry() { return { status: '', notes: '' }; }
 
 const state = {
   category: null,
@@ -11,18 +14,19 @@ const state = {
   categoryData: {
     fit: '',
     sizeRows: [],
-    fabricColorMatch: { status: '', notes: '' },
-    fabricWeightMatch: { status: '', notes: '' },
-    embroideryColorMatch: { status: '', notes: '' },
-    embroideryDimMatch: { status: '', notes: '' },
-    printColorMatch: { status: '', notes: '' },
-    printDimMatch: { status: '', notes: '' },
-    washTagMatch: { status: '', notes: '' },
-    generalSizingMatch: { status: '', notes: '' },
-    sleeveDimMatch: { status: '', notes: '' },
-    packagingCardMatch: { status: '', notes: '' },
-    bagTagsCorrect: { status: '', notes: '' },
-    customNotes: ''
+    fabricColorMatch: emptyChecklistEntry(),
+    fabricWeightMatch: emptyChecklistEntry(),
+    embroideryColorMatch: emptyChecklistEntry(),
+    embroideryDimMatch: emptyChecklistEntry(),
+    printColorMatch: emptyChecklistEntry(),
+    printDimMatch: emptyChecklistEntry(),
+    washTagMatch: emptyChecklistEntry(),
+    generalSizingMatch: emptyChecklistEntry(),
+    sleeveDimMatch: emptyChecklistEntry(),
+    packagingCardMatch: emptyChecklistEntry(),
+    bagTagsCorrect: emptyChecklistEntry(),
+    customNotes: '',
+    sectionPhotos: { fabric: [], embroidery: [], printing: [], washTag: [], sizing: [], packaging: [] }
   },
   photos: { general: [], tags: [] },
   issues: []
@@ -38,19 +42,17 @@ function todayStr() {
 
 function bi(key, fallback) {
   const e = I18N[key];
-  if (!e) return fallback || key;
+  if (!e) return { en: fallback || key, zh: '' };
   return { en: e.en, zh: e.zh };
 }
 
 function biHtml(key, fallback, tag = 'span') {
   const e = bi(key, fallback);
-  if (typeof e === 'string') return e;
   return `${escapeHtml(e.en)} <${tag} class="zh">${escapeHtml(e.zh)}</${tag}>`;
 }
 
 function biBlockHtml(key, fallback) {
   const e = bi(key, fallback);
-  if (typeof e === 'string') return e;
   return `${escapeHtml(e.en)}<span class="zh">${escapeHtml(e.zh)}</span>`;
 }
 
@@ -66,6 +68,7 @@ async function loadConfig() {
     const res = await fetch('/api/config');
     CONFIG = await res.json();
     I18N = CONFIG.i18n || {};
+    OPTIONS = CONFIG.options || {};
   } catch (e) {
     console.error('Failed to load config', e);
     showToast('Failed to load app configuration / 加载配置失败', true);
@@ -88,7 +91,7 @@ function goTo(newStep) {
   step = newStep;
   updateProgress();
   render();
-  window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
+  window.scrollTo(0, 0);
 }
 
 function next() {
@@ -124,6 +127,54 @@ function markError(fieldId) {
 }
 function clearErrors() {
   document.querySelectorAll('.has-error').forEach((el) => el.classList.remove('has-error'));
+}
+
+/* ---------------- PASS / FAIL LOGIC (mirrors lib/passFail.js) ---------------- */
+
+function computeOverallResult() {
+  const reasons = [];
+  const cd = state.categoryData;
+
+  if (state.category === 'apparel' && cd.fit && CONFIG.fits.fits[cd.fit]) {
+    const fitDef = CONFIG.fits.fits[cd.fit];
+    const tol = CONFIG.fits.toleranceInches || 0.5;
+    outer:
+    for (const row of (cd.sizeRows || [])) {
+      const standard = fitDef.sizes[row.size] || {};
+      for (const point of fitDef.points) {
+        const std = parseFloat(standard[point]);
+        const measured = row.measured && row.measured[point] !== undefined && row.measured[point] !== ''
+          ? parseFloat(row.measured[point]) : null;
+        if (!isNaN(std) && std !== 0 && measured !== null && !isNaN(measured)) {
+          if (Math.abs(measured - std) > tol) { reasons.push('tolerance'); break outer; }
+        }
+      }
+    }
+  }
+
+  const minorCount = state.issues.filter((i) => i.severity === 'minor').length;
+  const majorCriticalCount = state.issues.filter((i) => i.severity === 'major' || i.severity === 'critical').length;
+  if (minorCount >= 3) reasons.push('minor');
+  if (majorCriticalCount >= 1) reasons.push('major');
+
+  return { overall: reasons.length ? 'fail' : 'pass', reasons };
+}
+
+/* ---------------- PHOTO STORAGE HELPERS ---------------- */
+// fieldId scheme: "general" | "tags" | "section:fabric" | "issue:0"
+
+function getPhotoArray(fieldId) {
+  if (fieldId === 'general') return state.photos.general;
+  if (fieldId === 'tags') return state.photos.tags;
+  if (fieldId.startsWith('section:')) {
+    const key = fieldId.split(':')[1];
+    return state.categoryData.sectionPhotos[key];
+  }
+  if (fieldId.startsWith('issue:')) {
+    const idx = parseInt(fieldId.split(':')[1], 10);
+    return state.issues[idx].photos;
+  }
+  return [];
 }
 
 /* ---------------- RENDER ---------------- */
@@ -179,14 +230,14 @@ function renderOrderInfoStep() {
     <div class="step-title">Order Information<span class="zh">订单信息</span></div>
     <div class="card">
       ${textField('poNumber', 'poNumber', state.poNumber, { required: true, placeholderKey: 'poNumberPlaceholder' })}
-      ${textField('factoryCode', 'factoryCode', state.factoryCode, { required: true, placeholderKey: 'factoryCodePlaceholder' })}
+      ${selectField('factoryCode', 'factoryCode', state.factoryCode, OPTIONS.factoryCodes || [], { required: true })}
       <div class="field-row">
         <div style="flex:1">${dateField('date', 'date', state.date, { required: true })}</div>
-        <div style="flex:1">${textField('pointCheckRate', 'pointCheckRate', state.pointCheckRate, { placeholderKey: 'pointCheckRatePlaceholder' })}</div>
+        <div style="flex:1">${selectField('pointCheckRate', 'pointCheckRate', state.pointCheckRate, OPTIONS.pointCheckRates || [], {})}</div>
       </div>
-      ${textField('qaLead', 'qaLead', state.qaLead, { required: true })}
+      ${selectField('qaLead', 'qaLead', state.qaLead, OPTIONS.qaLeads || [], { required: true })}
       <div class="field-row">
-        <div style="flex:1">${textField('creator', 'creator', state.creator, {})}</div>
+        <div style="flex:1">${selectField('creator', 'creator', state.creator, OPTIONS.creators || [], {})}</div>
         <div style="flex:1">${textField('productTitle', 'productTitle', state.productTitle, {})}</div>
       </div>
       <div class="field">
@@ -223,6 +274,20 @@ function dateField(id, i18nKey, value, opts = {}) {
     </div>
   `;
 }
+function selectField(id, i18nKey, value, optionsList, opts = {}) {
+  const l = bi(i18nKey);
+  const ph = bi('selectPlaceholder');
+  const opts_html = optionsList.map((o) => `<option value="${escapeHtml(o)}" ${value === o ? 'selected' : ''}>${escapeHtml(o)}</option>`).join('');
+  return `
+    <div class="field" data-field="${id}">
+      <label class="field-label">${escapeHtml(l.en)} <span class="zh">${escapeHtml(l.zh)}</span>${opts.required ? '<span class="required">*</span>' : ''}</label>
+      <select data-bind="${id}">
+        <option value="">${escapeHtml(ph.en)} / ${escapeHtml(ph.zh)}</option>
+        ${opts_html}
+      </select>
+    </div>
+  `;
+}
 function segOption(groupName, value, i18nKey, current) {
   const l = bi(i18nKey);
   const sel = current === value ? 'selected' : '';
@@ -249,10 +314,22 @@ function renderCategoryDetailsStep() {
 
   if (state.category === 'apparel') {
     body += renderFitPicker();
-    if (cd.fit) body += renderSizeChart();
+    if (cd.fit) {
+      body += renderReferenceChart();
+      body += renderSizeEntry();
+    }
   }
 
-  body += renderChecklistCard();
+  body += checklistCard('fabricSection', [['fabricColorMatch', 'fabricColorMatch'], ['fabricWeightMatch', 'fabricWeightMatch']], 'fabric');
+  body += checklistCard('embroiderySection', [['embroideryColorMatch', 'embroideryColorMatch'], ['embroideryDimMatch', 'embroideryDimMatch']], 'embroidery');
+  body += checklistCard('printingSection', [['printColorMatch', 'printColorMatch'], ['printDimMatch', 'printDimMatch']], 'printing');
+  body += checklistCard('washTagSection', [['washTagMatch', 'washTagMatch']], 'washTag');
+  body += checklistCard('sizingSection',
+    state.category === 'apparel'
+      ? [['sleeveDimMatch', 'sleeveDimMatch'], ['generalSizingMatch', 'generalSizingMatch']]
+      : [['generalSizingMatch', 'generalSizingMatch']],
+    'sizing');
+  body += checklistCard('packagingSection', [['packagingCardMatch', 'packagingCardMatch'], ['bagTagsCorrect', 'bagTagsCorrect']], 'packaging');
 
   if (state.category === 'other') {
     body += `<div class="card">
@@ -294,7 +371,37 @@ function renderFitPicker() {
   `;
 }
 
-function renderSizeChart() {
+function renderReferenceChart() {
+  const fitDef = CONFIG.fits.fits[state.categoryData.fit];
+  if (!fitDef) return '';
+  const pointCols = fitDef.points.map((p) => {
+    const pl = fitDef.pointLabels[p] || { en: p, zh: '' };
+    return `<th>${escapeHtml(pl.en)}<span class="zh">${escapeHtml(pl.zh)}</span></th>`;
+  }).join('');
+  const rows = Object.keys(fitDef.sizes).map((sizeName) => {
+    const std = fitDef.sizes[sizeName];
+    const cells = fitDef.points.map((p) => {
+      const v = std[p];
+      return `<td>${v !== undefined && v !== null && v !== 0 ? v + '"' : '-'}</td>`;
+    }).join('');
+    return `<tr><td class="size-name">${escapeHtml(sizeName)}</td>${cells}</tr>`;
+  }).join('');
+
+  return `
+    <div class="card">
+      <div class="section-title">${biBlockHtml('referenceChart', 'Approved Reference Chart')}</div>
+      <div class="section-help">${escapeHtml(bi('referenceChartHelp').en)}<br/>${escapeHtml(bi('referenceChartHelp').zh)}</div>
+      <div class="ref-chart-wrap">
+        <table class="ref-chart-table">
+          <thead><tr><th>${escapeHtml(bi('size').en)}<span class="zh">${escapeHtml(bi('size').zh)}</span></th>${pointCols}</tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function renderSizeEntry() {
   const fitDef = CONFIG.fits.fits[state.categoryData.fit];
   if (!fitDef) return '';
   const tol = CONFIG.fits.toleranceInches || 0.5;
@@ -305,42 +412,54 @@ function renderSizeChart() {
     cd._fitForRows = cd.fit;
   }
 
-  const pointCols = fitDef.points.map((p) => {
-    const pl = fitDef.pointLabels[p] || { en: p, zh: '' };
-    return `<th>${escapeHtml(pl.en)}<span class="zh">${escapeHtml(pl.zh)}</span></th>`;
-  }).join('');
-
-  const rows = cd.sizeRows.map((row, ridx) => {
+  const cards = cd.sizeRows.map((row, ridx) => {
     const standard = fitDef.sizes[row.size] || {};
-    const cells = fitDef.points.map((p) => {
+    let anyOutOfTol = false;
+    const points = fitDef.points.map((p) => {
+      const pl = fitDef.pointLabels[p] || { en: p, zh: '' };
       const std = standard[p];
+      const stdNum = parseFloat(std);
       const measuredVal = row.measured[p] !== undefined ? row.measured[p] : '';
       const measuredNum = parseFloat(measuredVal);
-      const stdNum = parseFloat(std);
       let outOfTol = false;
       if (std && !isNaN(stdNum) && stdNum !== 0 && measuredVal !== '' && !isNaN(measuredNum)) {
         outOfTol = Math.abs(measuredNum - stdNum) > tol;
       }
-      return `<td class="${outOfTol ? 'out-of-tol' : ''}">
-        <span class="std-val">${bi('standard').en}: ${std ? std + '"' : '-'}</span>
-        <input type="number" step="0.01" inputmode="decimal" value="${escapeHtml(measuredVal)}"
-          data-size-row="${ridx}" data-size-point="${p}" placeholder="0.0" />
-        ${outOfTol ? `<span class="tol-flag">${escapeHtml(bi('outOfTolerance').en)}</span>` : ''}
-      </td>`;
+      if (outOfTol) anyOutOfTol = true;
+      return `
+        <div class="size-entry-point">
+          <div class="size-entry-point-label">
+            <span>${escapeHtml(pl.en)} <span class="zh">${escapeHtml(pl.zh)}</span></span>
+            <span class="std">${bi('standard').en}: ${stdNum && stdNum !== 0 ? stdNum + '"' : '-'}</span>
+          </div>
+          <div class="stepper">
+            <button type="button" class="stepper-btn" data-step-dir="-1" data-size-row="${ridx}" data-size-point="${p}">−</button>
+            <input type="number" step="0.1" inputmode="decimal" value="${escapeHtml(measuredVal)}"
+              class="${outOfTol ? 'out-of-tol' : ''}"
+              data-size-row="${ridx}" data-size-point="${p}" placeholder="0.0" />
+            <button type="button" class="stepper-btn" data-step-dir="1" data-size-row="${ridx}" data-size-point="${p}">+</button>
+          </div>
+          ${outOfTol ? `<div class="tol-flag-inline">${escapeHtml(bi('outOfTolerance').en)} ${escapeHtml(bi('outOfTolerance').zh)}</div>` : ''}
+        </div>
+      `;
     }).join('');
-    return `<tr><td class="size-name">${escapeHtml(row.size)}</td>${cells}</tr>`;
+
+    return `
+      <div class="size-entry-card ${anyOutOfTol ? 'out-of-tol' : ''}">
+        <div class="size-entry-header">
+          <span>${escapeHtml(row.size)}</span>
+          ${anyOutOfTol ? `<span class="flag">${escapeHtml(bi('outOfTolerance').en)}</span>` : ''}
+        </div>
+        ${points}
+      </div>
+    `;
   }).join('');
 
   return `
     <div class="card">
-      <div class="section-title">${biBlockHtml('sizeChart', 'Measurement Chart')}</div>
+      <div class="section-title">${biBlockHtml('enterMeasurements', 'Enter Measurements')}</div>
       <div class="section-help">${escapeHtml(bi('sizeChartHelp').en)}<br/>${escapeHtml(bi('sizeChartHelp').zh)}</div>
-      <div class="size-table-wrap">
-        <table class="size-table">
-          <thead><tr><th>${escapeHtml(bi('size').en)}<span class="zh">${escapeHtml(bi('size').zh)}</span></th>${pointCols}</tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
+      ${cards}
     </div>
   `;
 }
@@ -368,29 +487,26 @@ function checklistItem(key, i18nKey) {
   `;
 }
 
-function renderChecklistCard() {
-  const items = [
-    ['fabricSection', [['fabricColorMatch', 'fabricColorMatch'], ['fabricWeightMatch', 'fabricWeightMatch']]],
-    ['embroiderySection', [['embroideryColorMatch', 'embroideryColorMatch'], ['embroideryDimMatch', 'embroideryDimMatch']]],
-    ['printingSection', [['printColorMatch', 'printColorMatch'], ['printDimMatch', 'printDimMatch'], ['washTagMatch', 'washTagMatch']]],
-    ['sizingSection', state.category === 'apparel'
-      ? [['sleeveDimMatch', 'sleeveDimMatch'], ['generalSizingMatch', 'generalSizingMatch']]
-      : [['generalSizingMatch', 'generalSizingMatch']]],
-    ['packagingSection', [['packagingCardMatch', 'packagingCardMatch'], ['bagTagsCorrect', 'bagTagsCorrect']]]
-  ];
-  return items.map(([sectionKey, rows]) => `
+function checklistCard(sectionKey, rows, photoSectionKey) {
+  return `
     <div class="card">
       <div class="section-title">${biBlockHtml(sectionKey)}</div>
       ${rows.map(([k, lk]) => checklistItem(k, lk)).join('')}
+      <div class="section-photos-block">
+        <div class="section-photos-label">${biBlockHtml('sectionPhotos', 'Section Photos')}</div>
+        <div class="section-help" style="margin-bottom:6px;">${escapeHtml(bi('sectionPhotosHelp').en)} / ${escapeHtml(bi('sectionPhotosHelp').zh)}</div>
+        ${photoGrid('section:' + photoSectionKey, true)}
+      </div>
     </div>
-  `).join('');
+  `;
 }
 
-/* ---- Step 3: Photos ---- */
+/* ---- Step 3: Final Approval Photos ---- */
 function renderPhotosStep() {
   return `
     <div class="step-eyebrow">${biHtml('step', 'Step')} 4 / 6</div>
-    <div class="step-title">Photos<span class="zh">照片</span></div>
+    <div class="step-title">${biBlockHtml('finalApprovalPhotos', 'Final Approval Photos')}</div>
+    <div class="section-help" style="margin-bottom:14px;">${escapeHtml(bi('finalApprovalHelp').en)}<br/>${escapeHtml(bi('finalApprovalHelp').zh)}</div>
     <div class="card">
       <div class="section-title">${biBlockHtml('generalPhotos', 'General Photos')}</div>
       <div class="section-help">${escapeHtml(bi('generalPhotosHelp').en)} / ${escapeHtml(bi('generalPhotosHelp').zh)}</div>
@@ -408,23 +524,23 @@ function renderPhotosStep() {
   `;
 }
 
-function photoGrid(groupKey, issueIdx) {
-  const arr = issueIdx !== undefined ? state.issues[issueIdx].photos : state.photos[groupKey];
+function photoGrid(fieldId, compact) {
+  const arr = getPhotoArray(fieldId);
   const thumbs = arr.map((file, idx) => `
     <div class="photo-thumb">
       <img src="${file._url}" />
-      <button class="photo-remove" data-photo-remove="${groupKey}" data-photo-idx="${idx}" data-issue-idx="${issueIdx !== undefined ? issueIdx : ''}">✕</button>
+      <button class="photo-remove" data-photo-remove="${fieldId}" data-photo-idx="${idx}">✕</button>
     </div>
   `).join('');
-  const inputId = `photoInput_${groupKey}_${issueIdx !== undefined ? issueIdx : 'x'}`;
+  const inputId = `photoInput_${fieldId.replace(/[:]/g, '_')}`;
   return `
-    <div class="photo-grid">
+    <div class="photo-grid ${compact ? 'compact' : ''}">
       ${thumbs}
       <label class="photo-add" for="${inputId}">
         <span class="plus">+</span>
         <span>${escapeHtml(bi('addPhoto').en)}</span>
         <input type="file" id="${inputId}" accept="image/*" capture="environment" multiple
-          data-photo-input="${groupKey}" data-issue-idx="${issueIdx !== undefined ? issueIdx : ''}" />
+          data-photo-input="${fieldId}" />
       </label>
     </div>
   `;
@@ -456,7 +572,7 @@ function renderIssuesStep() {
       </div>
       <div class="field">
         <label class="field-label">${biBlockHtml('issuePhotos')}</label>
-        ${photoGrid('issue', idx)}
+        ${photoGrid('issue:' + idx)}
       </div>
     </div>
   `).join('');
@@ -478,12 +594,21 @@ function renderIssuesStep() {
 function renderReviewStep() {
   const catLabel = bi(state.category);
   const qaTypeLabel = state.qaType === 'production' ? bi('production') : bi('prePro');
-  const totalPhotos = state.photos.general.length + state.photos.tags.length +
-    state.issues.reduce((s, i) => s + i.photos.length, 0);
+  const result = computeOverallResult();
+  const reasonKeyMap = { tolerance: 'resultReasonTolerance', minor: 'resultReasonMinor', major: 'resultReasonMajor' };
+  const resultLabel = result.overall === 'pass' ? bi('resultPass') : bi('resultFail');
 
   return `
     <div class="step-eyebrow">${biHtml('step', 'Step')} 6 / 6</div>
     <div class="step-title">${biBlockHtml('reviewTitle', 'Review & Submit')}</div>
+
+    <div class="result-banner ${result.overall === 'fail' ? 'fail' : ''}">
+      <div class="result-banner-title">${escapeHtml(bi('overallResult').en)} / ${escapeHtml(bi('overallResult').zh)}</div>
+      <div class="result-banner-value">${escapeHtml(resultLabel.en)} ${escapeHtml(resultLabel.zh)}</div>
+      ${result.reasons.length ? `<div class="result-banner-reasons">${result.reasons.map((r) => escapeHtml(bi(reasonKeyMap[r]).en) + ' ' + escapeHtml(bi(reasonKeyMap[r]).zh)).join('<br/>')}</div>`
+        : `<div class="result-banner-reasons">${escapeHtml(bi('noIssuesReason').en)} ${escapeHtml(bi('noIssuesReason').zh)}</div>`}
+    </div>
+
     <div class="card">
       <div class="review-block">
         <div class="review-block-title">${bi('poInfo').en} / ${bi('poInfo').zh}</div>
@@ -492,11 +617,12 @@ function renderReviewStep() {
         ${reviewRow('date', state.date)}
         ${reviewRow('pointCheckRate', state.pointCheckRate)}
         ${reviewRow('qaLead', state.qaLead)}
+        ${reviewRow('creator', state.creator)}
         <div class="review-row"><span class="k">Category / 类别</span><span class="v">${escapeHtml(catLabel.en)} ${escapeHtml(catLabel.zh)}</span></div>
         <div class="review-row"><span class="k">${bi('qaType').en}</span><span class="v">${escapeHtml(qaTypeLabel.en)} ${escapeHtml(qaTypeLabel.zh)}</span></div>
       </div>
       <div class="review-block">
-        <div class="review-block-title">${bi('photosSection').en} / ${bi('photosSection').zh}</div>
+        <div class="review-block-title">${bi('finalApprovalPhotos').en} / ${bi('finalApprovalPhotos').zh}</div>
         <div class="review-row"><span class="k">${bi('generalPhotos').en}</span><span class="v">${state.photos.general.length}</span></div>
         <div class="review-row"><span class="k">${bi('tagPhotos').en}</span><span class="v">${state.photos.tags.length}</span></div>
       </div>
@@ -526,9 +652,10 @@ function attachStepHandlers(name) {
   const btnSubmit = document.getElementById('btnSubmit');
   if (btnSubmit) btnSubmit.addEventListener('click', submitReport);
 
-  // text/date/textarea bindings
+  // text/date/textarea/select bindings
   document.querySelectorAll('[data-bind]').forEach((el) => {
-    el.addEventListener('input', (e) => {
+    const evt = (el.tagName === 'SELECT') ? 'change' : 'input';
+    el.addEventListener(evt, (e) => {
       const path = el.getAttribute('data-bind');
       setStateValue(path, e.target.value);
     });
@@ -563,14 +690,25 @@ function attachStepHandlers(name) {
       });
     }
     document.querySelectorAll('[data-size-row]').forEach((el) => {
-      el.addEventListener('input', (e) => {
-        const ridx = parseInt(el.getAttribute('data-size-row'), 10);
-        const point = el.getAttribute('data-size-point');
-        state.categoryData.sizeRows[ridx].measured[point] = e.target.value;
-        // re-render just to update tolerance flags, but preserve focus is tricky;
-        // do a lightweight refresh of the table only
-        refreshSizeChartInPlace();
-      });
+      if (el.tagName === 'INPUT') {
+        el.addEventListener('input', (e) => {
+          const ridx = parseInt(el.getAttribute('data-size-row'), 10);
+          const point = el.getAttribute('data-size-point');
+          state.categoryData.sizeRows[ridx].measured[point] = e.target.value;
+          refreshInPlace();
+        });
+      } else {
+        el.addEventListener('click', () => {
+          const ridx = parseInt(el.getAttribute('data-size-row'), 10);
+          const point = el.getAttribute('data-size-point');
+          const dir = parseInt(el.getAttribute('data-step-dir'), 10);
+          const current = parseFloat(state.categoryData.sizeRows[ridx].measured[point]);
+          const base = isNaN(current) ? 0 : current;
+          const next = Math.round((base + dir * 0.1) * 10) / 10;
+          state.categoryData.sizeRows[ridx].measured[point] = String(next);
+          refreshInPlace();
+        });
+      }
     });
     document.querySelectorAll('[data-checklist-status]').forEach((el) => {
       el.addEventListener('click', () => {
@@ -585,6 +723,7 @@ function attachStepHandlers(name) {
         state.categoryData[key].notes = e.target.value;
       });
     });
+    attachPhotoHandlers();
   }
 
   if (name === 'photos') {
@@ -630,8 +769,7 @@ function setStateValue(path, value) {
   }
 }
 
-function refreshSizeChartInPlace() {
-  // Re-render whole categoryDetails step but try to keep scroll position
+function refreshInPlace() {
   const scrollY = window.scrollY;
   render();
   window.scrollTo(0, scrollY);
@@ -640,32 +778,22 @@ function refreshSizeChartInPlace() {
 function attachPhotoHandlers() {
   document.querySelectorAll('[data-photo-input]').forEach((el) => {
     el.addEventListener('change', (e) => {
-      const group = el.getAttribute('data-photo-input');
-      const issueIdxAttr = el.getAttribute('data-issue-idx');
+      const fieldId = el.getAttribute('data-photo-input');
       const files = Array.from(e.target.files || []);
+      const arr = getPhotoArray(fieldId);
       files.forEach((f) => {
         f._url = URL.createObjectURL(f);
-        if (group === 'issue') {
-          const idx = parseInt(issueIdxAttr, 10);
-          state.issues[idx].photos.push(f);
-        } else {
-          state.photos[group].push(f);
-        }
+        arr.push(f);
       });
       render();
     });
   });
   document.querySelectorAll('[data-photo-remove]').forEach((el) => {
     el.addEventListener('click', () => {
-      const group = el.getAttribute('data-photo-remove');
+      const fieldId = el.getAttribute('data-photo-remove');
       const idx = parseInt(el.getAttribute('data-photo-idx'), 10);
-      const issueIdxAttr = el.getAttribute('data-issue-idx');
-      if (group === 'issue') {
-        const iidx = parseInt(issueIdxAttr, 10);
-        state.issues[iidx].photos.splice(idx, 1);
-      } else {
-        state.photos[group].splice(idx, 1);
-      }
+      const arr = getPhotoArray(fieldId);
+      arr.splice(idx, 1);
       render();
     });
   });
@@ -691,7 +819,22 @@ async function submitReport() {
       qaType: state.qaType,
       materials: state.materials,
       printingMethod: state.printingMethod,
-      categoryData: state.categoryData,
+      categoryData: {
+        fit: state.categoryData.fit,
+        sizeRows: state.categoryData.sizeRows,
+        fabricColorMatch: state.categoryData.fabricColorMatch,
+        fabricWeightMatch: state.categoryData.fabricWeightMatch,
+        embroideryColorMatch: state.categoryData.embroideryColorMatch,
+        embroideryDimMatch: state.categoryData.embroideryDimMatch,
+        printColorMatch: state.categoryData.printColorMatch,
+        printDimMatch: state.categoryData.printDimMatch,
+        washTagMatch: state.categoryData.washTagMatch,
+        generalSizingMatch: state.categoryData.generalSizingMatch,
+        sleeveDimMatch: state.categoryData.sleeveDimMatch,
+        packagingCardMatch: state.categoryData.packagingCardMatch,
+        bagTagsCorrect: state.categoryData.bagTagsCorrect,
+        customNotes: state.categoryData.customNotes
+      },
       issues: state.issues.map((i) => ({ description: i.description, severity: i.severity }))
     };
 
@@ -699,6 +842,11 @@ async function submitReport() {
     formData.append('payload', JSON.stringify(payload));
     state.photos.general.forEach((f) => formData.append('photo_general', f, f.name));
     state.photos.tags.forEach((f) => formData.append('photo_tags', f, f.name));
+    Object.keys(state.categoryData.sectionPhotos).forEach((sectionKey) => {
+      state.categoryData.sectionPhotos[sectionKey].forEach((f) => {
+        formData.append(`photo_section_${sectionKey === 'washTag' ? 'washtag' : sectionKey}`, f, f.name);
+      });
+    });
     state.issues.forEach((issue, idx) => {
       issue.photos.forEach((f) => formData.append(`photo_issue_${idx}`, f, f.name));
     });
@@ -753,18 +901,19 @@ function resetApp() {
     materials: '', printingMethod: '',
     categoryData: {
       fit: '', sizeRows: [],
-      fabricColorMatch: { status: '', notes: '' },
-      fabricWeightMatch: { status: '', notes: '' },
-      embroideryColorMatch: { status: '', notes: '' },
-      embroideryDimMatch: { status: '', notes: '' },
-      printColorMatch: { status: '', notes: '' },
-      printDimMatch: { status: '', notes: '' },
-      washTagMatch: { status: '', notes: '' },
-      generalSizingMatch: { status: '', notes: '' },
-      sleeveDimMatch: { status: '', notes: '' },
-      packagingCardMatch: { status: '', notes: '' },
-      bagTagsCorrect: { status: '', notes: '' },
-      customNotes: ''
+      fabricColorMatch: emptyChecklistEntry(),
+      fabricWeightMatch: emptyChecklistEntry(),
+      embroideryColorMatch: emptyChecklistEntry(),
+      embroideryDimMatch: emptyChecklistEntry(),
+      printColorMatch: emptyChecklistEntry(),
+      printDimMatch: emptyChecklistEntry(),
+      washTagMatch: emptyChecklistEntry(),
+      generalSizingMatch: emptyChecklistEntry(),
+      sleeveDimMatch: emptyChecklistEntry(),
+      packagingCardMatch: emptyChecklistEntry(),
+      bagTagsCorrect: emptyChecklistEntry(),
+      customNotes: '',
+      sectionPhotos: { fabric: [], embroidery: [], printing: [], washTag: [], sizing: [], packaging: [] }
     },
     photos: { general: [], tags: [] },
     issues: []

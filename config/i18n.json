@@ -84,5 +84,21 @@
   "removePhoto": { "en": "Remove", "zh": "删除" },
   "otherChecksSection": { "en": "General QA Checks", "zh": "常规质检项目" },
   "customNotes": { "en": "Additional Notes", "zh": "其他备注" },
-  "customNotesPlaceholder": { "en": "Any other observations for this product", "zh": "本产品的其他观察记录" }
+  "customNotesPlaceholder": { "en": "Any other observations for this product", "zh": "本产品的其他观察记录" },
+  "washTagSection": { "en": "Washing Tags", "zh": "水洗唛" },
+  "sectionPhotos": { "en": "Section Photos", "zh": "本项照片" },
+  "sectionPhotosHelp": { "en": "Photos supporting this specific check", "zh": "支持本项检查的照片" },
+  "finalApprovalPhotos": { "en": "Final Approval Photos", "zh": "最终审批照片" },
+  "finalApprovalHelp": { "en": "Clean, final photos for manager review and approval. These are separate from the supporting photos already attached to each check above.", "zh": "供主管审核批准的最终照片，与上方各检查项已附的支持性照片分开。" },
+  "referenceChart": { "en": "Approved Reference Chart", "zh": "已批准参考尺寸表" },
+  "referenceChartHelp": { "en": "These are the approved standard measurements for this fit. Use them for reference while measuring.", "zh": "以下为该版型已批准的标准尺寸，供测量时参考。" },
+  "enterMeasurements": { "en": "Enter Measurements", "zh": "输入实测尺寸" },
+  "overallResult": { "en": "Overall Result", "zh": "总体结果" },
+  "resultPass": { "en": "PASS", "zh": "合格" },
+  "resultFail": { "en": "FAIL", "zh": "不合格" },
+  "resultReasonTolerance": { "en": "One or more measurements are out of tolerance", "zh": "存在超出公差的测量值" },
+  "resultReasonMinor": { "en": "3 or more minor issues found", "zh": "发现3个或以上轻微问题" },
+  "resultReasonMajor": { "en": "One or more major/critical issues found", "zh": "存在1个或以上严重/紧急问题" },
+  "noIssuesReason": { "en": "No blocking issues found", "zh": "未发现影响判定的问题" },
+  "selectPlaceholder": { "en": "Select...", "zh": "请选择..." }
 }

@@ -7,8 +7,10 @@ const { v4: uuidv4 } = require('uuid');
 const nodemailer = require('nodemailer');
 
 const { buildPdf } = require('./lib/pdfBuilder');
+const { computeOverallResult } = require('./lib/passFail');
 const fits = require('./config/fits.json');
 const i18n = require('./config/i18n.json');
+const options = require('./config/options.json');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -26,9 +28,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 // or locking this down before a real production deployment.
 app.use('/submissions', express.static(path.join(__dirname, 'submissions')));
 
-// Serve the fit library + translations to the frontend
+// Serve the fit library + translations + dropdown options to the frontend
 app.get('/api/config', (req, res) => {
-  res.json({ fits, i18n });
+  res.json({ fits, i18n, options });
 });
 
 app.get('/health', (req, res) => res.json({ ok: true }));
@@ -53,7 +55,8 @@ app.post('/api/submit', upload.any(), async (req, res) => {
     }
 
     const submissionId = uuidv4();
-    const pdfBuffer = await buildPdf(payload, filesByField, fits, i18n);
+    const overallResult = computeOverallResult(payload, fits);
+    const pdfBuffer = await buildPdf(payload, filesByField, fits, i18n, overallResult);
 
     const fileSafePo = (payload.poNumber || 'QA-Report').replace(/[^a-z0-9\-_]+/gi, '_');
     const pdfFilename = `${fileSafePo}_QA_Report_${submissionId.slice(0, 8)}.pdf`;
@@ -91,7 +94,7 @@ app.post('/api/submit', upload.any(), async (req, res) => {
       await transporter.sendMail({
         from: process.env.SMTP_FROM || process.env.SMTP_USER,
         to: recipients.join(','),
-        subject: `QA/QC Report - ${payload.poNumber || 'Unknown PO'} (${payload.category || ''})`,
+        subject: `QA/QC Report - ${payload.poNumber || 'Unknown PO'} (${payload.category || ''}) - ${overallResult.overall.toUpperCase()}`,
         text: `New QA/QC report submitted for PO ${payload.poNumber || 'N/A'}.\nCategory: ${payload.category}\nQA Lead: ${payload.qaLead || 'N/A'}\n\nSee attached PDF report.`,
         attachments
       });
@@ -111,7 +114,7 @@ app.post('/api/submit', upload.any(), async (req, res) => {
       pdfUrl = `/submissions/${encodeURIComponent(pdfFilename)}`;
     }
 
-    res.json({ ok: true, submissionId, filename: pdfFilename, pdfUrl, emailSent, testMode: !smtpConfigured });
+    res.json({ ok: true, submissionId, filename: pdfFilename, pdfUrl, emailSent, testMode: !smtpConfigured, overallResult });
   } catch (err) {
     console.error('Submission failed:', err);
     res.status(500).json({ error: 'Failed to process submission', detail: String(err.message || err) });

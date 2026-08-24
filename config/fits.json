@@ -4,125 +4,407 @@
   "fits": {
     "hoodie_standard": {
       "label_en": "Hoodie - Standard Fit",
-      "label_zh": "连帽卫衣 - 标准版型",
-      "points": ["chest", "length", "sleeve"],
+      "label_zh": "\u8fde\u5e3d\u536b\u8863 - \u6807\u51c6\u7248\u578b",
+      "points": [
+        "chest",
+        "length",
+        "sleeve"
+      ],
       "pointLabels": {
-        "chest": { "en": "Chest Width", "zh": "胸宽" },
-        "length": { "en": "Length", "zh": "衣长" },
-        "sleeve": { "en": "Sleeve Length", "zh": "袖长" }
+        "chest": {
+          "en": "Chest Width",
+          "zh": "\u80f8\u5bbd"
+        },
+        "length": {
+          "en": "Length",
+          "zh": "\u8863\u957f"
+        },
+        "sleeve": {
+          "en": "Sleeve Length",
+          "zh": "\u8896\u957f"
+        }
       },
       "sizes": {
-        "Youth XS": { "chest": 0, "length": 0, "sleeve": 0 },
-        "Youth S":  { "chest": 0, "length": 0, "sleeve": 0 },
-        "Youth M":  { "chest": 0, "length": 0, "sleeve": 0 },
-        "Youth L":  { "chest": 0, "length": 0, "sleeve": 0 },
-        "Youth XL": { "chest": 0, "length": 0, "sleeve": 0 },
-        "Adult XS": { "chest": 0, "length": 0, "sleeve": 0 },
-        "Adult S":  { "chest": 0, "length": 0, "sleeve": 0 },
-        "Adult M":  { "chest": 0, "length": 0, "sleeve": 0 },
-        "Adult L":  { "chest": 0, "length": 0, "sleeve": 0 },
-        "Adult XL": { "chest": 0, "length": 0, "sleeve": 0 },
-        "Adult 2XL":{ "chest": 0, "length": 0, "sleeve": 0 },
-        "Adult 3XL":{ "chest": 0, "length": 0, "sleeve": 0 }
+        "Youth XS": {
+          "chest": 0,
+          "length": 0,
+          "sleeve": 0
+        },
+        "Youth S": {
+          "chest": 0,
+          "length": 0,
+          "sleeve": 0
+        },
+        "Youth M": {
+          "chest": 0,
+          "length": 0,
+          "sleeve": 0
+        },
+        "Youth L": {
+          "chest": 0,
+          "length": 0,
+          "sleeve": 0
+        },
+        "Youth XL": {
+          "chest": 0,
+          "length": 0,
+          "sleeve": 0
+        },
+        "Adult XS": {
+          "chest": 0,
+          "length": 0,
+          "sleeve": 0
+        },
+        "Adult S": {
+          "chest": 0,
+          "length": 0,
+          "sleeve": 0
+        },
+        "Adult M": {
+          "chest": 0,
+          "length": 0,
+          "sleeve": 0
+        },
+        "Adult L": {
+          "chest": 0,
+          "length": 0,
+          "sleeve": 0
+        },
+        "Adult XL": {
+          "chest": 0,
+          "length": 0,
+          "sleeve": 0
+        },
+        "Adult 2XL": {
+          "chest": 0,
+          "length": 0,
+          "sleeve": 0
+        },
+        "Adult 3XL": {
+          "chest": 0,
+          "length": 0,
+          "sleeve": 0
+        }
       }
     },
     "hoodie_oversized": {
       "label_en": "Hoodie - Oversized Fit",
-      "label_zh": "连帽卫衣 - 宽松版型",
-      "points": ["chest", "length", "sleeve"],
+      "label_zh": "\u8fde\u5e3d\u536b\u8863 - \u5bbd\u677e\u7248\u578b",
+      "points": [
+        "chest",
+        "length",
+        "sleeve"
+      ],
       "pointLabels": {
-        "chest": { "en": "Chest Width", "zh": "胸宽" },
-        "length": { "en": "Length", "zh": "衣长" },
-        "sleeve": { "en": "Sleeve Length", "zh": "袖长" }
+        "chest": {
+          "en": "Chest Width",
+          "zh": "\u80f8\u5bbd"
+        },
+        "length": {
+          "en": "Length",
+          "zh": "\u8863\u957f"
+        },
+        "sleeve": {
+          "en": "Sleeve Length",
+          "zh": "\u8896\u957f"
+        }
       },
       "sizes": {
-        "Adult S":  { "chest": 0, "length": 0, "sleeve": 0 },
-        "Adult M":  { "chest": 0, "length": 0, "sleeve": 0 },
-        "Adult L":  { "chest": 0, "length": 0, "sleeve": 0 },
-        "Adult XL": { "chest": 0, "length": 0, "sleeve": 0 },
-        "Adult 2XL":{ "chest": 0, "length": 0, "sleeve": 0 }
+        "Adult S": {
+          "chest": 0,
+          "length": 0,
+          "sleeve": 0
+        },
+        "Adult M": {
+          "chest": 0,
+          "length": 0,
+          "sleeve": 0
+        },
+        "Adult L": {
+          "chest": 0,
+          "length": 0,
+          "sleeve": 0
+        },
+        "Adult XL": {
+          "chest": 0,
+          "length": 0,
+          "sleeve": 0
+        },
+        "Adult 2XL": {
+          "chest": 0,
+          "length": 0,
+          "sleeve": 0
+        }
       }
     },
     "tshirt_standard": {
       "label_en": "T-Shirt - Standard Fit",
-      "label_zh": "T恤 - 标准版型",
-      "points": ["chest", "length", "sleeve"],
+      "label_zh": "T\u6064 - \u6807\u51c6\u7248\u578b",
+      "points": [
+        "chest",
+        "length",
+        "sleeve"
+      ],
       "pointLabels": {
-        "chest": { "en": "Chest Width", "zh": "胸宽" },
-        "length": { "en": "Length", "zh": "衣长" },
-        "sleeve": { "en": "Sleeve Length", "zh": "袖长" }
+        "chest": {
+          "en": "Chest Width",
+          "zh": "\u80f8\u5bbd"
+        },
+        "length": {
+          "en": "Length",
+          "zh": "\u8863\u957f"
+        },
+        "sleeve": {
+          "en": "Sleeve Length",
+          "zh": "\u8896\u957f"
+        }
       },
       "sizes": {
-        "Youth XS": { "chest": 0, "length": 0, "sleeve": 0 },
-        "Youth S":  { "chest": 0, "length": 0, "sleeve": 0 },
-        "Youth M":  { "chest": 0, "length": 0, "sleeve": 0 },
-        "Youth L":  { "chest": 0, "length": 0, "sleeve": 0 },
-        "Youth XL": { "chest": 0, "length": 0, "sleeve": 0 },
-        "Adult S":  { "chest": 0, "length": 0, "sleeve": 0 },
-        "Adult M":  { "chest": 0, "length": 0, "sleeve": 0 },
-        "Adult L":  { "chest": 0, "length": 0, "sleeve": 0 },
-        "Adult XL": { "chest": 0, "length": 0, "sleeve": 0 },
-        "Adult 2XL":{ "chest": 0, "length": 0, "sleeve": 0 }
+        "Youth XS": {
+          "chest": 0,
+          "length": 0,
+          "sleeve": 0
+        },
+        "Youth S": {
+          "chest": 0,
+          "length": 0,
+          "sleeve": 0
+        },
+        "Youth M": {
+          "chest": 0,
+          "length": 0,
+          "sleeve": 0
+        },
+        "Youth L": {
+          "chest": 0,
+          "length": 0,
+          "sleeve": 0
+        },
+        "Youth XL": {
+          "chest": 0,
+          "length": 0,
+          "sleeve": 0
+        },
+        "Adult S": {
+          "chest": 0,
+          "length": 0,
+          "sleeve": 0
+        },
+        "Adult M": {
+          "chest": 0,
+          "length": 0,
+          "sleeve": 0
+        },
+        "Adult L": {
+          "chest": 0,
+          "length": 0,
+          "sleeve": 0
+        },
+        "Adult XL": {
+          "chest": 0,
+          "length": 0,
+          "sleeve": 0
+        },
+        "Adult 2XL": {
+          "chest": 0,
+          "length": 0,
+          "sleeve": 0
+        }
       }
     },
     "tshirt_oversized": {
       "label_en": "T-Shirt - Oversized Fit",
-      "label_zh": "T恤 - 宽松版型",
-      "points": ["chest", "length", "sleeve"],
+      "label_zh": "T\u6064 - \u5bbd\u677e\u7248\u578b",
+      "points": [
+        "chest",
+        "length",
+        "sleeve"
+      ],
       "pointLabels": {
-        "chest": { "en": "Chest Width", "zh": "胸宽" },
-        "length": { "en": "Length", "zh": "衣长" },
-        "sleeve": { "en": "Sleeve Length", "zh": "袖长" }
+        "chest": {
+          "en": "Chest Width",
+          "zh": "\u80f8\u5bbd"
+        },
+        "length": {
+          "en": "Length",
+          "zh": "\u8863\u957f"
+        },
+        "sleeve": {
+          "en": "Sleeve Length",
+          "zh": "\u8896\u957f"
+        }
       },
       "sizes": {
-        "Adult S":  { "chest": 0, "length": 0, "sleeve": 0 },
-        "Adult M":  { "chest": 0, "length": 0, "sleeve": 0 },
-        "Adult L":  { "chest": 0, "length": 0, "sleeve": 0 },
-        "Adult XL": { "chest": 0, "length": 0, "sleeve": 0 }
+        "Adult S": {
+          "chest": 0,
+          "length": 0,
+          "sleeve": 0
+        },
+        "Adult M": {
+          "chest": 0,
+          "length": 0,
+          "sleeve": 0
+        },
+        "Adult L": {
+          "chest": 0,
+          "length": 0,
+          "sleeve": 0
+        },
+        "Adult XL": {
+          "chest": 0,
+          "length": 0,
+          "sleeve": 0
+        }
       }
     },
     "sweater_standard": {
       "label_en": "Sweater - Standard Fit",
-      "label_zh": "毛衣 - 标准版型",
-      "points": ["sleeve", "width", "length"],
+      "label_zh": "\u6bdb\u8863 - \u6807\u51c6\u7248\u578b",
+      "points": [
+        "sleeve",
+        "width",
+        "length"
+      ],
       "pointLabels": {
-        "sleeve": { "en": "Sleeve", "zh": "袖长" },
-        "width": { "en": "Width", "zh": "胸宽" },
-        "length": { "en": "Length", "zh": "衣长" }
+        "sleeve": {
+          "en": "Sleeve",
+          "zh": "\u8896\u957f"
+        },
+        "width": {
+          "en": "Width",
+          "zh": "\u80f8\u5bbd"
+        },
+        "length": {
+          "en": "Length",
+          "zh": "\u8863\u957f"
+        }
       },
       "sizes": {
-        "Youth XS": { "sleeve": 0, "width": 0, "length": 0 },
-        "Youth S":  { "sleeve": 0, "width": 0, "length": 0 },
-        "Youth M":  { "sleeve": 0, "width": 0, "length": 0 },
-        "Youth L":  { "sleeve": 0, "width": 0, "length": 0 },
-        "Youth XL": { "sleeve": 0, "width": 0, "length": 0 },
-        "Adult XS": { "sleeve": 0, "width": 0, "length": 0 },
-        "Adult S":  { "sleeve": 0, "width": 0, "length": 0 },
-        "Adult M":  { "sleeve": 0, "width": 0, "length": 0 },
-        "Adult L":  { "sleeve": 0, "width": 0, "length": 0 },
-        "Adult XL": { "sleeve": 0, "width": 0, "length": 0 },
-        "Adult 2XL":{ "sleeve": 0, "width": 0, "length": 0 },
-        "Adult 3XL":{ "sleeve": 0, "width": 0, "length": 0 }
+        "Youth XS": {
+          "sleeve": 0,
+          "width": 0,
+          "length": 0
+        },
+        "Youth S": {
+          "sleeve": 0,
+          "width": 0,
+          "length": 0
+        },
+        "Youth M": {
+          "sleeve": 0,
+          "width": 0,
+          "length": 0
+        },
+        "Youth L": {
+          "sleeve": 0,
+          "width": 0,
+          "length": 0
+        },
+        "Youth XL": {
+          "sleeve": 0,
+          "width": 0,
+          "length": 0
+        },
+        "Adult XS": {
+          "sleeve": 0,
+          "width": 0,
+          "length": 0
+        },
+        "Adult S": {
+          "sleeve": 0,
+          "width": 0,
+          "length": 0
+        },
+        "Adult M": {
+          "sleeve": 0,
+          "width": 0,
+          "length": 0
+        },
+        "Adult L": {
+          "sleeve": 0,
+          "width": 0,
+          "length": 0
+        },
+        "Adult XL": {
+          "sleeve": 0,
+          "width": 0,
+          "length": 0
+        },
+        "Adult 2XL": {
+          "sleeve": 0,
+          "width": 0,
+          "length": 0
+        },
+        "Adult 3XL": {
+          "sleeve": 0,
+          "width": 0,
+          "length": 0
+        }
       }
     },
     "sweatpants_standard": {
       "label_en": "Sweatpants - Standard Fit",
-      "label_zh": "运动裤 - 标准版型",
-      "points": ["waist", "inseam", "length"],
+      "label_zh": "\u8fd0\u52a8\u88e4 - \u6807\u51c6\u7248\u578b",
+      "points": [
+        "waist",
+        "inseam",
+        "length"
+      ],
       "pointLabels": {
-        "waist": { "en": "Waist", "zh": "腰围" },
-        "inseam": { "en": "Inseam", "zh": "内长" },
-        "length": { "en": "Length", "zh": "裤长" }
+        "waist": {
+          "en": "Waist",
+          "zh": "\u8170\u56f4"
+        },
+        "inseam": {
+          "en": "Inseam",
+          "zh": "\u5185\u957f"
+        },
+        "length": {
+          "en": "Length",
+          "zh": "\u88e4\u957f"
+        }
       },
       "sizes": {
-        "Youth XS": { "waist": 0, "inseam": 0, "length": 0 },
-        "Youth S":  { "waist": 0, "inseam": 0, "length": 0 },
-        "Youth M":  { "waist": 0, "inseam": 0, "length": 0 },
-        "Youth L":  { "waist": 0, "inseam": 0, "length": 0 },
-        "Adult S":  { "waist": 0, "inseam": 0, "length": 0 },
-        "Adult M":  { "waist": 0, "inseam": 0, "length": 0 },
-        "Adult L":  { "waist": 0, "inseam": 0, "length": 0 },
-        "Adult XL": { "waist": 0, "inseam": 0, "length": 0 }
+        "Youth XS": {
+          "waist": 0,
+          "inseam": 0,
+          "length": 0
+        },
+        "Youth S": {
+          "waist": 0,
+          "inseam": 0,
+          "length": 0
+        },
+        "Youth M": {
+          "waist": 0,
+          "inseam": 0,
+          "length": 0
+        },
+        "Youth L": {
+          "waist": 0,
+          "inseam": 0,
+          "length": 0
+        },
+        "Adult S": {
+          "waist": 0,
+          "inseam": 0,
+          "length": 0
+        },
+        "Adult M": {
+          "waist": 0,
+          "inseam": 0,
+          "length": 0
+        },
+        "Adult L": {
+          "waist": 0,
+          "inseam": 0,
+          "length": 0
+        },
+        "Adult XL": {
+          "waist": 0,
+          "inseam": 0,
+          "length": 0
+        }
       }
     }
   }

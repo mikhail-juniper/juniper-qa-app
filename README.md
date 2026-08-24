@@ -70,17 +70,86 @@ need — flag it and we'll adjust before moving to the real deployment.
   size/fit, fill those in and the tolerance flagging will use real numbers. This file
   is plain JSON, so anyone on your team can edit it directly, no code needed. Comments
   at the top of the file explain the format.
-- **Brand colors** — I used a placeholder dark green. Let me know your actual brand hex
-  codes and I'll swap them in (`lib/pdfBuilder.js` → `BRAND` object, and
-  `public/styles.css` → `:root` variables).
-- **Logo** — Currently just a "JC" monogram placeholder in the header. Send over your
-  logo file and I'll drop it in.
+- **`config/options.json`** — the dropdown lists for Creator/Brand, Factory Code, Point
+  Check Rate, and QA/QC Lead. Also plain JSON, easy to edit directly (add/remove/reorder
+  entries any time).
 - **Chinese translations** — in `config/i18n.json`, one line per label. Easy to edit
   directly if anything needs correcting.
+- **Pass/Fail logic** — currently: FAIL if any apparel measurement is out of tolerance,
+  FAIL if there are 3+ minor issues, FAIL if there's 1+ major/critical issue, otherwise
+  PASS. This lives in `lib/passFail.js` if you want to adjust the thresholds later.
+
+---
+
+## Sharing a test version with a colleague
+
+Since your colleague has Google Workspace access in Canada (no China connectivity
+constraints for this test), there are two easy ways to get them a working version
+without needing your computer to stay on:
+
+### Option A — Quick temporary link (fastest, good for a live walkthrough)
+
+While the app is running locally (`npm start`), you can expose it with a free
+tunneling tool called [ngrok](https://ngrok.com/download):
+
+1. Download and install ngrok, then sign up for a free account (needed for the
+   authtoken step it walks you through).
+2. In a **second** terminal window (leave `npm start` running in the first one):
+   ```
+   ngrok http 3000
+   ```
+3. Ngrok prints a public URL like `https://random-name.ngrok-free.app` — send that
+   to your colleague. It stays live as long as both `npm start` and `ngrok` are
+   running on your machine.
+
+This is the fastest option but is temporary — closing either terminal window ends it.
+
+### Option B — Persistent hosted link (better if they'll test on their own time)
+
+[Render.com](https://render.com) has a free tier for small Node apps and doesn't
+require a credit card to start:
+
+1. Push this project to a GitHub repo (or use Render's manual upload/CLI deploy if
+   you'd rather not use GitHub).
+2. In Render, choose **New > Web Service**, connect the repo.
+3. Build command: `npm install` — Start command: `npm start`
+4. Add the environment variables from `.env.example` under the service's
+   **Environment** tab (see Gmail setup below for real email during testing).
+5. Render gives you a permanent URL like `https://juniper-qa.onrender.com` you can
+   share directly — your colleague just opens it, no setup on their end.
+
+(Free-tier Render services sleep after inactivity and take ~30s to wake up on the
+first request — fine for a test, worth knowing so it doesn't seem broken.)
+
+### Real email for this test (optional)
+
+Since this test isn't constrained by China connectivity, Gmail SMTP works fine here
+if you want your colleague to see the actual "email arrives with PDF attached" flow
+instead of just the in-app PDF preview:
+
+1. On the Google account you want to send from, turn on 2-Step Verification if it
+   isn't already on.
+2. Go to [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
+   and generate an App Password (choose "Mail" as the app).
+3. Set these in `.env` (or Render's Environment tab):
+   ```
+   SMTP_HOST=smtp.gmail.com
+   SMTP_PORT=587
+   SMTP_SECURE=false
+   SMTP_USER=your-gmail-address@gmail.com
+   SMTP_PASS=the-16-character-app-password
+   SMTP_FROM=your-gmail-address@gmail.com
+   REPORT_RECIPIENTS=mikhail@junipercreates.com,colleague@example.com
+   ```
+   Note this is just for this Canada-based test — the real production deployment in
+   China will need a different provider, as covered below.
+
+---
 
 ## Next step: China hosting + real email
 
-Once the workflow is confirmed, the remaining pieces to go live are:
+Once the workflow is confirmed, the remaining pieces to go live for your China-based
+team are:
 
 1. **Hosting**: deploy this Node.js app somewhere reachable from mainland China without
    a VPN — e.g. Alibaba Cloud, Tencent Cloud, or a Hong Kong/Singapore-based host. The
@@ -91,8 +160,7 @@ Once the workflow is confirmed, the remaining pieces to go live are:
    provider like SendGrid — the important part is that the *app server* (not your
    phone) is what talks to the email provider, so it just needs the server to be
    hosted somewhere with good connectivity.
-3. Turn off Test Mode by setting the `SMTP_*` variables in `.env` (see `.env.example`)
-   — once those are set, real submissions will email the PDF instead of just saving it
-   locally.
+3. Set the real `SMTP_*` variables in `.env` for that provider once chosen.
 
 I'm happy to help with either of those once you're ready.
+
