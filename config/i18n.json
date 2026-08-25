@@ -176,7 +176,11 @@
   "aqlNeedLotSize": { "en": "Enter a PO quantity above to calculate the required sample size and AQL thresholds.", "zh": "请在上方输入订单数量以计算所需样本数量及AQL标准。" },
   "aqlPreProductionNotice": { "en": "Pre-Production Sample: AQL sampling doesn't apply here. Check a few units by hand, at least one of each size, using the same sections below.", "zh": "产前样品：此处不适用AQL抽样。请手动检查少量样品（每个尺码至少一件），并按照下方相同的检查项目进行。" },
   "recommendationReferenceTitle": { "en": "Recommended Spot Check % & Reference Thresholds", "zh": "建议抽检比例及参考标准" },
-  "actualDeterminationTitle": { "en": "Actual Thresholds (based on your entered spot check %)", "zh": "实际标准（根据所填抽检比例计算）" },
+  "actualDeterminationTitle": { "en": "Actual Thresholds (based on units checked)", "zh": "实际标准（根据检查件数计算）" },
+  "quantityRecapTitle": { "en": "Recap", "zh": "结果汇总" },
+  "quantityChecked": { "en": "Quantity Checked", "zh": "检查数量" },
+  "quantityApproved": { "en": "Quantity Approved", "zh": "合格数量" },
+  "quantityRejected": { "en": "Quantity Rejected", "zh": "不合格数量" },
   "actualCount": { "en": "Units Actually Checked", "zh": "实际检查件数" },
   "enterActualSpotCheckFirst": { "en": "Enter the actual spot check % below to see the real Accept/Reject thresholds that will determine pass/fail.", "zh": "请在下方输入实际抽检比例，以查看决定合格/不合格的实际标准。" },
   "actualSpotCheckRequired": { "en": "Actual Spot Check % is required for a Production Sample", "zh": "量产样品必须填写实际抽检比例" },
@@ -186,5 +190,13 @@
   "toleranceGuidanceBags": { "en": "Placeholder guidance: overall dimensions should be within about ±0.5 in of the approved sample; strap/handle length within about ±0.25 in. Please confirm the real tolerance with your team.", "zh": "占位参考：整体尺寸应与已批准样品相差不超过约0.5英寸；背带/提手长度相差不超过约0.25英寸。请与团队确认真实公差标准。" },
   "toleranceGuidanceAccessories": { "en": "Placeholder guidance: dimensions should be within about ±0.125 in of the approved sample. Please confirm the real tolerance with your team.", "zh": "占位参考：尺寸应与已批准样品相差不超过约0.125英寸。请与团队确认真实公差标准。" },
   "toleranceGuidanceOther": { "en": "No standard tolerance defined yet for this category - use your judgment and compare against the approved sample.", "zh": "该类别尚无标准公差参考，请凭经验并与已批准样品进行比对。" },
-  "toleranceReferenceTitle": { "en": "Tolerance Reference", "zh": "公差参考" }
+  "toleranceReferenceTitle": { "en": "Tolerance Reference", "zh": "公差参考" },
+  "actualUnitsChecked": { "en": "Units Checked", "zh": "检查件数" },
+  "actualUnitsCheckedPlaceholder": { "en": "e.g. 400", "zh": "例如 400" },
+  "actualUnitsCheckedHelp": { "en": "Enter how many units you actually inspected. The percentage of the PO is calculated automatically.", "zh": "请输入实际检查的件数，占订单总数的百分比将自动计算。" },
+  "computedPercentOfPo": { "en": "of PO Quantity", "zh": "占订单数量的比例" },
+  "recommendedQuantityRange": { "en": "Recommended Units to Check", "zh": "建议检查件数" },
+  "minorDefinition": { "en": "Still saleable - a cosmetic or minor workmanship issue most customers wouldn't notice or return over.", "zh": "仍可正常销售——外观或工艺上的轻微问题，大多数顾客不会注意或因此退货。" },
+  "majorDefinition": { "en": "That unit is defective - likely unsaleable or would be returned. Affects function, fit, or accuracy of labeling. The rest of the batch isn't automatically rejected.", "zh": "该件产品存在缺陷——很可能无法销售或会被退货，影响功能、尺寸或标签准确性。其余批次不会因此自动判定不合格。" },
+  "criticalDefinition": { "en": "Unsafe, illegal to ship, or non-compliant. Zero tolerance - even a single critical defect can fail the entire batch.", "zh": "存在安全隐患、不合法或不合规。零容忍——即使只有一个致命缺陷，也可能导致整批不合格。" }
 }

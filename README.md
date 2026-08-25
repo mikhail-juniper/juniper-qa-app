@@ -303,3 +303,35 @@ the real ANSI/ASQ Z1.4 table itself, not a shortcut on my end).
 - **"Additional Issues" → "Tolerance & Placement Issues"** - reframed as the spot for
   finer issues like an off-center graphic or slightly misaligned print, since the
   sections above already cover major issues like material and construction.
+
+---
+
+## AQL simplified further, and a Recap section added
+
+- **Actual Spot Check is now a plain number** ("e.g. 400" units checked), not a
+  percentage - the app auto-computes and displays the percentage next to it. This
+  also feeds the pass/fail math directly, with no rounding round-trip through a %.
+- **Inspection Level, Major AQL, and Minor AQL are no longer shown or editable.**
+  Major/Minor are fixed at the industry-standard 2.5% / 4.0%, and Inspection Level
+  is derived silently from the Creator Tier table - neither needs a decision from
+  QA staff anymore.
+- **Code Letter removed everywhere** - only the plain Accept/Reject numbers show,
+  no ANSI table jargon.
+- **Recommendation now shows an actual quantity range** (e.g. "400 - 700 (40-70%)")
+  instead of a bare percentage, computed against the PO Quantity.
+- **Severity definitions added** under the Minor/Major/Critical picker on every
+  defect card, based on how AQL classification actually works in practice: Minor
+  means the unit is still saleable, Major means that specific unit is rejected
+  (not automatically the whole batch), Critical means zero tolerance - even one
+  can fail the entire batch. (Source: https://www.qcadvisor.com/blog/acceptable-quality-limit-classification/)
+- **Pre-Production Sample now shows nothing at all** for the AQL section - no card,
+  no notice, since AQL sampling genuinely doesn't apply to a small hand-checked
+  sample.
+- **New Recap section**, at the very end of the report (Production only): Quantity
+  Checked, Quantity Approved, and Quantity Rejected. A unit is only counted as
+  rejected if it has a Major or Critical defect logged against it - units with only
+  Minor defects stay in the Approved count, since minor issues don't make a unit
+  unsaleable. One caveat worth knowing: since defects are logged as counts rather
+  than tracked to a specific physical unit, a unit with both a Major and a Critical
+  defect could in principle be counted in both tallies - this is a reasonable
+  estimate given the data the app collects, not an exact unit-by-unit ledger.

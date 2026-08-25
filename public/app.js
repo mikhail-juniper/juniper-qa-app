@@ -16,8 +16,7 @@ const state = {
   poNumber: '', factoryCode: '', date: todayStr(), qaLead: '',
   creator: '', productTitle: '', qaType: 'pre_production',
   poQuantity: '', inspectionLevel: 'II', majorAql: 2.5, minorAql: 4.0,
-  productRisk: 'medium', actualSpotCheckPercent: '',
-  inspectionLevelTouched: false,
+  productRisk: 'medium', actualUnitsChecked: '',
   materials: '', printingMethod: '',
   categoryData: {
     fit: '',
@@ -42,6 +41,11 @@ const state = {
 let step = 0;
 const STEPS = ['category', 'orderInfo', 'inspectionDetails', 'sizing', 'photos', 'issues', 'review'];
 const CATEGORY_ORDER = ['apparel', 'plush', 'bags', 'accessories', 'other'];
+// Fixed industry-standard AQL values (Major 2.5%, Minor 4.0%) - not user-editable.
+// Critical is always zero-tolerance (Ac=0/Re=1), handled directly in the plan functions.
+const DEFAULT_MAJOR_AQL = 2.5;
+const DEFAULT_MINOR_AQL = 4.0;
+
 const CHECKLIST_KEYS = [
   'fabricColorMatch', 'fabricWeightMatch', 'embroideryColorMatch', 'embroideryDimMatch',
   'printColorMatch', 'printDimMatch', 'washTagMatch', 'generalSizingMatch',
@@ -200,7 +204,9 @@ function getAqlRecommendation() {
 }
 function levelNumberToRoman(n) { return n === 1 ? 'I' : n === 2 ? 'II' : 'III'; }
 function syncInspectionLevelToRecommendation() {
-  if (state.inspectionLevelTouched) return;
+  // Inspection Level has no UI control anymore - it's always derived silently
+  // from the recommendation (Creator Tier + Risk + PO Size), used only to compute
+  // the reference thresholds below.
   const rec = getAqlRecommendation();
   if (rec) state.inspectionLevel = levelNumberToRoman(rec.inspectionLevel);
 }
@@ -217,18 +223,15 @@ function getEffectiveCodeLetterFromCount(actualCount) {
   return best;
 }
 function computeActualAqlPlan() {
-  const qty = parseInt(state.poQuantity, 10);
-  const pct = parseFloat(String(state.actualSpotCheckPercent).replace('%', ''));
-  if (isNaN(qty) || qty < 1 || isNaN(pct) || pct <= 0) return null;
-  const actualCount = Math.round(qty * (pct / 100));
-  if (actualCount < 2) return null;
+  const actualCount = parseInt(state.actualUnitsChecked, 10);
+  if (isNaN(actualCount) || actualCount < 2) return null;
   const codeLetter = getEffectiveCodeLetterFromCount(actualCount);
   if (!codeLetter) return null;
-  const majorPlan = getPlan(codeLetter, state.majorAql);
-  const minorPlan = getPlan(codeLetter, state.minorAql);
+  const majorPlan = getPlan(codeLetter, DEFAULT_MAJOR_AQL);
+  const minorPlan = getPlan(codeLetter, DEFAULT_MINOR_AQL);
   if (!majorPlan || !minorPlan) return null;
   return {
-    actualCount, codeLetter, majorAql: state.majorAql, minorAql: state.minorAql,
+    actualCount, majorAql: DEFAULT_MAJOR_AQL, minorAql: DEFAULT_MINOR_AQL,
     critical: { sampleSize: actualCount, ac: 0, re: 1, codeLetterUsed: codeLetter },
     major: majorPlan, minor: minorPlan
   };
@@ -391,8 +394,8 @@ function validateStep(s) {
       if (!state[f] || !String(state[f]).trim()) { markError(f); ok = false; }
     });
     if (!state.poQuantity || parseInt(state.poQuantity, 10) < 2) { markError('poQuantity'); ok = false; }
-    if (state.qaType === 'production' && !state.actualSpotCheckPercent) {
-      markError('actualSpotCheckPercent');
+    if (state.qaType === 'production' && !state.actualUnitsChecked) {
+      markError('actualUnitsChecked');
       ok = false;
     }
     if (!ok) showToast('Please fill in all required fields / 请填写所有必填项', true);
@@ -435,7 +438,7 @@ function getAllValidationProblems() {
     if (!state[f] || !String(state[f]).trim()) problems.push(bi(f));
   });
   if (!state.poQuantity || parseInt(state.poQuantity, 10) < 2) problems.push(bi('poQuantity'));
-  if (state.qaType === 'production' && !state.actualSpotCheckPercent) problems.push(bi('actualSpotCheckRequired'));
+  if (state.qaType === 'production' && !state.actualUnitsChecked) problems.push(bi('actualSpotCheckRequired'));
 
   const detailDefs = checklistDefsForStep('inspectionDetails');
   const sizingDefs = state.category === 'apparel' ? [] : checklistDefsForStep('sizing');
@@ -487,12 +490,15 @@ function computeOverallResult() {
   if (state.qaType === 'pre_production') {
     aql = { criticalCount, majorCount, minorCount, isFallback: true, isPreProduction: true };
   } else {
-    const actualPlan = state.actualSpotCheckPercent ? computeActualAqlPlan() : null;
+    const actualPlan = state.actualUnitsChecked ? computeActualAqlPlan() : null;
     if (actualPlan) {
       if (criticalCount > actualPlan.critical.ac) reasons.push('aqlCritical');
       if (majorCount > actualPlan.major.ac) reasons.push('aqlMajor');
       if (minorCount > actualPlan.minor.ac) reasons.push('aqlMinor');
-      aql = { ...actualPlan, criticalCount, majorCount, minorCount, isFallback: false, isActual: true };
+      const checked = parseInt(state.actualUnitsChecked, 10);
+      const rejected = Math.min(checked, majorCount + criticalCount);
+      const recap = { quantityChecked: checked, quantityRejected: rejected, quantityApproved: checked - rejected };
+      aql = { ...actualPlan, criticalCount, majorCount, minorCount, isFallback: false, isActual: true, recap };
     } else {
       if (minorCount >= 3) reasons.push('minor');
       if (majorCount + criticalCount >= 1) reasons.push('major');
@@ -629,39 +635,38 @@ function renderOrderInfoStep() {
  *  #aqlSection whenever PO Quantity / Risk / Creator / QA Type / AQL settings change,
  *  without a full page re-render (keeps focus/scroll stable while typing). */
 function renderAqlSection() {
-  if (state.qaType === 'pre_production') {
-    return `
-      <div class="card">
-        <div class="section-title">${biBlockHtml('aqlReferenceTitle', 'AQL Sampling Reference')}</div>
-        <div class="section-help">${escapeHtml(bi('aqlPreProductionNotice').en)}<br/>${escapeHtml(bi('aqlPreProductionNotice').zh)}</div>
-      </div>
-    `;
-  }
+  if (state.qaType === 'pre_production') return '';
 
-  const aqlOptions = (CONFIG.aql && CONFIG.aql.aqlColumns) || [0.065, 0.10, 0.15, 0.25, 0.40, 0.65, 1.0, 1.5, 2.5, 4.0, 6.5];
   syncInspectionLevelToRecommendation();
   const rec = getAqlRecommendation();
 
-  const recBlock = rec ? `
-    <div class="aql-preview">
-      <div class="aql-preview-row"><span>${escapeHtml(bi('creatorTierLabel').en)} <span class="zh">${escapeHtml(bi('creatorTierLabel').zh)}</span></span><strong>Tier ${rec.tier}</strong></div>
-      <div class="aql-preview-row"><span>${escapeHtml(bi('orderValue').en)} <span class="zh">${escapeHtml(bi('orderValue').zh)}</span></span><strong>$${rec.orderValue.toLocaleString()}</strong></div>
-      <div class="aql-preview-row"><span>${escapeHtml(bi('recommendedPointCheck').en)} <span class="zh">${escapeHtml(bi('recommendedPointCheck').zh)}</span></span><strong>${escapeHtml(rec.pointCheck)}</strong></div>
-      <div class="aql-preview-row"><span>${escapeHtml(bi('recommendedInspectionLevel').en)} <span class="zh">${escapeHtml(bi('recommendedInspectionLevel').zh)}</span></span><strong>General ${rec.inspectionLevel}</strong></div>
-    </div>
-  ` : `<div class="section-help" style="margin-top:8px;">${escapeHtml(bi('needMoreInfoForRecommendation').en)}<br/>${escapeHtml(bi('needMoreInfoForRecommendation').zh)}</div>`;
+  let recBlock;
+  if (rec) {
+    const range = pointCheckRangeToUnits(rec.pointCheck, state.poQuantity);
+    recBlock = `
+      <div class="aql-preview">
+        <div class="aql-preview-row"><span>${escapeHtml(bi('creatorTierLabel').en)} <span class="zh">${escapeHtml(bi('creatorTierLabel').zh)}</span></span><strong>Tier ${rec.tier}</strong></div>
+        <div class="aql-preview-row"><span>${escapeHtml(bi('orderValue').en)} <span class="zh">${escapeHtml(bi('orderValue').zh)}</span></span><strong>$${rec.orderValue.toLocaleString()}</strong></div>
+        <div class="aql-preview-row"><span>${escapeHtml(bi('recommendedQuantityRange').en)} <span class="zh">${escapeHtml(bi('recommendedQuantityRange').zh)}</span></span><strong>${range ? `${range[0].toLocaleString()} - ${range[1].toLocaleString()}` : '-'} (${escapeHtml(rec.pointCheck)})</strong></div>
+      </div>
+    `;
+  } else {
+    recBlock = `<div class="section-help" style="margin-top:8px;">${escapeHtml(bi('needMoreInfoForRecommendation').en)}<br/>${escapeHtml(bi('needMoreInfoForRecommendation').zh)}</div>`;
+  }
 
   const referencePlan = state.poQuantity ? computeAqlPlan({
-    lotSize: state.poQuantity, inspectionLevel: state.inspectionLevel, majorAql: state.majorAql, minorAql: state.minorAql
+    lotSize: state.poQuantity, inspectionLevel: state.inspectionLevel, majorAql: DEFAULT_MAJOR_AQL, minorAql: DEFAULT_MINOR_AQL
   }) : null;
   const referenceTable = referencePlan ? aqlThresholdTableHtml(referencePlan) : `<div class="section-help" style="margin-top:8px;">${escapeHtml(bi('aqlNeedLotSize').en)}<br/>${escapeHtml(bi('aqlNeedLotSize').zh)}</div>`;
 
   const actualPlan = computeActualAqlPlan();
-  const actualBlock = state.actualSpotCheckPercent
+  const computedPercent = (state.actualUnitsChecked && state.poQuantity)
+    ? Math.round((parseInt(state.actualUnitsChecked, 10) / parseInt(state.poQuantity, 10)) * 1000) / 10
+    : null;
+  const actualBlock = state.actualUnitsChecked
     ? (actualPlan
       ? `
         <div class="section-title" style="margin-top:14px;">${biBlockHtml('actualDeterminationTitle', 'Actual Thresholds')}</div>
-        <div class="section-help">${escapeHtml(bi('actualCount').en)}: <strong>${actualPlan.actualCount}</strong></div>
         ${aqlThresholdTableHtml(actualPlan)}
       `
       : `<div class="section-help" style="margin-top:10px;">${escapeHtml(bi('aqlNeedLotSize').en)}</div>`)
@@ -672,33 +677,31 @@ function renderAqlSection() {
       <div class="section-title">${biBlockHtml('aqlRecommendationTitle', 'AQL Recommendation')}</div>
       ${recBlock}
 
-      <div class="field" style="margin-top:14px;">
-        <label class="field-label">${biBlockHtml('inspectionLevel', 'Inspection Level')}</label>
-        <div class="segmented">
-          ${['I', 'II', 'III'].map((lvl) => `<div class="segmented-option ${state.inspectionLevel === lvl ? 'selected' : ''}" data-seg-level="${lvl}">${lvl}</div>`).join('')}
-        </div>
-      </div>
-      <div class="field-row">
-        <div style="flex:1">${selectNumberField('majorAql', 'majorAql', state.majorAql, aqlOptions)}</div>
-        <div style="flex:1">${selectNumberField('minorAql', 'minorAql', state.minorAql, aqlOptions)}</div>
-      </div>
-
       <div class="section-title" style="margin-top:14px;">${biBlockHtml('recommendationReferenceTitle', 'Reference Thresholds')}</div>
       ${referenceTable}
     </div>
 
     <div class="card">
-      <div class="section-title">${biBlockHtml('actualSpotCheckPercent', 'Actual Spot Check Percentage')}<span class="required">*</span></div>
-      <div class="section-help">${escapeHtml(bi('actualSpotCheckHelp').en)}<br/>${escapeHtml(bi('actualSpotCheckHelp').zh)}</div>
-      <div class="field" data-field="actualSpotCheckPercent">
-        <select data-bind-live="actualSpotCheckPercent">
-          <option value="">${escapeHtml(bi('selectPlaceholder').en)} / ${escapeHtml(bi('selectPlaceholder').zh)}</option>
-          ${(OPTIONS.pointCheckRates || []).map((o) => `<option value="${escapeHtml(o)}" ${state.actualSpotCheckPercent === o ? 'selected' : ''}>${escapeHtml(o)}</option>`).join('')}
-        </select>
+      <div class="section-title">${biBlockHtml('actualUnitsChecked', 'Units Checked')}<span class="required">*</span></div>
+      <div class="section-help">${escapeHtml(bi('actualUnitsCheckedHelp').en)}<br/>${escapeHtml(bi('actualUnitsCheckedHelp').zh)}</div>
+      <div class="field" data-field="actualUnitsChecked">
+        <input type="number" min="1" step="1" inputmode="numeric" data-bind-live="actualUnitsChecked" value="${escapeHtml(state.actualUnitsChecked)}" placeholder="${escapeHtml(bi('actualUnitsCheckedPlaceholder').en)}" />
+        ${computedPercent !== null ? `<div class="section-help" style="margin-top:6px;">≈ <strong>${computedPercent}%</strong> ${escapeHtml(bi('computedPercentOfPo').en)} <span class="zh">${escapeHtml(bi('computedPercentOfPo').zh)}</span></div>` : ''}
       </div>
       ${actualBlock}
     </div>
   `;
+}
+
+/** Parses a "40-70%" style range against a PO quantity into an actual unit-count range. */
+function pointCheckRangeToUnits(pointCheckStr, poQuantity) {
+  const qty = parseInt(poQuantity, 10);
+  if (isNaN(qty) || qty < 1) return null;
+  const match = String(pointCheckStr).match(/(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)/);
+  if (!match) return null;
+  const lowPct = parseFloat(match[1]);
+  const highPct = parseFloat(match[2]);
+  return [Math.round(qty * (lowPct / 100)), Math.round(qty * (highPct / 100))];
 }
 
 function aqlThresholdTableHtml(plan) {
@@ -885,6 +888,7 @@ function defectCard(d, ownerKey) {
               return `<div class="segmented-option ${sel}" data-defect-severity="${d.id}" data-val="${s}">${escapeHtml(sl.en)}<span class="zh">${escapeHtml(sl.zh)}</span></div>`;
             }).join('')}
           </div>
+          <div class="severity-definition">${escapeHtml(bi(d.severity + 'Definition').en)}<span class="zh">${escapeHtml(bi(d.severity + 'Definition').zh)}</span></div>
         </div>
       </div>
       <div class="field">
@@ -1143,10 +1147,18 @@ function renderAqlTallyCard() {
     const exceeded = count > ac;
     return `<tr class="${exceeded ? 'exceeded' : ''}"><td>${escapeHtml(bi(labelKey).en)}${aqlSuffix}</td><td>${count}</td><td>${ac}</td><td>${re}</td></tr>`;
   };
+  const recapBlock = aql.recap ? `
+    <div class="section-title" style="margin-top:14px;">${biBlockHtml('quantityRecapTitle', 'Recap')}</div>
+    <div class="aql-preview">
+      <div class="aql-preview-row"><span>${escapeHtml(bi('quantityChecked').en)} <span class="zh">${escapeHtml(bi('quantityChecked').zh)}</span></span><strong>${aql.recap.quantityChecked}</strong></div>
+      <div class="aql-preview-row"><span>${escapeHtml(bi('quantityApproved').en)} <span class="zh">${escapeHtml(bi('quantityApproved').zh)}</span></span><strong>${aql.recap.quantityApproved}</strong></div>
+      <div class="aql-preview-row"><span>${escapeHtml(bi('quantityRejected').en)} <span class="zh">${escapeHtml(bi('quantityRejected').zh)}</span></span><strong>${aql.recap.quantityRejected}</strong></div>
+    </div>
+  ` : '';
   return `
     <div class="card" style="margin-top:14px;">
       <div class="section-title">${biBlockHtml('actualDeterminationTitle', 'Actual Thresholds')}</div>
-      <div class="section-help">${escapeHtml(bi('actualCount').en)}: <strong>${aql.actualCount}</strong> &nbsp;•&nbsp; ${escapeHtml(bi('aqlCodeLetter').en)}: <strong>${aql.codeLetter}</strong></div>
+      <div class="section-help">${escapeHtml(bi('actualUnitsChecked').en)}: <strong>${aql.actualCount}</strong></div>
       <table class="aql-preview-table" style="margin-top:8px;">
         <thead><tr><th></th><th>${escapeHtml(bi('defectTally').en)}</th><th>${escapeHtml(bi('aqlAccept').en)}</th><th>${escapeHtml(bi('aqlReject').en)}</th></tr></thead>
         <tbody>
@@ -1155,6 +1167,7 @@ function renderAqlTallyCard() {
           ${row('aqlMinor', ` (${aql.minorAql})`, aql.minorCount, aql.minor.ac, aql.minor.re)}
         </tbody>
       </table>
+      ${recapBlock}
     </div>
   `;
 }
@@ -1245,21 +1258,11 @@ function attachDataBindLiveHandlers(root = document) {
     });
   });
 }
-function attachSegLevelHandlers(root = document) {
-  root.querySelectorAll('[data-seg-level]').forEach((el) => {
-    el.addEventListener('click', () => {
-      state.inspectionLevel = el.getAttribute('data-seg-level');
-      state.inspectionLevelTouched = true;
-      refreshAqlSection();
-    });
-  });
-}
 function refreshAqlSection() {
   const section = document.getElementById('aqlSection');
   if (!section) return;
   section.innerHTML = renderAqlSection();
   attachDataBindLiveHandlers(section);
-  attachSegLevelHandlers(section);
 }
 
 function attachStepHandlers(name) {
@@ -1276,7 +1279,6 @@ function attachStepHandlers(name) {
   });
 
   attachDataBindLiveHandlers(document);
-  attachSegLevelHandlers(document);
 
   if (name === 'category') {
     document.querySelectorAll('.category-option').forEach((el) => {
@@ -1305,7 +1307,6 @@ function attachStepHandlers(name) {
         render();
       });
     });
-    attachSegLevelHandlers(document);
     document.querySelectorAll('[data-select-other]').forEach((el) => {
       el.addEventListener('change', (e) => {
         const id = el.getAttribute('data-select-other');
@@ -1529,7 +1530,7 @@ async function submitReport() {
       qaType: state.qaType,
       poQuantity: state.poQuantity,
       productRisk: state.productRisk,
-      actualSpotCheckPercent: state.actualSpotCheckPercent,
+      actualUnitsChecked: state.actualUnitsChecked,
       inspectionLevel: state.inspectionLevel,
       majorAql: state.majorAql,
       minorAql: state.minorAql,
@@ -1615,7 +1616,7 @@ function resetApp() {
     poNumber: '', factoryCode: '', date: todayStr(), qaLead: '',
     creator: '', productTitle: '', qaType: 'pre_production',
     poQuantity: '', inspectionLevel: 'II', majorAql: 2.5, minorAql: 4.0,
-    productRisk: 'medium', actualSpotCheckPercent: '', inspectionLevelTouched: false,
+    productRisk: 'medium', actualUnitsChecked: '',
     materials: '', printingMethod: '',
     categoryData: {
       fit: '', sizeRows: [],
