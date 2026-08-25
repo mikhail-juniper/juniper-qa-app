@@ -499,6 +499,42 @@ input:focus, select:focus, textarea:focus {
   border-top: 2px solid var(--jc-teal);
 }
 
+/* --- Previous report reference card (larger issue display with photos) --- */
+.prior-issue-card {
+  background: #fff;
+  border: 1px solid var(--jc-border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  margin-top: 10px;
+}
+.prior-issue-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+.prior-issue-desc { font-size: 14px; font-weight: 600; flex: 1; }
+.severity-badge {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 20px;
+  border: 1.5px solid;
+  white-space: nowrap;
+}
+.severity-badge.severity-minor { color: var(--jc-warn); border-color: var(--jc-warn); background: var(--jc-mint-light); }
+.severity-badge.severity-major { color: #D35400; border-color: #D35400; background: #FFF3E8; }
+.severity-badge.severity-critical { color: var(--jc-fail); border-color: var(--jc-fail); background: var(--jc-fail-bg); }
+.prior-issue-photo {
+  display: block;
+  max-width: 100%;
+  width: 260px;
+  border-radius: 8px;
+  margin-top: 10px;
+  border: 1px solid var(--jc-border);
+}
+
 /* --- Per-size cards (apparel sizing entry, each with its own photos) --- */
 .size-card {
   border: 1.5px solid var(--jc-border);

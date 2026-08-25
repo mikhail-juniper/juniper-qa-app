@@ -42,6 +42,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // persistent DATA_DIR (see lib/submissionLog.js) so these survive restarts
 // once a persistent disk is attached (e.g. on Render's paid tier).
 app.use('/submissions', express.static(submissionLog.PDF_ARCHIVE_DIR));
+app.use('/issue-photos', express.static(submissionLog.PHOTO_ARCHIVE_DIR));
 
 // Serve the fit library + translations + dropdown options + category tree + AQL
 // reference table + creator tiers + recommendation table + unit costs to the frontend
@@ -251,14 +252,31 @@ app.post('/api/submit', upload.any(), async (req, res) => {
     const pdfUrl = `/submissions/${encodeURIComponent(pdfFilename)}`;
 
     // Log this submission for the "reference the previous report" feature and
-    // the analytics dashboard. Keep this lightweight (no photos) - full detail
-    // lives in the PDF itself, which pdfUrl links to.
+    // the analytics dashboard. Each defect's first photo is saved separately
+    // (in addition to living in the PDF) so the prior-report card can show it
+    // inline without needing to open the full PDF.
+    fs.mkdirSync(submissionLog.PHOTO_ARCHIVE_DIR, { recursive: true });
+    const issuesWithPhotos = collectAllDefects(payload).map((d) => {
+      let photoUrl = null;
+      const photoFiles = filesByField[`photo_defect_${d.id}`];
+      if (photoFiles && photoFiles.length) {
+        const photoFilename = `${submissionId}_${d.id}.jpg`;
+        fs.writeFileSync(path.join(submissionLog.PHOTO_ARCHIVE_DIR, photoFilename), photoFiles[0].buffer);
+        photoUrl = `/issue-photos/${encodeURIComponent(photoFilename)}`;
+      }
+      return {
+        description: d.description || '', severity: d.severity,
+        unitsAffected: parseInt(d.unitsAffected, 10) || 1, photoUrl
+      };
+    });
+
     submissionLog.appendSubmission({
       id: submissionId,
       poNumber: payload.poNumber || null,
       category: payload.category || null,
       subcategory: payload.subcategory || null,
       creator: payload.creator || null,
+      factoryCode: payload.factoryCode || null,
       qaType: payload.qaType || null,
       date: payload.date || null,
       submittedAt: new Date().toISOString(),
@@ -271,9 +289,7 @@ app.post('/api/submit', upload.any(), async (req, res) => {
       majorCount: overallResult.aql ? overallResult.aql.majorCount : 0,
       minorCount: overallResult.aql ? overallResult.aql.minorCount : 0,
       pdfFilename,
-      issues: collectAllDefects(payload).map((d) => ({
-        description: d.description || '', severity: d.severity, unitsAffected: parseInt(d.unitsAffected, 10) || 1
-      }))
+      issues: issuesWithPhotos
     });
 
     res.json({ ok: true, submissionId, filename: pdfFilename, pdfUrl, emailSent, testMode: !smtpConfigured, overallResult });
@@ -310,6 +326,18 @@ app.get('/api/analytics/vendor', (req, res) => {
   } catch (err) {
     console.error('Failed to compute vendor analytics:', err);
     res.status(500).json({ error: 'Failed to compute vendor analytics', detail: String(err.message || err) });
+  }
+});
+
+app.get('/api/analytics/factory', (req, res) => {
+  try {
+    if (!req.query.factoryCode) return res.status(400).json({ error: 'factoryCode query param is required' });
+    const { start, end } = parseDateRange(req.query);
+    const all = submissionLog.getAllSubmissions();
+    res.json(analytics.factoryStats(all, req.query.factoryCode, start, end));
+  } catch (err) {
+    console.error('Failed to compute factory analytics:', err);
+    res.status(500).json({ error: 'Failed to compute factory analytics', detail: String(err.message || err) });
   }
 });
 

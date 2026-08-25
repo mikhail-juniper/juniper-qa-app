@@ -427,3 +427,46 @@ complete as your submission history - same persistence caveat applies.
 Generated from the existing teal tree logo (`public/assets/juniper-mark.png`)
 at the standard sizes (favicon.ico, 32x32 PNG, 180x180 apple-touch-icon) and
 wired into all three pages (main app, Settings, Analytics).
+
+---
+
+## Bug fix and refinements
+
+### Fixed: phantom "photo required" error with nothing visibly logged
+
+Found the exact cause of the bug you screenshotted: marking a checklist item
+"Fail" auto-creates an empty defect placeholder (so you don't hit a dead end
+if you tap Fail and add details a moment later). If you then changed your mind
+and switched it back to Pass or N/A, that placeholder stayed behind invisibly
+in the underlying data - the UI only shows the defects area while a section is
+marked Fail, so there was no way to see or remove it. Submission then correctly
+saw an incomplete defect (no description, no photo) and blocked with the
+confusing error, even though nothing appeared to be logged. Fixed by clearing
+a section's defects whenever its status changes away from Fail.
+
+### Recap changes
+
+- No more mentions of "AQL" in the Recap's plain-language notices.
+- **PO Size now always shows** in the main Order Information section of every
+  report, not just buried in the Production recap.
+- **Pre-Production now has its own "Quantity Checked" field** - a simple
+  manual count of how many units you physically hand-checked - which now
+  shows up in both the app's live recap and the PDF's Recap section
+  alongside PO Size and the Critical/Major/Minor counts.
+
+### "Previous Report Found" - moved and upgraded
+
+- Now sits at the bottom of the Order Info step as its own dedicated section,
+  after everything else, instead of squeezed under the PO Number field.
+- Each issue now displays as a larger card - description, a proper severity
+  badge, units affected, and the actual defect photo shown inline - matching
+  how the PDF itself presents a defect, instead of a small text-only bullet
+  list. This needed new backend support: defect photos are now saved
+  separately to persistent storage (alongside the PDF) specifically so they
+  can be pulled back up here without needing to open the full report.
+
+### Analytics: filter by Vendor or Factory Code
+
+The Vendor Stats section now has a toggle - Vendor or Factory Code - and
+switches the dropdown and the underlying query accordingly. Both use the same
+month-by-month stats format as before.

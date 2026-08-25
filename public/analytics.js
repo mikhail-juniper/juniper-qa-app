@@ -15,7 +15,9 @@ const PERIOD_PRESETS = {
 
 const state = {
   period: '90',
-  vendor: ''
+  filterMode: 'vendor',
+  vendor: '',
+  factoryCode: ''
 };
 
 function bi(key, fallback) {
@@ -66,10 +68,17 @@ async function loadCategoryStats() {
 }
 
 async function loadVendorStats() {
-  if (!state.vendor) { vendorData = null; return; }
-  const { start, end } = periodToRange(state.period);
-  const res = await fetch(`/api/analytics/vendor?creator=${encodeURIComponent(state.vendor)}&start=${isoDate(start)}&end=${isoDate(end)}`);
-  vendorData = await res.json();
+  if (state.filterMode === 'vendor') {
+    if (!state.vendor) { vendorData = null; return; }
+    const { start, end } = periodToRange(state.period);
+    const res = await fetch(`/api/analytics/vendor?creator=${encodeURIComponent(state.vendor)}&start=${isoDate(start)}&end=${isoDate(end)}`);
+    vendorData = await res.json();
+  } else {
+    if (!state.factoryCode) { vendorData = null; return; }
+    const { start, end } = periodToRange(state.period);
+    const res = await fetch(`/api/analytics/factory?factoryCode=${encodeURIComponent(state.factoryCode)}&start=${isoDate(start)}&end=${isoDate(end)}`);
+    vendorData = await res.json();
+  }
 }
 
 function render() {
@@ -94,11 +103,26 @@ function render() {
     <div class="step-title" style="font-size:19px; margin-top:26px;">${escapeHtml(bi('vendorStatsTitle').en)}<span class="zh">${escapeHtml(bi('vendorStatsTitle').zh)}</span></div>
     <div class="card">
       <div class="field">
-        <label class="field-label">${escapeHtml(bi('selectVendor').en)} <span class="zh">${escapeHtml(bi('selectVendor').zh)}</span></label>
-        <select id="vendorSelect">
-          <option value="">${escapeHtml(bi('selectPlaceholder', 'Select...').en)}</option>
-          ${(CONFIG.options.creators || []).slice().sort().map((c) => `<option value="${escapeHtml(c)}" ${state.vendor === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
-        </select>
+        <label class="field-label">${escapeHtml(bi('filterBy').en)} <span class="zh">${escapeHtml(bi('filterBy').zh)}</span></label>
+        <div class="segmented">
+          <div class="segmented-option ${state.filterMode === 'vendor' ? 'selected' : ''}" data-filter-mode="vendor">${escapeHtml(bi('selectVendor').en)}<span class="zh">${escapeHtml(bi('selectVendor').zh)}</span></div>
+          <div class="segmented-option ${state.filterMode === 'factory' ? 'selected' : ''}" data-filter-mode="factory">${escapeHtml(bi('factoryCode').en)}<span class="zh">${escapeHtml(bi('factoryCode').zh)}</span></div>
+        </div>
+      </div>
+      <div class="field" id="vendorFilterField">
+        ${state.filterMode === 'vendor' ? `
+          <label class="field-label">${escapeHtml(bi('selectVendor').en)} <span class="zh">${escapeHtml(bi('selectVendor').zh)}</span></label>
+          <select id="vendorSelect">
+            <option value="">${escapeHtml(bi('selectPlaceholder', 'Select...').en)}</option>
+            ${(CONFIG.options.creators || []).slice().sort().map((c) => `<option value="${escapeHtml(c)}" ${state.vendor === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+          </select>
+        ` : `
+          <label class="field-label">${escapeHtml(bi('factoryCode').en)} <span class="zh">${escapeHtml(bi('factoryCode').zh)}</span></label>
+          <select id="factorySelect">
+            <option value="">${escapeHtml(bi('selectPlaceholder', 'Select...').en)}</option>
+            ${(CONFIG.options.factoryCodes || []).slice().sort().map((c) => `<option value="${escapeHtml(c)}" ${state.factoryCode === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+          </select>
+        `}
       </div>
     </div>
     <div id="vendorSection">${renderVendorSection()}</div>
@@ -154,11 +178,12 @@ function renderCategorySection() {
 }
 
 function renderVendorSection() {
-  if (!state.vendor) return `<div class="section-help" style="margin:10px 0;">${escapeHtml(bi('selectVendor').en)}</div>`;
+  const filterVal = state.filterMode === 'vendor' ? state.vendor : state.factoryCode;
+  if (!filterVal) return `<div class="section-help" style="margin:10px 0;">${escapeHtml(bi('selectVendor').en)}</div>`;
   if (!vendorData) return `<div class="section-help">...</div>`;
   return `
     <div class="card">
-      <div class="section-title">${escapeHtml(vendorData.creator)}</div>
+      <div class="section-title">${escapeHtml(vendorData.creator || vendorData.factoryCode)}</div>
       ${statsTableHtml(vendorData.months, vendorData.total)}
     </div>
   `;
@@ -174,10 +199,26 @@ function attachHandlers() {
       document.getElementById('vendorSection').innerHTML = renderVendorSection();
     });
   }
+  document.querySelectorAll('[data-filter-mode]').forEach((el) => {
+    el.addEventListener('click', () => {
+      state.filterMode = el.getAttribute('data-filter-mode');
+      vendorData = null;
+      render();
+    });
+  });
   const vendorSelect = document.getElementById('vendorSelect');
   if (vendorSelect) {
     vendorSelect.addEventListener('change', async (e) => {
       state.vendor = e.target.value;
+      document.getElementById('vendorSection').innerHTML = `<div class="section-help">...</div>`;
+      await loadVendorStats();
+      document.getElementById('vendorSection').innerHTML = renderVendorSection();
+    });
+  }
+  const factorySelect = document.getElementById('factorySelect');
+  if (factorySelect) {
+    factorySelect.addEventListener('change', async (e) => {
+      state.factoryCode = e.target.value;
       document.getElementById('vendorSection').innerHTML = `<div class="section-help">...</div>`;
       await loadVendorStats();
       document.getElementById('vendorSection').innerHTML = renderVendorSection();

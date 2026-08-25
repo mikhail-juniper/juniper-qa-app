@@ -16,7 +16,7 @@ const state = {
   poNumber: '', factoryCode: '', date: todayStr(), qaLead: '',
   creator: '', productTitle: '', qaType: 'pre_production',
   poQuantity: '', inspectionLevel: 'II', majorAql: 2.5, minorAql: 4.0,
-  productRisk: 'medium', actualUnitsChecked: '',
+  productRisk: 'medium', actualUnitsChecked: '', preProductionUnitsChecked: '',
   materials: '', printingMethod: '',
   categoryData: {
     fit: '',
@@ -493,7 +493,12 @@ function computeOverallResult() {
 
   let aql;
   if (state.qaType === 'pre_production') {
-    aql = { criticalCount, majorCount, minorCount, isFallback: true, isPreProduction: true };
+    const preQty = parseInt(state.preProductionUnitsChecked, 10);
+    aql = {
+      criticalCount, majorCount, minorCount, isFallback: true, isPreProduction: true,
+      quantityChecked: isNaN(preQty) ? null : preQty,
+      poSize: parseInt(state.poQuantity, 10) || null
+    };
   } else {
     const checked = parseInt(state.actualUnitsChecked, 10);
     if (!isNaN(checked) && checked >= 1) {
@@ -617,12 +622,19 @@ function renderPriorReportCard() {
   const qaTypeLabel = latest.qaType === 'production' ? bi('production') : bi('prePro');
   const resultLabel = latest.overallResult === 'pass' ? bi('resultPass') : bi('resultFail');
   const issuesHtml = (latest.issues && latest.issues.length)
-    ? `<ul style="margin:8px 0 0 0; padding-left:18px; font-size:13px;">
-        ${latest.issues.map((iss) => {
-          const sevLabel = bi(iss.severity);
-          return `<li>${escapeHtml(iss.description || '-')} <span style="color:var(--jc-muted); font-size:11.5px;">(${escapeHtml(sevLabel.en)} ${escapeHtml(sevLabel.zh)}${iss.unitsAffected > 1 ? ` · ${iss.unitsAffected} ${escapeHtml(bi('unitsAffected').en)}` : ''})</span></li>`;
-        }).join('')}
-      </ul>`
+    ? latest.issues.map((iss) => {
+        const sevLabel = bi(iss.severity);
+        return `
+          <div class="prior-issue-card">
+            <div class="prior-issue-header">
+              <span class="prior-issue-desc">${escapeHtml(iss.description || '-')}</span>
+              <span class="severity-badge severity-${escapeHtml(iss.severity)}">${escapeHtml(sevLabel.en)} ${escapeHtml(sevLabel.zh)}</span>
+            </div>
+            <div class="section-help">${escapeHtml(bi('unitsAffected').en)}: ${iss.unitsAffected}</div>
+            ${iss.photoUrl ? `<img src="${escapeHtml(iss.photoUrl)}" class="prior-issue-photo" />` : ''}
+          </div>
+        `;
+      }).join('')
     : `<div class="section-help" style="margin-top:6px;">${escapeHtml(bi('noIssues').en)} / ${escapeHtml(bi('noIssues').zh)}</div>`;
 
   return `
@@ -632,7 +644,7 @@ function renderPriorReportCard() {
         ${escapeHtml(qaTypeLabel.en)} ${escapeHtml(qaTypeLabel.zh)} · ${escapeHtml(latest.date || '')} ·
         <strong style="color:${latest.overallResult === 'pass' ? 'var(--jc-teal-dark)' : 'var(--jc-fail)'}">${escapeHtml(resultLabel.en)} ${escapeHtml(resultLabel.zh)}</strong>
       </div>
-      <div class="section-photos-label" style="margin-top:10px;">${biBlockHtml('priorReportIssues', 'Issues Found')}</div>
+      <div class="section-photos-label" style="margin-top:12px;">${biBlockHtml('priorReportIssues', 'Issues Found')}</div>
       ${issuesHtml}
       <a href="/submissions/${encodeURIComponent(latest.pdfFilename)}" target="_blank" rel="noopener" class="btn btn-secondary" style="display:block; text-decoration:none; text-align:center; margin-top:12px; max-width:260px;">
         ${escapeHtml(bi('downloadFullReport').en)} / ${escapeHtml(bi('downloadFullReport').zh)}
@@ -649,7 +661,6 @@ function renderOrderInfoStep() {
     <div class="step-title">订单信息<span class="zh">Order Information</span></div>
     <div class="card">
       ${textField('poNumber', 'poNumber', state.poNumber, { required: true, placeholderKey: 'poNumberPlaceholder' })}
-      <div id="priorReportCard">${renderPriorReportCard()}</div>
       ${selectFieldWithOther('factoryCode', 'factoryCode', state.factoryCode, OPTIONS.factoryCodes || [], { required: true })}
       <div class="field-row">
         <div style="flex:1">${dateField('date', 'date', state.date, { required: true })}</div>
@@ -677,6 +688,8 @@ function renderOrderInfoStep() {
 
     <div id="aqlSection">${renderAqlSection()}</div>
 
+    <div id="priorReportCard">${renderPriorReportCard()}</div>
+
     <div class="nav-buttons">
       <button class="btn btn-secondary" id="btnBack">${biBlockHtml('back', 'Back')}</button>
       <button class="btn btn-primary" id="btnNext">${biBlockHtml('next', 'Next')}</button>
@@ -689,7 +702,17 @@ function renderOrderInfoStep() {
  *  #aqlSection whenever PO Quantity / Risk / Creator / QA Type / AQL settings change,
  *  without a full page re-render (keeps focus/scroll stable while typing). */
 function renderAqlSection() {
-  if (state.qaType === 'pre_production') return '';
+  if (state.qaType === 'pre_production') {
+    return `
+      <div class="card">
+        <div class="section-title">${biBlockHtml('quantityCheckedTitle', 'Quantity Checked')}</div>
+        <div class="section-help">${escapeHtml(bi('preProductionQuantityHelp').en)}<br/>${escapeHtml(bi('preProductionQuantityHelp').zh)}</div>
+        <div class="field">
+          <input type="number" min="1" step="1" inputmode="numeric" id="preProductionUnitsCheckedInput" value="${escapeHtml(state.preProductionUnitsChecked)}" placeholder="${escapeHtml(bi('actualUnitsCheckedPlaceholder').en)}" />
+        </div>
+      </div>
+    `;
+  }
 
   syncInspectionLevelToRecommendation();
   const rec = getAqlRecommendation();
@@ -1208,7 +1231,24 @@ function renderAqlTallyCard() {
   const result = computeOverallResult();
   const aql = result.aql;
   if (aql && aql.isPreProduction) {
-    return `<div class="section-help" style="margin-top:14px;">${escapeHtml(bi('aqlPreProductionNotice').en)}<br/>${escapeHtml(bi('aqlPreProductionNotice').zh)}</div>`;
+    return `
+      <div class="card" style="margin-top:14px;">
+        <div class="section-title">${biBlockHtml('quantityRecapTitle', 'Recap')}</div>
+        <div class="section-help">${escapeHtml(bi('aqlPreProductionNotice').en)}<br/>${escapeHtml(bi('aqlPreProductionNotice').zh)}</div>
+        <div class="aql-preview" style="margin-top:12px;">
+          <div class="aql-preview-row"><span>${escapeHtml(bi('poSize').en)} <span class="zh">${escapeHtml(bi('poSize').zh)}</span></span><strong>${aql.poSize !== null ? aql.poSize : '-'}</strong></div>
+          <div class="aql-preview-row"><span>${escapeHtml(bi('quantityChecked').en)} <span class="zh">${escapeHtml(bi('quantityChecked').zh)}</span></span><strong>${aql.quantityChecked !== null ? aql.quantityChecked : '-'}</strong></div>
+        </div>
+        <table class="aql-preview-table" style="margin-top:10px;">
+          <thead><tr><th></th><th>${escapeHtml(bi('foundLabel').en)}</th></tr></thead>
+          <tbody>
+            <tr><td>${escapeHtml(bi('aqlCritical').en)}</td><td>${aql.criticalCount}</td></tr>
+            <tr><td>${escapeHtml(bi('aqlMajor').en)}</td><td>${aql.majorCount}</td></tr>
+            <tr><td>${escapeHtml(bi('aqlMinor').en)}</td><td>${aql.minorCount}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    `;
   }
   if (!aql || aql.isFallback) {
     return `<div class="section-help" style="margin-top:14px;">${escapeHtml(bi('aqlFallbackNotice').en)}<br/>${escapeHtml(bi('aqlFallbackNotice').zh)}</div>`;
@@ -1325,12 +1365,19 @@ function refreshAqlSection() {
 }
 function attachUnitsCheckedHandler(root = document) {
   const input = root.querySelector('#actualUnitsCheckedInput');
-  if (!input) return;
-  input.addEventListener('input', (e) => {
-    state.actualUnitsChecked = e.target.value;
-    const derived = document.getElementById('unitsCheckedDerived');
-    if (derived) derived.innerHTML = renderUnitsCheckedDerived();
-  });
+  if (input) {
+    input.addEventListener('input', (e) => {
+      state.actualUnitsChecked = e.target.value;
+      const derived = document.getElementById('unitsCheckedDerived');
+      if (derived) derived.innerHTML = renderUnitsCheckedDerived();
+    });
+  }
+  const preProdInput = root.querySelector('#preProductionUnitsCheckedInput');
+  if (preProdInput) {
+    preProdInput.addEventListener('input', (e) => {
+      state.preProductionUnitsChecked = e.target.value;
+    });
+  }
 }
 
 function attachStepHandlers(name) {
@@ -1402,6 +1449,12 @@ function attachStepHandlers(name) {
         state.categoryData[key].status = val;
         if (val === 'fail' && state.categoryData[key].defects.length === 0) {
           state.categoryData[key].defects.push(emptyDefect());
+        } else if (val !== 'fail') {
+          // Clear out any defects logged while this was marked Fail - otherwise
+          // they stay behind invisibly (the defects UI only shows when status is
+          // Fail) but still count against validation, causing an inexplicable
+          // "photo required" error even though nothing appears to be logged.
+          state.categoryData[key].defects = [];
         }
         render();
       });
@@ -1605,6 +1658,7 @@ async function submitReport() {
       poQuantity: state.poQuantity,
       productRisk: state.productRisk,
       actualUnitsChecked: state.actualUnitsChecked,
+      preProductionUnitsChecked: state.preProductionUnitsChecked,
       inspectionLevel: state.inspectionLevel,
       majorAql: state.majorAql,
       minorAql: state.minorAql,
@@ -1692,7 +1746,7 @@ function resetApp() {
     poNumber: '', factoryCode: '', date: todayStr(), qaLead: '',
     creator: '', productTitle: '', qaType: 'pre_production',
     poQuantity: '', inspectionLevel: 'II', majorAql: 2.5, minorAql: 4.0,
-    productRisk: 'medium', actualUnitsChecked: '',
+    productRisk: 'medium', actualUnitsChecked: '', preProductionUnitsChecked: '',
     materials: '', printingMethod: '',
     categoryData: {
       fit: '', sizeRows: [],
