@@ -11,7 +11,7 @@ const { computeOverallResult, collectAllDefects } = require('./lib/passFail');
 const { getRecommendation } = require('./lib/aqlRecommendation');
 const submissionLog = require('./lib/submissionLog');
 const analytics = require('./lib/analytics');
-const fits = require('./config/fits.json');
+let fits = require('./config/fits.json');
 const i18n = require('./config/i18n.json');
 const categories = require('./config/categories.json');
 const aqlTable = require('./config/aql.json');
@@ -20,6 +20,7 @@ const OPTIONS_PATH = path.join(__dirname, 'config', 'options.json');
 const CREATOR_TIERS_PATH = path.join(__dirname, 'config', 'creatorTiers.json');
 const AQL_RECOMMENDATION_PATH = path.join(__dirname, 'config', 'aqlRecommendation.json');
 const UNIT_COSTS_PATH = path.join(__dirname, 'config', 'unitCosts.json');
+const FITS_PATH = path.join(__dirname, 'config', 'fits.json');
 const EDITABLE_OPTION_LISTS = ['creators', 'factoryCodes', 'qaLeads'];
 
 function loadJson(p) { return JSON.parse(fs.readFileSync(p, 'utf8')); }
@@ -140,6 +141,62 @@ app.post('/api/unit-costs', (req, res) => {
   } catch (err) {
     console.error('Failed to save unit costs:', err);
     res.status(500).json({ error: 'Failed to save unit costs', detail: String(err.message || err) });
+  }
+});
+
+// ---- Settings: apparel sizing charts (fits.json) ----
+app.get('/api/fits', (req, res) => res.json(fits));
+app.post('/api/fits', (req, res) => {
+  try {
+    const body = req.body || {};
+    if (!body.fits || typeof body.fits !== 'object') {
+      return res.status(400).json({ error: 'fits object is required' });
+    }
+    const current = loadJson(FITS_PATH);
+    const cleanedFits = {};
+    Object.entries(body.fits).forEach(([key, fit]) => {
+      if (!key || !fit || typeof fit !== 'object') return;
+      const points = Array.isArray(fit.points) ? fit.points.filter((p) => typeof p === 'string' && p) : [];
+      const pointLabels = {};
+      points.forEach((p) => {
+        const pl = (fit.pointLabels && fit.pointLabels[p]) || {};
+        pointLabels[p] = { en: String(pl.en || p), zh: String(pl.zh || '') };
+      });
+      const sizes = {};
+      if (fit.sizes && typeof fit.sizes === 'object') {
+        Object.entries(fit.sizes).forEach(([sizeName, values]) => {
+          if (!sizeName || !values || typeof values !== 'object') return;
+          const cleanValues = {};
+          points.forEach((p) => {
+            const v = values[p];
+            if (v === undefined || v === null || v === '') return;
+            if (typeof v === 'object' && v.min !== undefined && v.max !== undefined) {
+              const min = parseFloat(v.min), max = parseFloat(v.max);
+              if (!isNaN(min) && !isNaN(max)) cleanValues[p] = { min, max };
+            } else {
+              const n = parseFloat(v);
+              if (!isNaN(n)) cleanValues[p] = n;
+            }
+          });
+          sizes[sizeName] = cleanValues;
+        });
+      }
+      cleanedFits[key] = {
+        label_en: String(fit.label_en || key),
+        label_zh: String(fit.label_zh || ''),
+        group: String(fit.group || 'other'),
+        points,
+        pointLabels,
+        sizes
+      };
+    });
+    current.fits = cleanedFits;
+    saveJson(FITS_PATH, current);
+    fits = current; // update the in-memory copy so this takes effect without a restart
+    res.json({ ok: true, fits: current });
+  } catch (err) {
+    console.error('Failed to save fits:', err);
+    res.status(500).json({ error: 'Failed to save fits', detail: String(err.message || err) });
   }
 });
 
@@ -277,6 +334,11 @@ app.post('/api/submit', upload.any(), async (req, res) => {
       subcategory: payload.subcategory || null,
       creator: payload.creator || null,
       factoryCode: payload.factoryCode || null,
+      qaLead: payload.qaLead || null,
+      productTitle: payload.productTitle || null,
+      productRisk: payload.productRisk || null,
+      materials: payload.materials || null,
+      printingMethod: payload.printingMethod || null,
       qaType: payload.qaType || null,
       date: payload.date || null,
       submittedAt: new Date().toISOString(),
@@ -289,7 +351,15 @@ app.post('/api/submit', upload.any(), async (req, res) => {
       majorCount: overallResult.aql ? overallResult.aql.majorCount : 0,
       minorCount: overallResult.aql ? overallResult.aql.minorCount : 0,
       pdfFilename,
-      issues: issuesWithPhotos
+      issues: issuesWithPhotos,
+      // Sizing detail carried forward for pre-filling a later report on the same
+      // PO - text/numbers only, since photos are physical evidence tied to a
+      // specific inspection and shouldn't be silently reused.
+      sizingCarryForward: {
+        fit: (payload.categoryData && payload.categoryData.fit) || null,
+        sizeRows: (payload.categoryData && payload.categoryData.sizeRows) || [],
+        customSizeRows: (payload.categoryData && payload.categoryData.customSizeRows) || []
+      }
     });
 
     res.json({ ok: true, submissionId, filename: pdfFilename, pdfUrl, emailSent, testMode: !smtpConfigured, overallResult });

@@ -17,10 +17,13 @@ const state = {
   creator: '', productTitle: '', qaType: 'pre_production',
   poQuantity: '', inspectionLevel: 'II', majorAql: 2.5, minorAql: 4.0,
   productRisk: 'medium', actualUnitsChecked: '', preProductionUnitsChecked: '',
+  autoFilledForPo: null, _productRiskTouched: false,
   materials: '', printingMethod: '',
   categoryData: {
     fit: '',
     sizeRows: [],
+    customSizeRows: [],
+    chartPhotos: [],
     fabricColorMatch: emptyChecklistEntry(),
     fabricWeightMatch: emptyChecklistEntry(),
     embroideryColorMatch: emptyChecklistEntry(),
@@ -523,6 +526,8 @@ function getPhotoArray(fieldId) {
   if (fieldId === 'tags') return state.photos.tags;
   if (fieldId.startsWith('section:')) return state.categoryData.sectionPhotos[fieldId.split(':')[1]];
   if (fieldId.startsWith('sizerow:')) return state.categoryData.sizeRows[parseInt(fieldId.split(':')[1], 10)].photos;
+  if (fieldId.startsWith('customsizerow:')) return state.categoryData.customSizeRows[parseInt(fieldId.split(':')[1], 10)].photos;
+  if (fieldId === 'chartphotos') return state.categoryData.chartPhotos;
   if (fieldId.startsWith('defect:')) {
     const d = findDefectById(fieldId.split(':')[1]);
     return d ? d.photos : [];
@@ -611,9 +616,60 @@ async function fetchPriorReports() {
     console.error('Failed to fetch prior reports', e);
     priorReports = [];
   } finally {
-    const card = document.getElementById('priorReportCard');
-    if (card) card.innerHTML = renderPriorReportCard();
+    if (tryAutoFillFromPrior()) {
+      render(); // fields changed across the whole step - full redraw is simplest and safe here (not mid-typing)
+    } else {
+      const card = document.getElementById('priorReportCard');
+      if (card) card.innerHTML = renderPriorReportCard();
+    }
   }
+}
+
+/** If QA Type is Production and a prior report exists for this PO, fills in
+ *  order-info fields and sizing details that are still at their default/empty
+ *  state (never overwrites something the user already typed). Photos are never
+ *  carried over - only text/numbers, since photos are physical evidence tied to
+ *  a specific inspection. Returns true if anything was actually filled in. */
+function tryAutoFillFromPrior() {
+  if (state.qaType !== 'production') return false;
+  if (!priorReports.length) return false;
+  if (state.autoFilledForPo === state.poNumber) return false;
+
+  const source = priorReports[0];
+  let changed = false;
+  const fill = (field, value) => {
+    if (!value) return;
+    if (state[field]) return;
+    state[field] = value;
+    changed = true;
+  };
+  fill('factoryCode', source.factoryCode);
+  fill('qaLead', source.qaLead);
+  fill('creator', source.creator);
+  fill('productTitle', source.productTitle);
+  fill('poQuantity', source.poQuantity ? String(source.poQuantity) : '');
+  fill('materials', source.materials);
+  fill('printingMethod', source.printingMethod);
+  if (source.productRisk && !state._productRiskTouched) { state.productRisk = source.productRisk; changed = true; }
+
+  const carry = source.sizingCarryForward;
+  if (carry && state.category === 'apparel') {
+    if (!state.categoryData.fit && carry.fit) {
+      state.categoryData.fit = carry.fit;
+      changed = true;
+    }
+    if ((!state.categoryData.sizeRows || !state.categoryData.sizeRows.length) && carry.sizeRows && carry.sizeRows.length) {
+      state.categoryData.sizeRows = carry.sizeRows.map((r) => ({ size: r.size, measured: r.measured || {}, photos: [] }));
+      changed = true;
+    }
+    if ((!state.categoryData.customSizeRows || !state.categoryData.customSizeRows.length) && carry.customSizeRows && carry.customSizeRows.length) {
+      state.categoryData.customSizeRows = carry.customSizeRows.map((r) => ({ sizeName: r.sizeName, measurements: r.measurements, photos: [] }));
+      changed = true;
+    }
+  }
+
+  if (changed) state.autoFilledForPo = state.poNumber;
+  return changed;
 }
 
 function renderPriorReportCard() {
@@ -661,6 +717,32 @@ function renderOrderInfoStep() {
     <div class="step-title">订单信息<span class="zh">Order Information</span></div>
     <div class="card">
       ${textField('poNumber', 'poNumber', state.poNumber, { required: true, placeholderKey: 'poNumberPlaceholder' })}
+      <div class="field">
+        <label class="field-label">${biBlockHtml('qaType', 'QA Type')}</label>
+        <div class="segmented" id="qaTypeSeg">
+          ${segOption('qaType', 'pre_production', 'prePro', state.qaType)}
+          ${segOption('qaType', 'production', 'production', state.qaType)}
+        </div>
+      </div>
+    </div>
+
+    <div id="restOfOrderInfo">${renderRestOfOrderInfo()}</div>
+
+    <div id="aqlSection">${renderAqlSection()}</div>
+
+    <div id="priorReportCard">${renderPriorReportCard()}</div>
+
+    <div class="nav-buttons">
+      <button class="btn btn-secondary" id="btnBack">${biBlockHtml('back', 'Back')}</button>
+      <button class="btn btn-primary" id="btnNext">${biBlockHtml('next', 'Next')}</button>
+    </div>
+  `;
+}
+
+function renderRestOfOrderInfo() {
+  return `
+    <div class="card">
+      ${state.autoFilledForPo ? `<div class="section-help" style="margin-bottom:10px; color:var(--jc-teal-dark);">${escapeHtml(bi('prefilledNotice').en)}<br/>${escapeHtml(bi('prefilledNotice').zh)}</div>` : ''}
       ${selectFieldWithOther('factoryCode', 'factoryCode', state.factoryCode, OPTIONS.factoryCodes || [], { required: true })}
       <div class="field-row">
         <div style="flex:1">${dateField('date', 'date', state.date, { required: true })}</div>
@@ -670,13 +752,6 @@ function renderOrderInfoStep() {
         <div style="flex:1">${selectFieldWithOther('creator', 'creator', state.creator, OPTIONS.creators || [], {})}</div>
         <div style="flex:1">${textField('productTitle', 'productTitle', state.productTitle, {})}</div>
       </div>
-      <div class="field">
-        <label class="field-label">${biBlockHtml('qaType', 'QA Type')}</label>
-        <div class="segmented" id="qaTypeSeg">
-          ${segOption('qaType', 'pre_production', 'prePro', state.qaType)}
-          ${segOption('qaType', 'production', 'production', state.qaType)}
-        </div>
-      </div>
       ${numberField('poQuantity', 'poQuantity', state.poQuantity, { required: true, placeholderKey: 'poQuantityPlaceholder' })}
       <div class="field">
         <label class="field-label">${biBlockHtml('productRisk', 'Product Complexity/Risk')}</label>
@@ -684,15 +759,6 @@ function renderOrderInfoStep() {
           ${['high', 'medium', 'low'].map((r) => `<div class="segmented-option ${state.productRisk === r ? 'selected' : ''}" data-seg="productRisk" data-val="${r}">${escapeHtml(bi('risk' + r.charAt(0).toUpperCase() + r.slice(1)).en)}<span class="zh">${escapeHtml(bi('risk' + r.charAt(0).toUpperCase() + r.slice(1)).zh)}</span></div>`).join('')}
         </div>
       </div>
-    </div>
-
-    <div id="aqlSection">${renderAqlSection()}</div>
-
-    <div id="priorReportCard">${renderPriorReportCard()}</div>
-
-    <div class="nav-buttons">
-      <button class="btn btn-secondary" id="btnBack">${biBlockHtml('back', 'Back')}</button>
-      <button class="btn btn-primary" id="btnNext">${biBlockHtml('next', 'Next')}</button>
     </div>
   `;
 }
@@ -1026,6 +1092,7 @@ function renderSizingStep() {
   if (state.category === 'apparel') {
     body += renderFitPicker();
     if (state.categoryData.fit === OTHER_FIT_VALUE) {
+      body += renderCustomSizeChart();
       body += checklistCard('sizingSection', [['generalSizingMatch', 'generalSizingMatch']], 'sizing');
     } else if (state.categoryData.fit) {
       body += renderReferenceChart();
@@ -1046,6 +1113,43 @@ function renderSizingStep() {
     </div>
   `;
 }
+/** For apparel's "Other / Custom Sizing" option: a fillable chart with freeform
+ *  size rows (name + measurement notes + a photo per size), plus a general photo
+ *  slot for snapping a paper reference chart if that's faster than typing it out. */
+function renderCustomSizeChart() {
+  const rows = state.categoryData.customSizeRows.map((row, ridx) => `
+    <div class="size-card">
+      <div class="field">
+        <label class="field-label">${biBlockHtml('customSizeName', 'Size Name')}</label>
+        <input type="text" data-custom-size-name="${ridx}" value="${escapeHtml(row.sizeName)}" placeholder="${escapeHtml(bi('customSizeNamePlaceholder').en)}" />
+      </div>
+      <div class="field">
+        <label class="field-label">${biBlockHtml('customSizeMeasurements', 'Measurements')}</label>
+        <textarea data-custom-size-measurements="${ridx}" placeholder="${escapeHtml(bi('customSizeMeasurementsPlaceholder').en)}">${escapeHtml(row.measurements)}</textarea>
+      </div>
+      <div class="size-card-photos">
+        <div class="section-photos-label">${biBlockHtml('sizingPhotosForSize', 'Photos for this size')}</div>
+        ${photoGrid('customsizerow:' + ridx, true)}
+      </div>
+      <button type="button" class="remove-defect-btn" data-remove-custom-size="${ridx}">${escapeHtml(bi('removeIssue').en)} / ${escapeHtml(bi('removeIssue').zh)}</button>
+    </div>
+  `).join('');
+
+  return `
+    <div class="card">
+      <div class="section-title">${biBlockHtml('customSizeChartTitle', 'Custom Size Chart')}</div>
+      <div class="section-help">${escapeHtml(bi('customSizeChartHelp').en)}<br/>${escapeHtml(bi('customSizeChartHelp').zh)}</div>
+      ${rows}
+      <button type="button" class="add-defect-btn" id="btnAddCustomSize">${escapeHtml(bi('addCustomSize').en)} <span class="zh">${escapeHtml(bi('addCustomSize').zh)}</span></button>
+    </div>
+    <div class="card">
+      <div class="section-title">${biBlockHtml('chartPhotoTitle', 'Reference Chart Photo')}</div>
+      <div class="section-help">${escapeHtml(bi('chartPhotoHelp').en)}<br/>${escapeHtml(bi('chartPhotoHelp').zh)}</div>
+      ${photoGrid('chartphotos', true)}
+    </div>
+  `;
+}
+
 function renderFitPicker() {
   const fits = fitsForCurrentSubcategory();
   const options = Object.keys(fits).map((key) => {
@@ -1424,7 +1528,10 @@ function attachStepHandlers(name) {
     }
     document.querySelectorAll('[data-seg]').forEach((el) => {
       el.addEventListener('click', () => {
-        state[el.getAttribute('data-seg')] = el.getAttribute('data-val');
+        const field = el.getAttribute('data-seg');
+        state[field] = el.getAttribute('data-val');
+        if (field === 'productRisk') state._productRiskTouched = true;
+        if (field === 'qaType') tryAutoFillFromPrior();
         render();
       });
     });
@@ -1472,6 +1579,7 @@ function attachStepHandlers(name) {
       fitSelect.addEventListener('change', (e) => {
         state.categoryData.fit = e.target.value;
         state.categoryData.sizeRows = [];
+        state.categoryData.customSizeRows = [];
         render();
       });
     }
@@ -1481,6 +1589,29 @@ function attachStepHandlers(name) {
         const point = el.getAttribute('data-size-point');
         state.categoryData.sizeRows[ridx].measured[point] = e.target.value;
         updateSizeCellInPlace(ridx, point);
+      });
+    });
+    const btnAddCustomSize = document.getElementById('btnAddCustomSize');
+    if (btnAddCustomSize) {
+      btnAddCustomSize.addEventListener('click', () => {
+        state.categoryData.customSizeRows.push({ sizeName: '', measurements: '', photos: [] });
+        render();
+      });
+    }
+    document.querySelectorAll('[data-custom-size-name]').forEach((el) => {
+      el.addEventListener('input', (e) => {
+        state.categoryData.customSizeRows[parseInt(el.getAttribute('data-custom-size-name'), 10)].sizeName = e.target.value;
+      });
+    });
+    document.querySelectorAll('[data-custom-size-measurements]').forEach((el) => {
+      el.addEventListener('input', (e) => {
+        state.categoryData.customSizeRows[parseInt(el.getAttribute('data-custom-size-measurements'), 10)].measurements = e.target.value;
+      });
+    });
+    document.querySelectorAll('[data-remove-custom-size]').forEach((el) => {
+      el.addEventListener('click', () => {
+        state.categoryData.customSizeRows.splice(parseInt(el.getAttribute('data-remove-custom-size'), 10), 1);
+        render();
       });
     });
   }
@@ -1667,6 +1798,7 @@ async function submitReport() {
       categoryData: {
         fit: cd.fit,
         sizeRows: (cd.sizeRows || []).map((row) => ({ size: row.size, measured: row.measured })),
+        customSizeRows: (cd.customSizeRows || []).map((row) => ({ sizeName: row.sizeName, measurements: row.measurements })),
         ...Object.fromEntries(CHECKLIST_KEYS.map((key) => [key, {
           status: cd[key].status, notes: cd[key].notes,
           defects: (cd[key].defects || []).map(serializeDefect)
@@ -1692,6 +1824,10 @@ async function submitReport() {
     (state.categoryData.sizeRows || []).forEach((row, ridx) => {
       (row.photos || []).forEach((f) => formData.append(`photo_sizerow_${ridx}`, f, f.name));
     });
+    (state.categoryData.customSizeRows || []).forEach((row, ridx) => {
+      (row.photos || []).forEach((f) => formData.append(`photo_customsizerow_${ridx}`, f, f.name));
+    });
+    (state.categoryData.chartPhotos || []).forEach((f) => formData.append('photo_chart', f, f.name));
 
     const res = await fetch('/api/submit', { method: 'POST', body: formData });
     if (!res.ok) {
@@ -1747,9 +1883,10 @@ function resetApp() {
     creator: '', productTitle: '', qaType: 'pre_production',
     poQuantity: '', inspectionLevel: 'II', majorAql: 2.5, minorAql: 4.0,
     productRisk: 'medium', actualUnitsChecked: '', preProductionUnitsChecked: '',
+    autoFilledForPo: null, _productRiskTouched: false,
     materials: '', printingMethod: '',
     categoryData: {
-      fit: '', sizeRows: [],
+      fit: '', sizeRows: [], customSizeRows: [], chartPhotos: [],
       fabricColorMatch: emptyChecklistEntry(),
       fabricWeightMatch: emptyChecklistEntry(),
       embroideryColorMatch: emptyChecklistEntry(),

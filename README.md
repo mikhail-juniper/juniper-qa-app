@@ -470,3 +470,44 @@ a section's defects whenever its status changes away from Fail.
 The Vendor Stats section now has a toggle - Vendor or Factory Code - and
 switches the dropdown and the underlying query accordingly. Both use the same
 month-by-month stats format as before.
+
+---
+
+## Custom sizing, pre-fill, and a sizing chart editor
+
+### Apparel "Other / Custom Sizing" now has a real chart
+
+Instead of falling back to the same generic checklist as plush/bags/etc, "Other"
+now gets: a fillable chart (add a size, type in its measurements freeform, attach
+a photo of that specific size) plus a separate "Reference Chart Photo" upload for
+snapping a whole paper breakdown if that's faster than typing. The Pass/Fail
+sizing check still applies too, since there's no automatic tolerance comparison
+for a custom fit - the manual check is the actual QC record here.
+
+(Fixed a related bug while building this: apparel with "Other" fit was silently
+skipping the sizing Pass/Fail checklist entirely - that logic only made sense for
+standard fits with automatic tolerance checking, not "Other," which has none.)
+
+### Pre-fill from the Pre-Production report
+
+Step 2 is now two boxes: the first is just **PO Number + QA Type**. Once you enter
+a PO Number that matches an earlier report and select **Production Sample**, the
+second box (Factory Code, Date, QA Lead, Creator, Product Title, PO Quantity,
+Risk) - plus the sizing chart itself, if apparel - fills in automatically from
+whatever was entered on the Pre-Production report for that same PO. Anything you've
+already typed is never overwritten, and a small note flags when a field was
+auto-filled so it's obvious to double-check. Photos are never carried forward -
+only text and measurements - since photos are physical evidence tied to a specific
+inspection, not something that should be silently reused.
+
+### Settings: edit apparel sizing charts
+
+New section at the bottom of Settings - pick a standard from a dropdown to edit
+its chart (sizes, measurement points, and values - a value can be a plain number
+like `24` or a range like `24-26`), or add a brand new standard from scratch.
+Changes take effect immediately, no restart needed.
+
+### Bag category
+
+"Purse" is now labeled "Sling Bag" (the underlying data key is unchanged, so this
+doesn't affect existing reports or analytics).
