@@ -24,7 +24,7 @@ const CATEGORY_LABELS = {
 function bi(key, fallback) {
   const e = I18N[key];
   if (!e) return { en: fallback || key, zh: '' };
-  return e;
+  return { en: e.zh, zh: e.en };
 }
 function escapeHtml(str) {
   if (str === undefined || str === null) return '';
@@ -94,7 +94,7 @@ function renderListCard(def) {
 
   return `
     <div class="card">
-      <div class="section-title">${escapeHtml(def.pluralEn)}<span class="zh">${escapeHtml(def.pluralZh)}</span></div>
+      <div class="section-title">${escapeHtml(def.pluralZh)}<span class="zh">${escapeHtml(def.pluralEn)}</span></div>
       <div class="settings-list" id="list_${def.key}">
         ${rows || `<div class="section-help">No entries yet.</div>`}
       </div>
@@ -204,7 +204,7 @@ function renderUnitCostsCard() {
     `).join('');
     return `
       <div style="margin-top:10px;">
-        <div class="section-photos-label">${escapeHtml(label.en)} <span class="zh">${escapeHtml(label.zh)}</span></div>
+        <div class="section-photos-label">${escapeHtml(label.zh || label.en)} <span class="zh">${escapeHtml(label.en)}</span></div>
         ${rows}
       </div>
     `;

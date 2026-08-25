@@ -63,7 +63,7 @@ function todayStr() {
 function bi(key, fallback) {
   const e = I18N[key];
   if (!e) return { en: fallback || key, zh: '' };
-  return { en: e.en, zh: e.zh };
+  return { en: e.zh, zh: e.en };
 }
 function biHtml(key, fallback, tag = 'span') {
   const e = bi(key, fallback);
@@ -316,7 +316,7 @@ function checklistDefsForStep(name) {
       ['packagingCardMatch', 'packagingCardMatch'], ['bagTagsCorrect', 'bagTagsCorrect']
     ];
   }
-  if (name === 'sizing' && state.category !== 'apparel') {
+  if (name === 'sizing' && (state.category !== 'apparel' || state.categoryData.fit === OTHER_FIT_VALUE)) {
     return [['generalSizingMatch', 'generalSizingMatch']];
   }
   return [];
@@ -336,6 +336,9 @@ function findIncompleteDefects(defectList) {
 function apparelSizingIncomplete() {
   if (state.category !== 'apparel') return false;
   if (!state.categoryData.fit) return true;
+  if (state.categoryData.fit === OTHER_FIT_VALUE) {
+    return !state.categoryData.generalSizingMatch.status;
+  }
   const rows = state.categoryData.sizeRows || [];
   const hasAnyMeasurement = rows.some((r) => r.measured && Object.values(r.measured).some((v) => v !== '' && v !== undefined));
   return !hasAnyMeasurement;
@@ -402,7 +405,7 @@ function validateStep(s) {
   } else if (name === 'inspectionDetails') {
     ok = validateChecklistStepGeneric(name);
   } else if (name === 'sizing') {
-    if (state.category === 'apparel') {
+    if (state.category === 'apparel' && state.categoryData.fit !== OTHER_FIT_VALUE) {
       if (apparelSizingIncomplete()) {
         showToast(bi('selectFitRequired').en + ' / ' + bi('selectFitRequired').zh, true);
         ok = false;
@@ -441,7 +444,7 @@ function getAllValidationProblems() {
   if (state.qaType === 'production' && !state.actualUnitsChecked) problems.push(bi('actualSpotCheckRequired'));
 
   const detailDefs = checklistDefsForStep('inspectionDetails');
-  const sizingDefs = state.category === 'apparel' ? [] : checklistDefsForStep('sizing');
+  const sizingDefs = (state.category === 'apparel' && state.categoryData.fit !== OTHER_FIT_VALUE) ? [] : checklistDefsForStep('sizing');
   const allDefs = detailDefs.concat(sizingDefs);
 
   const missingStatus = allDefs.filter(([key]) => !state.categoryData[key].status);
@@ -458,7 +461,7 @@ function getAllValidationProblems() {
   if (incomplete.some((d) => !d.photos || d.photos.length === 0)) problems.push(bi('photoRequiredForDefect'));
   else if (incomplete.length) problems.push(bi('descriptionRequiredForDefect'));
 
-  if (state.category === 'apparel' && apparelSizingIncomplete()) problems.push(bi('selectFitRequired'));
+  if (state.category === 'apparel' && state.categoryData.fit !== OTHER_FIT_VALUE && apparelSizingIncomplete()) problems.push(bi('selectFitRequired'));
 
   return problems;
 }
@@ -490,15 +493,12 @@ function computeOverallResult() {
   if (state.qaType === 'pre_production') {
     aql = { criticalCount, majorCount, minorCount, isFallback: true, isPreProduction: true };
   } else {
-    const actualPlan = state.actualUnitsChecked ? computeActualAqlPlan() : null;
-    if (actualPlan) {
-      if (criticalCount > actualPlan.critical.ac) reasons.push('aqlCritical');
-      if (majorCount > actualPlan.major.ac) reasons.push('aqlMajor');
-      if (minorCount > actualPlan.minor.ac) reasons.push('aqlMinor');
-      const checked = parseInt(state.actualUnitsChecked, 10);
+    const checked = parseInt(state.actualUnitsChecked, 10);
+    if (!isNaN(checked) && checked >= 1) {
       const rejected = Math.min(checked, majorCount + criticalCount);
-      const recap = { quantityChecked: checked, quantityRejected: rejected, quantityApproved: checked - rejected };
-      aql = { ...actualPlan, criticalCount, majorCount, minorCount, isFallback: false, isActual: true, recap };
+      const recap = { poSize: parseInt(state.poQuantity, 10) || null, quantityChecked: checked, quantityRejected: rejected, quantityApproved: checked - rejected };
+      if (rejected >= checked) reasons.push('allRejected');
+      aql = { criticalCount, majorCount, minorCount, isFallback: false, isActual: true, recap };
     } else {
       if (minorCount >= 3) reasons.push('minor');
       if (majorCount + criticalCount >= 1) reasons.push('major');
@@ -552,8 +552,8 @@ function renderCategoryStep() {
     const cardHtml = `<div class="category-option ${sel} ${key === state.category && c.subcategories && c.subcategories.length ? 'has-subcat-open' : ''}" data-cat="${key}">
       <div class="category-icon">${c.icon || '📦'}</div>
       <div>
-        <div class="category-label-en">${escapeHtml(c.label_en)}</div>
-        <div class="category-label-zh">${escapeHtml(c.label_zh)}</div>
+        <div class="category-label-en">${escapeHtml(c.label_zh)}</div>
+        <div class="category-label-zh">${escapeHtml(c.label_en)}</div>
       </div>
     </div>`;
 
@@ -562,7 +562,7 @@ function renderCategoryStep() {
       const chips = c.subcategories.map((s) => {
         const subSel = state.subcategory === s.key ? 'selected' : '';
         return `<div class="segmented-option ${subSel}" data-subcat="${s.key}" style="flex: 0 0 auto; min-width: 100px;">
-          ${escapeHtml(s.label_en)}<span class="zh">${escapeHtml(s.label_zh)}</span>
+          ${escapeHtml(s.label_zh)}<span class="zh">${escapeHtml(s.label_en)}</span>
         </div>`;
       }).join('');
       inlineSubcatBlock = `
@@ -581,7 +581,7 @@ function renderCategoryStep() {
       <a href="settings.html" class="settings-link" title="Settings">⚙️ ${escapeHtml(bi('settingsTitle').en)}</a>
     </div>
     <div class="step-eyebrow">${biHtml('step', 'Step')} 1 / 7</div>
-    <div class="step-title">Select Product Category<span class="zh">选择产品类别</span></div>
+    <div class="step-title">选择产品类别<span class="zh">Select Product Category</span></div>
     <div class="category-grid">${catCards}</div>
     <div class="nav-buttons">
       <button class="btn btn-primary" id="btnNext">${biBlockHtml('next', 'Next')}</button>
@@ -593,7 +593,7 @@ function renderCategoryStep() {
 function renderOrderInfoStep() {
   return `
     <div class="step-eyebrow">${biHtml('step', 'Step')} 2 / 7</div>
-    <div class="step-title">Order Information<span class="zh">订单信息</span></div>
+    <div class="step-title">订单信息<span class="zh">Order Information</span></div>
     <div class="card">
       ${textField('poNumber', 'poNumber', state.poNumber, { required: true, placeholderKey: 'poNumberPlaceholder' })}
       ${selectFieldWithOther('factoryCode', 'factoryCode', state.factoryCode, OPTIONS.factoryCodes || [], { required: true })}
@@ -654,31 +654,17 @@ function renderAqlSection() {
     recBlock = `<div class="section-help" style="margin-top:8px;">${escapeHtml(bi('needMoreInfoForRecommendation').en)}<br/>${escapeHtml(bi('needMoreInfoForRecommendation').zh)}</div>`;
   }
 
-  const referencePlan = state.poQuantity ? computeAqlPlan({
-    lotSize: state.poQuantity, inspectionLevel: state.inspectionLevel, majorAql: DEFAULT_MAJOR_AQL, minorAql: DEFAULT_MINOR_AQL
-  }) : null;
-  const referenceTable = referencePlan ? aqlThresholdTableHtml(referencePlan) : `<div class="section-help" style="margin-top:8px;">${escapeHtml(bi('aqlNeedLotSize').en)}<br/>${escapeHtml(bi('aqlNeedLotSize').zh)}</div>`;
-
-  const actualPlan = computeActualAqlPlan();
   const computedPercent = (state.actualUnitsChecked && state.poQuantity)
     ? Math.round((parseInt(state.actualUnitsChecked, 10) / parseInt(state.poQuantity, 10)) * 1000) / 10
     : null;
-  const actualBlock = state.actualUnitsChecked
-    ? (actualPlan
-      ? `
-        <div class="section-title" style="margin-top:14px;">${biBlockHtml('actualDeterminationTitle', 'Actual Thresholds')}</div>
-        ${aqlThresholdTableHtml(actualPlan)}
-      `
-      : `<div class="section-help" style="margin-top:10px;">${escapeHtml(bi('aqlNeedLotSize').en)}</div>`)
-    : `<div class="section-help" style="margin-top:10px;">${escapeHtml(bi('enterActualSpotCheckFirst').en)}<br/>${escapeHtml(bi('enterActualSpotCheckFirst').zh)}</div>`;
+
+  const result = computeOverallResult();
+  const recapTableBlock = (result.aql && result.aql.isActual) ? foundAcceptedTableHtml(result.aql) : `<div class="section-help" style="margin-top:10px;">${escapeHtml(bi('enterActualSpotCheckFirst').en)}<br/>${escapeHtml(bi('enterActualSpotCheckFirst').zh)}</div>`;
 
   return `
     <div class="card">
-      <div class="section-title">${biBlockHtml('aqlRecommendationTitle', 'AQL Recommendation')}</div>
+      <div class="section-title">${biBlockHtml('aqlRecommendationTitle', 'Spot Check Recommendation')}</div>
       ${recBlock}
-
-      <div class="section-title" style="margin-top:14px;">${biBlockHtml('recommendationReferenceTitle', 'Reference Thresholds')}</div>
-      ${referenceTable}
     </div>
 
     <div class="card">
@@ -688,8 +674,25 @@ function renderAqlSection() {
         <input type="number" min="1" step="1" inputmode="numeric" data-bind-live="actualUnitsChecked" value="${escapeHtml(state.actualUnitsChecked)}" placeholder="${escapeHtml(bi('actualUnitsCheckedPlaceholder').en)}" />
         ${computedPercent !== null ? `<div class="section-help" style="margin-top:6px;">≈ <strong>${computedPercent}%</strong> ${escapeHtml(bi('computedPercentOfPo').en)} <span class="zh">${escapeHtml(bi('computedPercentOfPo').zh)}</span></div>` : ''}
       </div>
-      ${actualBlock}
+      ${recapTableBlock}
     </div>
+  `;
+}
+
+/** Critical/Major/Minor table showing Found vs Accepted (no Accept/Reject thresholds -
+ *  Major/Critical finds are simply rejected on a per-unit basis; Minor finds stay
+ *  accepted, since minor issues don't make a unit unsaleable). */
+function foundAcceptedTableHtml(aql) {
+  const row = (labelKey, count, accepted) => `<tr><td>${escapeHtml(bi(labelKey).en)}</td><td>${count}</td><td>${accepted}</td></tr>`;
+  return `
+    <table class="aql-preview-table" style="margin-top:10px;">
+      <thead><tr><th></th><th>${escapeHtml(bi('foundLabel').en)}</th><th>${escapeHtml(bi('acceptedLabel').en)}</th></tr></thead>
+      <tbody>
+        ${row('aqlCritical', aql.criticalCount, 0)}
+        ${row('aqlMajor', aql.majorCount, 0)}
+        ${row('aqlMinor', aql.minorCount, aql.minorCount)}
+      </tbody>
+    </table>
   `;
 }
 
@@ -830,7 +833,7 @@ function renderInspectionDetailsStep() {
 
   return `
     <div class="step-eyebrow">${biHtml('step', 'Step')} 3 / 7</div>
-    <div class="step-title">Inspection Details<span class="zh">检验详情</span></div>
+    <div class="step-title">检验详情<span class="zh">Inspection Details</span></div>
     ${body}
     <div class="nav-buttons">
       <button class="btn btn-secondary" id="btnBack">${biBlockHtml('back', 'Back')}</button>
@@ -932,11 +935,15 @@ function fitsForCurrentSubcategory() {
   return Object.keys(filtered).length ? filtered : allFits;
 }
 
+const OTHER_FIT_VALUE = '__other_fit__';
+
 function renderSizingStep() {
   let body = '';
   if (state.category === 'apparel') {
     body += renderFitPicker();
-    if (state.categoryData.fit) {
+    if (state.categoryData.fit === OTHER_FIT_VALUE) {
+      body += checklistCard('sizingSection', [['generalSizingMatch', 'generalSizingMatch']], 'sizing');
+    } else if (state.categoryData.fit) {
       body += renderReferenceChart();
       body += renderSizeEntryTable();
     }
@@ -947,7 +954,7 @@ function renderSizingStep() {
 
   return `
     <div class="step-eyebrow">${biHtml('step', 'Step')} 4 / 7</div>
-    <div class="step-title">Sizing<span class="zh">尺寸</span></div>
+    <div class="step-title">尺寸<span class="zh">Sizing</span></div>
     ${body}
     <div class="nav-buttons">
       <button class="btn btn-secondary" id="btnBack">${biBlockHtml('back', 'Back')}</button>
@@ -960,8 +967,9 @@ function renderFitPicker() {
   const options = Object.keys(fits).map((key) => {
     const f = fits[key];
     const sel = state.categoryData.fit === key ? 'selected' : '';
-    return `<option value="${key}" ${sel}>${escapeHtml(f.label_en)} / ${escapeHtml(f.label_zh)}</option>`;
+    return `<option value="${key}" ${sel}>${escapeHtml(f.label_zh)} / ${escapeHtml(f.label_en)}</option>`;
   }).join('');
+  const otherSel = state.categoryData.fit === OTHER_FIT_VALUE ? 'selected' : '';
   return `
     <div class="card">
       <div class="section-title">${biBlockHtml('fitSelect', 'Standard Fit')}</div>
@@ -969,6 +977,7 @@ function renderFitPicker() {
         <select id="fitSelect">
           <option value="">${escapeHtml(bi('fitSelectPlaceholder').en)} / ${escapeHtml(bi('fitSelectPlaceholder').zh)}</option>
           ${options}
+          <option value="${OTHER_FIT_VALUE}" ${otherSel}>${escapeHtml(bi('fitOther').en)} / ${escapeHtml(bi('fitOther').zh)}</option>
         </select>
       </div>
     </div>
@@ -979,7 +988,7 @@ function renderReferenceChart() {
   if (!fitDef) return '';
   const pointCols = fitDef.points.map((p) => {
     const pl = fitDef.pointLabels[p] || { en: p, zh: '' };
-    return `<th>${escapeHtml(pl.en)}<span class="zh">${escapeHtml(pl.zh)}</span></th>`;
+    return `<th>${escapeHtml(pl.zh || pl.en)}<span class="zh">${escapeHtml(pl.en)}</span></th>`;
   }).join('');
   const rows = Object.keys(fitDef.sizes).map((sizeName) => {
     const std = fitDef.sizes[sizeName];
@@ -1020,7 +1029,7 @@ function renderSizeEntryTable() {
       const outOfTol = isOutOfTolerance(std, measuredVal === '' ? null : measuredNum, tol);
       return `
         <div class="size-point-field ${outOfTol ? 'out-of-tol' : ''}" id="sizecell_${ridx}_${p}">
-          <label class="size-point-label">${escapeHtml(pl.en)} <span class="zh">${escapeHtml(pl.zh)}</span></label>
+          <label class="size-point-label">${escapeHtml(pl.zh || pl.en)} <span class="zh">${escapeHtml(pl.en)}</span></label>
           <span class="std-val">${escapeHtml(bi('standard').en)}: ${escapeHtml(formatStandard(std))}</span>
           <input type="number" step="0.1" inputmode="decimal" value="${escapeHtml(measuredVal)}"
             class="${outOfTol ? 'out-of-tol' : ''}"
@@ -1143,13 +1152,9 @@ function renderAqlTallyCard() {
   if (!aql || aql.isFallback) {
     return `<div class="section-help" style="margin-top:14px;">${escapeHtml(bi('aqlFallbackNotice').en)}<br/>${escapeHtml(bi('aqlFallbackNotice').zh)}</div>`;
   }
-  const row = (labelKey, aqlSuffix, count, ac, re) => {
-    const exceeded = count > ac;
-    return `<tr class="${exceeded ? 'exceeded' : ''}"><td>${escapeHtml(bi(labelKey).en)}${aqlSuffix}</td><td>${count}</td><td>${ac}</td><td>${re}</td></tr>`;
-  };
-  const recapBlock = aql.recap ? `
-    <div class="section-title" style="margin-top:14px;">${biBlockHtml('quantityRecapTitle', 'Recap')}</div>
-    <div class="aql-preview">
+  const recapRows = aql.recap ? `
+    <div class="aql-preview" style="margin-top:12px;">
+      <div class="aql-preview-row"><span>${escapeHtml(bi('poSize').en)} <span class="zh">${escapeHtml(bi('poSize').zh)}</span></span><strong>${aql.recap.poSize !== null ? aql.recap.poSize : '-'}</strong></div>
       <div class="aql-preview-row"><span>${escapeHtml(bi('quantityChecked').en)} <span class="zh">${escapeHtml(bi('quantityChecked').zh)}</span></span><strong>${aql.recap.quantityChecked}</strong></div>
       <div class="aql-preview-row"><span>${escapeHtml(bi('quantityApproved').en)} <span class="zh">${escapeHtml(bi('quantityApproved').zh)}</span></span><strong>${aql.recap.quantityApproved}</strong></div>
       <div class="aql-preview-row"><span>${escapeHtml(bi('quantityRejected').en)} <span class="zh">${escapeHtml(bi('quantityRejected').zh)}</span></span><strong>${aql.recap.quantityRejected}</strong></div>
@@ -1157,17 +1162,9 @@ function renderAqlTallyCard() {
   ` : '';
   return `
     <div class="card" style="margin-top:14px;">
-      <div class="section-title">${biBlockHtml('actualDeterminationTitle', 'Actual Thresholds')}</div>
-      <div class="section-help">${escapeHtml(bi('actualUnitsChecked').en)}: <strong>${aql.actualCount}</strong></div>
-      <table class="aql-preview-table" style="margin-top:8px;">
-        <thead><tr><th></th><th>${escapeHtml(bi('defectTally').en)}</th><th>${escapeHtml(bi('aqlAccept').en)}</th><th>${escapeHtml(bi('aqlReject').en)}</th></tr></thead>
-        <tbody>
-          ${row('aqlCritical', '', aql.criticalCount, aql.critical.ac, aql.critical.re)}
-          ${row('aqlMajor', ` (${aql.majorAql})`, aql.majorCount, aql.major.ac, aql.major.re)}
-          ${row('aqlMinor', ` (${aql.minorAql})`, aql.minorCount, aql.minor.ac, aql.minor.re)}
-        </tbody>
-      </table>
-      ${recapBlock}
+      <div class="section-title">${biBlockHtml('quantityRecapTitle', 'Recap')}</div>
+      ${foundAcceptedTableHtml(aql)}
+      ${recapRows}
     </div>
   `;
 }
@@ -1175,11 +1172,11 @@ function renderAqlTallyCard() {
 /* ---- Step 6: Review ---- */
 function renderReviewStep() {
   const catDef = currentCategoryDef();
-  const catLabel = catDef ? { en: catDef.label_en, zh: catDef.label_zh } : bi(state.category);
+  const catLabel = catDef ? { en: catDef.label_zh, zh: catDef.label_en } : bi(state.category);
   let subLabel = null;
   if (catDef && state.subcategory) {
     const sub = (catDef.subcategories || []).find((s) => s.key === state.subcategory);
-    if (sub) subLabel = { en: sub.label_en, zh: sub.label_zh };
+    if (sub) subLabel = { en: sub.label_zh, zh: sub.label_en };
   }
   const qaTypeLabel = state.qaType === 'production' ? bi('production') : bi('prePro');
   const result = computeOverallResult();
@@ -1222,8 +1219,8 @@ function renderReviewStep() {
         ${reviewRow('poQuantity', state.poQuantity)}
         ${reviewRow('qaLead', state.qaLead)}
         ${reviewRow('creator', state.creator)}
-        <div class="review-row"><span class="k">Category / 类别</span><span class="v">${escapeHtml(catLabel.en)} ${escapeHtml(catLabel.zh)}</span></div>
-        ${subLabel ? `<div class="review-row"><span class="k">Type / 类型</span><span class="v">${escapeHtml(subLabel.en)} ${escapeHtml(subLabel.zh)}</span></div>` : ''}
+        <div class="review-row"><span class="k">类别 / Category</span><span class="v">${escapeHtml(catLabel.en)} ${escapeHtml(catLabel.zh)}</span></div>
+        ${subLabel ? `<div class="review-row"><span class="k">类型 / Type</span><span class="v">${escapeHtml(subLabel.en)} ${escapeHtml(subLabel.zh)}</span></div>` : ''}
         <div class="review-row"><span class="k">${bi('qaType').en}</span><span class="v">${escapeHtml(qaTypeLabel.en)} ${escapeHtml(qaTypeLabel.zh)}</span></div>
       </div>
       <div class="review-block">

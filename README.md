@@ -335,3 +335,40 @@ the real ANSI/ASQ Z1.4 table itself, not a shortcut on my end).
   than tracked to a specific physical unit, a unit with both a Major and a Critical
   defect could in principle be counted in both tallies - this is a reasonable
   estimate given the data the app collects, not an exact unit-by-unit ledger.
+
+---
+
+## Chinese-first, and AQL simplified to a pure accept/reject model
+
+- **Chinese now displays first everywhere** (app and PDF) - English is the secondary
+  language, flipped from before. This was done at the source (the `bi()` translation
+  helper in each file), so it's consistent throughout without needing per-line changes.
+- **Step 2 ("Spot Check Recommendation", renamed from "AQL Recommendation")** no
+  longer shows the "Reference Thresholds" table - just the recommendation itself
+  (Creator Tier, Estimated Order Value, Recommended Units to Check).
+- **The overall pass/fail policy changed.** A PO is no longer auto-rejected just
+  because it has a lot of major defects. Instead: individual defective units
+  (Major or Critical) are rejected, the rest of the reviewed quantity is approved
+  (including units with only Minor issues - minor issues don't make a unit
+  unsaleable). The report only fails outright if every single unit reviewed turned
+  out defective. A partial defect rate is reflected honestly in the Quantity
+  Approved/Rejected numbers, not treated as a batch-wide failure. Tested with a
+  150-of-400-major-defects scenario: the report correctly stays "合格 PASS" with
+  250 approved / 150 rejected shown plainly, rather than auto-failing.
+- **The Critical/Major/Minor table now shows Found / Accepted instead of
+  Accept/Reject thresholds.** Minor's "Accepted" always equals its "Found" count
+  (minor issues stay accepted); Major and Critical always show 0 accepted (that
+  specific unit is rejected).
+- **The Recap now includes PO Size** alongside Quantity Checked, Approved, and
+  Rejected - both on the Review step and in the PDF (shown once near the AQL
+  section for context, and restated at the very end of the report as a clean
+  bottom line).
+- **Apparel sizing now has an "Other / Custom Sizing" option** in the fit dropdown,
+  for cases with a different approved sizing not covered by the standard charts.
+  Selecting it swaps in the same general Pass/Fail/defect-logging checklist that
+  non-apparel categories use, instead of the numeric measurement chart.
+- **Fixed a PDF bug found during this update**: the footer page-number text was
+  being drawn inside the page's bottom margin, which confused PDFKit's own
+  auto-pagination into silently inserting extra blank pages at the end of every
+  report (a 3-page report was coming out as 6 pages). Fixed by temporarily
+  zeroing the bottom margin while the footer draws.
