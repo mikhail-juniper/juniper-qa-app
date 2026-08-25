@@ -372,3 +372,58 @@ the real ANSI/ASQ Z1.4 table itself, not a shortcut on my end).
   auto-pagination into silently inserting extra blank pages at the end of every
   report (a 3-page report was coming out as 6 pages). Fixed by temporarily
   zeroing the bottom margin while the footer draws.
+
+---
+
+## Report history, analytics dashboard, and a favicon
+
+### Fixed: "Units Checked" needing a click between every digit
+
+Typing into that field was triggering a full re-render of the section it lives
+in (to update the live preview), which destroyed and recreated the input on
+every keystroke and dropped focus. Fixed by splitting the input from the
+derived content around it, so only the preview updates live now - the input
+itself is untouched while you type.
+
+### Report history (needs a persistent disk to actually stick around)
+
+Every submission now gets logged to `DATA_DIR/submissions.json` (see
+`lib/submissionLog.js`), and every generated PDF is saved to
+`DATA_DIR/submissions/` - both always on now, not just in test mode. Set
+`DATA_DIR` in `.env` to match your Render persistent disk's mount path so this
+survives restarts; it defaults to a local `./data` folder otherwise.
+
+When you start filling out a new report and enter a **PO Number** that matches
+an earlier submission (case-insensitive, exact string match - e.g.
+"JDAN01PLU1-PO3"), a **"Previous Report Found"** card appears right below the
+PO Number field: date, result, every issue that was logged, and a link to
+download that report's full PDF. This is how a Production report can
+reference the Pre-Production report for the same PO.
+
+### Analytics dashboard (new page, linked from the category screen)
+
+A new 📊 Analytics link sits next to ⚙️ Settings on the first screen. It has
+two sections:
+
+- **Overall Stats** - all POs, broken down by top-level category (Apparel,
+  Plush Toys, Bags, Accessories, Other), organized by month.
+- **Vendor Stats** - pick a Creator from a dropdown, see the same breakdown
+  scoped to just that vendor.
+
+Both default to the last 90 days, with a dropdown for 30 days / 90 days / 6
+months / 1 year / all time. Each month (and a totals row) shows: POs Placed
+(distinct PO numbers), Manufactured Quantity (sum of PO Quantity across
+Production reports completed that month), Units Checked, Units Rejected,
+Defective Rate, and Pass Rate. "Manufactured" is keyed to when a Production
+Sample report was completed, per your instruction - Pre-Production reports
+don't contribute to quantity/rate figures since they don't carry a formal
+checked quantity.
+
+This is all computed live from the same submission log above, so it's only as
+complete as your submission history - same persistence caveat applies.
+
+### Favicon
+
+Generated from the existing teal tree logo (`public/assets/juniper-mark.png`)
+at the standard sizes (favicon.ico, 32x32 PNG, 180x180 apple-touch-icon) and
+wired into all three pages (main app, Settings, Analytics).

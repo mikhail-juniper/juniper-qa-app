@@ -490,6 +490,15 @@ input:focus, select:focus, textarea:focus {
 .size-table input.out-of-tol { border-color: var(--jc-fail); color: var(--jc-fail); font-weight: 700; }
 .size-table .tol-flag { color: var(--jc-fail); font-size: 10px; font-weight: 700; display: block; margin-top: 3px; }
 
+/* --- Analytics dashboard tables --- */
+.analytics-table th, .analytics-table td { text-align: center; }
+.analytics-table th:first-child, .analytics-table td:first-child { text-align: left; }
+.analytics-table tr.total-row td {
+  font-weight: 700;
+  background: var(--jc-mint-light);
+  border-top: 2px solid var(--jc-teal);
+}
+
 /* --- Per-size cards (apparel sizing entry, each with its own photos) --- */
 .size-card {
   border: 1.5px solid var(--jc-border);

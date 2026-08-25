@@ -7,8 +7,10 @@ const { v4: uuidv4 } = require('uuid');
 const nodemailer = require('nodemailer');
 
 const { buildPdf } = require('./lib/pdfBuilder');
-const { computeOverallResult } = require('./lib/passFail');
+const { computeOverallResult, collectAllDefects } = require('./lib/passFail');
 const { getRecommendation } = require('./lib/aqlRecommendation');
+const submissionLog = require('./lib/submissionLog');
+const analytics = require('./lib/analytics');
 const fits = require('./config/fits.json');
 const i18n = require('./config/i18n.json');
 const categories = require('./config/categories.json');
@@ -36,10 +38,10 @@ const upload = multer({
 
 app.use(express.json({ limit: '5mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
-// Serve generated PDFs so they can be viewed/downloaded right after submitting.
-// This is primarily for local testing - see README for notes on disabling
-// or locking this down before a real production deployment.
-app.use('/submissions', express.static(path.join(__dirname, 'submissions')));
+// Serve generated PDFs so they can be viewed/downloaded - backed by the
+// persistent DATA_DIR (see lib/submissionLog.js) so these survive restarts
+// once a persistent disk is attached (e.g. on Render's paid tier).
+app.use('/submissions', express.static(submissionLog.PDF_ARCHIVE_DIR));
 
 // Serve the fit library + translations + dropdown options + category tree + AQL
 // reference table + creator tiers + recommendation table + unit costs to the frontend
@@ -241,21 +243,84 @@ app.post('/api/submit', upload.any(), async (req, res) => {
       console.warn('SMTP_HOST not configured - running in local test mode. The PDF will be saved and viewable, but no email will be sent.');
     }
 
-    // Persist a local copy so it can be viewed/downloaded.
-    // - Always on when SMTP isn't configured, so local testing has a way to see the result.
-    // - Otherwise controlled by SAVE_LOCAL_COPY (useful as a backup / audit trail in production).
-    let pdfUrl = null;
-    if (!smtpConfigured || process.env.SAVE_LOCAL_COPY === 'true') {
-      const outDir = path.join(__dirname, 'submissions');
-      fs.mkdirSync(outDir, { recursive: true });
-      fs.writeFileSync(path.join(outDir, pdfFilename), pdfBuffer);
-      pdfUrl = `/submissions/${encodeURIComponent(pdfFilename)}`;
-    }
+    // Persist a copy so it can be viewed/downloaded, and referenced later by the
+    // report-history and analytics features - now always on, backed by the
+    // persistent DATA_DIR rather than the old test-mode-only local folder.
+    fs.mkdirSync(submissionLog.PDF_ARCHIVE_DIR, { recursive: true });
+    fs.writeFileSync(path.join(submissionLog.PDF_ARCHIVE_DIR, pdfFilename), pdfBuffer);
+    const pdfUrl = `/submissions/${encodeURIComponent(pdfFilename)}`;
+
+    // Log this submission for the "reference the previous report" feature and
+    // the analytics dashboard. Keep this lightweight (no photos) - full detail
+    // lives in the PDF itself, which pdfUrl links to.
+    submissionLog.appendSubmission({
+      id: submissionId,
+      poNumber: payload.poNumber || null,
+      category: payload.category || null,
+      subcategory: payload.subcategory || null,
+      creator: payload.creator || null,
+      qaType: payload.qaType || null,
+      date: payload.date || null,
+      submittedAt: new Date().toISOString(),
+      poQuantity: payload.poQuantity ? parseInt(payload.poQuantity, 10) : null,
+      actualUnitsChecked: payload.actualUnitsChecked ? parseInt(payload.actualUnitsChecked, 10) : null,
+      overallResult: overallResult.overall,
+      reasons: overallResult.reasons,
+      recap: (overallResult.aql && overallResult.aql.recap) ? overallResult.aql.recap : null,
+      criticalCount: overallResult.aql ? overallResult.aql.criticalCount : 0,
+      majorCount: overallResult.aql ? overallResult.aql.majorCount : 0,
+      minorCount: overallResult.aql ? overallResult.aql.minorCount : 0,
+      pdfFilename,
+      issues: collectAllDefects(payload).map((d) => ({
+        description: d.description || '', severity: d.severity, unitsAffected: parseInt(d.unitsAffected, 10) || 1
+      }))
+    });
 
     res.json({ ok: true, submissionId, filename: pdfFilename, pdfUrl, emailSent, testMode: !smtpConfigured, overallResult });
   } catch (err) {
     console.error('Submission failed:', err);
     res.status(500).json({ error: 'Failed to process submission', detail: String(err.message || err) });
+  }
+});
+
+// ---- Report history: reference a prior report for the same PO Number ----
+app.get('/api/submission-history/:poNumber', (req, res) => {
+  try {
+    const prior = submissionLog.findPriorReportsByPoNumber(req.params.poNumber, req.query.excludeId);
+    res.json({ reports: prior });
+  } catch (err) {
+    console.error('Failed to look up submission history:', err);
+    res.status(500).json({ error: 'Failed to look up submission history', detail: String(err.message || err) });
+  }
+});
+
+// ---- Analytics: vendor dashboard and overall category breakdown ----
+function parseDateRange(query) {
+  const end = query.end ? new Date(query.end) : new Date();
+  const start = query.start ? new Date(query.start) : new Date(end.getTime() - 90 * 24 * 60 * 60 * 1000);
+  return { start, end };
+}
+
+app.get('/api/analytics/vendor', (req, res) => {
+  try {
+    if (!req.query.creator) return res.status(400).json({ error: 'creator query param is required' });
+    const { start, end } = parseDateRange(req.query);
+    const all = submissionLog.getAllSubmissions();
+    res.json(analytics.vendorStats(all, req.query.creator, start, end));
+  } catch (err) {
+    console.error('Failed to compute vendor analytics:', err);
+    res.status(500).json({ error: 'Failed to compute vendor analytics', detail: String(err.message || err) });
+  }
+});
+
+app.get('/api/analytics/category', (req, res) => {
+  try {
+    const { start, end } = parseDateRange(req.query);
+    const all = submissionLog.getAllSubmissions();
+    res.json({ categories: analytics.categoryStats(all, start, end) });
+  } catch (err) {
+    console.error('Failed to compute category analytics:', err);
+    res.status(500).json({ error: 'Failed to compute category analytics', detail: String(err.message || err) });
   }
 });
 

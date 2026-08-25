@@ -53,6 +53,8 @@ const CHECKLIST_KEYS = [
 ];
 
 const otherModeFlags = { factoryCode: false, creator: false, qaLead: false };
+let priorReports = [];
+let priorReportsPoChecked = null;
 const OTHER_VALUE = '__other__';
 
 function todayStr() {
@@ -577,7 +579,8 @@ function renderCategoryStep() {
   }).join('');
 
   return `
-    <div style="display:flex; justify-content:flex-end; margin-bottom:4px;">
+    <div style="display:flex; justify-content:flex-end; gap:16px; margin-bottom:4px;">
+      <a href="analytics.html" class="settings-link" title="Analytics">📊 ${escapeHtml(bi('analyticsLink').en)}</a>
       <a href="settings.html" class="settings-link" title="Settings">⚙️ ${escapeHtml(bi('settingsTitle').en)}</a>
     </div>
     <div class="step-eyebrow">${biHtml('step', 'Step')} 1 / 7</div>
@@ -589,6 +592,56 @@ function renderCategoryStep() {
   `;
 }
 
+/** Looks up prior reports for the currently-entered PO Number and refreshes the card. */
+async function fetchPriorReports() {
+  const po = (state.poNumber || '').trim();
+  if (!po || po === priorReportsPoChecked) return;
+  priorReportsPoChecked = po;
+  try {
+    const res = await fetch(`/api/submission-history/${encodeURIComponent(po)}`);
+    if (!res.ok) { priorReports = []; return; }
+    const data = await res.json();
+    priorReports = data.reports || [];
+  } catch (e) {
+    console.error('Failed to fetch prior reports', e);
+    priorReports = [];
+  } finally {
+    const card = document.getElementById('priorReportCard');
+    if (card) card.innerHTML = renderPriorReportCard();
+  }
+}
+
+function renderPriorReportCard() {
+  if (!priorReports.length) return '';
+  const latest = priorReports[0];
+  const qaTypeLabel = latest.qaType === 'production' ? bi('production') : bi('prePro');
+  const resultLabel = latest.overallResult === 'pass' ? bi('resultPass') : bi('resultFail');
+  const issuesHtml = (latest.issues && latest.issues.length)
+    ? `<ul style="margin:8px 0 0 0; padding-left:18px; font-size:13px;">
+        ${latest.issues.map((iss) => {
+          const sevLabel = bi(iss.severity);
+          return `<li>${escapeHtml(iss.description || '-')} <span style="color:var(--jc-muted); font-size:11.5px;">(${escapeHtml(sevLabel.en)} ${escapeHtml(sevLabel.zh)}${iss.unitsAffected > 1 ? ` · ${iss.unitsAffected} ${escapeHtml(bi('unitsAffected').en)}` : ''})</span></li>`;
+        }).join('')}
+      </ul>`
+    : `<div class="section-help" style="margin-top:6px;">${escapeHtml(bi('noIssues').en)} / ${escapeHtml(bi('noIssues').zh)}</div>`;
+
+  return `
+    <div class="card" style="background:var(--jc-mint-light); border-color:var(--jc-teal);">
+      <div class="section-title">${biBlockHtml('priorReportFound', 'Previous Report Found')}</div>
+      <div class="section-help">
+        ${escapeHtml(qaTypeLabel.en)} ${escapeHtml(qaTypeLabel.zh)} · ${escapeHtml(latest.date || '')} ·
+        <strong style="color:${latest.overallResult === 'pass' ? 'var(--jc-teal-dark)' : 'var(--jc-fail)'}">${escapeHtml(resultLabel.en)} ${escapeHtml(resultLabel.zh)}</strong>
+      </div>
+      <div class="section-photos-label" style="margin-top:10px;">${biBlockHtml('priorReportIssues', 'Issues Found')}</div>
+      ${issuesHtml}
+      <a href="/submissions/${encodeURIComponent(latest.pdfFilename)}" target="_blank" rel="noopener" class="btn btn-secondary" style="display:block; text-decoration:none; text-align:center; margin-top:12px; max-width:260px;">
+        ${escapeHtml(bi('downloadFullReport').en)} / ${escapeHtml(bi('downloadFullReport').zh)}
+      </a>
+      ${priorReports.length > 1 ? `<div class="section-help" style="margin-top:8px;">${priorReports.length - 1} ${escapeHtml(bi('moreEarlierReports').en)} ${escapeHtml(bi('moreEarlierReports').zh)}</div>` : ''}
+    </div>
+  `;
+}
+
 /* ---- Step 1: Order Info (+ AQL setup) ---- */
 function renderOrderInfoStep() {
   return `
@@ -596,6 +649,7 @@ function renderOrderInfoStep() {
     <div class="step-title">订单信息<span class="zh">Order Information</span></div>
     <div class="card">
       ${textField('poNumber', 'poNumber', state.poNumber, { required: true, placeholderKey: 'poNumberPlaceholder' })}
+      <div id="priorReportCard">${renderPriorReportCard()}</div>
       ${selectFieldWithOther('factoryCode', 'factoryCode', state.factoryCode, OPTIONS.factoryCodes || [], { required: true })}
       <div class="field-row">
         <div style="flex:1">${dateField('date', 'date', state.date, { required: true })}</div>
@@ -654,13 +708,6 @@ function renderAqlSection() {
     recBlock = `<div class="section-help" style="margin-top:8px;">${escapeHtml(bi('needMoreInfoForRecommendation').en)}<br/>${escapeHtml(bi('needMoreInfoForRecommendation').zh)}</div>`;
   }
 
-  const computedPercent = (state.actualUnitsChecked && state.poQuantity)
-    ? Math.round((parseInt(state.actualUnitsChecked, 10) / parseInt(state.poQuantity, 10)) * 1000) / 10
-    : null;
-
-  const result = computeOverallResult();
-  const recapTableBlock = (result.aql && result.aql.isActual) ? foundAcceptedTableHtml(result.aql) : `<div class="section-help" style="margin-top:10px;">${escapeHtml(bi('enterActualSpotCheckFirst').en)}<br/>${escapeHtml(bi('enterActualSpotCheckFirst').zh)}</div>`;
-
   return `
     <div class="card">
       <div class="section-title">${biBlockHtml('aqlRecommendationTitle', 'Spot Check Recommendation')}</div>
@@ -671,11 +718,25 @@ function renderAqlSection() {
       <div class="section-title">${biBlockHtml('actualUnitsChecked', 'Units Checked')}<span class="required">*</span></div>
       <div class="section-help">${escapeHtml(bi('actualUnitsCheckedHelp').en)}<br/>${escapeHtml(bi('actualUnitsCheckedHelp').zh)}</div>
       <div class="field" data-field="actualUnitsChecked">
-        <input type="number" min="1" step="1" inputmode="numeric" data-bind-live="actualUnitsChecked" value="${escapeHtml(state.actualUnitsChecked)}" placeholder="${escapeHtml(bi('actualUnitsCheckedPlaceholder').en)}" />
-        ${computedPercent !== null ? `<div class="section-help" style="margin-top:6px;">≈ <strong>${computedPercent}%</strong> ${escapeHtml(bi('computedPercentOfPo').en)} <span class="zh">${escapeHtml(bi('computedPercentOfPo').zh)}</span></div>` : ''}
+        <input type="number" min="1" step="1" inputmode="numeric" id="actualUnitsCheckedInput" value="${escapeHtml(state.actualUnitsChecked)}" placeholder="${escapeHtml(bi('actualUnitsCheckedPlaceholder').en)}" />
       </div>
-      ${recapTableBlock}
+      <div id="unitsCheckedDerived">${renderUnitsCheckedDerived()}</div>
     </div>
+  `;
+}
+
+/** The part of the Units Checked card that depends on the typed value (percent
+ *  display + Found/Accepted table) - refreshed on every keystroke WITHOUT
+ *  touching the input element itself, so focus never gets lost mid-typing. */
+function renderUnitsCheckedDerived() {
+  const computedPercent = (state.actualUnitsChecked && state.poQuantity)
+    ? Math.round((parseInt(state.actualUnitsChecked, 10) / parseInt(state.poQuantity, 10)) * 1000) / 10
+    : null;
+  const result = computeOverallResult();
+  const recapTableBlock = (result.aql && result.aql.isActual) ? foundAcceptedTableHtml(result.aql) : `<div class="section-help" style="margin-top:10px;">${escapeHtml(bi('enterActualSpotCheckFirst').en)}<br/>${escapeHtml(bi('enterActualSpotCheckFirst').zh)}</div>`;
+  return `
+    ${computedPercent !== null ? `<div class="section-help" style="margin-top:6px;">≈ <strong>${computedPercent}%</strong> ${escapeHtml(bi('computedPercentOfPo').en)} <span class="zh">${escapeHtml(bi('computedPercentOfPo').zh)}</span></div>` : ''}
+    ${recapTableBlock}
   `;
 }
 
@@ -1260,6 +1321,16 @@ function refreshAqlSection() {
   if (!section) return;
   section.innerHTML = renderAqlSection();
   attachDataBindLiveHandlers(section);
+  attachUnitsCheckedHandler(section);
+}
+function attachUnitsCheckedHandler(root = document) {
+  const input = root.querySelector('#actualUnitsCheckedInput');
+  if (!input) return;
+  input.addEventListener('input', (e) => {
+    state.actualUnitsChecked = e.target.value;
+    const derived = document.getElementById('unitsCheckedDerived');
+    if (derived) derived.innerHTML = renderUnitsCheckedDerived();
+  });
 }
 
 function attachStepHandlers(name) {
@@ -1276,6 +1347,7 @@ function attachStepHandlers(name) {
   });
 
   attachDataBindLiveHandlers(document);
+  attachUnitsCheckedHandler(document);
 
   if (name === 'category') {
     document.querySelectorAll('.category-option').forEach((el) => {
@@ -1298,6 +1370,11 @@ function attachStepHandlers(name) {
   }
 
   if (name === 'orderInfo') {
+    const poInput = document.querySelector('[data-bind="poNumber"]');
+    if (poInput) {
+      poInput.addEventListener('blur', fetchPriorReports);
+      if (state.poNumber) fetchPriorReports();
+    }
     document.querySelectorAll('[data-seg]').forEach((el) => {
       el.addEventListener('click', () => {
         state[el.getAttribute('data-seg')] = el.getAttribute('data-val');
@@ -1608,6 +1685,8 @@ function resetApp() {
   otherModeFlags.factoryCode = false;
   otherModeFlags.creator = false;
   otherModeFlags.qaLead = false;
+  priorReports = [];
+  priorReportsPoChecked = null;
   Object.assign(state, {
     category: null, subcategory: null,
     poNumber: '', factoryCode: '', date: todayStr(), qaLead: '',
