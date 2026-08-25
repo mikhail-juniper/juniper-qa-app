@@ -1,0 +1,145 @@
+{
+  "_readme": "Product category tree. Each top-level category may have subcategories. 'fitGroup' (only on apparel subcategories) links a subcategory to the matching group of fits in config/fits.json, so the Sizing step only shows relevant fits. Categories without subcategories (Other) skip the subcategory picker entirely.",
+  "categories": {
+    "apparel": {
+      "label_en": "Apparel",
+      "label_zh": "服装",
+      "icon": "👕",
+      "subcategories": [
+        {
+          "key": "hoodie",
+          "label_en": "Hoodie",
+          "label_zh": "连帽卫衣",
+          "fitGroup": "hoodie"
+        },
+        {
+          "key": "tshirt",
+          "label_en": "T-Shirt",
+          "label_zh": "T恤",
+          "fitGroup": "t_shirt"
+        },
+        {
+          "key": "sweatshirt",
+          "label_en": "Sweatshirt",
+          "label_zh": "卫衣",
+          "fitGroup": "crewnecks"
+        },
+        {
+          "key": "hat",
+          "label_en": "Hat",
+          "label_zh": "帽子",
+          "fitGroup": "hat"
+        },
+        {
+          "key": "other",
+          "label_en": "Other",
+          "label_zh": "其他",
+          "fitGroup": null
+        }
+      ]
+    },
+    "plush": {
+      "label_en": "Plush Toys",
+      "label_zh": "毛绒玩具",
+      "icon": "🧸",
+      "subcategories": [
+        {
+          "key": "standard",
+          "label_en": "Standard",
+          "label_zh": "标准款",
+          "fitGroup": null
+        },
+        {
+          "key": "mini",
+          "label_en": "Mini",
+          "label_zh": "迷你款",
+          "fitGroup": null
+        },
+        {
+          "key": "electronic",
+          "label_en": "Electronic (talking)",
+          "label_zh": "电子发声款",
+          "fitGroup": null
+        }
+      ],
+      "toleranceGuidanceKey": "toleranceGuidancePlush"
+    },
+    "bags": {
+      "label_en": "Bags",
+      "label_zh": "箱包",
+      "icon": "🎒",
+      "subcategories": [
+        {
+          "key": "backpack",
+          "label_en": "Backpack",
+          "label_zh": "双肩包",
+          "fitGroup": null
+        },
+        {
+          "key": "lunchbox",
+          "label_en": "Lunchbox",
+          "label_zh": "午餐盒",
+          "fitGroup": null
+        },
+        {
+          "key": "purse",
+          "label_en": "Sling Bag",
+          "label_zh": "斜挎包",
+          "fitGroup": null
+        },
+        {
+          "key": "tote",
+          "label_en": "Tote",
+          "label_zh": "托特包",
+          "fitGroup": null
+        },
+        {
+          "key": "other",
+          "label_en": "Other",
+          "label_zh": "其他",
+          "fitGroup": null
+        }
+      ],
+      "toleranceGuidanceKey": "toleranceGuidanceBags"
+    },
+    "accessories": {
+      "label_en": "Accessories",
+      "label_zh": "配件",
+      "icon": "🔑",
+      "subcategories": [
+        {
+          "key": "keychain",
+          "label_en": "Keychain",
+          "label_zh": "钥匙扣",
+          "fitGroup": null
+        },
+        {
+          "key": "pin",
+          "label_en": "Pin",
+          "label_zh": "徽章",
+          "fitGroup": null
+        },
+        {
+          "key": "notebook",
+          "label_en": "Notebook / Sketchbook",
+          "label_zh": "笔记本 / 素描本",
+          "fitGroup": null
+        },
+        {
+          "key": "other",
+          "label_en": "Other",
+          "label_zh": "其他",
+          "fitGroup": null
+        }
+      ],
+      "toleranceGuidanceKey": "toleranceGuidanceAccessories"
+    },
+    "other": {
+      "label_en": "Other",
+      "label_zh": "其他",
+      "icon": "📦",
+      "subcategories": [],
+      "toleranceGuidanceKey": "toleranceGuidanceOther"
+    }
+  }
+}

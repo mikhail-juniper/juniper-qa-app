@@ -1,0 +1,43 @@
+{
+  "_readme": "ANSI/ASQ Z1.4 (ISO 2859-1) single-sampling, normal-inspection tables. Table A maps lot size + inspection level to a sample size code letter. Table B maps that code letter to a sample size and Accept(Ac)/Reject(Re) numbers for each AQL value. '-' means no direct plan exists at that cell; lib/aql.js resolves this by following the standard's 'arrow' convention (searching toward the nearest defined cell). Do not hand-edit these numbers unless you are correcting a transcription error against the published standard - they are not company-specific settings.",
+  "tableA": {
+    "generalLevels": ["I", "II", "III"],
+    "rows": [
+      { "lotMin": 2,      "lotMax": 8,      "I": "A", "II": "A", "III": "B" },
+      { "lotMin": 9,      "lotMax": 15,     "I": "A", "II": "B", "III": "C" },
+      { "lotMin": 16,     "lotMax": 25,     "I": "B", "II": "C", "III": "D" },
+      { "lotMin": 26,     "lotMax": 50,     "I": "C", "II": "D", "III": "E" },
+      { "lotMin": 51,     "lotMax": 90,     "I": "C", "II": "E", "III": "F" },
+      { "lotMin": 91,     "lotMax": 150,    "I": "D", "II": "F", "III": "G" },
+      { "lotMin": 151,    "lotMax": 280,    "I": "E", "II": "G", "III": "H" },
+      { "lotMin": 281,    "lotMax": 500,    "I": "F", "II": "H", "III": "J" },
+      { "lotMin": 501,    "lotMax": 1200,   "I": "G", "II": "J", "III": "K" },
+      { "lotMin": 1201,   "lotMax": 3200,   "I": "H", "II": "K", "III": "L" },
+      { "lotMin": 3201,   "lotMax": 10000,  "I": "J", "II": "L", "III": "M" },
+      { "lotMin": 10001,  "lotMax": 35000,  "I": "K", "II": "M", "III": "N" },
+      { "lotMin": 35001,  "lotMax": 150000, "I": "L", "II": "N", "III": "P" },
+      { "lotMin": 150001, "lotMax": 500000, "I": "M", "II": "P", "III": "Q" },
+      { "lotMin": 500001, "lotMax": null,   "I": "N", "II": "Q", "III": "R" }
+    ]
+  },
+  "aqlColumns": [0.065, 0.10, 0.15, 0.25, 0.40, 0.65, 1.0, 1.5, 2.5, 4.0, 6.5],
+  "tableB": {
+    "A": { "sampleSize": 2,    "plans": { "0.065": null,     "0.10": null,     "0.15": null,     "0.25": null,     "0.40": null,     "0.65": null,     "1.0": null,     "1.5": null,     "2.5": [0,1],  "4.0": [0,1],  "6.5": [1,2]  } },
+    "B": { "sampleSize": 3,    "plans": { "0.065": null,     "0.10": null,     "0.15": null,     "0.25": null,     "0.40": null,     "0.65": null,     "1.0": null,     "1.5": [0,1],  "2.5": [0,1],  "4.0": [0,1],  "6.5": [1,2]  } },
+    "C": { "sampleSize": 5,    "plans": { "0.065": null,     "0.10": null,     "0.15": null,     "0.25": null,     "0.40": null,     "0.65": null,     "1.0": [0,1],  "1.5": [0,1],  "2.5": [0,1],  "4.0": [1,2],  "6.5": [2,3]  } },
+    "D": { "sampleSize": 8,    "plans": { "0.065": null,     "0.10": null,     "0.15": null,     "0.25": null,     "0.40": null,     "0.65": [0,1],  "1.0": [0,1],  "1.5": [0,1],  "2.5": [1,2],  "4.0": [2,3],  "6.5": [3,4]  } },
+    "E": { "sampleSize": 13,   "plans": { "0.065": null,     "0.10": null,     "0.15": null,     "0.25": null,     "0.40": [0,1],  "0.65": [0,1],  "1.0": [0,1],  "1.5": [1,2],  "2.5": [2,3],  "4.0": [3,4],  "6.5": [5,6]  } },
+    "F": { "sampleSize": 20,   "plans": { "0.065": null,     "0.10": null,     "0.15": null,     "0.25": [0,1],  "0.40": [0,1],  "0.65": [0,1],  "1.0": [1,2],  "1.5": [2,3],  "2.5": [3,4],  "4.0": [5,6],  "6.5": [7,8]  } },
+    "G": { "sampleSize": 32,   "plans": { "0.065": null,     "0.10": null,     "0.15": [0,1],  "0.25": [0,1],  "0.40": [0,1],  "0.65": [1,2],  "1.0": [2,3],  "1.5": [3,4],  "2.5": [5,6],  "4.0": [7,8],  "6.5": [10,11] } },
+    "H": { "sampleSize": 50,   "plans": { "0.065": null,     "0.10": [0,1],  "0.15": [0,1],  "0.25": [0,1],  "0.40": [1,2],  "0.65": [2,3],  "1.0": [3,4],  "1.5": [5,6],  "2.5": [7,8],  "4.0": [10,11],"6.5": [14,15] } },
+    "J": { "sampleSize": 80,   "plans": { "0.065": [0,1],  "0.10": [0,1],  "0.15": [0,1],  "0.25": [1,2],  "0.40": [2,3],  "0.65": [3,4],  "1.0": [5,6],  "1.5": [7,8],  "2.5": [10,11],"4.0": [14,15],"6.5": [21,22] } },
+    "K": { "sampleSize": 125,  "plans": { "0.065": [0,1],  "0.10": [0,1],  "0.15": [1,2],  "0.25": [2,3],  "0.40": [3,4],  "0.65": [5,6],  "1.0": [7,8],  "1.5": [10,11],"2.5": [14,15],"4.0": [21,22],"6.5": null   } },
+    "L": { "sampleSize": 200,  "plans": { "0.065": [0,1],  "0.10": [1,2],  "0.15": [2,3],  "0.25": [3,4],  "0.40": [5,6],  "0.65": [7,8],  "1.0": [10,11],"1.5": [14,15],"2.5": [21,22],"4.0": null,   "6.5": null   } },
+    "M": { "sampleSize": 315,  "plans": { "0.065": [1,2],  "0.10": [2,3],  "0.15": [3,4],  "0.25": [5,6],  "0.40": [7,8],  "0.65": [10,11],"1.0": [14,15],"1.5": [21,22],"2.5": null,   "4.0": null,   "6.5": null   } },
+    "N": { "sampleSize": 500,  "plans": { "0.065": [2,3],  "0.10": [3,4],  "0.15": [5,6],  "0.25": [7,8],  "0.40": [10,11],"0.65": [14,15],"1.0": [21,22],"1.5": null,   "2.5": null,   "4.0": null,   "6.5": null   } },
+    "P": { "sampleSize": 800,  "plans": { "0.065": [3,4],  "0.10": [5,6],  "0.15": [7,8],  "0.25": [10,11],"0.40": [14,15],"0.65": [21,22],"1.0": null,   "1.5": null,   "2.5": null,   "4.0": null,   "6.5": null   } },
+    "Q": { "sampleSize": 1250, "plans": { "0.065": [5,6],  "0.10": [7,8],  "0.15": [10,11], "0.25": [14,15],"0.40": [21,22],"0.65": null,   "1.0": null,   "1.5": null,   "2.5": null,   "4.0": null,   "6.5": null   } },
+    "R": { "sampleSize": 2000, "plans": { "0.065": [7,8],  "0.10": [10,11], "0.15": [14,15],"0.25": [21,22],"0.40": null,   "0.65": null,   "1.0": null,   "1.5": null,   "2.5": null,   "4.0": null,   "6.5": null   } }
+  },
+  "codeLetterOrder": ["A","B","C","D","E","F","G","H","J","K","L","M","N","P","Q","R"]
+}

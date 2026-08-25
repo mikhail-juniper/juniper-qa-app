@@ -1,0 +1,26 @@
+{
+  "_readme": "Recommends an Inspection Level and Point Check % range based on Creator Tier, Product Risk, and PO Size (dollar value band, computed from PO Quantity x per-unit cost - see unitCosts.json). Extracted from Creator_List_QA.xlsx and reduced to its underlying Tier x Risk x PO-Size pattern (every creator of the same tier had identical recommendations). Editable via Settings if the underlying policy changes - no code changes needed.",
+  "poSizeBands": [
+    { "key": ">20k", "label_en": "> $20,000", "label_zh": "超过 $20,000", "min": 20000, "max": null },
+    { "key": "5-20k", "label_en": "$5,000 - $20,000", "label_zh": "$5,000 - $20,000", "min": 5000, "max": 20000 },
+    { "key": "<5k", "label_en": "< $5,000", "label_zh": "低于 $5,000", "min": 0, "max": 5000 }
+  ],
+  "risks": ["high", "medium", "low"],
+  "table": {
+    "1": {
+      "high":   { ">20k": { "pointCheck": "70-100%", "inspectionLevel": 3 }, "5-20k": { "pointCheck": "70-100%", "inspectionLevel": 3 }, "<5k": { "pointCheck": "70-100%", "inspectionLevel": 3 } },
+      "medium": { ">20k": { "pointCheck": "70-100%", "inspectionLevel": 3 }, "5-20k": { "pointCheck": "70-100%", "inspectionLevel": 3 }, "<5k": { "pointCheck": "70-100%", "inspectionLevel": 3 } },
+      "low":    { ">20k": { "pointCheck": "40-70%",  "inspectionLevel": 3 }, "5-20k": { "pointCheck": "40-70%",  "inspectionLevel": 3 }, "<5k": { "pointCheck": "40-70%",  "inspectionLevel": 3 } }
+    },
+    "2": {
+      "high":   { ">20k": { "pointCheck": "70-100%", "inspectionLevel": 3 }, "5-20k": { "pointCheck": "70-100%", "inspectionLevel": 3 }, "<5k": { "pointCheck": "70-100%", "inspectionLevel": 3 } },
+      "medium": { ">20k": { "pointCheck": "70-100%", "inspectionLevel": 3 }, "5-20k": { "pointCheck": "40-70%",  "inspectionLevel": 2 }, "<5k": { "pointCheck": "40-70%",  "inspectionLevel": 2 } },
+      "low":    { ">20k": { "pointCheck": "40-70%",  "inspectionLevel": 2 }, "5-20k": { "pointCheck": "40-70%",  "inspectionLevel": 2 }, "<5k": { "pointCheck": "40-70%",  "inspectionLevel": 2 } }
+    },
+    "3": {
+      "high":   { ">20k": { "pointCheck": "70-100%", "inspectionLevel": 3 }, "5-20k": { "pointCheck": "70-100%", "inspectionLevel": 2 }, "<5k": { "pointCheck": "70-100%", "inspectionLevel": 2 } },
+      "medium": { ">20k": { "pointCheck": "70-100%", "inspectionLevel": 2 }, "5-20k": { "pointCheck": "40-70%",  "inspectionLevel": 2 }, "<5k": { "pointCheck": "40-70%",  "inspectionLevel": 2 } },
+      "low":    { ">20k": { "pointCheck": "40-70%",  "inspectionLevel": 2 }, "5-20k": { "pointCheck": "40-70%",  "inspectionLevel": 2 }, "<5k": { "pointCheck": "10-30%",  "inspectionLevel": 1 } }
+    }
+  }
+}
