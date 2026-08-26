@@ -620,9 +620,8 @@ app.get('/api/consolidated-report/:poNumber', async (req, res) => {
     if (!po) return res.status(404).json({ error: 'Purchase order not found' });
     const approval = approvalStore.getByPoNumber(po.poNumber);
     const reportingHistory = submissionLog.findPriorReportsByPoNumber(po.poNumber);
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
 
-    const buffer = await buildConsolidatedReport(po, approval, reportingHistory, i18n, baseUrl);
+    const buffer = await buildConsolidatedReport(po, approval, reportingHistory, i18n);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="${po.poNumber}_Consolidated_Report.pdf"`);
     res.send(buffer);

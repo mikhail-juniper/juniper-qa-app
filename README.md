@@ -689,3 +689,85 @@ set, which on many mobile browsers (iOS Safari especially) removes the "Photo
 Library" option from the picker, leaving only "Take Photo." Removed it -
 `multiple` was already in place, so this restores full camera-roll,
 multi-select access. Confirmed no other instance of this anywhere in the app.
+
+---
+
+## Reporting Step 3 ("Production Notes") and Reports rewritten as one true document
+
+### New Reporting wizard step
+
+Pre-Production/Bulk Sampling Reporting now has 7 steps instead of 6 - a new
+Step 3 sits between Order Info and Inspection Details:
+
+- **Reference Images** - the actual Approved Sample (and Pre-Production, once
+  it exists) photos, large with click-to-enlarge (added the same lightbox
+  approval.html already had, now in the Reporting wizard too).
+- **Production Notes** - Approved Sample Notes and Pre-Production Sample
+  Notes, each showing both the free-text notes entered at that stage AND
+  Product Development's comments on it, color-coded the same way as
+  everywhere else. Pre-Production's section links straight to that
+  inspection's own report once one's been filed.
+- **Previous Production Issues** - every issue found on every prior report
+  for this SKU (not just the latest one), each with a working download link.
+
+Order Info no longer shows any of this - it's just the pre-filled order
+details plus QA Lead / Quantity Checked now.
+
+Tested end-to-end with a real PO carrying Sample Approval notes, a PD
+comment, and a filed Pre-Production report with a logged issue - confirmed
+every piece shows up correctly, color-coded right, and the wizard still
+flows correctly through all 7 renumbered steps afterward.
+
+### Reports: genuinely one document now, not links
+
+Rewrote the consolidated report generator to actually merge real PDF pages
+together (using `pdf-lib`) instead of drawing summaries with links out to
+separate files. The final PDF is laid out as:
+
+1. Order Information + Performance (quantity checked/approved/rejected,
+   pulled from whichever reports have been filed)
+2. Sample Approval (info, notes, PD comments, photos)
+3. Pre-Production Approval (photos, notes, PD comments) immediately followed
+   by the **actual, full** Pre-Production inspection report - the complete
+   checklist detail, sizing charts, everything - not a summary
+4. Bulk Approval, followed by the actual, full Bulk inspection report the
+   same way
+
+Verified this with a complete real scenario spanning all three approval
+stages and both report types - confirmed the merged PDF genuinely contains
+the full original inspection report pages (PASS banner, full checklist,
+Recap, all of it) inline, not a link. One minor known cosmetic detail: each
+merged section keeps its own "Page X of Y" footer from when it was generated,
+rather than one continuous page count across the whole document - doesn't
+affect the content, just how the page-count label reads.
+
+---
+
+## QA/QC Approval polish + wider desktop layout
+
+- **Title fixed** - "Product Development Approval" now shows consistently
+  across the Approval entry screens.
+- **"Copy From Prior PO" now copies sizing too** - found a real gap where
+  only the apparel fit was being copied over, not the general sizing notes
+  used by non-apparel categories. Both now carry forward correctly.
+- **"Submit Photos"** - the Approval stage's submit button now has its own
+  label, separate from the Reporting flow's "Submit Report" button (they
+  used to share one i18n key).
+- **Reordered and clearly separated** - the submitted-stage view is now
+  Images → Notes → Product Development Approval (comment + approval status),
+  followed by a visible divider, then Previous PO Issues at the very bottom.
+- **Saved comments now say what they're approving** - "Sample Approval,"
+  "PP Sample Approval," or "Bulk Sample Approval" shows right on the card,
+  so it's clear which stage a given comment belongs to at a glance.
+- **Back to one unified flow** - removed the China-team/PD-team split
+  entirely. Visiting Approval now goes straight to PO entry; the page itself
+  (upload form vs. submitted review) makes clear what's happening without
+  needing a separate access path.
+- **Wider desktop layout** - above 900px viewport width, the app now uses up
+  to 1180px instead of the mobile-optimized 720px, and the photo comparison
+  columns stop wrapping - so Bulk Approval's 3-way side-by-side comparison
+  actually sits side by side instead of stacking.
+
+Every change here was verified directly against the rendered HTML output
+(including the exact section ordering and the stage-labeled comment display),
+not just code review.

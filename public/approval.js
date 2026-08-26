@@ -12,8 +12,6 @@ const STAGE_LABELS = {
 
 const approvalState = {
   stage: null, // 'sample' | 'preProduction' | 'bulk'
-  landingChoice: null, // null (show landing) | 'approval' (go straight to PO entry)
-  pdView: false, // true when accessed via the persistent PD review link or the PD landing option
   poNumberInput: '',
   po: null,
   photoSet: null,
@@ -133,7 +131,6 @@ async function initFromLink() {
     const res = await fetch(`/api/purchase-orders/${encodeURIComponent(poId)}`);
     if (!res.ok) return false;
     const { po } = await res.json();
-    approvalState.pdView = true;
     const ok = await loadApprovalForPo(po.poNumber);
     return ok;
   } catch (e) {
@@ -146,41 +143,10 @@ async function initFromLink() {
 
 function render() {
   const root = document.getElementById('approvalRoot');
-  if (!approvalState.po && !approvalState.landingChoice) { root.innerHTML = renderLanding(); attachLandingHandlers(); return; }
   if (!approvalState.po) { root.innerHTML = renderPoEntry(); attachPoEntryHandlers(); return; }
   root.innerHTML = renderStageScreen();
   attachStageHandlers();
   attachLightboxHandlers();
-}
-
-function renderLanding() {
-  return `
-    ${backHomeLink()}
-    <div class="step-title">质检审批 QA/QC Approval</div>
-    <div class="home-nav-card" data-landing="submit">
-      <div class="home-nav-icon">📤</div>
-      <div class="home-nav-text">
-        <div class="home-nav-title">${biBlockHtml('submitApprovalPhotosTitle', 'Submit Approval Photos')}</div>
-        <div class="home-nav-desc">${biBlockHtml('submitApprovalPhotosDesc', 'For the Juniper China team - upload photos and notes')}</div>
-      </div>
-    </div>
-    <div class="home-nav-card" data-landing="pd">
-      <div class="home-nav-icon">✅</div>
-      <div class="home-nav-text">
-        <div class="home-nav-title">${biBlockHtml('homeApprovalTitle', 'Product Development Approval')}</div>
-        <div class="home-nav-desc">${biBlockHtml('pdReviewDesc', 'For Product Development - review and approve')}</div>
-      </div>
-    </div>
-  `;
-}
-function attachLandingHandlers() {
-  document.querySelectorAll('[data-landing]').forEach((el) => {
-    el.addEventListener('click', () => {
-      approvalState.pdView = el.getAttribute('data-landing') === 'pd';
-      approvalState.landingChoice = 'approval';
-      render();
-    });
-  });
 }
 
 function backHomeLink() {
@@ -190,7 +156,7 @@ function backHomeLink() {
 function renderPoEntry() {
   return `
     ${backHomeLink()}
-    <div class="step-title">质检审批 QA/QC Approval</div>
+    <div class="step-title">产品开发审批<span class="zh">Product Development Approval</span></div>
     <div class="card">
       <div class="field">
         <label class="field-label">${biBlockHtml('poNumber', 'Purchase Order Number')}</label>
@@ -403,8 +369,6 @@ function renderStageScreen() {
   let body;
   if (stageData && stageData.submitted) {
     body = renderSubmittedStage(stageData);
-  } else if (approvalState.pdView) {
-    body = `<div class="card"><div class="section-help">${escapeHtml(bi('notReadyForReview').en)}<br/>${escapeHtml(bi('notReadyForReview').zh)}</div></div>`;
   } else if (approvalState.stage === 'sample') {
     body = renderSampleApprovalForm();
   } else {
@@ -463,7 +427,7 @@ function renderSampleApprovalForm() {
       ${renderPhotoSlot('_notes', 'Notes Photos', '备注照片')}
     </div>
 
-    <button class="btn btn-primary" id="btnSubmitStage" style="margin-top:10px;">${biBlockHtml('submit', 'Submit')}</button>
+    <button class="btn btn-primary" id="btnSubmitStage" style="margin-top:10px;">${biBlockHtml('submitPhotos', 'Submit Photos')}</button>
   `;
 }
 
@@ -584,7 +548,7 @@ function renderPrePorBulkForm() {
       <textarea id="approvalNotes" placeholder="${escapeHtml(bi('notesPlaceholder').en)} / ${escapeHtml(bi('notesPlaceholder').zh)}">${escapeHtml(approvalState.notes)}</textarea>
       ${renderPhotoSlot('_notes', 'Notes Photos', '备注照片')}
     </div>
-    <button class="btn btn-primary" id="btnSubmitStage" style="margin-top:10px;">${biBlockHtml('submit', 'Submit')}</button>
+    <button class="btn btn-primary" id="btnSubmitStage" style="margin-top:10px;">${biBlockHtml('submitPhotos', 'Submit Photos')}</button>
   `;
 }
 
@@ -604,6 +568,12 @@ function renderReportingReferenceBlock() {
 }
 
 /* ---- Submitted stage: show data read-back + PD comments ---- */
+function commentStageTitle() {
+  if (approvalState.stage === 'sample') return bi('commentStageTitleSample', 'Sample Approval');
+  if (approvalState.stage === 'preProduction') return bi('commentStageTitlePreProduction', 'PP Sample Approval');
+  return bi('commentStageTitleBulk', 'Bulk Sample Approval');
+}
+
 function renderSubmittedStage(stageData) {
   const sample = approvalState.approval.sampleApproval;
   const preProduction = approvalState.approval.preProductionApproval;
@@ -628,13 +598,15 @@ function renderSubmittedStage(stageData) {
     </div>
   `;
 
+  const stageTitle = commentStageTitle();
   const comments = stageData.pdComments || [];
   const commentsHtml = comments.length ? comments.map((c) => `
     <div class="defect-card comment-card ${approvalStatusColorClass(c.approvalStatus)}">
       <div class="prior-issue-header">
-        ${c.text ? `<span class="prior-issue-desc">${escapeHtml(c.text)}</span>` : `<span class="prior-issue-desc" style="font-style:italic; color:var(--jc-muted);">${escapeHtml(bi('noCommentTextProvided').en)}</span>`}
+        <span class="prior-issue-desc" style="font-weight:700;">${escapeHtml(stageTitle.en)} ${escapeHtml(stageTitle.zh)}</span>
         <span class="severity-badge comment-badge-${approvalStatusColorClass(c.approvalStatus)}">${escapeHtml(bi(approvalStatusLabelKey(c.approvalStatus)).en)} ${escapeHtml(bi(approvalStatusLabelKey(c.approvalStatus)).zh)}</span>
       </div>
+      ${c.text ? `<div class="prior-issue-desc" style="margin-top:4px;">${escapeHtml(c.text)}</div>` : `<div class="prior-issue-desc" style="margin-top:4px; font-style:italic; color:var(--jc-muted);">${escapeHtml(bi('noCommentTextProvided').en)}</div>`}
       <div class="section-help">${escapeHtml(c.author)} · ${new Date(c.timestamp).toLocaleString()}</div>
       ${(c.photos || []).map((url) => `<img src="${escapeHtml(url)}" class="prior-issue-photo js-lightbox" />`).join('')}
     </div>
@@ -647,11 +619,11 @@ function renderSubmittedStage(stageData) {
     </div>
     ${referenceBlock}
     ${renderCurrentProductionNotes()}
-    ${renderPreviousPoIssuesSection()}
     <div class="card">
       <div class="section-title">${biBlockHtml('pdCommentsTitle', 'Product Development Comments')}</div>
       ${commentsHtml}
       <div style="margin-top:14px; padding-top:14px; border-top:1px dashed var(--jc-border);">
+        <div class="section-help" style="font-weight:700; color:var(--jc-teal-dark); margin-bottom:8px;">${escapeHtml(stageTitle.en)} ${escapeHtml(stageTitle.zh)}</div>
         ${selectField3('commentAuthor', 'productDevelopmentLead', approvalState.commentAuthor, OPTIONS.productDevelopmentLeads || [])}
         <div class="field">
           <label class="field-label">${biBlockHtml('approvalStatusLabel', 'Approval')}</label>
@@ -670,6 +642,8 @@ function renderSubmittedStage(stageData) {
         <button class="btn btn-primary" id="btnSubmitComment" style="margin-top:10px;">${biBlockHtml('submit', 'Submit')}</button>
       </div>
     </div>
+    <div class="major-divider"></div>
+    ${renderPreviousPoIssuesSection()}
   `;
 }
 
@@ -710,7 +684,10 @@ function attachStageHandlers() {
       approvalState.factoryCode = prior.factoryCode || '';
       approvalState.qaLead = prior.qaLead || '';
       approvalState.productRisk = prior.productRisk || 'medium';
-      if (prior.sizing) approvalState.fit = prior.sizing.fit || '';
+      if (prior.sizing) {
+        approvalState.fit = prior.sizing.fit || '';
+        approvalState.generalSizingNotes = prior.sizing.notes || '';
+      }
 
       // Also copy the Approved Sample Photos themselves (only these - not any
       // other stage's photos) by fetching each one back as a file so it flows
@@ -813,7 +790,7 @@ async function submitStage() {
     console.error(e);
     showToast(bi('submitError').en, true);
     btn.disabled = false;
-    btn.innerHTML = biBlockHtml('submit', 'Submit');
+    btn.innerHTML = biBlockHtml('submitPhotos', 'Submit Photos');
   }
 }
 

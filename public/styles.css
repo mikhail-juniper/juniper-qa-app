@@ -70,6 +70,15 @@ html, body {
   padding-bottom: 40px;
 }
 
+/* Desktop gets a wider canvas - mainly so QA/QC Approval's side-by-side photo
+   columns (up to 3 for Bulk) have room to sit genuinely side by side instead
+   of wrapping onto their own rows. Mobile keeps the narrower single-column
+   layout above this breakpoint. */
+@media (min-width: 900px) {
+  #app { max-width: 1180px; }
+  .photo-compare-row { flex-wrap: nowrap; }
+}
+
 .app-header {
   background: var(--jc-teal);
   padding: 16px 20px;
@@ -628,6 +637,15 @@ input:focus, select:focus, textarea:focus {
   max-height: 100%;
   border-radius: 6px;
   box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+}
+
+/* --- Large visual break between the approval workflow and reference/history
+   content further down the page (e.g. Previous PO Issues) --- */
+.major-divider {
+  height: 8px;
+  background: linear-gradient(90deg, var(--jc-teal), var(--jc-mint));
+  border-radius: 4px;
+  margin: 32px 0 24px 0;
 }
 
 /* --- Per-size cards (apparel sizing entry, each with its own photos) --- */
