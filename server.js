@@ -587,15 +587,47 @@ app.post('/api/approval/:poNumber/:stage/comment', upload.any(), (req, res) => {
     if (!stageKey) return res.status(400).json({ error: 'Unknown approval stage' });
     const text = ((req.body && req.body.text) || '').trim();
     const author = ((req.body && req.body.author) || '').trim();
+    const approvalStatus = ((req.body && req.body.approvalStatus) || '').trim();
     if (!text || !author) return res.status(400).json({ error: 'text and author are required' });
 
     const photos = saveApprovalPhotos(req.files, `${req.params.poNumber}_${req.params.stage}_comment`);
-    const entry = approvalStore.addPdComment(req.params.poNumber, stageKey, { text, author, photos });
+    const entry = approvalStore.addPdComment(req.params.poNumber, stageKey, { text, author, approvalStatus, photos });
     if (!entry) return res.status(404).json({ error: 'Purchase order not found' });
     res.json({ ok: true, approval: entry });
   } catch (err) {
     console.error('Failed to save PD comment:', err);
     res.status(500).json({ error: 'Failed to save PD comment', detail: String(err.message || err) });
+  }
+});
+
+// ---- Reports: consolidated PDF combining PO info, every QA/QC Approval
+// stage, and every Reporting-side inspection for that PO ----
+const { buildConsolidatedReport } = require('./lib/consolidatedReportBuilder');
+
+app.get('/api/reports/by-sku/:sku', (req, res) => {
+  try {
+    res.json({ pos: poStore.getPosBySku(req.params.sku) });
+  } catch (err) {
+    console.error('Failed to look up POs by SKU:', err);
+    res.status(500).json({ error: 'Failed to look up POs by SKU', detail: String(err.message || err) });
+  }
+});
+
+app.get('/api/consolidated-report/:poNumber', async (req, res) => {
+  try {
+    const po = poStore.getPoByNumber(req.params.poNumber);
+    if (!po) return res.status(404).json({ error: 'Purchase order not found' });
+    const approval = approvalStore.getByPoNumber(po.poNumber);
+    const reportingHistory = submissionLog.findPriorReportsByPoNumber(po.poNumber);
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+
+    const buffer = await buildConsolidatedReport(po, approval, reportingHistory, i18n, baseUrl);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${po.poNumber}_Consolidated_Report.pdf"`);
+    res.send(buffer);
+  } catch (err) {
+    console.error('Failed to build consolidated report:', err);
+    res.status(500).json({ error: 'Failed to build consolidated report', detail: String(err.message || err) });
   }
 });
 

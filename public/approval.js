@@ -23,7 +23,7 @@ const approvalState = {
   fit: '', generalSizingNotes: '',
   photos: {}, // slotKey (or slotKey__SizeName) -> [] of File
   notes: '', notesPhotos: [],
-  commentText: '', commentAuthor: '', commentPhotos: []
+  commentText: '', commentAuthor: '', commentPhotos: [], approvalStatus: ''
 };
 
 function bi(key, fallback) {
@@ -46,6 +46,22 @@ function showToast(msg, isError = false) {
   t.textContent = msg;
   t.className = 'toast' + (isError ? ' error' : '');
   setTimeout(() => { t.className = 'toast hidden'; }, 3800);
+}
+function openLightbox(url) {
+  const overlay = document.getElementById('lightboxOverlay');
+  const img = document.getElementById('lightboxImg');
+  img.src = url;
+  overlay.classList.remove('hidden');
+}
+function attachLightboxHandlers() {
+  document.querySelectorAll('.js-lightbox').forEach((el) => {
+    el.addEventListener('click', () => openLightbox(el.getAttribute('src')));
+  });
+  const overlay = document.getElementById('lightboxOverlay');
+  if (overlay && !overlay._wired) {
+    overlay.addEventListener('click', () => overlay.classList.add('hidden'));
+    overlay._wired = true;
+  }
 }
 function compressImage(file, maxDim = 1600, quality = 0.8) {
   return new Promise((resolve, reject) => {
@@ -121,6 +137,7 @@ function render() {
   if (!approvalState.po) { root.innerHTML = renderPoEntry(); attachPoEntryHandlers(); return; }
   root.innerHTML = renderStageScreen();
   attachStageHandlers();
+  attachLightboxHandlers();
 }
 
 function backHomeLink() {
@@ -199,6 +216,146 @@ function currentStageData() {
   const key = STAGE_LABELS[approvalState.stage].apiPath === 'sample' ? 'sampleApproval'
     : STAGE_LABELS[approvalState.stage].apiPath === 'preProduction' ? 'preProductionApproval' : 'bulkApproval';
   return approvalState.approval ? approvalState.approval[key] : null;
+}
+
+/* ---- Large, aligned photo displays for review (click to enlarge) ---- */
+function photoSetLabelFor(slotKey) {
+  const slot = (approvalState.photoSet || []).find((s) => s.key === slotKey);
+  if (slot) return { en: slot.label_en, zh: slot.label_zh };
+  if (slotKey === 'notesPhotos') return { en: 'Notes Photos', zh: '备注照片' };
+  return { en: slotKey, zh: '' };
+}
+function renderPhotoGalleryLarge(photosMap) {
+  const slots = Object.keys(photosMap || {}).filter((k) => (photosMap[k] || []).length);
+  if (!slots.length) return `<div class="section-help">${escapeHtml(bi('noPhotosYet').en)}<br/>${escapeHtml(bi('noPhotosYet').zh)}</div>`;
+  return slots.map((slotKey) => {
+    const label = photoSetLabelFor(slotKey);
+    return `
+      <div class="section-photos-block">
+        <div class="section-photos-label">${escapeHtml(label.en)} <span class="zh">${escapeHtml(label.zh)}</span></div>
+        <div class="photo-gallery-large">
+          ${photosMap[slotKey].map((url) => `<img src="${escapeHtml(url)}" class="js-lightbox" />`).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+/** Side-by-side: Approved Sample photo(s) for a slot next to the current
+ *  stage's photo(s) for that same slot - per size for apparel, since
+ *  Pre-Production/Bulk photos are captured per size there. */
+function renderPhotoComparisonLarge(samplePhotos, stagePhotos, category, sizesIncluded) {
+  samplePhotos = samplePhotos || {};
+  stagePhotos = stagePhotos || {};
+
+  if (category === 'apparel' && sizesIncluded && sizesIncluded.length) {
+    const frontBackSlots = (approvalState.photoSet || []).filter((s) => s.key === 'front' || s.key === 'back');
+    return sizesIncluded.map((size) => `
+      <div style="margin-top:14px; padding-top:14px; border-top:1px dashed var(--jc-border);">
+        <div class="section-photos-label" style="font-size:14px;">${escapeHtml(size)}</div>
+        ${frontBackSlots.map((slot) => {
+          const sampleUrls = samplePhotos[slot.key] || [];
+          const stageUrls = stagePhotos[`${slot.key}__${size}`] || [];
+          return `
+            <div class="photo-compare-row">
+              <div class="photo-compare-col">
+                <div class="photo-compare-col-label">${escapeHtml(bi('approvedSample').en)} · ${escapeHtml(slot.label_zh)} ${escapeHtml(slot.label_en)}</div>
+                ${sampleUrls.length ? sampleUrls.map((u) => `<img src="${escapeHtml(u)}" class="js-lightbox" />`).join('') : `<div class="section-help">${escapeHtml(bi('noPhotosYet').en)}</div>`}
+              </div>
+              <div class="photo-compare-col">
+                <div class="photo-compare-col-label">${escapeHtml(bi('thisStage').en)} · ${escapeHtml(slot.label_zh)} ${escapeHtml(slot.label_en)}</div>
+                ${stageUrls.length ? stageUrls.map((u) => `<img src="${escapeHtml(u)}" class="js-lightbox" />`).join('') : `<div class="section-help">${escapeHtml(bi('noPhotosYet').en)}</div>`}
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `).join('');
+  }
+
+  const allSlots = [...new Set([...Object.keys(samplePhotos), ...Object.keys(stagePhotos)])];
+  return allSlots.map((slotKey) => {
+    const label = photoSetLabelFor(slotKey);
+    return `
+      <div class="photo-compare-row">
+        <div class="photo-compare-col">
+          <div class="photo-compare-col-label">${escapeHtml(bi('approvedSample').en)} · ${escapeHtml(label.en)} ${escapeHtml(label.zh)}</div>
+          ${(samplePhotos[slotKey] || []).map((u) => `<img src="${escapeHtml(u)}" class="js-lightbox" />`).join('') || `<div class="section-help">${escapeHtml(bi('noPhotosYet').en)}</div>`}
+        </div>
+        <div class="photo-compare-col">
+          <div class="photo-compare-col-label">${escapeHtml(bi('thisStage').en)} · ${escapeHtml(label.en)} ${escapeHtml(label.zh)}</div>
+          ${(stagePhotos[slotKey] || []).map((u) => `<img src="${escapeHtml(u)}" class="js-lightbox" />`).join('') || `<div class="section-help">${escapeHtml(bi('noPhotosYet').en)}</div>`}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+/** Collects the free-text "notes" field from every stage that's been
+ *  submitted so far, so PD can see what the China QA team wrote at each
+ *  point without digging through each stage separately. */
+function renderCurrentProductionNotes() {
+  const stages = [
+    { key: 'sampleApproval', labelKey: 'sampleApprovalTitle' },
+    { key: 'preProductionApproval', labelKey: 'preProductionApprovalTitle' },
+    { key: 'bulkApproval', labelKey: 'bulkApprovalTitle' }
+  ];
+  const withNotes = stages
+    .map((s) => ({ ...s, stage: approvalState.approval[s.key] }))
+    .filter((s) => s.stage && s.stage.submitted && s.stage.data && s.stage.data.notes && s.stage.data.notes.trim());
+
+  return `
+    <div class="card">
+      <div class="section-title">${biBlockHtml('currentProductionNotesTitle', 'Current Production Notes')}</div>
+      ${withNotes.length ? withNotes.map((s) => `
+        <div class="defect-card">
+          <div class="section-photos-label">${escapeHtml(bi(s.labelKey).en)} ${escapeHtml(bi(s.labelKey).zh)}</div>
+          <div class="prior-issue-desc">${escapeHtml(s.stage.data.notes)}</div>
+          ${(s.stage.data.photos && s.stage.data.photos.notesPhotos || []).map((u) => `<img src="${escapeHtml(u)}" class="prior-issue-photo js-lightbox" />`).join('')}
+        </div>
+      `).join('') : `<div class="section-help">${escapeHtml(bi('noNotesYet').en)}<br/>${escapeHtml(bi('noNotesYet').zh)}</div>`}
+    </div>
+  `;
+}
+
+/** Full-detail SKU-based Reporting history - mirrors the "Previous Report
+ *  Found" card in the Reporting flow, so PD sees the same issue detail here. */
+function renderPreviousPoIssuesSection() {
+  const history = approvalState.reportingHistory || [];
+  return `
+    <div class="card">
+      <div class="section-title">${biBlockHtml('previousPoIssuesTitle', 'Previous PO Issues')}</div>
+      ${!history.length ? `<div class="section-help">${escapeHtml(bi('noIssues').en)}<br/>${escapeHtml(bi('noIssues').zh)}</div>` : history.map((r) => {
+        const qaTypeLabel = r.qaType === 'production' ? bi('production') : bi('prePro');
+        const resultLabel = r.overallResult === 'pass' ? bi('resultPass') : bi('resultFail');
+        const issuesHtml = (r.issues && r.issues.length)
+          ? r.issues.map((iss) => {
+              const sevLabel = bi(iss.severity);
+              return `
+                <div class="prior-issue-card">
+                  <div class="prior-issue-header">
+                    <span class="prior-issue-desc">${escapeHtml(iss.description || '-')}</span>
+                    <span class="severity-badge severity-${escapeHtml(iss.severity)}">${escapeHtml(sevLabel.en)} ${escapeHtml(sevLabel.zh)}</span>
+                  </div>
+                  <div class="section-help">${escapeHtml(bi('unitsAffected').en)}: ${iss.unitsAffected}</div>
+                  ${iss.photoUrl ? `<img src="${escapeHtml(iss.photoUrl)}" class="prior-issue-photo js-lightbox" />` : ''}
+                </div>
+              `;
+            }).join('')
+          : `<div class="section-help">${escapeHtml(bi('noIssues').en)} / ${escapeHtml(bi('noIssues').zh)}</div>`;
+        return `
+          <div style="margin-top:12px; padding-top:12px; border-top:1px dashed var(--jc-border);">
+            <div class="section-help">
+              ${escapeHtml(qaTypeLabel.en)} ${escapeHtml(qaTypeLabel.zh)} · ${escapeHtml(r.date || '')} ·
+              <strong style="color:${r.overallResult === 'pass' ? 'var(--jc-teal-dark)' : 'var(--jc-fail)'}">${escapeHtml(resultLabel.en)} ${escapeHtml(resultLabel.zh)}</strong>
+            </div>
+            ${issuesHtml}
+            <a href="/submissions/${encodeURIComponent(r.pdfFilename)}" target="_blank" rel="noopener" class="btn btn-secondary" style="display:block; text-decoration:none; text-align:center; margin-top:8px; max-width:220px;">${escapeHtml(bi('downloadFullReport').en)}</a>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
 }
 
 function renderStageScreen() {
@@ -346,14 +503,7 @@ function renderPrePorBulkForm() {
   const referenceBlock = prior && prior.submitted ? `
     <div class="card">
       <div class="section-title">${biBlockHtml('sampleApprovalReference', 'Sample Approval Reference')}</div>
-      ${Object.keys(prior.data.photos || {}).map((slot) => `
-        <div class="section-photos-block">
-          <div class="section-photos-label">${escapeHtml(slot)}</div>
-          <div class="photo-grid compact">
-            ${(prior.data.photos[slot] || []).map((url) => `<div class="photo-thumb"><img src="${url}" /></div>`).join('')}
-          </div>
-        </div>
-      `).join('')}
+      ${renderPhotoGalleryLarge(prior.data.photos || {})}
     </div>
   ` : `<div class="card"><div class="section-help">${escapeHtml(bi('noSampleApprovalYet').en)}<br/>${escapeHtml(bi('noSampleApprovalYet').zh)}</div></div>`;
 
@@ -405,14 +555,28 @@ function renderReportingReferenceBlock() {
 
 /* ---- Submitted stage: show data read-back + PD comments ---- */
 function renderSubmittedStage(stageData) {
+  const sample = approvalState.approval.sampleApproval;
+  const samplePhotos = (sample && sample.data && sample.data.photos) || {};
+  const isSampleStage = approvalState.stage === 'sample';
+
+  const referenceBlock = `
+    <div class="card">
+      <div class="section-title">${biBlockHtml('approvedSamplePhotosReference', 'Approved Sample Photos')}</div>
+      ${isSampleStage
+        ? renderPhotoGalleryLarge(samplePhotos)
+        : renderPhotoComparisonLarge(samplePhotos, stageData.data.photos, approvalState.po.category, approvalState.po.sizesIncluded)}
+    </div>
+  `;
+
   const comments = stageData.pdComments || [];
   const commentsHtml = comments.length ? comments.map((c) => `
     <div class="defect-card">
       <div class="prior-issue-header">
         <span class="prior-issue-desc">${escapeHtml(c.text)}</span>
+        ${c.approvalStatus ? `<span class="severity-badge severity-${c.approvalStatus === 'approved' ? 'minor' : c.approvalStatus === 'notApproved' ? 'critical' : 'major'}">${escapeHtml(bi(approvalStatusLabelKey(c.approvalStatus)).en)}</span>` : ''}
       </div>
       <div class="section-help">${escapeHtml(c.author)} · ${new Date(c.timestamp).toLocaleString()}</div>
-      ${(c.photos || []).map((url) => `<img src="${url}" class="prior-issue-photo" />`).join('')}
+      ${(c.photos || []).map((url) => `<img src="${escapeHtml(url)}" class="prior-issue-photo js-lightbox" />`).join('')}
     </div>
   `).join('') : `<div class="section-help">${escapeHtml(bi('noCommentsYet').en)}<br/>${escapeHtml(bi('noCommentsYet').zh)}</div>`;
 
@@ -421,23 +585,42 @@ function renderSubmittedStage(stageData) {
       <div class="section-title">${biBlockHtml('stageSubmittedTitle', 'Submitted')}</div>
       <div class="section-help">${new Date(stageData.submittedAt).toLocaleString()}</div>
     </div>
+    ${referenceBlock}
+    ${renderCurrentProductionNotes()}
+    ${renderPreviousPoIssuesSection()}
     <div class="card">
       <div class="section-title">${biBlockHtml('pdCommentsTitle', 'Product Development Comments')}</div>
       ${commentsHtml}
       <div style="margin-top:14px; padding-top:14px; border-top:1px dashed var(--jc-border);">
         ${selectField3('commentAuthor', 'productDevelopmentLead', approvalState.commentAuthor, OPTIONS.productDevelopmentLeads || [])}
         <div class="field">
+          <label class="field-label">${biBlockHtml('approvalStatusLabel', 'Approval')}</label>
+          <select id="approvalStatusSelect">
+            <option value="">${escapeHtml(bi('selectPlaceholder').en)}</option>
+            <option value="approved" ${approvalState.approvalStatus === 'approved' ? 'selected' : ''}>${escapeHtml(bi('statusApproved').en)} ${escapeHtml(bi('statusApproved').zh)}</option>
+            <option value="approvedWithComments" ${approvalState.approvalStatus === 'approvedWithComments' ? 'selected' : ''}>${escapeHtml(bi('statusApprovedWithComments').en)} ${escapeHtml(bi('statusApprovedWithComments').zh)}</option>
+            <option value="notApproved" ${approvalState.approvalStatus === 'notApproved' ? 'selected' : ''}>${escapeHtml(bi('statusNotApproved').en)} ${escapeHtml(bi('statusNotApproved').zh)}</option>
+          </select>
+        </div>
+        <div class="field">
           <label class="field-label">${biBlockHtml('commentText', 'Comment')}</label>
           <textarea id="pdCommentText" placeholder="${escapeHtml(bi('commentPlaceholder').en)}">${escapeHtml(approvalState.commentText)}</textarea>
         </div>
         ${renderPhotoSlot('_comment', 'Photos', '照片')}
-        <button class="btn btn-secondary" id="btnSubmitComment" style="margin-top:10px;">${biBlockHtml('addComment', 'Add Comment')}</button>
+        <button class="btn btn-primary" id="btnSubmitComment" style="margin-top:10px;">${biBlockHtml('submit', 'Submit')}</button>
       </div>
     </div>
   `;
 }
 
 /* ---------------- HANDLERS ---------------- */
+
+function approvalStatusLabelKey(status) {
+  if (status === 'approved') return 'statusApproved';
+  if (status === 'approvedWithComments') return 'statusApprovedWithComments';
+  if (status === 'notApproved') return 'statusNotApproved';
+  return 'statusApproved';
+}
 
 function attachStageHandlers() {
   document.querySelectorAll('[data-approval-risk]').forEach((el) => {
@@ -474,6 +657,8 @@ function attachStageHandlers() {
 
   const commentAuthorSelect = document.getElementById('approval_commentAuthor');
   if (commentAuthorSelect) commentAuthorSelect.addEventListener('change', (e) => { approvalState.commentAuthor = e.target.value; });
+  const approvalStatusSelect = document.getElementById('approvalStatusSelect');
+  if (approvalStatusSelect) approvalStatusSelect.addEventListener('change', (e) => { approvalState.approvalStatus = e.target.value; });
   const commentText = document.getElementById('pdCommentText');
   if (commentText) commentText.addEventListener('input', (e) => { approvalState.commentText = e.target.value; });
   const btnSubmitComment = document.getElementById('btnSubmitComment');
@@ -547,7 +732,7 @@ async function submitStage() {
 }
 
 async function submitComment() {
-  if (!approvalState.commentText.trim() || !approvalState.commentAuthor) {
+  if (!approvalState.commentText.trim() || !approvalState.commentAuthor || !approvalState.approvalStatus) {
     showToast(bi('commentRequiredFields').en + ' / ' + bi('commentRequiredFields').zh, true);
     return;
   }
@@ -557,6 +742,7 @@ async function submitComment() {
     const formData = new FormData();
     formData.append('text', approvalState.commentText);
     formData.append('author', approvalState.commentAuthor);
+    formData.append('approvalStatus', approvalState.approvalStatus);
     (approvalState.photos['_comment'] || []).forEach((f) => formData.append('photo', f, f.name));
 
     const res = await fetch(`/api/approval/${encodeURIComponent(approvalState.po.poNumber)}/${STAGE_LABELS[approvalState.stage].apiPath}/comment`, {
@@ -566,6 +752,7 @@ async function submitComment() {
     if (!res.ok) throw new Error(result.error || 'Failed');
     approvalState.approval = result.approval;
     approvalState.commentText = '';
+    approvalState.approvalStatus = '';
     approvalState.photos = {};
     showToast(bi('commentAdded').en + ' / ' + bi('commentAdded').zh);
     render();

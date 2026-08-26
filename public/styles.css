@@ -558,6 +558,68 @@ input:focus, select:focus, textarea:focus {
   border: 1px solid var(--jc-border);
 }
 
+/* --- Approval: large aligned photo galleries + click-to-enlarge lightbox --- */
+.photo-gallery-large {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+.photo-gallery-large img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--jc-border);
+  cursor: zoom-in;
+  display: block;
+}
+.photo-compare-row {
+  display: flex;
+  gap: 14px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.photo-compare-col {
+  flex: 1 1 220px;
+  min-width: 180px;
+}
+.photo-compare-col-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--jc-muted);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.photo-compare-col img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--jc-border);
+  cursor: zoom-in;
+  display: block;
+}
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 24px;
+  cursor: zoom-out;
+}
+.lightbox-overlay.hidden { display: none; }
+.lightbox-overlay img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 6px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+}
+
 /* --- Per-size cards (apparel sizing entry, each with its own photos) --- */
 .size-card {
   border: 1.5px solid var(--jc-border);

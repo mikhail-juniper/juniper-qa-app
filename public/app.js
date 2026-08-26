@@ -1734,7 +1734,7 @@ function photoGrid(fieldId, compact) {
       <label class="photo-add" for="${inputId}">
         <span class="plus">+</span>
         <span>${escapeHtml(bi('addPhoto').en)}</span>
-        <input type="file" id="${inputId}" accept="image/*" capture="environment" multiple
+        <input type="file" id="${inputId}" accept="image/*" multiple
           data-photo-input="${fieldId}" />
       </label>
     </div>

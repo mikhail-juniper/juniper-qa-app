@@ -636,3 +636,56 @@ both counts (no Final Approval Photos section, "Other Issues" wording).
 Reports (Phase 4 - SKU lookup with a consolidated download combining
 Reporting + Approval + PD comments) and the multi-photo/camera-roll upload fix
 are not built yet.
+
+---
+
+## Approval UX overhaul, Phase 4 (Reports), and the camera fix
+
+### Fixed: Sample Approval photos not showing up after submission
+
+This was a real bug, not a display quirk - the "Submitted" screen only ever
+showed a checkmark and a PD comment box, never the photos that were actually
+uploaded. Rebuilt this screen entirely; confirmed via a live test against the
+running server that the photos now render, large and aligned, with a
+click-to-enlarge lightbox (works everywhere photos show up now, not just here).
+
+### Side-by-side comparison for Pre-Production / Bulk Approval
+
+Reviewing Pre-Production or Bulk Approval now shows the Approved Sample photo
+next to that stage's own photo for the same slot, side by side, large - for
+apparel, this is per-size (each size's Front/Back next to the Sample's
+Front/Back).
+
+### The Approval review page now has three sections, per PO's request
+
+In this order, all on the same screen once a stage is submitted:
+1. **Approved Sample Photos** (or the comparison, for Pre-Production/Bulk)
+2. **Current Production Notes** - the free-text notes field from every stage
+   submitted so far (Sample, Pre-Production, Bulk), not just the current one
+3. **Previous PO Issues** - the same SKU-based Reporting history/issue detail
+   used in the Reporting flow, now visible here too
+
+Product Development's comment box sits below all three, now with an
+**Approval** dropdown (Approved / Approved with Comments / Not Approved)
+alongside the comment text, and the button is now "Submit" instead of "Add
+Comment." The approval decision shows as a badge on each past comment.
+
+### Phase 4: Reports
+
+New working page at `reports.html` - enter a SKU, see every PO under it, and
+download a **consolidated report** per PO: order info, every completed
+Approval stage (photos, notes, PD comments with their decision), and a
+summary of every Reporting-side inspection for that PO with a clickable link
+to each one's full report. Tested end-to-end with a real PO spanning Sample
+Approval (with a photo and a PD comment) and a Pre-Production inspection
+report with a logged issue - confirmed everything renders correctly in one
+PDF, including the link back to the original report actually resolving to a
+real file.
+
+### Camera roll fix
+
+Found the cause: the Reporting flow's photo input had `capture="environment"`
+set, which on many mobile browsers (iOS Safari especially) removes the "Photo
+Library" option from the picker, leaving only "Take Photo." Removed it -
+`multiple` was already in place, so this restores full camera-roll,
+multi-select access. Confirmed no other instance of this anywhere in the app.
