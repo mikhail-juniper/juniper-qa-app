@@ -22,7 +22,7 @@ const CREATOR_TIERS_PATH = path.join(__dirname, 'config', 'creatorTiers.json');
 const AQL_RECOMMENDATION_PATH = path.join(__dirname, 'config', 'aqlRecommendation.json');
 const UNIT_COSTS_PATH = path.join(__dirname, 'config', 'unitCosts.json');
 const FITS_PATH = path.join(__dirname, 'config', 'fits.json');
-const EDITABLE_OPTION_LISTS = ['creators', 'factoryCodes', 'qaLeads'];
+const EDITABLE_OPTION_LISTS = ['creators', 'factoryCodes', 'qaLeads', 'productDevelopmentLeads'];
 
 function loadJson(p) { return JSON.parse(fs.readFileSync(p, 'utf8')); }
 function saveJson(p, data) { fs.writeFileSync(p, JSON.stringify(data, null, 2)); }

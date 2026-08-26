@@ -17,7 +17,8 @@ const FIT_GROUPS = ['hoodie', 'crewnecks', 't_shirt', 'jacket', 'hat', 'other'];
 const LISTS = [
   { key: 'factoryCodes', labelKey: 'factoryCode', pluralEn: 'Factory Codes', pluralZh: '工厂代码' },
   { key: 'creators', labelKey: 'creator', pluralEn: 'Creators / Brands', pluralZh: '创作者 / 品牌方' },
-  { key: 'qaLeads', labelKey: 'qaLead', pluralEn: 'QA/QC Leads', pluralZh: 'QA/QC 负责人' }
+  { key: 'qaLeads', labelKey: 'qaLead', pluralEn: 'QA/QC Leads', pluralZh: 'QA/QC 负责人' },
+  { key: 'productDevelopmentLeads', labelKey: 'productDevelopmentLead', pluralEn: 'Product Development Leads', pluralZh: '产品开发负责人' }
 ];
 const RISKS = ['high', 'medium', 'low'];
 const BANDS = ['>20k', '5-20k', '<5k'];
@@ -589,7 +590,7 @@ async function saveSettings() {
     const results = await Promise.all([
       fetch('/api/options', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ creators: currentOptions.creators, factoryCodes: currentOptions.factoryCodes, qaLeads: currentOptions.qaLeads })
+        body: JSON.stringify({ creators: currentOptions.creators, factoryCodes: currentOptions.factoryCodes, qaLeads: currentOptions.qaLeads, productDevelopmentLeads: currentOptions.productDevelopmentLeads })
       }),
       fetch('/api/creator-tiers', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },

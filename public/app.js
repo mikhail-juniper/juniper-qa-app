@@ -691,7 +691,7 @@ function renderNewPoScreen() {
         <div style="flex:1">${textField2('newPoQuantity', 'poQuantity', newPoState.orderQuantity, { required: true, placeholderKey: 'poQuantityPlaceholder', numeric: true })}</div>
       </div>
       ${selectFieldPlain('newPoCreator', 'creator', newPoState.creator, OPTIONS.creators || [])}
-      ${textField2('newPoPdLead', 'productDevelopmentLead', newPoState.productDevelopmentLead, { required: true, placeholderKey: 'productDevelopmentLeadPlaceholder' })}
+      ${selectFieldPlain('newPoPdLead', 'productDevelopmentLead', newPoState.productDevelopmentLead, OPTIONS.productDevelopmentLeads || [])}
     </div>
 
     ${sizesBlock}
@@ -760,7 +760,9 @@ function attachNewPoHandlers() {
   bindText('newPoNumber', 'poNumber');
   bindText('newPoOrderDate', 'orderDate');
   bindText('newPoQuantity', 'orderQuantity');
-  bindText('newPoPdLead', 'productDevelopmentLead');
+
+  const pdLeadSelect = document.getElementById('newPoPdLead');
+  if (pdLeadSelect) pdLeadSelect.addEventListener('change', (e) => { newPoState.productDevelopmentLead = e.target.value; });
 
   const skuInput = document.getElementById('newPoSku');
   if (skuInput) {
