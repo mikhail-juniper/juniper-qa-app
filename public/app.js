@@ -1058,16 +1058,54 @@ function renderProductionNotesSection() {
   `;
 }
 
-function renderPreviousProductionIssuesSection() {
-  if (!priorReports.length) return '';
+/** Issues flagged in THIS PO's own Pre-Production sample report - part of
+ *  the main section, distinct from Production Notes (which is free-text
+ *  notes/comments only) and from Previous PO References (other POs). */
+function renderProductionIssuesSection() {
+  const ownPreProdReports = priorReports.filter((r) => r.poNumber === state.poNumber && r.qaType === 'pre_production');
+  if (!ownPreProdReports.length) return '';
+  const withIssues = ownPreProdReports.filter((r) => r.issues && r.issues.length);
+  if (!withIssues.length) return '';
+
   return `
     <div class="card">
+      <div class="section-title">${biBlockHtml('productionIssuesTitle', 'Production Issues')}</div>
+      ${withIssues.map((r) => r.issues.map((iss) => {
+        const sevLabel = bi(iss.severity);
+        return `
+          <div class="prior-issue-card">
+            <div class="prior-issue-header">
+              <span class="prior-issue-desc">${escapeHtml(iss.description || '-')}</span>
+              <span class="severity-badge severity-${escapeHtml(iss.severity)}">${escapeHtml(sevLabel.en)} ${escapeHtml(sevLabel.zh)}</span>
+            </div>
+            <div class="section-help">${escapeHtml(bi('unitsAffected').en)}: ${iss.unitsAffected}</div>
+            ${iss.photoUrl ? `<img src="${escapeHtml(iss.photoUrl)}" class="prior-issue-photo js-lightbox" />` : ''}
+          </div>
+        `;
+      }).join('')).join('')}
+    </div>
+  `;
+}
+
+/** Only Major/Critical issues from OTHER POs of the same SKU - this PO's own
+ *  issues live in Production Issues above, not here. Rendered with a large
+ *  header and a visible divider so it reads as clearly a different section. */
+function renderPreviousPoReferencesSection() {
+  const otherPoReports = priorReports.filter((r) => r.poNumber !== state.poNumber);
+  const withMajorCritical = otherPoReports
+    .map((r) => ({ ...r, issues: (r.issues || []).filter((iss) => iss.severity === 'major' || iss.severity === 'critical') }))
+    .filter((r) => r.issues.length);
+  if (!withMajorCritical.length) return '';
+
+  return `
+    <div class="major-divider"></div>
+    <div class="step-title" style="font-size:20px; margin-bottom:10px;">${biBlockHtml('previousPoReferencesTitle', 'Previous PO References')}</div>
+    <div class="card">
       <div class="section-title">${biBlockHtml('previousProductionIssuesTitle', 'Previous Production Issues')}</div>
-      ${priorReports.map((r) => {
+      ${withMajorCritical.map((r) => {
         const qaTypeLabel = r.qaType === 'production' ? bi('production') : bi('prePro');
         const resultLabel = r.overallResult === 'pass' ? bi('resultPass') : bi('resultFail');
-        const issuesHtml = (r.issues && r.issues.length)
-          ? r.issues.map((iss) => {
+        const issuesHtml = r.issues.map((iss) => {
               const sevLabel = bi(iss.severity);
               return `
                 <div class="prior-issue-card">
@@ -1079,12 +1117,11 @@ function renderPreviousProductionIssuesSection() {
                   ${iss.photoUrl ? `<img src="${escapeHtml(iss.photoUrl)}" class="prior-issue-photo js-lightbox" />` : ''}
                 </div>
               `;
-            }).join('')
-          : `<div class="section-help">${escapeHtml(bi('noIssues').en)} / ${escapeHtml(bi('noIssues').zh)}</div>`;
+            }).join('');
         return `
           <div style="margin-top:12px; padding-top:12px; border-top:1px dashed var(--jc-border);">
             <div class="section-help">
-              ${escapeHtml(qaTypeLabel.en)} ${escapeHtml(qaTypeLabel.zh)} · ${escapeHtml(r.date || '')} ·
+              ${escapeHtml(r.poNumber || '')} · ${escapeHtml(qaTypeLabel.en)} ${escapeHtml(qaTypeLabel.zh)} · ${escapeHtml(r.date || '')} ·
               <strong style="color:${r.overallResult === 'pass' ? 'var(--jc-teal-dark)' : 'var(--jc-fail)'}">${escapeHtml(resultLabel.en)} ${escapeHtml(resultLabel.zh)}</strong>
             </div>
             ${issuesHtml}
@@ -1099,10 +1136,11 @@ function renderPreviousProductionIssuesSection() {
 function renderProductionNotesStep() {
   return `
     <div class="step-eyebrow">${biHtml('step', 'Step')} 3 / 7</div>
-    <div class="step-title">${biBlockHtml('productionNotesStepTitle', 'Production Notes')}</div>
+    <div class="step-title">${biBlockHtml('productionNotesStepTitle', 'Production Notes & References')}</div>
     <div id="referencePhotosArea">${renderReferencePhotosSection()}</div>
     ${renderProductionNotesSection()}
-    ${renderPreviousProductionIssuesSection()}
+    ${renderProductionIssuesSection()}
+    ${renderPreviousPoReferencesSection()}
     <div class="nav-buttons">
       <button class="btn btn-secondary" id="btnBack">${biBlockHtml('back', 'Back')}</button>
       <button class="btn btn-primary" id="btnNext">${biBlockHtml('next', 'Next')}</button>

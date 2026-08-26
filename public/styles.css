@@ -75,8 +75,9 @@ html, body {
    of wrapping onto their own rows. Mobile keeps the narrower single-column
    layout above this breakpoint. */
 @media (min-width: 900px) {
-  #app { max-width: 1180px; }
+  #app { max-width: 1440px; }
   .photo-compare-row { flex-wrap: nowrap; }
+  .photo-gallery-large { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
 }
 
 .app-header {
