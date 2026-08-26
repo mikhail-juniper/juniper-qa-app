@@ -25,6 +25,7 @@ function emptyDefect() { return { id: genId(), description: '', severity: 'minor
 const state = {
   category: null,
   subcategory: null,
+  sku: '', poSizesIncluded: [], pdNotes: [],
   poNumber: '', factoryCode: '', date: todayStr(), qaLead: '',
   creator: '', productTitle: '', qaType: 'pre_production',
   poQuantity: '', inspectionLevel: 'II', majorAql: 2.5, minorAql: 4.0,
@@ -54,7 +55,7 @@ const state = {
 };
 
 let step = 0;
-const STEPS = ['category', 'orderInfo', 'inspectionDetails', 'sizing', 'photos', 'issues', 'review'];
+const STEPS = ['poLookup', 'orderInfo', 'inspectionDetails', 'sizing', 'issues', 'review'];
 const CATEGORY_ORDER = ['apparel', 'plush', 'bags', 'accessories', 'other'];
 // Fixed industry-standard AQL values (Major 2.5%, Minor 4.0%) - not user-editable.
 // Critical is always zero-tolerance (Ac=0/Re=1), handled directly in the plan functions.
@@ -570,11 +571,10 @@ function render() {
   }
   const name = STEPS[step];
   let html = '';
-  if (name === 'category') html = renderCategoryStep();
+  if (name === 'poLookup') html = renderPoLookupStep();
   else if (name === 'orderInfo') html = renderOrderInfoStep();
   else if (name === 'inspectionDetails') html = renderInspectionDetailsStep();
   else if (name === 'sizing') html = renderSizingStep();
-  else if (name === 'photos') html = renderPhotosStep();
   else if (name === 'issues') html = renderAdditionalIssuesStep();
   else if (name === 'review') html = renderReviewStep();
 
@@ -854,7 +854,8 @@ function renderNewPoSuccess(data) {
         <input type="text" readonly value="${escapeHtml(fullUrl)}" id="approvalLinkInput" style="margin-top:8px;" onclick="this.select()" />
         <button class="btn btn-secondary" id="btnCopyLink" style="margin-top:8px;">${escapeHtml(bi('copyLink').en)} / ${escapeHtml(bi('copyLink').zh)}</button>
       </div>
-      <button class="btn btn-secondary" id="btnPoStartOver" style="max-width:280px; margin:16px auto 0 auto;">${biBlockHtml('startOver', 'Start New Report')}</button>
+      <button class="btn btn-secondary" id="btnPoStartOver" style="max-width:280px; margin:16px auto 0 auto;">${biBlockHtml('submitAnotherPo', 'Submit Another PO')}</button>
+      <a href="index.html" class="btn btn-secondary" style="max-width:280px; margin:10px auto 0 auto; text-decoration:none; display:block; text-align:center;">${biBlockHtml('goHome', 'Go Home')}</a>
     </div>
   `;
   document.getElementById('btnCopyLink').addEventListener('click', () => {
@@ -865,9 +866,82 @@ function renderNewPoSuccess(data) {
       category: null, subcategory: null, poNumber: '', sku: '', orderDate: todayStr(), creator: '',
       orderQuantity: '', productDevelopmentLead: '', sizesIncluded: [], establishedFit: null, skuChecked: null
     });
-    appMode = 'chooser';
+    appMode = 'newPO';
     render();
   });
+}
+
+/* ---- PO Lookup: replaces the old Category step. Category, order info, and
+ * sizing standard now all come from the PO record + QA/QC Approval data. ---- */
+function renderPoLookupStep() {
+  return `
+    <div class="step-eyebrow">${biHtml('step', 'Step')} 1 / 6</div>
+    <div class="step-title">${biBlockHtml(stageTitleKeyForQaType(), 'Pre-Production Sample Reporting')}</div>
+    <div class="card">
+      <div class="field">
+        <label class="field-label">${biBlockHtml('poNumber', 'Purchase Order Number')}<span class="required">*</span></label>
+        <input type="text" id="poLookupInput" value="${escapeHtml(state.poNumber)}" placeholder="${escapeHtml(bi('poNumberPlaceholder').en)}" />
+      </div>
+      <button class="btn btn-primary" id="btnPoLookupSubmit" style="margin-top:10px;">${biBlockHtml('next', 'Next')}</button>
+    </div>
+  `;
+}
+function stageTitleKeyForQaType() {
+  return state.qaType === 'production' ? 'chooserBulk' : 'chooserPreProd';
+}
+async function submitPoLookup() {
+  const po = document.getElementById('poLookupInput').value.trim();
+  if (!po) return;
+  const btn = document.getElementById('btnPoLookupSubmit');
+  btn.disabled = true;
+  try {
+    const poRes = await fetch(`/api/purchase-orders?poNumber=${encodeURIComponent(po)}`);
+    const poData = await poRes.json();
+    if (!poData.pos || !poData.pos.length) {
+      showToast(bi('poNotFound').en + ' / ' + bi('poNotFound').zh, true);
+      btn.disabled = false;
+      return;
+    }
+    const record = poData.pos[0];
+    state.poNumber = record.poNumber;
+    state.sku = record.sku;
+    state.category = record.category;
+    state.subcategory = record.subcategory;
+    state.creator = record.creator || '';
+    state.poQuantity = record.orderQuantity ? String(record.orderQuantity) : '';
+    state.poSizesIncluded = record.sizesIncluded || [];
+
+    // Pull Factory Code / Product Risk / sizing standard from QA/QC Approval's
+    // Sample Approval, if it's been completed for this PO.
+    try {
+      const approvalRes = await fetch(`/api/approval/${encodeURIComponent(po)}`);
+      if (approvalRes.ok) {
+        const approvalData = await approvalRes.json();
+        const sample = approvalData.approval && approvalData.approval.sampleApproval;
+        if (sample && sample.submitted) {
+          state.factoryCode = sample.data.factoryCode || '';
+          state.productRisk = sample.data.productRisk || 'medium';
+          if (state.category === 'apparel' && sample.data.sizing) state.categoryData.fit = sample.data.sizing.fit || '';
+        }
+        // Collect every PD comment across all three stages for the Notes section.
+        const allComments = [];
+        ['sampleApproval', 'preProductionApproval', 'bulkApproval'].forEach((key) => {
+          const stage = approvalData.approval && approvalData.approval[key];
+          if (stage && stage.pdComments) {
+            stage.pdComments.forEach((c) => allComments.push({ ...c, stage: key }));
+          }
+        });
+        allComments.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        state.pdNotes = allComments;
+      }
+    } catch (e) { console.error('Failed to load approval data for pre-fill', e); }
+
+    goTo(1);
+  } catch (e) {
+    console.error(e);
+    showToast(bi('poNotFound').en + ' / ' + bi('poNotFound').zh, true);
+    btn.disabled = false;
+  }
 }
 
 function renderCategoryStep() {
@@ -920,11 +994,11 @@ function renderCategoryStep() {
 
 /** Looks up prior reports for the currently-entered PO Number and refreshes the card. */
 async function fetchPriorReports() {
-  const po = (state.poNumber || '').trim();
-  if (!po || po === priorReportsPoChecked) return;
-  priorReportsPoChecked = po;
+  const sku = (state.sku || '').trim();
+  if (!sku || sku === priorReportsPoChecked) return;
+  priorReportsPoChecked = sku;
   try {
-    const res = await fetch(`/api/submission-history/${encodeURIComponent(po)}`);
+    const res = await fetch(`/api/submission-history-by-sku/${encodeURIComponent(sku)}`);
     if (!res.ok) { priorReports = []; return; }
     const data = await res.json();
     priorReports = data.reports || [];
@@ -932,12 +1006,8 @@ async function fetchPriorReports() {
     console.error('Failed to fetch prior reports', e);
     priorReports = [];
   } finally {
-    if (tryAutoFillFromPrior()) {
-      render(); // fields changed across the whole step - full redraw is simplest and safe here (not mid-typing)
-    } else {
-      const card = document.getElementById('priorReportCard');
-      if (card) card.innerHTML = renderPriorReportCard();
-    }
+    const card = document.getElementById('priorReportCard');
+    if (card) card.innerHTML = renderPriorReportCard();
   }
 }
 
@@ -1028,29 +1098,67 @@ function renderPriorReportCard() {
 
 /* ---- Step 1: Order Info (+ AQL setup) ---- */
 function renderOrderInfoStep() {
+  const catDef = currentCategoryDef();
+  const catLabel = catDef ? { en: catDef.label_zh, zh: catDef.label_en } : { en: '', zh: '' };
+  const subDef = catDef && state.subcategory ? (catDef.subcategories || []).find((s) => s.key === state.subcategory) : null;
+  const subLabel = subDef ? { en: subDef.label_zh, zh: subDef.label_en } : null;
+
   return `
-    <div class="step-eyebrow">${biHtml('step', 'Step')} 2 / 7</div>
+    <div class="step-eyebrow">${biHtml('step', 'Step')} 2 / 6</div>
     <div class="step-title">订单信息<span class="zh">Order Information</span></div>
     <div class="card">
-      ${textField('poNumber', 'poNumber', state.poNumber, { required: true, placeholderKey: 'poNumberPlaceholder' })}
+      ${state.autoFilledForPo || state.factoryCode || state.productRisk !== 'medium' ? `<div class="section-help" style="margin-bottom:10px; color:var(--jc-teal-dark);">${escapeHtml(bi('prefilledFromPoNotice').en)}<br/>${escapeHtml(bi('prefilledFromPoNotice').zh)}</div>` : ''}
+      <div class="review-row"><span class="k">类别 / Category</span><span class="v">${escapeHtml(catLabel.en)} ${escapeHtml(catLabel.zh)}</span></div>
+      ${subLabel ? `<div class="review-row"><span class="k">类型 / Type</span><span class="v">${escapeHtml(subLabel.en)} ${escapeHtml(subLabel.zh)}</span></div>` : ''}
+      <div class="review-row"><span class="k">${escapeHtml(bi('poNumber').en)}</span><span class="v">${escapeHtml(state.poNumber)}</span></div>
+      <div class="review-row"><span class="k">${escapeHtml(bi('productSku').en)}</span><span class="v">${escapeHtml(state.sku)}</span></div>
+      ${selectFieldWithOther('factoryCode', 'factoryCode', state.factoryCode, OPTIONS.factoryCodes || [], { required: true })}
+      <div class="field-row">
+        <div style="flex:1">${dateField('date', 'date', state.date, { required: true })}</div>
+      </div>
+      <div class="field-row">
+        <div style="flex:1">${selectFieldWithOther('creator', 'creator', state.creator, OPTIONS.creators || [], {})}</div>
+        <div style="flex:1">${textField('productTitle', 'productTitle', state.productTitle, {})}</div>
+      </div>
+      ${numberField('poQuantity', 'poQuantity', state.poQuantity, { required: true, placeholderKey: 'poQuantityPlaceholder' })}
       <div class="field">
-        <label class="field-label">${biBlockHtml('qaType', 'QA Type')}</label>
-        <div class="segmented" id="qaTypeSeg">
-          ${segOption('qaType', 'pre_production', 'prePro', state.qaType)}
-          ${segOption('qaType', 'production', 'production', state.qaType)}
+        <label class="field-label">${biBlockHtml('productRisk', 'Product Complexity/Risk')}</label>
+        <div class="segmented">
+          ${['high', 'medium', 'low'].map((r) => `<div class="segmented-option ${state.productRisk === r ? 'selected' : ''}" data-seg="productRisk" data-val="${r}">${escapeHtml(bi('risk' + r.charAt(0).toUpperCase() + r.slice(1)).en)}<span class="zh">${escapeHtml(bi('risk' + r.charAt(0).toUpperCase() + r.slice(1)).zh)}</span></div>`).join('')}
         </div>
       </div>
     </div>
 
-    <div id="restOfOrderInfo">${renderRestOfOrderInfo()}</div>
+    <div class="card">
+      <div class="section-title">${biBlockHtml('freshEntrySection', 'For This Inspection')}</div>
+      ${selectFieldWithOther('qaLead', 'qaLead', state.qaLead, OPTIONS.qaLeads || [], { required: true })}
+    </div>
 
     <div id="aqlSection">${renderAqlSection()}</div>
+
+    ${renderPdNotesSection()}
 
     <div id="priorReportCard">${renderPriorReportCard()}</div>
 
     <div class="nav-buttons">
       <button class="btn btn-secondary" id="btnBack">${biBlockHtml('back', 'Back')}</button>
       <button class="btn btn-primary" id="btnNext">${biBlockHtml('next', 'Next')}</button>
+    </div>
+  `;
+}
+
+function renderPdNotesSection() {
+  if (!state.pdNotes || !state.pdNotes.length) return '';
+  return `
+    <div class="card">
+      <div class="section-title">${biBlockHtml('pdNotesTitle', 'Notes from Product Development')}</div>
+      ${state.pdNotes.map((n) => `
+        <div class="defect-card">
+          <div class="prior-issue-desc">${escapeHtml(n.text)}</div>
+          <div class="section-help">${escapeHtml(n.author)} · ${new Date(n.timestamp).toLocaleDateString()}</div>
+          ${(n.photos || []).map((url) => `<img src="${escapeHtml(url)}" class="prior-issue-photo" />`).join('')}
+        </div>
+      `).join('')}
     </div>
   `;
 }
@@ -1298,7 +1406,7 @@ function renderInspectionDetailsStep() {
   }
 
   return `
-    <div class="step-eyebrow">${biHtml('step', 'Step')} 3 / 7</div>
+    <div class="step-eyebrow">${biHtml('step', 'Step')} 3 / 6</div>
     <div class="step-title">检验详情<span class="zh">Inspection Details</span></div>
     ${body}
     <div class="nav-buttons">
@@ -1420,7 +1528,7 @@ function renderSizingStep() {
   }
 
   return `
-    <div class="step-eyebrow">${biHtml('step', 'Step')} 4 / 7</div>
+    <div class="step-eyebrow">${biHtml('step', 'Step')} 4 / 6</div>
     <div class="step-title">尺寸<span class="zh">Sizing</span></div>
     ${body}
     <div class="nav-buttons">
@@ -1519,7 +1627,10 @@ function renderSizeEntryTable() {
   const cd = state.categoryData;
 
   if (!cd.sizeRows.length || cd._fitForRows !== cd.fit) {
-    cd.sizeRows = Object.keys(fitDef.sizes).map((size) => ({ size, measured: {}, photos: [] }));
+    const availableSizes = (state.poSizesIncluded && state.poSizesIncluded.length)
+      ? Object.keys(fitDef.sizes).filter((s) => state.poSizesIncluded.includes(s))
+      : Object.keys(fitDef.sizes);
+    cd.sizeRows = availableSizes.map((size) => ({ size, measured: {}, photos: [] }));
     cd._fitForRows = cd.fit;
   }
 
@@ -1635,9 +1746,13 @@ function renderAdditionalIssuesStep() {
   const issuesHtml = state.additionalIssues.map((issue) => defectCard(issue, null)).join('');
 
   return `
-    <div class="step-eyebrow">${biHtml('step', 'Step')} 6 / 7</div>
+    <div class="step-eyebrow">${biHtml('step', 'Step')} 5 / 6</div>
     <div class="step-title">${biBlockHtml('additionalIssuesSection', 'Additional Issues')}</div>
     <div class="section-help" style="margin-bottom:14px;">${escapeHtml(bi('additionalIssuesHelp').en)}<br/>${escapeHtml(bi('additionalIssuesHelp').zh)}</div>
+    <div class="card" style="background:var(--jc-mint-light); border-color:var(--jc-teal); margin-bottom:16px;">
+      <div class="section-title" style="font-size:14px;">${biBlockHtml('severityGuideTitle', 'How to classify an issue')}</div>
+      <div class="section-help">${escapeHtml(bi('severityGuideText').en)}<br/>${escapeHtml(bi('severityGuideText').zh)}</div>
+    </div>
     ${state.additionalIssues.length === 0 ? `<div class="no-issues-note">${escapeHtml(bi('noIssues').en)} / ${escapeHtml(bi('noIssues').zh)}</div>` : issuesHtml}
     <button class="add-issue-btn" id="btnAddIssue">${escapeHtml(bi('addDefect').en)} / ${escapeHtml(bi('addDefect').zh)}</button>
     <div id="issuesAqlLive">${renderAqlTallyCard()}</div>
@@ -1718,7 +1833,7 @@ function renderReviewStep() {
   ` : '';
 
   return `
-    <div class="step-eyebrow">${biHtml('step', 'Step')} 7 / 7</div>
+    <div class="step-eyebrow">${biHtml('step', 'Step')} 6 / 6</div>
     <div class="step-title">${biBlockHtml('reviewTitle', 'Review & Submit')}</div>
 
     <div class="result-banner ${result.overall === 'fail' ? 'fail' : ''}">
@@ -1743,11 +1858,6 @@ function renderReviewStep() {
         <div class="review-row"><span class="k">类别 / Category</span><span class="v">${escapeHtml(catLabel.en)} ${escapeHtml(catLabel.zh)}</span></div>
         ${subLabel ? `<div class="review-row"><span class="k">类型 / Type</span><span class="v">${escapeHtml(subLabel.en)} ${escapeHtml(subLabel.zh)}</span></div>` : ''}
         <div class="review-row"><span class="k">${bi('qaType').en}</span><span class="v">${escapeHtml(qaTypeLabel.en)} ${escapeHtml(qaTypeLabel.zh)}</span></div>
-      </div>
-      <div class="review-block">
-        <div class="review-block-title">${bi('finalApprovalPhotos').en} / ${bi('finalApprovalPhotos').zh}</div>
-        <div class="review-row"><span class="k">${bi('generalPhotos').en}</span><span class="v">${state.photos.general.length}</span></div>
-        <div class="review-row"><span class="k">${bi('tagPhotos').en}</span><span class="v">${state.photos.tags.length}</span></div>
       </div>
       <div class="review-block">
         <div class="review-block-title">${bi('additionalIssuesSection').en} / ${bi('additionalIssuesSection').zh}</div>
@@ -1816,6 +1926,13 @@ function attachStepHandlers(name) {
   attachDataBindLiveHandlers(document);
   attachUnitsCheckedHandler(document);
 
+  if (name === 'poLookup') {
+    const input = document.getElementById('poLookupInput');
+    if (input) input.addEventListener('input', (e) => { state.poNumber = e.target.value; });
+    const btn = document.getElementById('btnPoLookupSubmit');
+    if (btn) btn.addEventListener('click', submitPoLookup);
+  }
+
   if (name === 'category') {
     document.querySelectorAll('.category-option').forEach((el) => {
       el.addEventListener('click', () => {
@@ -1837,17 +1954,12 @@ function attachStepHandlers(name) {
   }
 
   if (name === 'orderInfo') {
-    const poInput = document.querySelector('[data-bind="poNumber"]');
-    if (poInput) {
-      poInput.addEventListener('blur', fetchPriorReports);
-      if (state.poNumber) fetchPriorReports();
-    }
+    if (state.sku) fetchPriorReports();
     document.querySelectorAll('[data-seg]').forEach((el) => {
       el.addEventListener('click', () => {
         const field = el.getAttribute('data-seg');
         state[field] = el.getAttribute('data-val');
         if (field === 'productRisk') state._productRiskTouched = true;
-        if (field === 'qaType') tryAutoFillFromPrior();
         render();
       });
     });
@@ -2195,6 +2307,7 @@ function resetApp() {
   priorReportsPoChecked = null;
   Object.assign(state, {
     category: null, subcategory: null,
+    sku: '', poSizesIncluded: [], pdNotes: [],
     poNumber: '', factoryCode: '', date: todayStr(), qaLead: '',
     creator: '', productTitle: '', qaType: 'pre_production',
     poQuantity: '', inspectionLevel: 'II', majorAql: 2.5, minorAql: 4.0,

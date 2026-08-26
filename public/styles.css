@@ -85,6 +85,8 @@ html, body {
 .brand-mark {
   width: 38px; height: 38px;
   flex-shrink: 0;
+  display: block;
+  cursor: pointer;
 }
 .brand-mark img { width: 100%; height: 100%; display: block; }
 

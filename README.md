@@ -568,3 +568,71 @@ Phase 2 (Pre-Production/Bulk Sampling Reporting updates: pre-fill from the PO
 removing the Final Approval Photos step), Phase 3 (the full QA/QC Approval
 workflow), Phase 4 (Reports), and the multi-photo/camera-roll fix are all not
 built yet.
+
+---
+
+## Phase 2 + 3: QA/QC Approval, and Reporting now built on top of it
+
+### QA/QC Approval (new)
+
+A full new workflow at `approval.html`, for the China QA team to share reference
+photos with Product Development for sign-off:
+
+- **Sample Approval** - enter a PO Number (or arrive via a New PO's share link,
+  which jumps straight here), fill in Factory Code / QA Lead / Product Risk /
+  Sizing, upload the category-specific photo set (Plush, Apparel, Book -
+  mapped to the Notebook/Sketchbook subcategory - or a general default set),
+  add notes. If a SKU already has a completed Sample Approval from an earlier
+  PO, it shows up as a reference with a one-click "Copy From Prior PO" -
+  tested this exact PO2 scenario end-to-end.
+- **Pre-Production Approval** / **Bulk Approval** - same PO-entry pattern,
+  shows the Sample Approval photos as reference, uploads its own photo set
+  (per-size for apparel - Front+Back for each size in the PO), links to the
+  matching Reporting-side report once one exists.
+- Every submitted stage gets a **Product Development comment box** - text +
+  optional photos, timestamped and attributed to whoever left it.
+- Crucially: submitting a Sample Approval with an apparel sizing standard now
+  writes that standard back onto the PO record, which is what lets it copy
+  forward automatically to PO2, PO3, etc. of the same SKU (this took a real
+  bug fix to get right during testing - the initial version updated the
+  Approval data but never wrote it back to the PO record, so nothing carried
+  forward).
+
+### QA/QC Reporting - restructured around POs and Approval data
+
+- **Category selection is gone as its own step.** Pre-Production/Bulk
+  Sampling Reporting now start with a **PO Lookup** step - enter the PO
+  Number, and Category, Subcategory, SKU, Creator, PO Quantity, sizes
+  included, Factory Code, Product Risk, and the sizing standard all pull in
+  automatically from the PO record and Sample Approval.
+- **Order Info is now pre-filled** (still editable) with only QA Lead and
+  Quantity Checked genuinely entered fresh, grouped together as their own
+  section.
+- **Prior report history is now SKU-based, not PO-based** - it follows a
+  product across PO2, PO3, etc., not just one specific PO.
+- **Product Development's Approval-side comments now show up directly** in
+  the Reporting flow's Order Info step, so factory QA staff see PD's feedback
+  without needing to go dig through Approval separately.
+- **Final Approval Photos is gone** as a step, and removed from the generated
+  PDF too (it would have always been empty now that the step doesn't exist).
+- **Apparel sizing is now scoped to the PO** - only the sizes actually
+  included in that specific PO show up in the measurement chart, not every
+  size the standard defines.
+- **Issues step reworded** - renamed "Tolerance & Placement Issues" to "Other
+  Issues" and broadened the description (not limited to tolerance/placement
+  anymore), plus a clear classification guide: Minor stays within tolerance
+  and gets accepted, Major is outside tolerance and gets rejected back to the
+  factory to fix, Critical means the whole batch has the issue and gets
+  rejected and redone.
+
+Every piece above was tested end-to-end against the real running server: PO
+creation, Sample Approval with a real photo, a PD comment, then a
+Pre-Production report reading all of that back and pre-filling correctly, the
+SKU-based history picking it up, and the generated PDF confirmed correct on
+both counts (no Final Approval Photos section, "Other Issues" wording).
+
+### Still outstanding
+
+Reports (Phase 4 - SKU lookup with a consolidated download combining
+Reporting + Approval + PD comments) and the multi-photo/camera-roll upload fix
+are not built yet.

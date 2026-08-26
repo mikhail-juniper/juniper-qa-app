@@ -11,6 +11,18 @@ const { computeOverallResult, collectAllDefects } = require('./lib/passFail');
 const { getRecommendation } = require('./lib/aqlRecommendation');
 const submissionLog = require('./lib/submissionLog');
 const poStore = require('./lib/poStore');
+const approvalStore = require('./lib/approvalStore');
+const approvalPhotoSets = require('./config/approvalPhotoSets.json');
+
+/** Picks the right named photo-slot set for a product: apparel and plush by
+ *  top-level category, "book" for Notebook/Sketchbook (an accessories
+ *  subcategory), everything else falls back to the default set. */
+function resolvePhotoSet(category, subcategory) {
+  if (category === 'apparel') return approvalPhotoSets.sets.apparel;
+  if (category === 'plush') return approvalPhotoSets.sets.plush;
+  if (subcategory === 'notebook') return approvalPhotoSets.sets.book;
+  return approvalPhotoSets.sets.default;
+}
 const analytics = require('./lib/analytics');
 let fits = require('./config/fits.json');
 const i18n = require('./config/i18n.json');
@@ -45,6 +57,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // once a persistent disk is attached (e.g. on Render's paid tier).
 app.use('/submissions', express.static(submissionLog.PDF_ARCHIVE_DIR));
 app.use('/issue-photos', express.static(submissionLog.PHOTO_ARCHIVE_DIR));
+app.use('/approval-photos', express.static(approvalStore.APPROVAL_PHOTO_DIR));
 
 // Serve the fit library + translations + dropdown options + category tree + AQL
 // reference table + creator tiers + recommendation table + unit costs to the frontend
@@ -331,6 +344,7 @@ app.post('/api/submit', upload.any(), async (req, res) => {
     submissionLog.appendSubmission({
       id: submissionId,
       poNumber: payload.poNumber || null,
+      sku: payload.sku || (poStore.getPoByNumber(payload.poNumber) || {}).sku || null,
       category: payload.category || null,
       subcategory: payload.subcategory || null,
       creator: payload.creator || null,
@@ -370,7 +384,7 @@ app.post('/api/submit', upload.any(), async (req, res) => {
   }
 });
 
-// ---- Report history: reference a prior report for the same PO Number ----
+// ---- Report history: reference prior reports for the same PO or the same SKU ----
 app.get('/api/submission-history/:poNumber', (req, res) => {
   try {
     const prior = submissionLog.findPriorReportsByPoNumber(req.params.poNumber, req.query.excludeId);
@@ -378,6 +392,15 @@ app.get('/api/submission-history/:poNumber', (req, res) => {
   } catch (err) {
     console.error('Failed to look up submission history:', err);
     res.status(500).json({ error: 'Failed to look up submission history', detail: String(err.message || err) });
+  }
+});
+app.get('/api/submission-history-by-sku/:sku', (req, res) => {
+  try {
+    const prior = submissionLog.findPriorReportsBySku(req.params.sku, req.query.excludeId);
+    res.json({ reports: prior });
+  } catch (err) {
+    console.error('Failed to look up submission history by SKU:', err);
+    res.status(500).json({ error: 'Failed to look up submission history by SKU', detail: String(err.message || err) });
   }
 });
 
@@ -482,6 +505,98 @@ app.get('/api/purchase-orders', (req, res) => {
 
 app.get('/api/sku-established-fit/:sku', (req, res) => {
   res.json({ fit: poStore.getEstablishedFitForSku(req.params.sku) });
+});
+
+// ---- QA/QC Approval workflow ----
+const STAGE_KEY_MAP = { sample: 'sampleApproval', preProduction: 'preProductionApproval', bulk: 'bulkApproval' };
+
+function saveApprovalPhotos(files, prefix) {
+  fs.mkdirSync(approvalStore.APPROVAL_PHOTO_DIR, { recursive: true });
+  const urls = [];
+  (files || []).forEach((f, i) => {
+    const filename = `${prefix}_${i}_${uuidv4().slice(0, 8)}.jpg`;
+    fs.writeFileSync(path.join(approvalStore.APPROVAL_PHOTO_DIR, filename), f.buffer);
+    urls.push(`/approval-photos/${encodeURIComponent(filename)}`);
+  });
+  return urls;
+}
+
+app.get('/api/approval/:poNumber', (req, res) => {
+  try {
+    const po = poStore.getPoByNumber(req.params.poNumber);
+    if (!po) return res.status(404).json({ error: 'Purchase order not found - has it been created via New Purchase Order?' });
+
+    const photoSet = resolvePhotoSet(po.category, po.subcategory);
+    const approval = approvalStore.getOrCreateByPoNumber(po.poNumber, po.sku);
+    const priorSampleApproval = approvalStore.getPriorSampleApprovalForSku(po.sku, po.poNumber);
+    const reportingHistory = submissionLog.findPriorReportsBySku(po.sku);
+
+    res.json({ po, photoSet, approval, priorSampleApproval, reportingHistory });
+  } catch (err) {
+    console.error('Failed to load approval record:', err);
+    res.status(500).json({ error: 'Failed to load approval record', detail: String(err.message || err) });
+  }
+});
+
+app.post('/api/approval/:poNumber/:stage', upload.any(), (req, res) => {
+  try {
+    const stageKey = STAGE_KEY_MAP[req.params.stage];
+    if (!stageKey) return res.status(400).json({ error: 'Unknown approval stage' });
+    const po = poStore.getPoByNumber(req.params.poNumber);
+    if (!po) return res.status(404).json({ error: 'Purchase order not found' });
+
+    const data = JSON.parse((req.body && req.body.data) || '{}');
+    const filesByField = {};
+    (req.files || []).forEach((f) => {
+      if (!filesByField[f.fieldname]) filesByField[f.fieldname] = [];
+      filesByField[f.fieldname].push(f);
+    });
+
+    // Photos come in per named slot (e.g. photo_front, photo_back) or, for
+    // per-size apparel Pre-Production/Bulk Approval, per slot+size
+    // (photo_front__Adult_M). Save each and build a slot -> URLs map.
+    const photos = {};
+    Object.keys(filesByField).forEach((field) => {
+      if (!field.startsWith('photo_')) return;
+      const slotKey = field.slice('photo_'.length);
+      photos[slotKey] = saveApprovalPhotos(filesByField[field], `${po.poNumber}_${req.params.stage}_${slotKey}`);
+    });
+
+    const entry = approvalStore.updateStage(po.poNumber, po.sku, stageKey, { ...data, photos });
+
+    // If this Sample Approval established an apparel sizing standard, write it
+    // back onto the PO record so future POs of the same SKU can find and copy
+    // it forward automatically (see poStore.getEstablishedFitForSku).
+    if (req.params.stage === 'sample' && po.category === 'apparel' && data.sizing && data.sizing.fit) {
+      const fitDef = fits.fits[data.sizing.fit];
+      if (fitDef) {
+        poStore.updatePo(po.id, { fitKey: data.sizing.fit, fitSizes: Object.keys(fitDef.sizes) });
+      }
+    }
+
+    res.json({ ok: true, approval: entry });
+  } catch (err) {
+    console.error('Failed to save approval stage:', err);
+    res.status(500).json({ error: 'Failed to save approval stage', detail: String(err.message || err) });
+  }
+});
+
+app.post('/api/approval/:poNumber/:stage/comment', upload.any(), (req, res) => {
+  try {
+    const stageKey = STAGE_KEY_MAP[req.params.stage];
+    if (!stageKey) return res.status(400).json({ error: 'Unknown approval stage' });
+    const text = ((req.body && req.body.text) || '').trim();
+    const author = ((req.body && req.body.author) || '').trim();
+    if (!text || !author) return res.status(400).json({ error: 'text and author are required' });
+
+    const photos = saveApprovalPhotos(req.files, `${req.params.poNumber}_${req.params.stage}_comment`);
+    const entry = approvalStore.addPdComment(req.params.poNumber, stageKey, { text, author, photos });
+    if (!entry) return res.status(404).json({ error: 'Purchase order not found' });
+    res.json({ ok: true, approval: entry });
+  } catch (err) {
+    console.error('Failed to save PD comment:', err);
+    res.status(500).json({ error: 'Failed to save PD comment', detail: String(err.message || err) });
+  }
 });
 
 app.listen(PORT, () => {
