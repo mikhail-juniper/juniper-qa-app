@@ -511,3 +511,60 @@ Changes take effect immediately, no restart needed.
 
 "Purse" is now labeled "Sling Bag" (the underlying data key is unchanged, so this
 doesn't affect existing reports or analytics).
+
+---
+
+## Phase 1: Site restructure, three workstreams, New Purchase Order
+
+Bigger picture change - the app is being split into three main workstreams
+(QA/QC Reporting, QA/QC Approval, Reports), rolled out in phases. This is
+Phase 1: the new home page, the split, and the New Purchase Order flow.
+
+### New site layout
+
+- `index.html` is now the home page: three main buttons (QA/QC Reporting, QA/QC
+  Approval, Reports) plus Settings and Analytics.
+- The existing inspection wizard moved to `reporting.html` (same `app.js`).
+- `approval.html` and `reports.html` are placeholders for now (Phases 3 and 4).
+  Approval's placeholder is functional in one respect already: if reached via a
+  New Purchase Order's share link, it pulls and displays that PO's real data,
+  so the link isn't a dead end while the rest of that workflow gets built.
+- Fixed a bug found along the way: the Settings/Analytics header links were
+  showing Chinese only, with no English at all.
+
+### QA/QC Reporting now starts with a chooser
+
+Three options: **New Purchase Order**, **Pre-Production Sample Reporting**,
+**Bulk Sampling Reporting**. The latter two drop straight into the existing
+wizard (unchanged for now - that's Phase 2). Finishing a report returns to
+this chooser instead of restarting the wizard directly.
+
+### New Purchase Order
+
+A lightweight one-page form: Category/Type, PO Number, Product SKU, Order
+Date, Order Quantity, Creator, Product Development Lead, and - for apparel -
+which sizes are included in this specific PO.
+
+The sizing part depends on whether this SKU already has an established
+sizing standard on file (set later, during QA/QC Approval's Sample Approval
+step):
+- **If yes** (a later PO for a SKU that's already been through Approval),
+  its size list shows as a multi-select automatically.
+- **If no** (the first PO for a brand-new SKU), there's nothing to select
+  from yet - a note explains the standard will be set at Approval and carried
+  forward automatically to future POs of this SKU. Tested this exact
+  hand-off: created PO1 for a new SKU (no fit yet), simulated Approval
+  establishing a fit, then created PO2 for the same SKU and confirmed the fit
+  and its sizes copied over automatically.
+
+Submitting creates the PO record and shows a shareable link (with a copy
+button) that opens QA/QC Approval for that PO - this is the link that gets
+shared with whoever owns that part of the process.
+
+### Still to come
+
+Phase 2 (Pre-Production/Bulk Sampling Reporting updates: pre-fill from the PO
++ Approval data, SKU-based history instead of PO-based, Issues step rewording,
+removing the Final Approval Photos step), Phase 3 (the full QA/QC Approval
+workflow), Phase 4 (Reports), and the multi-photo/camera-roll fix are all not
+built yet.

@@ -4,6 +4,18 @@ let CONFIG = { fits: { fits: {}, toleranceInches: 0.5 }, i18n: {}, options: {}, 
 let I18N = {};
 let OPTIONS = {};
 
+// 'chooser' (pick New PO / Pre-Production / Bulk Sampling) -> 'newPO' (create a
+// PO record) or 'wizard' (the existing step-based inspection report flow).
+let appMode = 'chooser';
+
+const newPoState = {
+  category: null, subcategory: null,
+  poNumber: '', sku: '', orderDate: todayStr(), creator: '', orderQuantity: '', productDevelopmentLead: '',
+  sizesIncluded: [],
+  establishedFit: null, // { fitKey, sizes } - looked up once SKU is entered, if this SKU already has one on file
+  skuChecked: null
+};
+
 let idCounter = 0;
 function genId() { idCounter += 1; return `d${Date.now().toString(36)}${idCounter}`; }
 
@@ -295,6 +307,11 @@ function updateProgress() {
   const pct = Math.round(((step) / (STEPS.length - 1)) * 100);
   document.getElementById('progressFill').style.width = Math.max(8, pct) + '%';
 }
+function updateProgressForMode() {
+  const fill = document.getElementById('progressFill');
+  if (!fill) return;
+  fill.style.width = appMode === 'chooser' ? '0%' : '8%';
+}
 function goTo(newStep) {
   step = newStep;
   updateProgress();
@@ -539,6 +556,18 @@ function getPhotoArray(fieldId) {
 
 function render() {
   const root = document.getElementById('formRoot');
+  if (appMode === 'chooser') {
+    root.innerHTML = renderChooserScreen();
+    attachChooserHandlers();
+    updateProgressForMode();
+    return;
+  }
+  if (appMode === 'newPO') {
+    root.innerHTML = renderNewPoScreen();
+    attachNewPoHandlers();
+    updateProgressForMode();
+    return;
+  }
   const name = STEPS[step];
   let html = '';
   if (name === 'category') html = renderCategoryStep();
@@ -554,6 +583,291 @@ function render() {
 }
 
 /* ---- Step 0: Category + Subcategory ---- */
+/* ---- Chooser: New Purchase Order / Pre-Production / Bulk Sampling Reporting ---- */
+function renderChooserScreen() {
+  return `
+    <div style="display:flex; justify-content:flex-end; gap:16px; margin-bottom:16px;">
+      <a href="analytics.html" class="settings-link" title="Analytics">📊 ${biBlockHtml('analyticsLink', 'Analytics')}</a>
+      <a href="settings.html" class="settings-link" title="Settings">⚙️ ${biBlockHtml('settingsTitle', 'Settings')}</a>
+    </div>
+    <div class="step-title">质检报告 QA/QC Reporting</div>
+    <div class="section-help" style="margin-bottom:16px;">${escapeHtml(bi('chooserHelp').en)}<br/>${escapeHtml(bi('chooserHelp').zh)}</div>
+
+    <div class="home-nav-card" data-chooser="newPO">
+      <div class="home-nav-icon">🆕</div>
+      <div class="home-nav-text">
+        <div class="home-nav-title">${biBlockHtml('chooserNewPO', 'New Purchase Order')}</div>
+        <div class="home-nav-desc">${biBlockHtml('chooserNewPODesc', 'Log a new PO and get a link to share for QA/QC Approval')}</div>
+      </div>
+    </div>
+    <div class="home-nav-card" data-chooser="pre_production">
+      <div class="home-nav-icon">🔍</div>
+      <div class="home-nav-text">
+        <div class="home-nav-title">${biBlockHtml('chooserPreProd', 'Pre-Production Sample Reporting')}</div>
+        <div class="home-nav-desc">${biBlockHtml('chooserPreProdDesc', 'Inspect a small hand-checked sample before the full run')}</div>
+      </div>
+    </div>
+    <div class="home-nav-card" data-chooser="production">
+      <div class="home-nav-icon">📦</div>
+      <div class="home-nav-text">
+        <div class="home-nav-title">${biBlockHtml('chooserBulk', 'Bulk Sampling Reporting')}</div>
+        <div class="home-nav-desc">${biBlockHtml('chooserBulkDesc', 'Inspect a spot-checked sample of the full production run')}</div>
+      </div>
+    </div>
+    <a href="index.html" class="settings-link" style="display:block; text-align:center; margin-top:8px;">← ${biBlockHtml('backToApp', 'Back to Home')}</a>
+  `;
+}
+function attachChooserHandlers() {
+  document.querySelectorAll('[data-chooser]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const choice = el.getAttribute('data-chooser');
+      if (choice === 'newPO') {
+        appMode = 'newPO';
+        render();
+      } else {
+        state.qaType = choice;
+        appMode = 'wizard';
+        goTo(0);
+      }
+    });
+  });
+}
+
+/* ---- New Purchase Order ---- */
+function renderNewPoScreen() {
+  const cats = (CONFIG.categories && CONFIG.categories.categories) || {};
+  const catOptions = CATEGORY_ORDER.filter((k) => cats[k]).map((k) => `<option value="${k}" ${newPoState.category === k ? 'selected' : ''}>${escapeHtml(cats[k].label_zh)} ${escapeHtml(cats[k].label_en)}</option>`).join('');
+  const catDef = newPoState.category ? cats[newPoState.category] : null;
+  const subOptions = (catDef && catDef.subcategories || []).map((s) => `<option value="${s.key}" ${newPoState.subcategory === s.key ? 'selected' : ''}>${escapeHtml(s.label_zh)} ${escapeHtml(s.label_en)}</option>`).join('');
+
+  let sizesBlock = '';
+  if (newPoState.category === 'apparel' && newPoState.sku.trim()) {
+    if (newPoState.establishedFit) {
+      const sizes = newPoState.establishedFit.sizes || [];
+      sizesBlock = `
+        <div class="card">
+          <div class="section-title">${biBlockHtml('sizesInPo', 'Sizes Included in this PO')}</div>
+          <div class="section-help">${escapeHtml(bi('sizesInPoHelp').en)}<br/>${escapeHtml(bi('sizesInPoHelp').zh)}</div>
+          <div class="segmented" style="flex-wrap:wrap; margin-top:8px;">
+            ${sizes.map((s) => `<div class="segmented-option ${newPoState.sizesIncluded.includes(s) ? 'selected' : ''}" data-po-size="${escapeHtml(s)}" style="flex:0 0 auto; min-width:90px;">${escapeHtml(s)}</div>`).join('')}
+          </div>
+        </div>
+      `;
+    } else if (newPoState.skuChecked === newPoState.sku.trim()) {
+      sizesBlock = `
+        <div class="card">
+          <div class="section-help">${escapeHtml(bi('noEstablishedFitYet').en)}<br/>${escapeHtml(bi('noEstablishedFitYet').zh)}</div>
+        </div>
+      `;
+    }
+  }
+
+  return `
+    <div class="step-title">🆕 ${biBlockHtml('chooserNewPO', 'New Purchase Order')}</div>
+    <div class="card">
+      <div class="field">
+        <label class="field-label">${biBlockHtml('selectCategory', 'Product Category')}</label>
+        <select id="newPoCategory">
+          <option value="">${escapeHtml(bi('selectPlaceholder').en)}</option>
+          ${catOptions}
+        </select>
+      </div>
+      ${catDef && catDef.subcategories && catDef.subcategories.length ? `
+        <div class="field">
+          <label class="field-label">${biBlockHtml('selectSubcategory', 'Type')}</label>
+          <select id="newPoSubcategory">
+            <option value="">${escapeHtml(bi('selectPlaceholder').en)}</option>
+            ${subOptions}
+          </select>
+        </div>
+      ` : ''}
+    </div>
+
+    <div class="card">
+      ${textField2('newPoNumber', 'poNumber', newPoState.poNumber, { required: true, placeholderKey: 'poNumberPlaceholder' })}
+      ${textField2('newPoSku', 'productSku', newPoState.sku, { required: true, placeholderKey: 'productSkuPlaceholder' })}
+      <div class="field-row">
+        <div style="flex:1">${dateField2('newPoOrderDate', 'date', newPoState.orderDate, { required: true })}</div>
+        <div style="flex:1">${textField2('newPoQuantity', 'poQuantity', newPoState.orderQuantity, { required: true, placeholderKey: 'poQuantityPlaceholder', numeric: true })}</div>
+      </div>
+      ${selectFieldPlain('newPoCreator', 'creator', newPoState.creator, OPTIONS.creators || [])}
+      ${textField2('newPoPdLead', 'productDevelopmentLead', newPoState.productDevelopmentLead, { required: true, placeholderKey: 'productDevelopmentLeadPlaceholder' })}
+    </div>
+
+    ${sizesBlock}
+
+    <div class="nav-buttons">
+      <button class="btn btn-secondary" id="btnNewPoBack">${biBlockHtml('back', 'Back')}</button>
+      <button class="btn btn-primary" id="btnNewPoSubmit">${biBlockHtml('createPo', 'Create Purchase Order')}</button>
+    </div>
+  `;
+}
+
+function textField2(id, i18nKey, value, opts = {}) {
+  const l = bi(i18nKey);
+  const ph = opts.placeholderKey ? bi(opts.placeholderKey) : { en: '', zh: '' };
+  return `
+    <div class="field" data-field="${id}">
+      <label class="field-label">${escapeHtml(l.en)} <span class="zh">${escapeHtml(l.zh)}</span>${opts.required ? '<span class="required">*</span>' : ''}</label>
+      <input type="${opts.numeric ? 'number' : 'text'}" id="${id}" value="${escapeHtml(value || '')}" placeholder="${escapeHtml(ph.en)} / ${escapeHtml(ph.zh)}" />
+    </div>
+  `;
+}
+function dateField2(id, i18nKey, value, opts = {}) {
+  const l = bi(i18nKey);
+  return `
+    <div class="field" data-field="${id}">
+      <label class="field-label">${escapeHtml(l.en)} <span class="zh">${escapeHtml(l.zh)}</span>${opts.required ? '<span class="required">*</span>' : ''}</label>
+      <input type="date" id="${id}" value="${escapeHtml(value || '')}" />
+    </div>
+  `;
+}
+function selectFieldPlain(id, i18nKey, value, optionsList) {
+  const l = bi(i18nKey);
+  const ph = bi('selectPlaceholder');
+  return `
+    <div class="field" data-field="${id}">
+      <label class="field-label">${escapeHtml(l.en)} <span class="zh">${escapeHtml(l.zh)}</span></label>
+      <select id="${id}">
+        <option value="">${escapeHtml(ph.en)} / ${escapeHtml(ph.zh)}</option>
+        ${optionsList.map((o) => `<option value="${escapeHtml(o)}" ${value === o ? 'selected' : ''}>${escapeHtml(o)}</option>`).join('')}
+      </select>
+    </div>
+  `;
+}
+
+async function checkSkuEstablishedFit() {
+  const sku = newPoState.sku.trim();
+  if (!sku || sku === newPoState.skuChecked) return;
+  try {
+    const res = await fetch(`/api/sku-established-fit/${encodeURIComponent(sku)}`);
+    const data = await res.json();
+    newPoState.establishedFit = data.fit;
+  } catch (e) {
+    console.error('Failed to check established fit', e);
+    newPoState.establishedFit = null;
+  } finally {
+    newPoState.skuChecked = sku;
+    render();
+  }
+}
+
+function attachNewPoHandlers() {
+  const bindText = (id, field, numeric) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', (e) => { newPoState[field] = e.target.value; });
+  };
+  bindText('newPoNumber', 'poNumber');
+  bindText('newPoOrderDate', 'orderDate');
+  bindText('newPoQuantity', 'orderQuantity');
+  bindText('newPoPdLead', 'productDevelopmentLead');
+
+  const skuInput = document.getElementById('newPoSku');
+  if (skuInput) {
+    skuInput.addEventListener('input', (e) => { newPoState.sku = e.target.value; });
+    skuInput.addEventListener('blur', checkSkuEstablishedFit);
+  }
+  const creatorSelect = document.getElementById('newPoCreator');
+  if (creatorSelect) creatorSelect.addEventListener('change', (e) => { newPoState.creator = e.target.value; });
+
+  const catSelect = document.getElementById('newPoCategory');
+  if (catSelect) {
+    catSelect.addEventListener('change', (e) => {
+      newPoState.category = e.target.value || null;
+      newPoState.subcategory = null;
+      render();
+    });
+  }
+  const subSelect = document.getElementById('newPoSubcategory');
+  if (subSelect) subSelect.addEventListener('change', (e) => { newPoState.subcategory = e.target.value || null; });
+
+  document.querySelectorAll('[data-po-size]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const s = el.getAttribute('data-po-size');
+      const idx = newPoState.sizesIncluded.indexOf(s);
+      if (idx > -1) newPoState.sizesIncluded.splice(idx, 1);
+      else newPoState.sizesIncluded.push(s);
+      render();
+    });
+  });
+
+  const btnBack = document.getElementById('btnNewPoBack');
+  if (btnBack) btnBack.addEventListener('click', () => { appMode = 'chooser'; render(); });
+
+  const btnSubmit = document.getElementById('btnNewPoSubmit');
+  if (btnSubmit) btnSubmit.addEventListener('click', submitNewPo);
+}
+
+async function submitNewPo() {
+  const missing = [];
+  if (!newPoState.category) missing.push('Product Category');
+  if (!newPoState.poNumber.trim()) missing.push('PO Number');
+  if (!newPoState.sku.trim()) missing.push('Product SKU');
+  if (!newPoState.orderDate) missing.push('Order Date');
+  if (!newPoState.orderQuantity) missing.push('Order Quantity');
+  if (!newPoState.productDevelopmentLead.trim()) missing.push('Product Development Lead');
+  if (missing.length) {
+    showToast('Please fill in: ' + missing.join(', '), true);
+    return;
+  }
+
+  const btn = document.getElementById('btnNewPoSubmit');
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spinner"></span>...`;
+  try {
+    const res = await fetch('/api/purchase-orders', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        poNumber: newPoState.poNumber, sku: newPoState.sku, category: newPoState.category, subcategory: newPoState.subcategory,
+        orderDate: newPoState.orderDate, creator: newPoState.creator, orderQuantity: newPoState.orderQuantity,
+        productDevelopmentLead: newPoState.productDevelopmentLead, sizesIncluded: newPoState.sizesIncluded
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showToast(data.error || 'Failed to create purchase order', true);
+      btn.disabled = false;
+      btn.innerHTML = biBlockHtml('createPo', 'Create Purchase Order');
+      return;
+    }
+    renderNewPoSuccess(data);
+  } catch (e) {
+    console.error(e);
+    showToast('Failed to create purchase order', true);
+    btn.disabled = false;
+    btn.innerHTML = biBlockHtml('createPo', 'Create Purchase Order');
+  }
+}
+
+function renderNewPoSuccess(data) {
+  const root = document.getElementById('formRoot');
+  const fullUrl = `${location.origin}${data.approvalUrl}`;
+  root.innerHTML = `
+    <div class="success-screen">
+      <div class="success-icon">✓</div>
+      <div class="success-title">${escapeHtml(bi('poCreated').en)}</div>
+      <div class="success-sub">${escapeHtml(bi('poCreated').zh)}</div>
+      <div class="card" style="text-align:left; margin-top:16px;">
+        <div class="section-title">${biBlockHtml('shareLinkTitle', 'Share this link for QA/QC Approval')}</div>
+        <input type="text" readonly value="${escapeHtml(fullUrl)}" id="approvalLinkInput" style="margin-top:8px;" onclick="this.select()" />
+        <button class="btn btn-secondary" id="btnCopyLink" style="margin-top:8px;">${escapeHtml(bi('copyLink').en)} / ${escapeHtml(bi('copyLink').zh)}</button>
+      </div>
+      <button class="btn btn-secondary" id="btnPoStartOver" style="max-width:280px; margin:16px auto 0 auto;">${biBlockHtml('startOver', 'Start New Report')}</button>
+    </div>
+  `;
+  document.getElementById('btnCopyLink').addEventListener('click', () => {
+    navigator.clipboard.writeText(fullUrl).then(() => showToast(bi('linkCopied').en + ' / ' + bi('linkCopied').zh));
+  });
+  document.getElementById('btnPoStartOver').addEventListener('click', () => {
+    Object.assign(newPoState, {
+      category: null, subcategory: null, poNumber: '', sku: '', orderDate: todayStr(), creator: '',
+      orderQuantity: '', productDevelopmentLead: '', sizesIncluded: [], establishedFit: null, skuChecked: null
+    });
+    appMode = 'chooser';
+    render();
+  });
+}
+
 function renderCategoryStep() {
   const cats = (CONFIG.categories && CONFIG.categories.categories) || {};
   const orderedKeys = CATEGORY_ORDER.filter((k) => cats[k]);
@@ -590,8 +904,8 @@ function renderCategoryStep() {
 
   return `
     <div style="display:flex; justify-content:flex-end; gap:16px; margin-bottom:4px;">
-      <a href="analytics.html" class="settings-link" title="Analytics">📊 ${escapeHtml(bi('analyticsLink').en)}</a>
-      <a href="settings.html" class="settings-link" title="Settings">⚙️ ${escapeHtml(bi('settingsTitle').en)}</a>
+      <a href="analytics.html" class="settings-link" title="Analytics">📊 ${biBlockHtml('analyticsLink', 'Analytics')}</a>
+      <a href="settings.html" class="settings-link" title="Settings">⚙️ ${biBlockHtml('settingsTitle', 'Settings')}</a>
     </div>
     <div class="step-eyebrow">${biHtml('step', 'Step')} 1 / 7</div>
     <div class="step-title">选择产品类别<span class="zh">Select Product Category</span></div>
@@ -1903,13 +2217,14 @@ function resetApp() {
     photos: { general: [], tags: [] },
     additionalIssues: []
   });
-  goTo(0);
+  appMode = 'chooser';
+  render();
 }
 
 /* ---------------- INIT ---------------- */
 
 (async function init() {
   await loadConfig();
-  updateProgress();
+  updateProgressForMode();
   render();
 })();

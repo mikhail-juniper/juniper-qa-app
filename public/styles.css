@@ -198,6 +198,27 @@ html, body {
 }
 .category-label-en { font-family: 'Lexend Deca', sans-serif; font-weight: 600; font-size: 15.5px; }
 .category-label-zh { font-size: 13px; color: var(--jc-muted); }
+
+/* --- Home page main nav cards --- */
+.home-nav-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 22px 18px;
+  background: #fff;
+  border: 2px solid var(--jc-border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  margin-bottom: 14px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.home-nav-card:hover { border-color: var(--jc-teal); background: var(--jc-mint-light); }
+.home-nav-card:active { transform: scale(0.99); }
+.home-nav-icon { font-size: 34px; flex: 0 0 auto; }
+.home-nav-title { font-family: 'Lexend Deca', sans-serif; font-weight: 700; font-size: 17px; color: var(--jc-teal-dark); }
+.home-nav-title .zh { display: block; font-size: 13px; font-weight: 500; color: var(--jc-muted); margin-top: 1px; }
+.home-nav-desc { font-size: 12.5px; color: var(--jc-muted); margin-top: 4px; }
+.home-nav-desc .zh { display: block; color: var(--jc-muted-light); }
 .subcategory-inline {
   background: var(--jc-mint-light);
   border: 2px solid var(--jc-teal);

@@ -10,6 +10,7 @@ const { buildPdf } = require('./lib/pdfBuilder');
 const { computeOverallResult, collectAllDefects } = require('./lib/passFail');
 const { getRecommendation } = require('./lib/aqlRecommendation');
 const submissionLog = require('./lib/submissionLog');
+const poStore = require('./lib/poStore');
 const analytics = require('./lib/analytics');
 let fits = require('./config/fits.json');
 const i18n = require('./config/i18n.json');
@@ -420,6 +421,67 @@ app.get('/api/analytics/category', (req, res) => {
     console.error('Failed to compute category analytics:', err);
     res.status(500).json({ error: 'Failed to compute category analytics', detail: String(err.message || err) });
   }
+});
+
+// ---- Purchase Orders: created via "New Purchase Order", the shared source of
+// truth that Pre-Production/Bulk Sampling Reporting and QA/QC Approval both
+// pre-fill against. ----
+app.post('/api/purchase-orders', (req, res) => {
+  try {
+    const body = req.body || {};
+    if (!body.poNumber || !body.sku) {
+      return res.status(400).json({ error: 'poNumber and sku are required' });
+    }
+    if (poStore.getPoByNumber(body.poNumber)) {
+      return res.status(409).json({ error: 'A PO with this number already exists' });
+    }
+    const id = uuidv4();
+
+    // If this SKU already has an established apparel fit from a prior PO,
+    // carry it forward automatically.
+    const established = body.category === 'apparel' ? poStore.getEstablishedFitForSku(body.sku) : null;
+
+    const entry = poStore.createPo({
+      id,
+      poNumber: body.poNumber,
+      sku: body.sku,
+      category: body.category || null,
+      subcategory: body.subcategory || null,
+      orderDate: body.orderDate || null,
+      creator: body.creator || null,
+      orderQuantity: body.orderQuantity ? parseInt(body.orderQuantity, 10) : null,
+      productDevelopmentLead: body.productDevelopmentLead || null,
+      sizesIncluded: Array.isArray(body.sizesIncluded) ? body.sizesIncluded : [],
+      fitKey: established ? established.fitKey : null,
+      fitSizes: established ? established.sizes : [],
+      createdAt: new Date().toISOString()
+    });
+    res.json({ ok: true, po: entry, approvalUrl: `/approval.html?po=${encodeURIComponent(id)}` });
+  } catch (err) {
+    console.error('Failed to create purchase order:', err);
+    res.status(500).json({ error: 'Failed to create purchase order', detail: String(err.message || err) });
+  }
+});
+
+app.get('/api/purchase-orders/:id', (req, res) => {
+  const po = poStore.getPoById(req.params.id);
+  if (!po) return res.status(404).json({ error: 'Purchase order not found' });
+  res.json({ po });
+});
+
+app.get('/api/purchase-orders', (req, res) => {
+  if (req.query.poNumber) {
+    const po = poStore.getPoByNumber(req.query.poNumber);
+    return res.json({ pos: po ? [po] : [] });
+  }
+  if (req.query.sku) {
+    return res.json({ pos: poStore.getPosBySku(req.query.sku) });
+  }
+  res.status(400).json({ error: 'poNumber or sku query param is required' });
+});
+
+app.get('/api/sku-established-fit/:sku', (req, res) => {
+  res.json({ fit: poStore.getEstablishedFitForSku(req.params.sku) });
 });
 
 app.listen(PORT, () => {
