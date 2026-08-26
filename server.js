@@ -473,6 +473,7 @@ app.post('/api/purchase-orders', (req, res) => {
       orderDate: body.orderDate || null,
       creator: body.creator || null,
       orderQuantity: body.orderQuantity ? parseInt(body.orderQuantity, 10) : null,
+      productTitle: body.productTitle || null,
       productDevelopmentLead: body.productDevelopmentLead || null,
       sizesIncluded: Array.isArray(body.sizesIncluded) ? body.sizesIncluded : [],
       fitKey: established ? established.fitKey : null,

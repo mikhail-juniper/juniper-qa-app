@@ -13,6 +13,7 @@ const STAGE_LABELS = {
 const approvalState = {
   stage: null, // 'sample' | 'preProduction' | 'bulk'
   landingChoice: null, // null (show landing) | 'approval' (go straight to PO entry)
+  pdView: false, // true when accessed via the persistent PD review link or the PD landing option
   poNumberInput: '',
   po: null,
   photoSet: null,
@@ -132,6 +133,7 @@ async function initFromLink() {
     const res = await fetch(`/api/purchase-orders/${encodeURIComponent(poId)}`);
     if (!res.ok) return false;
     const { po } = await res.json();
+    approvalState.pdView = true;
     const ok = await loadApprovalForPo(po.poNumber);
     return ok;
   } catch (e) {
@@ -155,24 +157,30 @@ function renderLanding() {
   return `
     ${backHomeLink()}
     <div class="step-title">质检审批 QA/QC Approval</div>
-    <a href="reporting.html?mode=newPO" class="home-nav-card" style="text-decoration:none; display:flex;">
-      <div class="home-nav-icon">🆕</div>
+    <div class="home-nav-card" data-landing="submit">
+      <div class="home-nav-icon">📤</div>
       <div class="home-nav-text">
-        <div class="home-nav-title">${biBlockHtml('chooserNewPO', 'New Purchase Order')}</div>
-        <div class="home-nav-desc">${biBlockHtml('chooserNewPODesc', 'Log a new PO and get a link to share for QA/QC Approval')}</div>
+        <div class="home-nav-title">${biBlockHtml('submitApprovalPhotosTitle', 'Submit Approval Photos')}</div>
+        <div class="home-nav-desc">${biBlockHtml('submitApprovalPhotosDesc', 'For the Juniper China team - upload photos and notes')}</div>
       </div>
-    </a>
-    <div class="home-nav-card" data-landing="approval">
+    </div>
+    <div class="home-nav-card" data-landing="pd">
       <div class="home-nav-icon">✅</div>
       <div class="home-nav-text">
-        <div class="home-nav-title">${biBlockHtml('homeApprovalTitle', 'QA/QC Approval')}</div>
+        <div class="home-nav-title">${biBlockHtml('homeApprovalTitle', 'Product Development Approval')}</div>
+        <div class="home-nav-desc">${biBlockHtml('pdReviewDesc', 'For Product Development - review and approve')}</div>
       </div>
     </div>
   `;
 }
 function attachLandingHandlers() {
-  const card = document.querySelector('[data-landing="approval"]');
-  if (card) card.addEventListener('click', () => { approvalState.landingChoice = 'approval'; render(); });
+  document.querySelectorAll('[data-landing]').forEach((el) => {
+    el.addEventListener('click', () => {
+      approvalState.pdView = el.getAttribute('data-landing') === 'pd';
+      approvalState.landingChoice = 'approval';
+      render();
+    });
+  });
 }
 
 function backHomeLink() {
@@ -266,48 +274,45 @@ function renderPhotoGalleryLarge(photosMap) {
 /** Side-by-side: Approved Sample photo(s) for a slot next to the current
  *  stage's photo(s) for that same slot - per size for apparel, since
  *  Pre-Production/Bulk photos are captured per size there. */
-function renderPhotoComparisonLarge(samplePhotos, stagePhotos, category, sizesIncluded) {
-  samplePhotos = samplePhotos || {};
-  stagePhotos = stagePhotos || {};
-
+/** columns: array of { label: {en,zh}, photos: {slotKey: [urls]} }, in display
+ *  order (Approved Sample first, then each subsequent stage) - 2 columns for
+ *  Pre-Production Approval, 3 for Bulk Approval. */
+function renderPhotoComparisonLarge(columns, category, sizesIncluded) {
   if (category === 'apparel' && sizesIncluded && sizesIncluded.length) {
     const frontBackSlots = (approvalState.photoSet || []).filter((s) => s.key === 'front' || s.key === 'back');
     return sizesIncluded.map((size) => `
       <div style="margin-top:14px; padding-top:14px; border-top:1px dashed var(--jc-border);">
         <div class="section-photos-label" style="font-size:14px;">${escapeHtml(size)}</div>
-        ${frontBackSlots.map((slot) => {
-          const sampleUrls = samplePhotos[slot.key] || [];
-          const stageUrls = stagePhotos[`${slot.key}__${size}`] || [];
-          return `
-            <div class="photo-compare-row">
-              <div class="photo-compare-col">
-                <div class="photo-compare-col-label">${escapeHtml(bi('approvedSample').en)} · ${escapeHtml(slot.label_zh)} ${escapeHtml(slot.label_en)}</div>
-                ${sampleUrls.length ? sampleUrls.map((u) => `<img src="${escapeHtml(u)}" class="js-lightbox" />`).join('') : `<div class="section-help">${escapeHtml(bi('noPhotosYet').en)}</div>`}
-              </div>
-              <div class="photo-compare-col">
-                <div class="photo-compare-col-label">${escapeHtml(bi('thisStage').en)} · ${escapeHtml(slot.label_zh)} ${escapeHtml(slot.label_en)}</div>
-                ${stageUrls.length ? stageUrls.map((u) => `<img src="${escapeHtml(u)}" class="js-lightbox" />`).join('') : `<div class="section-help">${escapeHtml(bi('noPhotosYet').en)}</div>`}
-              </div>
-            </div>
-          `;
-        }).join('')}
+        ${frontBackSlots.map((slot) => `
+          <div class="photo-compare-row">
+            ${columns.map((col, idx) => {
+              // Approved Sample photos aren't captured per-size, every later
+              // stage's photos are (photo_front__SizeName).
+              const urls = idx === 0 ? (col.photos[slot.key] || []) : (col.photos[`${slot.key}__${size}`] || []);
+              return `
+                <div class="photo-compare-col">
+                  <div class="photo-compare-col-label">${escapeHtml(col.label.en)} ${escapeHtml(col.label.zh)} · ${escapeHtml(slot.label_zh)} ${escapeHtml(slot.label_en)}</div>
+                  ${urls.length ? urls.map((u) => `<img src="${escapeHtml(u)}" class="js-lightbox" />`).join('') : `<div class="section-help">${escapeHtml(bi('noPhotosYet').en)}</div>`}
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `).join('')}
       </div>
     `).join('');
   }
 
-  const allSlots = [...new Set([...Object.keys(samplePhotos), ...Object.keys(stagePhotos)])];
+  const allSlots = [...new Set(columns.flatMap((c) => Object.keys(c.photos)))];
   return allSlots.map((slotKey) => {
     const label = photoSetLabelFor(slotKey);
     return `
       <div class="photo-compare-row">
-        <div class="photo-compare-col">
-          <div class="photo-compare-col-label">${escapeHtml(bi('approvedSample').en)} · ${escapeHtml(label.en)} ${escapeHtml(label.zh)}</div>
-          ${(samplePhotos[slotKey] || []).map((u) => `<img src="${escapeHtml(u)}" class="js-lightbox" />`).join('') || `<div class="section-help">${escapeHtml(bi('noPhotosYet').en)}</div>`}
-        </div>
-        <div class="photo-compare-col">
-          <div class="photo-compare-col-label">${escapeHtml(bi('thisStage').en)} · ${escapeHtml(label.en)} ${escapeHtml(label.zh)}</div>
-          ${(stagePhotos[slotKey] || []).map((u) => `<img src="${escapeHtml(u)}" class="js-lightbox" />`).join('') || `<div class="section-help">${escapeHtml(bi('noPhotosYet').en)}</div>`}
-        </div>
+        ${columns.map((col) => `
+          <div class="photo-compare-col">
+            <div class="photo-compare-col-label">${escapeHtml(col.label.en)} ${escapeHtml(col.label.zh)} · ${escapeHtml(label.en)} ${escapeHtml(label.zh)}</div>
+            ${(col.photos[slotKey] || []).map((u) => `<img src="${escapeHtml(u)}" class="js-lightbox" />`).join('') || `<div class="section-help">${escapeHtml(bi('noPhotosYet').en)}</div>`}
+          </div>
+        `).join('')}
       </div>
     `;
   }).join('');
@@ -398,6 +403,8 @@ function renderStageScreen() {
   let body;
   if (stageData && stageData.submitted) {
     body = renderSubmittedStage(stageData);
+  } else if (approvalState.pdView) {
+    body = `<div class="card"><div class="section-help">${escapeHtml(bi('notReadyForReview').en)}<br/>${escapeHtml(bi('notReadyForReview').zh)}</div></div>`;
   } else if (approvalState.stage === 'sample') {
     body = renderSampleApprovalForm();
   } else {
@@ -522,13 +529,33 @@ function selectField3(id, i18nKey, value, optionsList) {
 
 /* ---- Pre-Production / Bulk Approval form ---- */
 function renderPrePorBulkForm() {
-  const prior = approvalState.approval.sampleApproval;
-  const referenceBlock = prior && prior.submitted ? `
-    <div class="card">
-      <div class="section-title">${biBlockHtml('sampleApprovalReference', 'Sample Approval Reference')}</div>
-      ${renderPhotoGalleryLarge(prior.data.photos || {})}
-    </div>
-  ` : `<div class="card"><div class="section-help">${escapeHtml(bi('noSampleApprovalYet').en)}<br/>${escapeHtml(bi('noSampleApprovalYet').zh)}</div></div>`;
+  const sample = approvalState.approval.sampleApproval;
+  const preProduction = approvalState.approval.preProductionApproval;
+  const isBulkStage = approvalState.stage === 'bulk';
+
+  let referenceBlock;
+  if (!sample || !sample.submitted) {
+    referenceBlock = `<div class="card"><div class="section-help">${escapeHtml(bi('noSampleApprovalYet').en)}<br/>${escapeHtml(bi('noSampleApprovalYet').zh)}</div></div>`;
+  } else if (isBulkStage && preProduction && preProduction.submitted) {
+    // Bulk: show both prior sets side by side for reference while uploading.
+    const columns = [
+      { label: bi('approvedSample', 'Approved Sample'), photos: sample.data.photos || {} },
+      { label: bi('preProductionApprovalTitle', 'Pre-Production Approval'), photos: preProduction.data.photos || {} }
+    ];
+    referenceBlock = `
+      <div class="card">
+        <div class="section-title">${biBlockHtml('priorApprovalsReference', 'Prior Approvals Reference')}</div>
+        ${renderPhotoComparisonLarge(columns, approvalState.po.category, approvalState.po.sizesIncluded)}
+      </div>
+    `;
+  } else {
+    referenceBlock = `
+      <div class="card">
+        <div class="section-title">${biBlockHtml('sampleApprovalReference', 'Sample Approval Reference')}</div>
+        ${renderPhotoGalleryLarge(sample.data.photos || {})}
+      </div>
+    `;
+  }
 
   const reportBlock = renderReportingReferenceBlock();
 
@@ -579,15 +606,25 @@ function renderReportingReferenceBlock() {
 /* ---- Submitted stage: show data read-back + PD comments ---- */
 function renderSubmittedStage(stageData) {
   const sample = approvalState.approval.sampleApproval;
+  const preProduction = approvalState.approval.preProductionApproval;
   const samplePhotos = (sample && sample.data && sample.data.photos) || {};
   const isSampleStage = approvalState.stage === 'sample';
+  const isBulkStage = approvalState.stage === 'bulk';
+
+  let comparisonColumns = [{ label: bi('approvedSample', 'Approved Sample'), photos: samplePhotos }];
+  if (isBulkStage) {
+    comparisonColumns.push({ label: bi('preProductionApprovalTitle', 'Pre-Production Approval'), photos: (preProduction && preProduction.data && preProduction.data.photos) || {} });
+  }
+  if (!isSampleStage) {
+    comparisonColumns.push({ label: bi('thisStage', 'This Stage'), photos: stageData.data.photos });
+  }
 
   const referenceBlock = `
     <div class="card">
       <div class="section-title">${biBlockHtml('approvedSamplePhotosReference', 'Approved Sample Photos')}</div>
       ${isSampleStage
         ? renderPhotoGalleryLarge(samplePhotos)
-        : renderPhotoComparisonLarge(samplePhotos, stageData.data.photos, approvalState.po.category, approvalState.po.sizesIncluded)}
+        : renderPhotoComparisonLarge(comparisonColumns, approvalState.po.category, approvalState.po.sizesIncluded)}
     </div>
   `;
 
@@ -620,7 +657,6 @@ function renderSubmittedStage(stageData) {
           <label class="field-label">${biBlockHtml('approvalStatusLabel', 'Approval')}</label>
           <select id="approvalStatusSelect">
             <option value="">${escapeHtml(bi('selectPlaceholder').en)}</option>
-            <option value="general" ${approvalState.approvalStatus === 'general' ? 'selected' : ''}>${escapeHtml(bi('statusGeneral').en)} ${escapeHtml(bi('statusGeneral').zh)}</option>
             <option value="minorIssue" ${approvalState.approvalStatus === 'minorIssue' ? 'selected' : ''}>${escapeHtml(bi('statusMinorIssue').en)} ${escapeHtml(bi('statusMinorIssue').zh)}</option>
             <option value="majorCriticalIssue" ${approvalState.approvalStatus === 'majorCriticalIssue' ? 'selected' : ''}>${escapeHtml(bi('statusMajorCriticalIssue').en)} ${escapeHtml(bi('statusMajorCriticalIssue').zh)}</option>
             <option value="approved" ${approvalState.approvalStatus === 'approved' ? 'selected' : ''}>${escapeHtml(bi('statusApproved').en)} ${escapeHtml(bi('statusApproved').zh)}</option>
@@ -640,14 +676,12 @@ function renderSubmittedStage(stageData) {
 /* ---------------- HANDLERS ---------------- */
 
 function approvalStatusLabelKey(status) {
-  if (status === 'general') return 'statusGeneral';
   if (status === 'minorIssue') return 'statusMinorIssue';
   if (status === 'majorCriticalIssue') return 'statusMajorCriticalIssue';
   if (status === 'approved') return 'statusApproved';
   return 'statusGeneral';
 }
 function approvalStatusColorClass(status) {
-  if (status === 'general') return 'comment-general';
   if (status === 'minorIssue') return 'comment-minor';
   if (status === 'majorCriticalIssue') return 'comment-major';
   if (status === 'approved') return 'comment-approved';
@@ -671,12 +705,32 @@ function attachStageHandlers() {
 
   const btnUsePrior = document.getElementById('btnUsePriorSample');
   if (btnUsePrior) {
-    btnUsePrior.addEventListener('click', () => {
+    btnUsePrior.addEventListener('click', async () => {
       const prior = approvalState.priorSampleApproval.data;
       approvalState.factoryCode = prior.factoryCode || '';
       approvalState.qaLead = prior.qaLead || '';
       approvalState.productRisk = prior.productRisk || 'medium';
       if (prior.sizing) approvalState.fit = prior.sizing.fit || '';
+
+      // Also copy the Approved Sample Photos themselves (only these - not any
+      // other stage's photos) by fetching each one back as a file so it flows
+      // through the normal upload path when this stage gets submitted.
+      btnUsePrior.disabled = true;
+      showToast(bi('processingPhotos').en);
+      const priorPhotos = prior.photos || {};
+      for (const slotKey of Object.keys(priorPhotos)) {
+        for (const url of priorPhotos[slotKey]) {
+          try {
+            const res = await fetch(url);
+            const blob = await res.blob();
+            blob.name = `${slotKey}.jpg`;
+            blob._url = URL.createObjectURL(blob);
+            if (!approvalState.photos[slotKey]) approvalState.photos[slotKey] = [];
+            approvalState.photos[slotKey].push(blob);
+          } catch (e) { console.error('Failed to copy photo', url, e); }
+        }
+      }
+
       showToast(bi('copiedFromPrior').en + ' / ' + bi('copiedFromPrior').zh);
       render();
     });

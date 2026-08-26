@@ -36,6 +36,14 @@ function render() {
       <a href="settings.html" class="settings-link" title="Settings">⚙️ ${biBlockHtml('settingsTitle', 'Settings')}</a>
     </div>
 
+    <div class="home-nav-card" onclick="location.href='reporting.html?mode=newPO'">
+      <div class="home-nav-icon">🆕</div>
+      <div class="home-nav-text">
+        <div class="home-nav-title">${biBlockHtml('chooserNewPO', 'New Purchase Order')}</div>
+        <div class="home-nav-desc">${biBlockHtml('chooserNewPODesc', 'Log a new PO and get a link to share for QA/QC Approval')}</div>
+      </div>
+    </div>
+
     <div class="home-nav-card" onclick="location.href='reporting.html'">
       <div class="home-nav-icon">📋</div>
       <div class="home-nav-text">
@@ -47,7 +55,7 @@ function render() {
     <div class="home-nav-card" onclick="location.href='approval.html'">
       <div class="home-nav-icon">✅</div>
       <div class="home-nav-text">
-        <div class="home-nav-title">${biBlockHtml('homeApprovalTitle', 'QA/QC Approval')}</div>
+        <div class="home-nav-title">${biBlockHtml('homeApprovalTitle', 'Product Development Approval')}</div>
         <div class="home-nav-desc">${biBlockHtml('homeApprovalDesc', 'Share reference photos with Product Development for sign-off')}</div>
       </div>
     </div>
