@@ -588,7 +588,7 @@ app.post('/api/approval/:poNumber/:stage/comment', upload.any(), (req, res) => {
     const text = ((req.body && req.body.text) || '').trim();
     const author = ((req.body && req.body.author) || '').trim();
     const approvalStatus = ((req.body && req.body.approvalStatus) || '').trim();
-    if (!text || !author) return res.status(400).json({ error: 'text and author are required' });
+    if (!author || !approvalStatus) return res.status(400).json({ error: 'author and approvalStatus are required' });
 
     const photos = saveApprovalPhotos(req.files, `${req.params.poNumber}_${req.params.stage}_comment`);
     const entry = approvalStore.addPdComment(req.params.poNumber, stageKey, { text, author, approvalStatus, photos });

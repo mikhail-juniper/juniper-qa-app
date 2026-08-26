@@ -25,7 +25,7 @@ function emptyDefect() { return { id: genId(), description: '', severity: 'minor
 const state = {
   category: null,
   subcategory: null,
-  sku: '', poSizesIncluded: [], pdNotes: [],
+  sku: '', poSizesIncluded: [], pdNotes: [], approvalSizingData: null,
   poNumber: '', factoryCode: '', date: todayStr(), qaLead: '',
   creator: '', productTitle: '', qaType: 'pre_production',
   poQuantity: '', inspectionLevel: 'II', majorAql: 2.5, minorAql: 4.0,
@@ -593,13 +593,6 @@ function renderChooserScreen() {
     <div class="step-title">质检报告 QA/QC Reporting</div>
     <div class="section-help" style="margin-bottom:16px;">${escapeHtml(bi('chooserHelp').en)}<br/>${escapeHtml(bi('chooserHelp').zh)}</div>
 
-    <div class="home-nav-card" data-chooser="newPO">
-      <div class="home-nav-icon">🆕</div>
-      <div class="home-nav-text">
-        <div class="home-nav-title">${biBlockHtml('chooserNewPO', 'New Purchase Order')}</div>
-        <div class="home-nav-desc">${biBlockHtml('chooserNewPODesc', 'Log a new PO and get a link to share for QA/QC Approval')}</div>
-      </div>
-    </div>
     <div class="home-nav-card" data-chooser="pre_production">
       <div class="home-nav-icon">🔍</div>
       <div class="home-nav-text">
@@ -921,7 +914,10 @@ async function submitPoLookup() {
         if (sample && sample.submitted) {
           state.factoryCode = sample.data.factoryCode || '';
           state.productRisk = sample.data.productRisk || 'medium';
-          if (state.category === 'apparel' && sample.data.sizing) state.categoryData.fit = sample.data.sizing.fit || '';
+          if (sample.data.sizing) {
+            state.approvalSizingData = sample.data.sizing;
+            if (state.category === 'apparel') state.categoryData.fit = sample.data.sizing.fit || '';
+          }
         }
         // Collect every PD comment across all three stages for the Notes section.
         const allComments = [];
@@ -1511,8 +1507,28 @@ function fitsForCurrentSubcategory() {
 
 const OTHER_FIT_VALUE = '__other_fit__';
 
+function renderApprovalSizingReferenceTile() {
+  if (!state.approvalSizingData) return '';
+  const d = state.approvalSizingData;
+  let content = '';
+  if (d.fit) {
+    const fitDef = CONFIG.fits && CONFIG.fits.fits && CONFIG.fits.fits[d.fit];
+    content = fitDef ? `${fitDef.label_zh} ${fitDef.label_en}` : d.fit;
+  } else if (d.notes) {
+    content = d.notes;
+  }
+  if (!content) return '';
+  return `
+    <div class="card" style="background:var(--jc-mint-light); border-color:var(--jc-teal);">
+      <div class="section-title">${biBlockHtml('approvalSizingReferenceTitle', 'Sizing (from QA/QC Approval)')}</div>
+      <div class="section-help" style="color:var(--jc-text);">${escapeHtml(content)}</div>
+    </div>
+  `;
+}
+
 function renderSizingStep() {
   let body = '';
+  body += renderApprovalSizingReferenceTile();
   if (state.category === 'apparel') {
     body += renderFitPicker();
     if (state.categoryData.fit === OTHER_FIT_VALUE) {
@@ -2307,7 +2323,7 @@ function resetApp() {
   priorReportsPoChecked = null;
   Object.assign(state, {
     category: null, subcategory: null,
-    sku: '', poSizesIncluded: [], pdNotes: [],
+    sku: '', poSizesIncluded: [], pdNotes: [], approvalSizingData: null,
     poNumber: '', factoryCode: '', date: todayStr(), qaLead: '',
     creator: '', productTitle: '', qaType: 'pre_production',
     poQuantity: '', inspectionLevel: 'II', majorAql: 2.5, minorAql: 4.0,
@@ -2340,6 +2356,8 @@ function resetApp() {
 
 (async function init() {
   await loadConfig();
+  const params = new URLSearchParams(location.search);
+  if (params.get('mode') === 'newPO') appMode = 'newPO';
   updateProgressForMode();
   render();
 })();

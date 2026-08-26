@@ -2,42 +2,182 @@
   "_readme": "Named photo slot sets for QA/QC Approval, resolved per product. 'apparel' and 'plush' are picked by top-level category; 'book' is picked when the subcategory is Notebook/Sketchbook (accessories); everything else uses 'default'. Apparel is per-size for Pre-Production/Bulk Approval (Front+Back for each size in the PO) - see approval.js.",
   "sets": {
     "plush": [
-      { "key": "front", "label_en": "Front", "label_zh": "正面" },
-      { "key": "back", "label_en": "Back", "label_zh": "背面" },
-      { "key": "left", "label_en": "Left Side", "label_zh": "左侧" },
-      { "key": "right", "label_en": "Right Side", "label_zh": "右侧" },
-      { "key": "packagingTag", "label_en": "Packaging / Tag", "label_zh": "包装 / 吊牌" },
-      { "key": "accessories", "label_en": "Accessories", "label_zh": "配件" },
-      { "key": "bag", "label_en": "Bag", "label_zh": "包装袋" },
-      { "key": "additional", "label_en": "Additional Photos", "label_zh": "其他照片" }
+      {
+        "key": "front",
+        "label_en": "Front",
+        "label_zh": "\u6b63\u9762"
+      },
+      {
+        "key": "back",
+        "label_en": "Back",
+        "label_zh": "\u80cc\u9762"
+      },
+      {
+        "key": "left",
+        "label_en": "Left Side",
+        "label_zh": "\u5de6\u4fa7"
+      },
+      {
+        "key": "right",
+        "label_en": "Right Side",
+        "label_zh": "\u53f3\u4fa7"
+      },
+      {
+        "key": "packaging",
+        "label_en": "Packaging",
+        "label_zh": "\u5305\u88c5"
+      },
+      {
+        "key": "tags",
+        "label_en": "Tags",
+        "label_zh": "\u540a\u724c"
+      },
+      {
+        "key": "accessories",
+        "label_en": "Accessories",
+        "label_zh": "\u914d\u4ef6"
+      },
+      {
+        "key": "bag",
+        "label_en": "Bag",
+        "label_zh": "\u5305\u88c5\u888b"
+      },
+      {
+        "key": "additional",
+        "label_en": "Additional Photos",
+        "label_zh": "\u5176\u4ed6\u7167\u7247"
+      }
     ],
     "apparel": [
-      { "key": "front", "label_en": "Front", "label_zh": "正面" },
-      { "key": "back", "label_en": "Back", "label_zh": "背面" },
-      { "key": "stitching", "label_en": "Stitching", "label_zh": "缝线" },
-      { "key": "washTag", "label_en": "Washing Tag", "label_zh": "水洗唛" },
-      { "key": "hemTag", "label_en": "Hem Tag", "label_zh": "下摆标签" },
-      { "key": "packagingHangTag", "label_en": "Packaging / Hang Tag", "label_zh": "包装 / 挂牌" }
+      {
+        "key": "front",
+        "label_en": "Front",
+        "label_zh": "\u6b63\u9762"
+      },
+      {
+        "key": "back",
+        "label_en": "Back",
+        "label_zh": "\u80cc\u9762"
+      },
+      {
+        "key": "stitching",
+        "label_en": "Stitching",
+        "label_zh": "\u7f1d\u7ebf"
+      },
+      {
+        "key": "washTag",
+        "label_en": "Washing Tag",
+        "label_zh": "\u6c34\u6d17\u551b"
+      },
+      {
+        "key": "hemTag",
+        "label_en": "Hem Tag",
+        "label_zh": "\u4e0b\u6446\u6807\u7b7e"
+      },
+      {
+        "key": "packaging",
+        "label_en": "Packaging",
+        "label_zh": "\u5305\u88c5"
+      },
+      {
+        "key": "hangTag",
+        "label_en": "Hang Tag",
+        "label_zh": "\u6302\u724c"
+      }
     ],
     "book": [
-      { "key": "front", "label_en": "Front", "label_zh": "正面" },
-      { "key": "back", "label_en": "Back", "label_zh": "背面" },
-      { "key": "left", "label_en": "Left Side", "label_zh": "左侧" },
-      { "key": "right", "label_en": "Right Side", "label_zh": "右侧" },
-      { "key": "packagingTag", "label_en": "Packaging / Tag", "label_zh": "包装 / 吊牌" },
-      { "key": "accessories", "label_en": "Accessories", "label_zh": "配件" },
-      { "key": "interior", "label_en": "Interior", "label_zh": "内页" },
-      { "key": "additional", "label_en": "Additional Photos", "label_zh": "其他照片" }
+      {
+        "key": "front",
+        "label_en": "Front",
+        "label_zh": "\u6b63\u9762"
+      },
+      {
+        "key": "back",
+        "label_en": "Back",
+        "label_zh": "\u80cc\u9762"
+      },
+      {
+        "key": "left",
+        "label_en": "Left Side",
+        "label_zh": "\u5de6\u4fa7"
+      },
+      {
+        "key": "right",
+        "label_en": "Right Side",
+        "label_zh": "\u53f3\u4fa7"
+      },
+      {
+        "key": "packaging",
+        "label_en": "Packaging",
+        "label_zh": "\u5305\u88c5"
+      },
+      {
+        "key": "tags",
+        "label_en": "Tags",
+        "label_zh": "\u540a\u724c"
+      },
+      {
+        "key": "accessories",
+        "label_en": "Accessories",
+        "label_zh": "\u914d\u4ef6"
+      },
+      {
+        "key": "interior",
+        "label_en": "Interior",
+        "label_zh": "\u5185\u9875"
+      },
+      {
+        "key": "additional",
+        "label_en": "Additional Photos",
+        "label_zh": "\u5176\u4ed6\u7167\u7247"
+      }
     ],
     "default": [
-      { "key": "front", "label_en": "Front", "label_zh": "正面" },
-      { "key": "back", "label_en": "Back", "label_zh": "背面" },
-      { "key": "left", "label_en": "Left Side", "label_zh": "左侧" },
-      { "key": "right", "label_en": "Right Side", "label_zh": "右侧" },
-      { "key": "packagingTag", "label_en": "Packaging / Tag", "label_zh": "包装 / 吊牌" },
-      { "key": "accessories", "label_en": "Accessories", "label_zh": "配件" },
-      { "key": "bag", "label_en": "Bag", "label_zh": "包装袋" },
-      { "key": "additional", "label_en": "Additional Photos", "label_zh": "其他照片" }
+      {
+        "key": "front",
+        "label_en": "Front",
+        "label_zh": "\u6b63\u9762"
+      },
+      {
+        "key": "back",
+        "label_en": "Back",
+        "label_zh": "\u80cc\u9762"
+      },
+      {
+        "key": "left",
+        "label_en": "Left Side",
+        "label_zh": "\u5de6\u4fa7"
+      },
+      {
+        "key": "right",
+        "label_en": "Right Side",
+        "label_zh": "\u53f3\u4fa7"
+      },
+      {
+        "key": "packaging",
+        "label_en": "Packaging",
+        "label_zh": "\u5305\u88c5"
+      },
+      {
+        "key": "tags",
+        "label_en": "Tags",
+        "label_zh": "\u540a\u724c"
+      },
+      {
+        "key": "accessories",
+        "label_en": "Accessories",
+        "label_zh": "\u914d\u4ef6"
+      },
+      {
+        "key": "bag",
+        "label_en": "Bag",
+        "label_zh": "\u5305\u88c5\u888b"
+      },
+      {
+        "key": "additional",
+        "label_en": "Additional Photos",
+        "label_zh": "\u5176\u4ed6\u7167\u7247"
+      }
     ]
   }
 }

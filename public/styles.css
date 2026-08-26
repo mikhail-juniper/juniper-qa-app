@@ -376,6 +376,16 @@ input:focus, select:focus, textarea:focus {
   outline: 2px solid var(--jc-fail);
   outline-offset: 2px;
 }
+
+/* --- PD comment color coding (overrides the default red .defect-card look) --- */
+.comment-card.comment-general { background: #FFFBEA; border-color: #E8C547; }
+.comment-card.comment-minor { background: #FFF3E8; border-color: #D35400; }
+.comment-card.comment-major { background: var(--jc-fail-bg); border-color: var(--jc-fail); }
+.comment-card.comment-approved { background: var(--jc-mint-light); border-color: var(--jc-teal); }
+.comment-badge-comment-general { color: #92720C; border-color: #E8C547; background: #FFFBEA; }
+.comment-badge-comment-minor { color: #D35400; border-color: #D35400; background: #FFF3E8; }
+.comment-badge-comment-major { color: var(--jc-fail); border-color: var(--jc-fail); background: var(--jc-fail-bg); }
+.comment-badge-comment-approved { color: var(--jc-teal-dark); border-color: var(--jc-teal); background: var(--jc-mint-light); }
 .remove-defect-btn {
   background: none;
   border: none;

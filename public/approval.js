@@ -12,6 +12,7 @@ const STAGE_LABELS = {
 
 const approvalState = {
   stage: null, // 'sample' | 'preProduction' | 'bulk'
+  landingChoice: null, // null (show landing) | 'approval' (go straight to PO entry)
   poNumberInput: '',
   po: null,
   photoSet: null,
@@ -109,7 +110,18 @@ async function loadApprovalForPo(poNumber) {
   approvalState.approval = data.approval;
   approvalState.priorSampleApproval = data.priorSampleApproval;
   approvalState.reportingHistory = data.reportingHistory;
+  approvalState.stage = determineCurrentStage(data.approval);
   return true;
+}
+
+/** The PO is really just one continuous approval process - this picks up
+ *  wherever it was left off: the first stage that hasn't been submitted yet,
+ *  or Bulk (the last stage) if everything's already done, so there's always
+ *  exactly one obvious "current" screen to show. */
+function determineCurrentStage(approval) {
+  if (!approval.sampleApproval.submitted) return 'sample';
+  if (!approval.preProductionApproval.submitted) return 'preProduction';
+  return 'bulk';
 }
 
 async function initFromLink() {
@@ -120,7 +132,6 @@ async function initFromLink() {
     const res = await fetch(`/api/purchase-orders/${encodeURIComponent(poId)}`);
     if (!res.ok) return false;
     const { po } = await res.json();
-    approvalState.stage = 'sample';
     const ok = await loadApprovalForPo(po.poNumber);
     return ok;
   } catch (e) {
@@ -133,54 +144,45 @@ async function initFromLink() {
 
 function render() {
   const root = document.getElementById('approvalRoot');
-  if (!approvalState.stage) { root.innerHTML = renderChooser(); attachChooserHandlers(); return; }
+  if (!approvalState.po && !approvalState.landingChoice) { root.innerHTML = renderLanding(); attachLandingHandlers(); return; }
   if (!approvalState.po) { root.innerHTML = renderPoEntry(); attachPoEntryHandlers(); return; }
   root.innerHTML = renderStageScreen();
   attachStageHandlers();
   attachLightboxHandlers();
 }
 
-function backHomeLink() {
-  return `<a href="index.html" class="btn btn-secondary" style="display:inline-block;width:auto;padding:10px 18px;margin-bottom:16px;text-decoration:none;">← ${biBlockHtml('goHome', 'Go Home')}</a>`;
-}
-
-function renderChooser() {
+function renderLanding() {
   return `
     ${backHomeLink()}
     <div class="step-title">质检审批 QA/QC Approval</div>
-    <div class="home-nav-card" data-stage="sample">
-      <div class="home-nav-icon">📸</div>
+    <a href="reporting.html?mode=newPO" class="home-nav-card" style="text-decoration:none; display:flex;">
+      <div class="home-nav-icon">🆕</div>
       <div class="home-nav-text">
-        <div class="home-nav-title">${biBlockHtml('sampleApprovalTitle', 'Sample Approval')}</div>
+        <div class="home-nav-title">${biBlockHtml('chooserNewPO', 'New Purchase Order')}</div>
+        <div class="home-nav-desc">${biBlockHtml('chooserNewPODesc', 'Log a new PO and get a link to share for QA/QC Approval')}</div>
       </div>
-    </div>
-    <div class="home-nav-card" data-stage="preProduction">
-      <div class="home-nav-icon">🔍</div>
+    </a>
+    <div class="home-nav-card" data-landing="approval">
+      <div class="home-nav-icon">✅</div>
       <div class="home-nav-text">
-        <div class="home-nav-title">${biBlockHtml('preProductionApprovalTitle', 'Pre-Production Approval')}</div>
-      </div>
-    </div>
-    <div class="home-nav-card" data-stage="bulk">
-      <div class="home-nav-icon">📦</div>
-      <div class="home-nav-text">
-        <div class="home-nav-title">${biBlockHtml('bulkApprovalTitle', 'Bulk Approval')}</div>
+        <div class="home-nav-title">${biBlockHtml('homeApprovalTitle', 'QA/QC Approval')}</div>
       </div>
     </div>
   `;
 }
-function attachChooserHandlers() {
-  document.querySelectorAll('[data-stage]').forEach((el) => {
-    el.addEventListener('click', () => {
-      approvalState.stage = el.getAttribute('data-stage');
-      render();
-    });
-  });
+function attachLandingHandlers() {
+  const card = document.querySelector('[data-landing="approval"]');
+  if (card) card.addEventListener('click', () => { approvalState.landingChoice = 'approval'; render(); });
+}
+
+function backHomeLink() {
+  return `<a href="index.html" class="btn btn-secondary" style="display:inline-block;width:auto;padding:10px 18px;margin-bottom:16px;text-decoration:none;">← ${biBlockHtml('goHome', 'Go Home')}</a>`;
 }
 
 function renderPoEntry() {
   return `
     ${backHomeLink()}
-    <div class="step-title">${biBlockHtml(STAGE_LABELS[approvalState.stage].titleKey)}</div>
+    <div class="step-title">质检审批 QA/QC Approval</div>
     <div class="card">
       <div class="field">
         <label class="field-label">${biBlockHtml('poNumber', 'Purchase Order Number')}</label>
@@ -216,6 +218,26 @@ function currentStageData() {
   const key = STAGE_LABELS[approvalState.stage].apiPath === 'sample' ? 'sampleApproval'
     : STAGE_LABELS[approvalState.stage].apiPath === 'preProduction' ? 'preProductionApproval' : 'bulkApproval';
   return approvalState.approval ? approvalState.approval[key] : null;
+}
+
+/** Small "already done" summary cards for every stage before the current one,
+ *  so it reads as one continuous process rather than three separate flows. */
+function renderCompletedPriorStagesSummary() {
+  const order = ['sample', 'preProduction', 'bulk'];
+  const currentIdx = order.indexOf(approvalState.stage);
+  if (currentIdx <= 0) return '';
+  const stageKeyMap = { sample: 'sampleApproval', preProduction: 'preProductionApproval', bulk: 'bulkApproval' };
+  const priorStages = order.slice(0, currentIdx).filter((s) => approvalState.approval[stageKeyMap[s]].submitted);
+  if (!priorStages.length) return '';
+  return priorStages.map((s) => {
+    const stage = approvalState.approval[stageKeyMap[s]];
+    return `
+      <div class="card" style="background:var(--jc-mint-light); border-color:var(--jc-teal);">
+        <div class="section-title" style="font-size:14px;">✓ ${biBlockHtml(STAGE_LABELS[s].titleKey)}</div>
+        <div class="section-help">${escapeHtml(bi('completedOn').en)} ${new Date(stage.submittedAt).toLocaleDateString()}</div>
+      </div>
+    `;
+  }).join('');
 }
 
 /* ---- Large, aligned photo displays for review (click to enlarge) ---- */
@@ -386,6 +408,7 @@ function renderStageScreen() {
     ${backHomeLink()}
     <div class="step-title">${biBlockHtml(STAGE_LABELS[approvalState.stage].titleKey)}</div>
     ${orderInfoBlock}
+    ${renderCompletedPriorStagesSummary()}
     ${body}
   `;
 }
@@ -570,10 +593,10 @@ function renderSubmittedStage(stageData) {
 
   const comments = stageData.pdComments || [];
   const commentsHtml = comments.length ? comments.map((c) => `
-    <div class="defect-card">
+    <div class="defect-card comment-card ${approvalStatusColorClass(c.approvalStatus)}">
       <div class="prior-issue-header">
-        <span class="prior-issue-desc">${escapeHtml(c.text)}</span>
-        ${c.approvalStatus ? `<span class="severity-badge severity-${c.approvalStatus === 'approved' ? 'minor' : c.approvalStatus === 'notApproved' ? 'critical' : 'major'}">${escapeHtml(bi(approvalStatusLabelKey(c.approvalStatus)).en)}</span>` : ''}
+        ${c.text ? `<span class="prior-issue-desc">${escapeHtml(c.text)}</span>` : `<span class="prior-issue-desc" style="font-style:italic; color:var(--jc-muted);">${escapeHtml(bi('noCommentTextProvided').en)}</span>`}
+        <span class="severity-badge comment-badge-${approvalStatusColorClass(c.approvalStatus)}">${escapeHtml(bi(approvalStatusLabelKey(c.approvalStatus)).en)} ${escapeHtml(bi(approvalStatusLabelKey(c.approvalStatus)).zh)}</span>
       </div>
       <div class="section-help">${escapeHtml(c.author)} · ${new Date(c.timestamp).toLocaleString()}</div>
       ${(c.photos || []).map((url) => `<img src="${escapeHtml(url)}" class="prior-issue-photo js-lightbox" />`).join('')}
@@ -597,9 +620,10 @@ function renderSubmittedStage(stageData) {
           <label class="field-label">${biBlockHtml('approvalStatusLabel', 'Approval')}</label>
           <select id="approvalStatusSelect">
             <option value="">${escapeHtml(bi('selectPlaceholder').en)}</option>
+            <option value="general" ${approvalState.approvalStatus === 'general' ? 'selected' : ''}>${escapeHtml(bi('statusGeneral').en)} ${escapeHtml(bi('statusGeneral').zh)}</option>
+            <option value="minorIssue" ${approvalState.approvalStatus === 'minorIssue' ? 'selected' : ''}>${escapeHtml(bi('statusMinorIssue').en)} ${escapeHtml(bi('statusMinorIssue').zh)}</option>
+            <option value="majorCriticalIssue" ${approvalState.approvalStatus === 'majorCriticalIssue' ? 'selected' : ''}>${escapeHtml(bi('statusMajorCriticalIssue').en)} ${escapeHtml(bi('statusMajorCriticalIssue').zh)}</option>
             <option value="approved" ${approvalState.approvalStatus === 'approved' ? 'selected' : ''}>${escapeHtml(bi('statusApproved').en)} ${escapeHtml(bi('statusApproved').zh)}</option>
-            <option value="approvedWithComments" ${approvalState.approvalStatus === 'approvedWithComments' ? 'selected' : ''}>${escapeHtml(bi('statusApprovedWithComments').en)} ${escapeHtml(bi('statusApprovedWithComments').zh)}</option>
-            <option value="notApproved" ${approvalState.approvalStatus === 'notApproved' ? 'selected' : ''}>${escapeHtml(bi('statusNotApproved').en)} ${escapeHtml(bi('statusNotApproved').zh)}</option>
           </select>
         </div>
         <div class="field">
@@ -616,10 +640,18 @@ function renderSubmittedStage(stageData) {
 /* ---------------- HANDLERS ---------------- */
 
 function approvalStatusLabelKey(status) {
+  if (status === 'general') return 'statusGeneral';
+  if (status === 'minorIssue') return 'statusMinorIssue';
+  if (status === 'majorCriticalIssue') return 'statusMajorCriticalIssue';
   if (status === 'approved') return 'statusApproved';
-  if (status === 'approvedWithComments') return 'statusApprovedWithComments';
-  if (status === 'notApproved') return 'statusNotApproved';
-  return 'statusApproved';
+  return 'statusGeneral';
+}
+function approvalStatusColorClass(status) {
+  if (status === 'general') return 'comment-general';
+  if (status === 'minorIssue') return 'comment-minor';
+  if (status === 'majorCriticalIssue') return 'comment-major';
+  if (status === 'approved') return 'comment-approved';
+  return 'comment-general';
 }
 
 function attachStageHandlers() {
@@ -732,7 +764,7 @@ async function submitStage() {
 }
 
 async function submitComment() {
-  if (!approvalState.commentText.trim() || !approvalState.commentAuthor || !approvalState.approvalStatus) {
+  if (!approvalState.commentAuthor || !approvalState.approvalStatus) {
     showToast(bi('commentRequiredFields').en + ' / ' + bi('commentRequiredFields').zh, true);
     return;
   }
