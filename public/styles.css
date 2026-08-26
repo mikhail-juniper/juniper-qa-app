@@ -593,6 +593,13 @@ input:focus, select:focus, textarea:focus {
   cursor: zoom-in;
   display: block;
 }
+.photo-tile { display: flex; flex-direction: column; }
+.photo-tile-caption {
+  font-size: 11px;
+  color: var(--jc-muted);
+  margin-top: 4px;
+  text-align: center;
+}
 .photo-compare-row {
   display: flex;
   gap: 14px;

@@ -999,14 +999,16 @@ function renderReferencePhotosSection() {
   const gallery = (photosMap, titleKey, fallback) => {
     const slots = Object.keys(photosMap).filter((k) => (photosMap[k] || []).length);
     if (!slots.length) return '';
+    const tiles = slots.flatMap((slotKey) => photosMap[slotKey].map((url) => `
+      <div class="photo-tile">
+        <img src="${escapeHtml(url)}" class="js-lightbox" />
+        <div class="photo-tile-caption">${escapeHtml(slotKey)}</div>
+      </div>
+    `)).join('');
     return `
       <div class="section-photos-block" style="margin-top:10px;">
         <div class="section-title" style="font-size:14px;">${biBlockHtml(titleKey, fallback)}</div>
-        ${slots.map((slotKey) => `
-          <div class="photo-gallery-large">
-            ${photosMap[slotKey].map((url) => `<img src="${escapeHtml(url)}" class="js-lightbox" />`).join('')}
-          </div>
-        `).join('')}
+        <div class="photo-gallery-large">${tiles}</div>
       </div>
     `;
   };
@@ -1311,12 +1313,14 @@ function approvalStatusLabelKey(status) {
   if (status === 'minorIssue') return 'statusMinorIssue';
   if (status === 'majorCriticalIssue') return 'statusMajorCriticalIssue';
   if (status === 'approved') return 'statusApproved';
+  if (status === 'approvedWithComments') return 'statusApprovedWithComments';
   return 'statusGeneral';
 }
 function approvalStatusColorClass(status) {
   if (status === 'minorIssue') return 'comment-minor';
   if (status === 'majorCriticalIssue') return 'comment-major';
   if (status === 'approved') return 'comment-approved';
+  if (status === 'approvedWithComments') return 'comment-approved';
   return 'comment-general';
 }
 
