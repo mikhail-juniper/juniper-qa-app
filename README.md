@@ -771,3 +771,46 @@ affect the content, just how the page-count label reads.
 Every change here was verified directly against the rendered HTML output
 (including the exact section ordering and the stage-labeled comment display),
 not just code review.
+
+---
+
+## Full sizing chart in QA/QC Approval, and a fixed universal size list for New PO
+
+### QA/QC Approval's Sample Approval now has the real sizing chart
+
+Previously this was just a fit-name dropdown with no actual chart. Now, for
+apparel:
+
+- The dropdown is filtered to the PO's subcategory (a hoodie PO only shows
+  hoodie fits), plus an "Other / Custom Sizing" option - same filtering
+  the Reporting flow already had.
+- Selecting a standard fit shows the read-only reference chart, then a fully
+  **editable** measurement table - one card per size, with live
+  out-of-tolerance flagging as you type. Both are scoped to just the sizes
+  selected for this PO (from New Purchase Order), not every size the
+  standard defines.
+- Selecting "Other" shows a freeform custom chart, pre-seeded with the PO's
+  selected sizes.
+- "Copy From Prior PO" now also copies the actual measurement data, not just
+  the fit selection.
+
+Ported the same tolerance/formatting logic and the same "update just this
+cell in place" pattern the Reporting flow uses for its own measurement
+table, specifically to avoid a focus-loss bug this project hit once before
+when a full re-render on every keystroke destroyed the input mid-typing.
+
+Tested end-to-end: subcategory filtering (confirmed a hoodie PO only offers
+hoodie fits), the chart appearing scoped to the right sizes, live tolerance
+flagging without losing input focus, real measurement data round-tripping
+through the server, copy-from-prior carrying the data forward, the "Other"
+custom path, and confirmed non-apparel categories are unaffected.
+
+### New Purchase Order: sizes multi-select is now always available
+
+Previously this only appeared once a sizing standard had already been
+established for the SKU (via an earlier PO's Approval), which meant it never
+showed up for a brand-new product. Now it's a fixed universal list - Youth
+XS through Adult 5XL - available immediately for any apparel PO, regardless
+of whether a fit's been chosen yet. If a fit *has* already been established
+for this SKU, matching sizes get pre-checked as a convenience, but the
+selector itself no longer waits on that.

@@ -4,6 +4,50 @@ let I18N = {};
 let OPTIONS = {};
 let CONFIG = {};
 
+const OTHER_FIT_VALUE = '__other_fit__';
+
+/** Only the fit standards belonging to the PO's subcategory group (e.g. only
+ *  hoodie fits for a hoodie PO) - mirrors the same filtering the Reporting
+ *  flow already does, so the dropdown here isn't showing irrelevant options. */
+function fitsForPoSubcategory() {
+  const allFits = (CONFIG.fits && CONFIG.fits.fits) || {};
+  const cats = (CONFIG.categories && CONFIG.categories.categories) || {};
+  const catDef = approvalState.po && cats[approvalState.po.category];
+  const sub = catDef && (catDef.subcategories || []).find((s) => s.key === approvalState.po.subcategory);
+  const group = sub ? sub.fitGroup : null;
+  if (!group) return allFits;
+  const filtered = {};
+  Object.keys(allFits).forEach((key) => { if (allFits[key].group === group) filtered[key] = allFits[key]; });
+  return Object.keys(filtered).length ? filtered : allFits;
+}
+
+/** Client-side copies of the same tolerance/formatting logic used server-side
+ *  (lib/passFail.js) and in the Reporting flow, so the measurement table here
+ *  flags out-of-tolerance entries the same way. */
+function isOutOfTolerance(standard, measured, tol) {
+  if (standard === undefined || standard === null) return false;
+  if (measured === null || measured === undefined || isNaN(measured)) return false;
+  if (typeof standard === 'object') {
+    const min = parseFloat(standard.min);
+    const max = parseFloat(standard.max);
+    if (isNaN(min) || isNaN(max)) return false;
+    return measured < (min - tol) || measured > (max + tol);
+  }
+  const std = parseFloat(standard);
+  if (isNaN(std) || std === 0) return false;
+  return Math.abs(measured - std) > tol;
+}
+function formatStandard(standard) {
+  if (standard === undefined || standard === null) return '-';
+  if (typeof standard === 'object') {
+    if (standard.min === undefined || standard.max === undefined) return '-';
+    return `${standard.min}-${standard.max}"`;
+  }
+  const n = parseFloat(standard);
+  if (isNaN(n) || n === 0) return '-';
+  return `${n}"`;
+}
+
 const STAGE_LABELS = {
   sample: { titleKey: 'sampleApprovalTitle', apiPath: 'sample' },
   preProduction: { titleKey: 'preProductionApprovalTitle', apiPath: 'preProduction' },
@@ -21,7 +65,7 @@ const approvalState = {
   reportingHistory: null,
   // working fields
   factoryCode: '', qaLead: '', productRisk: 'medium',
-  fit: '', generalSizingNotes: '',
+  fit: '', generalSizingNotes: '', sizeRows: [], customSizeRows: [], _fitForRows: null,
   photos: {}, // slotKey (or slotKey__SizeName) -> [] of File
   notes: '', notesPhotos: [],
   commentText: '', commentAuthor: '', commentPhotos: [], approvalStatus: ''
@@ -471,10 +515,7 @@ function renderSampleApprovalForm() {
       </div>
     </div>
 
-    <div class="card">
-      <div class="section-title">${biBlockHtml('sizingTitle', 'Sizing')}</div>
-      ${approvalState.po.category === 'apparel' ? renderApparelFitPicker() : renderGeneralSizingNotes()}
-    </div>
+    ${renderSizingSection()}
 
     <div class="card">
       <div class="section-title">${biBlockHtml('approvedSamplePhotos', 'Approved Sample Photos')}</div>
@@ -491,19 +532,157 @@ function renderSampleApprovalForm() {
   `;
 }
 
-function renderApparelFitPicker() {
-  const fits = (CONFIG.fits && CONFIG.fits.fits) || {};
+function renderSizingSection() {
+  if (approvalState.po.category !== 'apparel') {
+    return `
+      <div class="card">
+        <div class="section-title">${biBlockHtml('sizingTitle', 'Sizing')}</div>
+        ${renderGeneralSizingNotes()}
+      </div>
+    `;
+  }
+
+  const fits = fitsForPoSubcategory();
   const options = Object.keys(fits).map((k) => `<option value="${k}" ${approvalState.fit === k ? 'selected' : ''}>${escapeHtml(fits[k].label_zh)} ${escapeHtml(fits[k].label_en)}</option>`).join('');
+  const otherSel = approvalState.fit === OTHER_FIT_VALUE ? 'selected' : '';
+
+  const pickerCard = `
+    <div class="card">
+      <div class="section-title">${biBlockHtml('sizingTitle', 'Sizing')}</div>
+      <div class="field">
+        <label class="field-label">${biBlockHtml('fitSelect', 'Standard Fit')}</label>
+        <select id="approvalFitSelect">
+          <option value="">${escapeHtml(bi('fitSelectPlaceholder').en)}</option>
+          ${options}
+          <option value="${OTHER_FIT_VALUE}" ${otherSel}>${escapeHtml(bi('fitOther').en)} ${escapeHtml(bi('fitOther').zh)}</option>
+        </select>
+      </div>
+    </div>
+  `;
+
+  if (approvalState.fit === OTHER_FIT_VALUE) {
+    return pickerCard + renderApprovalCustomSizeChart();
+  }
+  if (approvalState.fit && fits[approvalState.fit]) {
+    return pickerCard + renderApprovalReferenceChart(fits[approvalState.fit]) + renderApprovalSizeEntryTable(fits[approvalState.fit]);
+  }
+  return pickerCard;
+}
+
+/** Read-only reference chart of the standard's defined values, scoped to the
+ *  sizes actually included in this PO if that's been set. */
+function renderApprovalReferenceChart(fitDef) {
+  const sizesIncluded = (approvalState.po.sizesIncluded && approvalState.po.sizesIncluded.length) ? approvalState.po.sizesIncluded : null;
+  const sizeNames = Object.keys(fitDef.sizes).filter((s) => !sizesIncluded || sizesIncluded.some((canonical) => s === canonical || s.startsWith(canonical + ' ') || s.startsWith(canonical + '(')));
+  const pointCols = fitDef.points.map((p) => {
+    const pl = fitDef.pointLabels[p] || { en: p, zh: '' };
+    return `<th>${escapeHtml(pl.zh || pl.en)}<span class="zh">${escapeHtml(pl.en)}</span></th>`;
+  }).join('');
+  const rows = sizeNames.map((sizeName) => {
+    const std = fitDef.sizes[sizeName];
+    const cells = fitDef.points.map((p) => `<td>${escapeHtml(formatStandard(std[p]))}</td>`).join('');
+    return `<tr><td class="size-name">${escapeHtml(sizeName)}</td>${cells}</tr>`;
+  }).join('');
   return `
-    <div class="field">
-      <label class="field-label">${biBlockHtml('fitSelect', 'Standard Fit')}</label>
-      <select id="approvalFitSelect">
-        <option value="">${escapeHtml(bi('fitSelectPlaceholder').en)}</option>
-        ${options}
-      </select>
+    <div class="card">
+      <div class="section-title">${biBlockHtml('referenceChart', 'Approved Reference Chart')}</div>
+      <div class="ref-chart-wrap">
+        <table class="ref-chart-table">
+          <thead><tr><th>${escapeHtml(bi('size').en)}<span class="zh">${escapeHtml(bi('size').zh)}</span></th>${pointCols}</tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
     </div>
   `;
 }
+
+/** Editable measurement entry, one card per size (scoped to the PO's
+ *  included sizes if set), with a photo slot per size and tolerance
+ *  flagging - the same capability the Reporting flow has, so the approved
+ *  sample's actual measurements get captured here as the baseline. */
+function renderApprovalSizeEntryTable(fitDef) {
+  const tol = (CONFIG.fits && CONFIG.fits.toleranceInches) || 0.5;
+  const sizesIncluded = (approvalState.po.sizesIncluded && approvalState.po.sizesIncluded.length) ? approvalState.po.sizesIncluded : null;
+
+  if (!approvalState.sizeRows.length || approvalState._fitForRows !== approvalState.fit) {
+    const availableSizes = Object.keys(fitDef.sizes).filter((s) => !sizesIncluded || sizesIncluded.some((canonical) => s === canonical || s.startsWith(canonical + ' ') || s.startsWith(canonical + '(')));
+    approvalState.sizeRows = availableSizes.map((size) => ({ size, measured: {} }));
+    approvalState._fitForRows = approvalState.fit;
+  }
+
+  const cards = approvalState.sizeRows.map((row, ridx) => {
+    const standard = fitDef.sizes[row.size] || {};
+    const pointFields = fitDef.points.map((p) => {
+      const pl = fitDef.pointLabels[p] || { en: p, zh: '' };
+      const std = standard[p];
+      const measuredVal = row.measured[p] !== undefined ? row.measured[p] : '';
+      const measuredNum = parseFloat(measuredVal);
+      const outOfTol = isOutOfTolerance(std, measuredVal === '' ? null : measuredNum, tol);
+      return `
+        <div class="size-point-field ${outOfTol ? 'out-of-tol' : ''}">
+          <label class="size-point-label">${escapeHtml(pl.zh || pl.en)} <span class="zh">${escapeHtml(pl.en)}</span></label>
+          <span class="std-val">${escapeHtml(bi('standard').en)}: ${escapeHtml(formatStandard(std))}</span>
+          <input type="number" step="0.1" inputmode="decimal" value="${escapeHtml(measuredVal)}"
+            class="${outOfTol ? 'out-of-tol' : ''}"
+            data-approval-size-row="${ridx}" data-approval-size-point="${p}" placeholder="0.0" />
+          <span class="tol-flag" style="display:${outOfTol ? 'inline' : 'none'}">${escapeHtml(bi('outOfTolerance').en)}</span>
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="size-card">
+        <div class="size-card-header">${escapeHtml(row.size)}</div>
+        <div class="size-point-grid">${pointFields}</div>
+        <div class="size-card-photos">
+          <div class="section-photos-label">${biBlockHtml('sizingPhotosForSize', 'Photos for this size')}</div>
+          ${renderPhotoSlot('sizecheck', 'Photo', '照片', row.size)}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <div class="card">
+      <div class="section-title">${biBlockHtml('enterMeasurements', 'Enter Measurements')}</div>
+      ${cards}
+    </div>
+  `;
+}
+
+/** For a custom ("Other") fit: freeform size rows, pre-seeded from the PO's
+ *  included sizes if that's been set, otherwise added manually. */
+function renderApprovalCustomSizeChart() {
+  if (!approvalState.customSizeRows.length && approvalState.po.sizesIncluded && approvalState.po.sizesIncluded.length) {
+    approvalState.customSizeRows = approvalState.po.sizesIncluded.map((size) => ({ sizeName: size, measurements: '' }));
+  }
+  const rows = approvalState.customSizeRows.map((row, ridx) => `
+    <div class="size-card">
+      <div class="field">
+        <label class="field-label">${biBlockHtml('customSizeName', 'Size Name')}</label>
+        <input type="text" data-approval-custom-size-name="${ridx}" value="${escapeHtml(row.sizeName)}" placeholder="${escapeHtml(bi('customSizeNamePlaceholder').en)}" />
+      </div>
+      <div class="field">
+        <label class="field-label">${biBlockHtml('customSizeMeasurements', 'Measurements')}</label>
+        <textarea data-approval-custom-size-measurements="${ridx}" placeholder="${escapeHtml(bi('customSizeMeasurementsPlaceholder').en)}">${escapeHtml(row.measurements)}</textarea>
+      </div>
+      <div class="size-card-photos">
+        <div class="section-photos-label">${biBlockHtml('sizingPhotosForSize', 'Photos for this size')}</div>
+        ${renderPhotoSlot('customsizecheck', 'Photo', '照片', row.sizeName || String(ridx))}
+      </div>
+      <button type="button" class="remove-defect-btn" data-approval-remove-custom-size="${ridx}">${escapeHtml(bi('removeIssue').en)} ${escapeHtml(bi('removeIssue').zh)}</button>
+    </div>
+  `).join('');
+
+  return `
+    <div class="card">
+      <div class="section-title">${biBlockHtml('customSizeChartTitle', 'Custom Size Chart')}</div>
+      ${rows}
+      <button type="button" class="add-defect-btn" id="btnApprovalAddCustomSize">${escapeHtml(bi('addCustomSize').en)} <span class="zh">${escapeHtml(bi('addCustomSize').zh)}</span></button>
+    </div>
+  `;
+}
+
 function renderGeneralSizingNotes() {
   return `
     <div class="field">
@@ -628,6 +807,31 @@ function renderReportingReferenceBlock() {
 }
 
 /* ---- Submitted stage: show data read-back + PD comments ---- */
+function updateApprovalSizeCellInPlace(ridx, point) {
+  const fits = fitsForPoSubcategory();
+  const fitDef = fits[approvalState.fit];
+  if (!fitDef) return;
+  const tol = (CONFIG.fits && CONFIG.fits.toleranceInches) || 0.5;
+  const row = approvalState.sizeRows[ridx];
+  const standard = fitDef.sizes[row.size] || {};
+  const measuredVal = row.measured[point] !== undefined ? row.measured[point] : '';
+  const measuredNum = parseFloat(measuredVal);
+  const outOfTol = isOutOfTolerance(standard[point], measuredVal === '' ? null : measuredNum, tol);
+  const input = document.querySelector(`[data-approval-size-row="${ridx}"][data-approval-size-point="${point}"]`);
+  if (!input) return;
+  const cell = input.closest('.size-point-field');
+  const flag = cell ? cell.querySelector('.tol-flag') : null;
+  if (cell) cell.classList.toggle('out-of-tol', outOfTol);
+  input.classList.toggle('out-of-tol', outOfTol);
+  if (flag) flag.style.display = outOfTol ? 'inline' : 'none';
+}
+
+function buildSizingPayload() {
+  if (approvalState.po.category !== 'apparel') return { notes: approvalState.generalSizingNotes };
+  if (approvalState.fit === OTHER_FIT_VALUE) return { fit: OTHER_FIT_VALUE, customSizeRows: approvalState.customSizeRows };
+  return { fit: approvalState.fit, sizeRows: approvalState.sizeRows };
+}
+
 function commentStageTitle() {
   if (approvalState.stage === 'sample') return bi('commentStageTitleSample', 'Sample Approval');
   if (approvalState.stage === 'preProduction') return bi('commentStageTitlePreProduction', 'PP Sample Approval');
@@ -734,11 +938,57 @@ function attachStageHandlers() {
   const qaLeadSelect = document.getElementById('approval_qaLead');
   if (qaLeadSelect) qaLeadSelect.addEventListener('change', (e) => { approvalState.qaLead = e.target.value; });
   const fitSelect = document.getElementById('approvalFitSelect');
-  if (fitSelect) fitSelect.addEventListener('change', (e) => { approvalState.fit = e.target.value; });
+  if (fitSelect) {
+    fitSelect.addEventListener('change', (e) => {
+      approvalState.fit = e.target.value;
+      approvalState.sizeRows = [];
+      approvalState._fitForRows = null;
+      approvalState.customSizeRows = [];
+      render();
+    });
+  }
   const generalSizing = document.getElementById('approvalGeneralSizing');
   if (generalSizing) generalSizing.addEventListener('input', (e) => { approvalState.generalSizingNotes = e.target.value; });
   const notes = document.getElementById('approvalNotes');
   if (notes) notes.addEventListener('input', (e) => { approvalState.notes = e.target.value; });
+
+  // Standard-fit measurement inputs
+  document.querySelectorAll('[data-approval-size-row]').forEach((el) => {
+    el.addEventListener('input', (e) => {
+      const ridx = parseInt(el.getAttribute('data-approval-size-row'), 10);
+      const point = el.getAttribute('data-approval-size-point');
+      approvalState.sizeRows[ridx].measured[point] = e.target.value;
+      updateApprovalSizeCellInPlace(ridx, point);
+    });
+  });
+
+  // Custom ("Other" fit) size rows
+  document.querySelectorAll('[data-approval-custom-size-name]').forEach((el) => {
+    el.addEventListener('input', (e) => {
+      const ridx = parseInt(el.getAttribute('data-approval-custom-size-name'), 10);
+      approvalState.customSizeRows[ridx].sizeName = e.target.value;
+    });
+  });
+  document.querySelectorAll('[data-approval-custom-size-measurements]').forEach((el) => {
+    el.addEventListener('input', (e) => {
+      const ridx = parseInt(el.getAttribute('data-approval-custom-size-measurements'), 10);
+      approvalState.customSizeRows[ridx].measurements = e.target.value;
+    });
+  });
+  document.querySelectorAll('[data-approval-remove-custom-size]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const ridx = parseInt(el.getAttribute('data-approval-remove-custom-size'), 10);
+      approvalState.customSizeRows.splice(ridx, 1);
+      render();
+    });
+  });
+  const btnAddCustomSize = document.getElementById('btnApprovalAddCustomSize');
+  if (btnAddCustomSize) {
+    btnAddCustomSize.addEventListener('click', () => {
+      approvalState.customSizeRows.push({ sizeName: '', measurements: '' });
+      render();
+    });
+  }
 
   const btnUsePrior = document.getElementById('btnUsePriorSample');
   if (btnUsePrior) {
@@ -750,6 +1000,9 @@ function attachStageHandlers() {
       if (prior.sizing) {
         approvalState.fit = prior.sizing.fit || '';
         approvalState.generalSizingNotes = prior.sizing.notes || '';
+        approvalState.sizeRows = prior.sizing.sizeRows ? JSON.parse(JSON.stringify(prior.sizing.sizeRows)) : [];
+        approvalState.customSizeRows = prior.sizing.customSizeRows ? JSON.parse(JSON.stringify(prior.sizing.customSizeRows)) : [];
+        approvalState._fitForRows = approvalState.sizeRows.length ? approvalState.fit : null;
       }
 
       // Also copy the Approved Sample Photos themselves (only these - not any
@@ -830,7 +1083,7 @@ async function submitStage() {
       factoryCode: approvalState.factoryCode,
       qaLead: approvalState.qaLead,
       productRisk: approvalState.productRisk,
-      sizing: approvalState.po.category === 'apparel' ? { fit: approvalState.fit } : { notes: approvalState.generalSizingNotes },
+      sizing: buildSizingPayload(),
       notes: approvalState.notes
     };
     const formData = new FormData();

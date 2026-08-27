@@ -452,6 +452,32 @@ function validateStep(s) {
       }
     } else {
       ok = validateChecklistStepGeneric(name);
+
+      // Sizing notes are required regardless of pass/fail/na - sizing is
+      // nuanced enough that a written observation is worth having either way.
+      const sizingEntry = state.categoryData.generalSizingMatch;
+      if (!sizingEntry.notes || !sizingEntry.notes.trim()) {
+        markChecklistError('generalSizingMatch');
+        showToast(bi('sizingNotesRequired').en + ' / ' + bi('sizingNotesRequired').zh, true);
+        ok = false;
+      }
+
+      // For a custom ("Other") fit, every size row needs its measurements
+      // written out - that's the only record of what was actually measured.
+      if (state.category === 'apparel' && state.categoryData.fit === OTHER_FIT_VALUE) {
+        const rows = state.categoryData.customSizeRows || [];
+        const emptyRows = rows.filter((r) => !r.measurements || !r.measurements.trim());
+        if (!rows.length) {
+          showToast(bi('customSizeRowRequired').en + ' / ' + bi('customSizeRowRequired').zh, true);
+          ok = false;
+        } else if (emptyRows.length) {
+          rows.forEach((r, idx) => {
+            if (!r.measurements || !r.measurements.trim()) markError(`customSizeMeasurements-${idx}`);
+          });
+          showToast(bi('customSizeMeasurementsRequired').en + ' / ' + bi('customSizeMeasurementsRequired').zh, true);
+          ok = false;
+        }
+      }
     }
   }
   return ok;
@@ -502,6 +528,15 @@ function getAllValidationProblems() {
   else if (incomplete.length) problems.push(bi('descriptionRequiredForDefect'));
 
   if (state.category === 'apparel' && state.categoryData.fit !== OTHER_FIT_VALUE && apparelSizingIncomplete()) problems.push(bi('selectFitRequired'));
+
+  if (state.category !== 'apparel' || state.categoryData.fit === OTHER_FIT_VALUE) {
+    const sizingEntry = state.categoryData.generalSizingMatch;
+    if (!sizingEntry.notes || !sizingEntry.notes.trim()) problems.push(bi('sizingNotesRequired'));
+  }
+  if (state.category === 'apparel' && state.categoryData.fit === OTHER_FIT_VALUE) {
+    const rows = state.categoryData.customSizeRows || [];
+    if (!rows.length || rows.some((r) => !r.measurements || !r.measurements.trim())) problems.push(bi('customSizeMeasurementsRequired'));
+  }
 
   return problems;
 }
@@ -653,25 +688,17 @@ function renderNewPoScreen() {
   const subOptions = (catDef && catDef.subcategories || []).map((s) => `<option value="${s.key}" ${newPoState.subcategory === s.key ? 'selected' : ''}>${escapeHtml(s.label_zh)} ${escapeHtml(s.label_en)}</option>`).join('');
 
   let sizesBlock = '';
-  if (newPoState.category === 'apparel' && newPoState.sku.trim()) {
-    if (newPoState.establishedFit) {
-      const sizes = newPoState.establishedFit.sizes || [];
-      sizesBlock = `
-        <div class="card">
-          <div class="section-title">${biBlockHtml('sizesInPo', 'Sizes Included in this PO')}</div>
-          <div class="section-help">${escapeHtml(bi('sizesInPoHelp').en)}<br/>${escapeHtml(bi('sizesInPoHelp').zh)}</div>
-          <div class="segmented" style="flex-wrap:wrap; margin-top:8px;">
-            ${sizes.map((s) => `<div class="segmented-option ${newPoState.sizesIncluded.includes(s) ? 'selected' : ''}" data-po-size="${escapeHtml(s)}" style="flex:0 0 auto; min-width:90px;">${escapeHtml(s)}</div>`).join('')}
-          </div>
+  if (newPoState.category === 'apparel') {
+    const universalSizes = (CONFIG.fits && CONFIG.fits.universalSizes) || [];
+    sizesBlock = `
+      <div class="card">
+        <div class="section-title">${biBlockHtml('sizesInPo', 'Sizes Included in this PO')}</div>
+        <div class="section-help">${escapeHtml(bi('sizesInPoHelp').en)}<br/>${escapeHtml(bi('sizesInPoHelp').zh)}</div>
+        <div class="segmented" style="flex-wrap:wrap; margin-top:8px;">
+          ${universalSizes.map((s) => `<div class="segmented-option ${newPoState.sizesIncluded.includes(s) ? 'selected' : ''}" data-po-size="${escapeHtml(s)}" style="flex:0 0 auto; min-width:90px;">${escapeHtml(s)}</div>`).join('')}
         </div>
-      `;
-    } else if (newPoState.skuChecked === newPoState.sku.trim()) {
-      sizesBlock = `
-        <div class="card">
-          <div class="section-help">${escapeHtml(bi('noEstablishedFitYet').en)}<br/>${escapeHtml(bi('noEstablishedFitYet').zh)}</div>
-        </div>
-      `;
-    }
+      </div>
+    `;
   }
 
   return `
@@ -749,6 +776,10 @@ function selectFieldPlain(id, i18nKey, value, optionsList) {
   `;
 }
 
+function sizeMatchesCanonical(fitSizeKey, canonicalSize) {
+  return fitSizeKey === canonicalSize || fitSizeKey.startsWith(canonicalSize + ' ') || fitSizeKey.startsWith(canonicalSize + '(');
+}
+
 async function checkSkuEstablishedFit() {
   const sku = newPoState.sku.trim();
   if (!sku || sku === newPoState.skuChecked) return;
@@ -756,6 +787,12 @@ async function checkSkuEstablishedFit() {
     const res = await fetch(`/api/sku-established-fit/${encodeURIComponent(sku)}`);
     const data = await res.json();
     newPoState.establishedFit = data.fit;
+    // Convenience: pre-check whichever universal sizes match this SKU's
+    // previously-established fit, if nothing's been manually selected yet.
+    if (data.fit && !newPoState.sizesIncluded.length) {
+      const universalSizes = (CONFIG.fits && CONFIG.fits.universalSizes) || [];
+      newPoState.sizesIncluded = universalSizes.filter((canonical) => (data.fit.sizes || []).some((fitSize) => sizeMatchesCanonical(fitSize, canonical)));
+    }
   } catch (e) {
     console.error('Failed to check established fit', e);
     newPoState.establishedFit = null;
@@ -1785,8 +1822,8 @@ function renderCustomSizeChart() {
         <label class="field-label">${biBlockHtml('customSizeName', 'Size Name')}</label>
         <input type="text" data-custom-size-name="${ridx}" value="${escapeHtml(row.sizeName)}" placeholder="${escapeHtml(bi('customSizeNamePlaceholder').en)}" />
       </div>
-      <div class="field">
-        <label class="field-label">${biBlockHtml('customSizeMeasurements', 'Measurements')}</label>
+      <div class="field" data-field="customSizeMeasurements-${ridx}">
+        <label class="field-label">${biBlockHtml('customSizeMeasurements', 'Measurements')}<span class="required">*</span></label>
         <textarea data-custom-size-measurements="${ridx}" placeholder="${escapeHtml(bi('customSizeMeasurementsPlaceholder').en)}">${escapeHtml(row.measurements)}</textarea>
       </div>
       <div class="size-card-photos">

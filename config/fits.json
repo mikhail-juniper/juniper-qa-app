@@ -4,7 +4,7 @@
   "fits": {
     "crewnecks_standard": {
       "label_en": "Crewneck - Standard",
-      "label_zh": "卫衣 - 标准款",
+      "label_zh": "\u536b\u8863 - \u6807\u51c6\u6b3e",
       "group": "crewnecks",
       "points": [
         "length",
@@ -14,15 +14,15 @@
       "pointLabels": {
         "length": {
           "en": "Length",
-          "zh": "衣长"
+          "zh": "\u8863\u957f"
         },
         "width": {
           "en": "Width",
-          "zh": "胸宽"
+          "zh": "\u80f8\u5bbd"
         },
         "sleeve": {
           "en": "Sleeve",
-          "zh": "袖长"
+          "zh": "\u8896\u957f"
         }
       },
       "sizes": {
@@ -90,7 +90,7 @@
     },
     "crewnecks_drop_shoulder": {
       "label_en": "Crewneck - Drop Shoulder",
-      "label_zh": "卫衣 - 落肩款",
+      "label_zh": "\u536b\u8863 - \u843d\u80a9\u6b3e",
       "group": "crewnecks",
       "points": [
         "length",
@@ -100,15 +100,15 @@
       "pointLabels": {
         "length": {
           "en": "Length",
-          "zh": "衣长"
+          "zh": "\u8863\u957f"
         },
         "width": {
           "en": "Width",
-          "zh": "胸宽"
+          "zh": "\u80f8\u5bbd"
         },
         "sleeve": {
           "en": "Sleeve",
-          "zh": "袖长"
+          "zh": "\u8896\u957f"
         }
       },
       "sizes": {
@@ -176,7 +176,7 @@
     },
     "crewnecks_raglan_sleeves": {
       "label_en": "Crewneck - Raglan Sleeves",
-      "label_zh": "卫衣 - 插肩袖款",
+      "label_zh": "\u536b\u8863 - \u63d2\u80a9\u8896\u6b3e",
       "group": "crewnecks",
       "points": [
         "length",
@@ -186,15 +186,15 @@
       "pointLabels": {
         "length": {
           "en": "Length",
-          "zh": "衣长"
+          "zh": "\u8863\u957f"
         },
         "width": {
           "en": "Width",
-          "zh": "胸宽"
+          "zh": "\u80f8\u5bbd"
         },
         "sleeve": {
           "en": "Sleeve",
-          "zh": "袖长"
+          "zh": "\u8896\u957f"
         }
       },
       "sizes": {
@@ -262,7 +262,7 @@
     },
     "crewnecks_oversized": {
       "label_en": "Crewneck - Oversized",
-      "label_zh": "卫衣 - 宽松款",
+      "label_zh": "\u536b\u8863 - \u5bbd\u677e\u6b3e",
       "group": "crewnecks",
       "points": [
         "length",
@@ -272,15 +272,15 @@
       "pointLabels": {
         "length": {
           "en": "Length",
-          "zh": "衣长"
+          "zh": "\u8863\u957f"
         },
         "width": {
           "en": "Width",
-          "zh": "胸宽"
+          "zh": "\u80f8\u5bbd"
         },
         "sleeve": {
           "en": "Sleeve",
-          "zh": "袖长"
+          "zh": "\u8896\u957f"
         }
       },
       "sizes": {
@@ -348,7 +348,7 @@
     },
     "t_shirt_standard": {
       "label_en": "T-Shirt - Standard",
-      "label_zh": "T恤 - 标准款",
+      "label_zh": "T\u6064 - \u6807\u51c6\u6b3e",
       "group": "t_shirt",
       "points": [
         "length",
@@ -357,11 +357,11 @@
       "pointLabels": {
         "length": {
           "en": "Length",
-          "zh": "衣长"
+          "zh": "\u8863\u957f"
         },
         "width": {
           "en": "Width",
-          "zh": "胸宽"
+          "zh": "\u80f8\u5bbd"
         }
       },
       "sizes": {
@@ -425,7 +425,7 @@
     },
     "t_shirt_longsleeve": {
       "label_en": "T-Shirt - Longsleeve",
-      "label_zh": "T恤 - 长袖款",
+      "label_zh": "T\u6064 - \u957f\u8896\u6b3e",
       "group": "t_shirt",
       "points": [
         "length",
@@ -435,15 +435,15 @@
       "pointLabels": {
         "length": {
           "en": "Length",
-          "zh": "衣长"
+          "zh": "\u8863\u957f"
         },
         "width": {
           "en": "Width",
-          "zh": "胸宽"
+          "zh": "\u80f8\u5bbd"
         },
         "sleeve": {
           "en": "Sleeve",
-          "zh": "袖长"
+          "zh": "\u8896\u957f"
         }
       },
       "sizes": {
@@ -521,7 +521,7 @@
     },
     "t_shirt_oversized": {
       "label_en": "T-Shirt - Oversized",
-      "label_zh": "T恤 - 宽松款",
+      "label_zh": "T\u6064 - \u5bbd\u677e\u6b3e",
       "group": "t_shirt",
       "points": [
         "length",
@@ -530,11 +530,11 @@
       "pointLabels": {
         "length": {
           "en": "Length",
-          "zh": "衣长"
+          "zh": "\u8863\u957f"
         },
         "width": {
           "en": "Width",
-          "zh": "胸宽"
+          "zh": "\u80f8\u5bbd"
         }
       },
       "sizes": {
@@ -590,7 +590,7 @@
     },
     "t_shirt_streetwear_tee": {
       "label_en": "T-Shirt - Streetwear Tee",
-      "label_zh": "T恤 - 街头款",
+      "label_zh": "T\u6064 - \u8857\u5934\u6b3e",
       "group": "t_shirt",
       "points": [
         "length",
@@ -599,11 +599,11 @@
       "pointLabels": {
         "length": {
           "en": "Length",
-          "zh": "衣长"
+          "zh": "\u8863\u957f"
         },
         "width": {
           "en": "Width",
-          "zh": "胸宽"
+          "zh": "\u80f8\u5bbd"
         }
       },
       "sizes": {
@@ -659,7 +659,7 @@
     },
     "t_shirt_cropped_tee": {
       "label_en": "T-Shirt - Cropped Tee",
-      "label_zh": "T恤 - 短款",
+      "label_zh": "T\u6064 - \u77ed\u6b3e",
       "group": "t_shirt",
       "points": [
         "length",
@@ -668,11 +668,11 @@
       "pointLabels": {
         "length": {
           "en": "Length",
-          "zh": "衣长"
+          "zh": "\u8863\u957f"
         },
         "width": {
           "en": "Width",
-          "zh": "胸宽"
+          "zh": "\u80f8\u5bbd"
         }
       },
       "sizes": {
@@ -728,7 +728,7 @@
     },
     "t_shirt_women_s_e_sports": {
       "label_en": "T-Shirt - Women's E-Sports",
-      "label_zh": "T恤 - 女款电竞",
+      "label_zh": "T\u6064 - \u5973\u6b3e\u7535\u7ade",
       "group": "t_shirt",
       "points": [
         "length",
@@ -737,11 +737,11 @@
       "pointLabels": {
         "length": {
           "en": "Length",
-          "zh": "衣长"
+          "zh": "\u8863\u957f"
         },
         "width": {
           "en": "Width",
-          "zh": "胸宽"
+          "zh": "\u80f8\u5bbd"
         }
       },
       "sizes": {
@@ -797,7 +797,7 @@
     },
     "t_shirt_collared_shirt": {
       "label_en": "T-Shirt - Collared Shirt",
-      "label_zh": "T恤 - polo领款",
+      "label_zh": "T\u6064 - polo\u9886\u6b3e",
       "group": "t_shirt",
       "points": [
         "length",
@@ -807,15 +807,15 @@
       "pointLabels": {
         "length": {
           "en": "Length",
-          "zh": "衣长"
+          "zh": "\u8863\u957f"
         },
         "width": {
           "en": "Width",
-          "zh": "胸宽"
+          "zh": "\u80f8\u5bbd"
         },
         "sleeve": {
           "en": "Sleeve",
-          "zh": "袖长"
+          "zh": "\u8896\u957f"
         }
       },
       "sizes": {
@@ -883,7 +883,7 @@
     },
     "t_shirt_golf_tee": {
       "label_en": "T-Shirt - Golf Tee",
-      "label_zh": "T恤 - 高尔夫款",
+      "label_zh": "T\u6064 - \u9ad8\u5c14\u592b\u6b3e",
       "group": "t_shirt",
       "points": [
         "length",
@@ -892,11 +892,11 @@
       "pointLabels": {
         "length": {
           "en": "Length",
-          "zh": "衣长"
+          "zh": "\u8863\u957f"
         },
         "width": {
           "en": "Width",
-          "zh": "胸宽"
+          "zh": "\u80f8\u5bbd"
         }
       },
       "sizes": {
@@ -952,7 +952,7 @@
     },
     "t_shirt_standard_tank_top": {
       "label_en": "T-Shirt - Standard Tank Top",
-      "label_zh": "T恤 - 标准背心款",
+      "label_zh": "T\u6064 - \u6807\u51c6\u80cc\u5fc3\u6b3e",
       "group": "t_shirt",
       "points": [
         "length",
@@ -962,15 +962,15 @@
       "pointLabels": {
         "length": {
           "en": "Length",
-          "zh": "衣长"
+          "zh": "\u8863\u957f"
         },
         "width": {
           "en": "Width",
-          "zh": "胸宽"
+          "zh": "\u80f8\u5bbd"
         },
         "armholeDepth": {
           "en": "Armhole Depth",
-          "zh": "袖窿深"
+          "zh": "\u8896\u7abf\u6df1"
         }
       },
       "sizes": {
@@ -1038,7 +1038,7 @@
     },
     "hoodie_standard": {
       "label_en": "Hoodie - Standard",
-      "label_zh": "连帽卫衣 - 标准款",
+      "label_zh": "\u8fde\u5e3d\u536b\u8863 - \u6807\u51c6\u6b3e",
       "group": "hoodie",
       "points": [
         "length",
@@ -1048,15 +1048,15 @@
       "pointLabels": {
         "length": {
           "en": "Length",
-          "zh": "衣长"
+          "zh": "\u8863\u957f"
         },
         "width": {
           "en": "Width",
-          "zh": "胸宽"
+          "zh": "\u80f8\u5bbd"
         },
         "sleeve": {
           "en": "Sleeve",
-          "zh": "袖长"
+          "zh": "\u8896\u957f"
         }
       },
       "sizes": {
@@ -1124,7 +1124,7 @@
     },
     "hoodie_drop_shoulder": {
       "label_en": "Hoodie - Drop Shoulder",
-      "label_zh": "连帽卫衣 - 落肩款",
+      "label_zh": "\u8fde\u5e3d\u536b\u8863 - \u843d\u80a9\u6b3e",
       "group": "hoodie",
       "points": [
         "length",
@@ -1134,15 +1134,15 @@
       "pointLabels": {
         "length": {
           "en": "Length",
-          "zh": "衣长"
+          "zh": "\u8863\u957f"
         },
         "width": {
           "en": "Width",
-          "zh": "胸宽"
+          "zh": "\u80f8\u5bbd"
         },
         "sleeve": {
           "en": "Sleeve",
-          "zh": "袖长"
+          "zh": "\u8896\u957f"
         }
       },
       "sizes": {
@@ -1210,7 +1210,7 @@
     },
     "hoodie_raglan_sleeve": {
       "label_en": "Hoodie - Raglan Sleeve",
-      "label_zh": "连帽卫衣 - 插肩袖款",
+      "label_zh": "\u8fde\u5e3d\u536b\u8863 - \u63d2\u80a9\u8896\u6b3e",
       "group": "hoodie",
       "points": [
         "length",
@@ -1220,15 +1220,15 @@
       "pointLabels": {
         "length": {
           "en": "Length",
-          "zh": "衣长"
+          "zh": "\u8863\u957f"
         },
         "width": {
           "en": "Width",
-          "zh": "胸宽"
+          "zh": "\u80f8\u5bbd"
         },
         "sleeve": {
           "en": "Sleeve",
-          "zh": "袖长"
+          "zh": "\u8896\u957f"
         }
       },
       "sizes": {
@@ -1296,7 +1296,7 @@
     },
     "hoodie_hidden_pockets_2": {
       "label_en": "Hoodie - Hidden Pockets (2)",
-      "label_zh": "连帽卫衣 - 暗袋款",
+      "label_zh": "\u8fde\u5e3d\u536b\u8863 - \u6697\u888b\u6b3e",
       "group": "hoodie",
       "points": [
         "length",
@@ -1306,15 +1306,15 @@
       "pointLabels": {
         "length": {
           "en": "Length",
-          "zh": "衣长"
+          "zh": "\u8863\u957f"
         },
         "width": {
           "en": "Width",
-          "zh": "胸宽"
+          "zh": "\u80f8\u5bbd"
         },
         "sleeve": {
           "en": "Sleeve",
-          "zh": "袖长"
+          "zh": "\u8896\u957f"
         }
       },
       "sizes": {
@@ -1382,7 +1382,7 @@
     },
     "hoodie_no_pocket_standard": {
       "label_en": "Hoodie - No Pocket Standard",
-      "label_zh": "连帽卫衣 - 无口袋标准款",
+      "label_zh": "\u8fde\u5e3d\u536b\u8863 - \u65e0\u53e3\u888b\u6807\u51c6\u6b3e",
       "group": "hoodie",
       "points": [
         "length",
@@ -1392,15 +1392,15 @@
       "pointLabels": {
         "length": {
           "en": "Length",
-          "zh": "衣长"
+          "zh": "\u8863\u957f"
         },
         "width": {
           "en": "Width",
-          "zh": "胸宽"
+          "zh": "\u80f8\u5bbd"
         },
         "sleeve": {
           "en": "Sleeve",
-          "zh": "袖长"
+          "zh": "\u8896\u957f"
         }
       },
       "sizes": {
@@ -1468,7 +1468,7 @@
     },
     "hoodie_oversized": {
       "label_en": "Hoodie - Oversized",
-      "label_zh": "连帽卫衣 - 宽松款",
+      "label_zh": "\u8fde\u5e3d\u536b\u8863 - \u5bbd\u677e\u6b3e",
       "group": "hoodie",
       "points": [
         "length",
@@ -1478,15 +1478,15 @@
       "pointLabels": {
         "length": {
           "en": "Length",
-          "zh": "衣长"
+          "zh": "\u8863\u957f"
         },
         "width": {
           "en": "Width",
-          "zh": "胸宽"
+          "zh": "\u80f8\u5bbd"
         },
         "sleeve": {
           "en": "Sleeve",
-          "zh": "袖长"
+          "zh": "\u8896\u957f"
         }
       },
       "sizes": {
@@ -1554,7 +1554,7 @@
     },
     "hoodie_split_sleeves": {
       "label_en": "Hoodie - Split Sleeves",
-      "label_zh": "连帽卫衣 - 拼接袖款",
+      "label_zh": "\u8fde\u5e3d\u536b\u8863 - \u62fc\u63a5\u8896\u6b3e",
       "group": "hoodie",
       "points": [
         "length",
@@ -1564,15 +1564,15 @@
       "pointLabels": {
         "length": {
           "en": "Length",
-          "zh": "衣长"
+          "zh": "\u8863\u957f"
         },
         "width": {
           "en": "Width",
-          "zh": "胸宽"
+          "zh": "\u80f8\u5bbd"
         },
         "sleeve": {
           "en": "Sleeve",
-          "zh": "袖长"
+          "zh": "\u8896\u957f"
         }
       },
       "sizes": {
@@ -1640,7 +1640,7 @@
     },
     "varsity_jacket": {
       "label_en": "Varsity Jacket",
-      "label_zh": "棒球夹克",
+      "label_zh": "\u68d2\u7403\u5939\u514b",
       "group": "jacket",
       "points": [
         "length",
@@ -1650,15 +1650,15 @@
       "pointLabels": {
         "length": {
           "en": "Length",
-          "zh": "衣长"
+          "zh": "\u8863\u957f"
         },
         "width": {
           "en": "Width",
-          "zh": "胸宽"
+          "zh": "\u80f8\u5bbd"
         },
         "sleeve": {
           "en": "Sleeve",
-          "zh": "袖长"
+          "zh": "\u8896\u957f"
         }
       },
       "sizes": {
@@ -1762,7 +1762,7 @@
     },
     "bomber_jacket": {
       "label_en": "Bomber Jacket",
-      "label_zh": "飞行员夹克",
+      "label_zh": "\u98de\u884c\u5458\u5939\u514b",
       "group": "jacket",
       "points": [
         "length",
@@ -1772,15 +1772,15 @@
       "pointLabels": {
         "length": {
           "en": "Length",
-          "zh": "衣长"
+          "zh": "\u8863\u957f"
         },
         "width": {
           "en": "Width",
-          "zh": "胸宽"
+          "zh": "\u80f8\u5bbd"
         },
         "sleeve": {
           "en": "Sleeve",
-          "zh": "袖长"
+          "zh": "\u8896\u957f"
         }
       },
       "sizes": {
@@ -1884,7 +1884,7 @@
     },
     "fleece_jacket": {
       "label_en": "Fleece Jacket",
-      "label_zh": "抓绒夹克",
+      "label_zh": "\u6293\u7ed2\u5939\u514b",
       "group": "jacket",
       "points": [
         "length",
@@ -1894,15 +1894,15 @@
       "pointLabels": {
         "length": {
           "en": "Length",
-          "zh": "衣长"
+          "zh": "\u8863\u957f"
         },
         "width": {
           "en": "Width",
-          "zh": "胸宽"
+          "zh": "\u80f8\u5bbd"
         },
         "sleeve": {
           "en": "Sleeve",
-          "zh": "袖长"
+          "zh": "\u8896\u957f"
         }
       },
       "sizes": {
@@ -2006,7 +2006,7 @@
     },
     "panelled_fleece_jacket": {
       "label_en": "Panelled Fleece Jacket",
-      "label_zh": "拼接抓绒夹克",
+      "label_zh": "\u62fc\u63a5\u6293\u7ed2\u5939\u514b",
       "group": "jacket",
       "points": [
         "length",
@@ -2016,15 +2016,15 @@
       "pointLabels": {
         "length": {
           "en": "Length",
-          "zh": "衣长"
+          "zh": "\u8863\u957f"
         },
         "width": {
           "en": "Width",
-          "zh": "胸宽"
+          "zh": "\u80f8\u5bbd"
         },
         "sleeve": {
           "en": "Sleeve",
-          "zh": "袖长"
+          "zh": "\u8896\u957f"
         }
       },
       "sizes": {
@@ -2128,7 +2128,7 @@
     },
     "sherpa_jacket_youth": {
       "label_en": "Sherpa Jacket Youth",
-      "label_zh": "儿童羊羔绒夹克",
+      "label_zh": "\u513f\u7ae5\u7f8a\u7f94\u7ed2\u5939\u514b",
       "group": "jacket",
       "points": [
         "length",
@@ -2138,15 +2138,15 @@
       "pointLabels": {
         "length": {
           "en": "Length",
-          "zh": "衣长"
+          "zh": "\u8863\u957f"
         },
         "width": {
           "en": "Width",
-          "zh": "胸宽"
+          "zh": "\u80f8\u5bbd"
         },
         "sleeve": {
           "en": "Sleeve",
-          "zh": "袖长"
+          "zh": "\u8896\u957f"
         }
       },
       "sizes": {
@@ -2179,7 +2179,7 @@
     },
     "hat_standard": {
       "label_en": "Hat - Standard",
-      "label_zh": "帽子 - 标准款",
+      "label_zh": "\u5e3d\u5b50 - \u6807\u51c6\u6b3e",
       "group": "hat",
       "points": [
         "circumference"
@@ -2187,7 +2187,7 @@
       "pointLabels": {
         "circumference": {
           "en": "Circumference",
-          "zh": "围度"
+          "zh": "\u56f4\u5ea6"
         }
       },
       "sizes": {
@@ -2205,5 +2205,21 @@
         }
       }
     }
-  }
+  },
+  "universalSizes": [
+    "Youth XS",
+    "Youth S",
+    "Youth M",
+    "Youth L",
+    "Youth XL",
+    "Adult XS",
+    "Adult S",
+    "Adult M",
+    "Adult L",
+    "Adult XL",
+    "Adult 2XL",
+    "Adult 3XL",
+    "Adult 4XL",
+    "Adult 5XL"
+  ]
 }
