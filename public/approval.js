@@ -172,16 +172,15 @@ function attachLightboxHandlers() {
     });
     el.classList.toggle('reference-selectable', !!referenceSelectStage);
   });
-  document.querySelectorAll('[data-size-target]').forEach((el) => {
+  document.querySelectorAll('[data-size-cell-target]').forEach((el) => {
     el.classList.toggle('reference-selectable', !!referenceSelectStage);
     if (el._referenceClickWired) return;
     el._referenceClickWired = true;
     el.addEventListener('click', () => {
       if (!referenceSelectStage) return;
-      const size = el.getAttribute('data-size-target');
-      const items = getReferenceableItems(referenceSelectStage);
-      const match = items.find((it) => it.type === 'size' && it.targetId === size);
-      pickReferenceTarget({ type: 'size', targetId: size, label: match ? match.label : `${bi('sizeChartRefLabel', 'Size chart').en}: ${size}` });
+      const cellTarget = el.getAttribute('data-size-cell-target');
+      const label = el.getAttribute('data-size-cell-label') || cellTarget;
+      pickReferenceTarget({ type: 'sizeCell', targetId: cellTarget, label: `${bi('sizeChartRefLabel', 'Size chart').en}: ${label}` });
     });
   });
   applyCompareSelectionHighlights();
@@ -880,10 +879,14 @@ function renderCombinedFitSizingTable(sample, pp, bulk) {
       const ppVal = rowsBySize.pp[size] && rowsBySize.pp[size][p];
       const bulkVal = rowsBySize.bulk[size] && rowsBySize.bulk[size][p];
       const fmt = (v) => (v !== undefined && v !== '' && v !== null) ? `${v} cm` : '-';
+      const pl = labelFor(p);
+      const pointName = pl.zh || pl.en;
+      const cellTarget = (stageKey) => `${size}|${p}|${stageKey}`;
+      const cellLabel = (stageKey) => `${size} · ${pointName} · ${stageSubLabel(stageKey).zh || stageSubLabel(stageKey).en}`;
       return `
-        <td class="size-group-start">${escapeHtml(fmt(goldenVal))}</td>
-        <td class="${cellClass(goldenVal, ppVal)}">${escapeHtml(fmt(ppVal))}</td>
-        <td class="${cellClass(goldenVal, bulkVal)}">${escapeHtml(fmt(bulkVal))}</td>
+        <td class="size-group-start" data-size-cell-target="${escapeHtml(cellTarget('golden'))}" data-size-cell-label="${escapeHtml(cellLabel('golden'))}">${escapeHtml(fmt(goldenVal))}</td>
+        <td class="${cellClass(goldenVal, ppVal)}" data-size-cell-target="${escapeHtml(cellTarget('pp'))}" data-size-cell-label="${escapeHtml(cellLabel('pp'))}">${escapeHtml(fmt(ppVal))}</td>
+        <td class="${cellClass(goldenVal, bulkVal)}" data-size-cell-target="${escapeHtml(cellTarget('bulk'))}" data-size-cell-label="${escapeHtml(cellLabel('bulk'))}">${escapeHtml(fmt(bulkVal))}</td>
       `;
     }).join('');
     return `<tr data-size-target="${escapeHtml(size)}"><td class="size-name">${escapeHtml(size)}</td>${cells}</tr>`;
@@ -1641,7 +1644,9 @@ function attachStageHandlers() {
     el.addEventListener('click', () => {
       let ref;
       try { ref = JSON.parse(el.getAttribute('data-scroll-to-reference')); } catch { return; }
-      const selector = ref.type === 'photo' ? `[data-photo-target="${CSS.escape(ref.targetId)}"]` : `[data-size-target="${CSS.escape(ref.targetId)}"]`;
+      const selector = ref.type === 'photo' ? `[data-photo-target="${CSS.escape(ref.targetId)}"]`
+        : ref.type === 'sizeCell' ? `[data-size-cell-target="${CSS.escape(ref.targetId)}"]`
+        : `[data-size-target="${CSS.escape(ref.targetId)}"]`; // old row-level references, kept for anything saved before this change
       const target = document.querySelector(selector);
       if (!target) { showToast(bi('referenceTargetMissing', "Can't find that anymore - it may have been replaced since this comment was written.").en, true); return; }
       target.scrollIntoView({ behavior: 'smooth', block: 'center' });

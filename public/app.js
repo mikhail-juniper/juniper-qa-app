@@ -15,6 +15,7 @@ const newPoState = {
   establishedFit: null, // { fitKey, sizes } - looked up once SKU is entered, if this SKU already has one on file
   skuChecked: null,
   pdLeadOtherMode: false,
+  creatorOtherMode: false,
   asanaTaskLink: ''
 };
 
@@ -752,7 +753,7 @@ function renderNewPoScreen() {
         <div style="flex:1">${dateField2('newPoOrderDate', 'orderDateLabel', newPoState.orderDate, { required: true })}</div>
         <div style="flex:1">${textField2('newPoQuantity', 'poQuantity', newPoState.orderQuantity, { required: true, placeholderKey: 'poQuantityPlaceholder', numeric: true })}</div>
       </div>
-      ${selectFieldPlain('newPoCreator', 'creator', newPoState.creator, OPTIONS.creators || [])}
+      ${newPoSelectFieldWithOther('newPoCreator', 'creator', newPoState.creator, OPTIONS.creators || [], newPoState.creatorOtherMode)}
       ${textField2('newPoProductTitle', 'productTitle', newPoState.productTitle, {})}
       ${newPoSelectFieldWithOther('newPoPdLead', 'productDevelopmentLead', newPoState.productDevelopmentLead, OPTIONS.productDevelopmentLeads || [], newPoState.pdLeadOtherMode)}
       ${textField2('newPoAsanaLink', 'asanaTaskLink', newPoState.asanaTaskLink, { placeholderKey: 'asanaTaskLinkPlaceholder' })}
@@ -815,8 +816,8 @@ function newPoSelectFieldWithOther(id, i18nKey, value, optionsList, otherModeOn)
       <label class="field-label">${escapeHtml(l.en)} <span class="zh">${escapeHtml(l.zh)}</span></label>
       <select data-newpo-select-other="${id}">
         <option value="">${escapeHtml(ph.en)} / ${escapeHtml(ph.zh)}</option>
-        ${optsHtml}
         <option value="${OTHER_VALUE}" ${isOther ? 'selected' : ''}>${escapeHtml(otherLabel.en)} / ${escapeHtml(otherLabel.zh)}</option>
+        ${optsHtml}
       </select>
       ${isOther ? `<input type="text" data-newpo-other-text="${id}" value="${escapeHtml(value || '')}" placeholder="${escapeHtml(otherPh.en)} / ${escapeHtml(otherPh.zh)}" style="margin-top:8px;" />` : ''}
     </div>
@@ -912,8 +913,16 @@ function attachNewPoHandlers() {
     skuInput.addEventListener('input', (e) => { newPoState.sku = e.target.value; });
     skuInput.addEventListener('blur', checkSkuEstablishedFit);
   }
-  const creatorSelect = document.getElementById('newPoCreator');
-  if (creatorSelect) creatorSelect.addEventListener('change', (e) => { newPoState.creator = e.target.value; });
+  const creatorSelect = document.querySelector('[data-newpo-select-other="newPoCreator"]');
+  if (creatorSelect) {
+    creatorSelect.addEventListener('change', (e) => {
+      if (e.target.value === OTHER_VALUE) { newPoState.creatorOtherMode = true; newPoState.creator = ''; }
+      else { newPoState.creatorOtherMode = false; newPoState.creator = e.target.value; }
+      render();
+    });
+  }
+  const creatorOtherInput = document.querySelector('[data-newpo-other-text="newPoCreator"]');
+  if (creatorOtherInput) creatorOtherInput.addEventListener('input', (e) => { newPoState.creator = e.target.value; });
 
   const catSelect = document.getElementById('newPoCategory');
   if (catSelect) {
@@ -1000,7 +1009,7 @@ function renderNewPoSuccess(data) {
   document.getElementById('btnPoStartOver').addEventListener('click', () => {
     Object.assign(newPoState, {
       category: null, subcategory: null, poNumber: '', sku: '', orderDate: todayStr(), creator: '', productTitle: '',
-      orderQuantity: '', productDevelopmentLead: '', sizesIncluded: [], establishedFit: null, skuChecked: null, pdLeadOtherMode: false, asanaTaskLink: ''
+      orderQuantity: '', productDevelopmentLead: '', sizesIncluded: [], establishedFit: null, skuChecked: null, pdLeadOtherMode: false, creatorOtherMode: false, asanaTaskLink: ''
     });
     appMode = 'newPO';
     render();

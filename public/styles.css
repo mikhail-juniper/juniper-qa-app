@@ -655,8 +655,14 @@ input:focus, select:focus, textarea:focus {
   outline: 3px solid var(--jc-teal) !important;
   outline-offset: 2px;
   transition: outline-color 2.5s ease-out;
+  animation: reference-flash 0.6s ease-out 2;
+}
+@keyframes reference-flash {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(42,172,141,0); }
+  50% { box-shadow: 0 0 0 6px rgba(42,172,141,0.5); }
 }
 tr.reference-highlight { outline-offset: -2px; background: var(--jc-mint-light) !important; }
+td.reference-highlight { outline-offset: -2px; background: var(--jc-mint-light) !important; }
 
 .reference-select-btn {
   width: 100%;
@@ -684,6 +690,7 @@ tr.reference-highlight { outline-offset: -2px; background: var(--jc-mint-light) 
    in progress, so it's obvious what's clickable right now. */
 .reference-selectable { cursor: pointer !important; outline: 2px dashed var(--jc-teal); outline-offset: 2px; }
 tr.reference-selectable { outline-offset: -2px; }
+td.reference-selectable { outline-offset: -2px; }
 .reference-selectable:hover { outline-color: var(--jc-teal-dark); background: var(--jc-mint-light); }
 
 .reference-preview {

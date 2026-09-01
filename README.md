@@ -546,3 +546,66 @@ and highlight lands on the right target, and confirming a comment
 submitted with no reference at all still works exactly as before. Also
 confirmed Compare Photos still works correctly on its own and doesn't
 conflict with the new mode.
+
+---
+
+## Fixed: Creator/Brand on New Purchase Order had no "Other" option at all
+
+Found the actual cause: this field used a different, simpler dropdown
+helper than every other similar field in the app - one that never had an
+"Other" choice built in, not one where it was just hard to find. Switched
+it to the same "dropdown + Other reveals a text field" helper already
+used for Product Development Lead on the same form.
+
+Also moved "Other" to the top of the list (right after the placeholder),
+for this field and Product Development Lead alongside it, since with 218+
+creators on file, having it buried at the bottom after everything else
+defeats the purpose of it being there at all.
+
+Separately, found and fixed a real gap: even once "Other" existed, a
+newly typed creator name was never being saved for future use - only
+Product Development Lead had that auto-save wired up server-side, so a
+new creator would need to be retyped as "Other" every single time. Now
+saves it as a new option the first time it's used, exactly like every
+other similar field in the app already does.
+
+Tested end-to-end: confirmed "Other" now appears immediately after the
+placeholder rather than after 218 other options, confirmed typing a
+brand new creator name and submitting a PO actually adds it to the
+saved options list (verified directly in the data, not just that the UI
+accepted it), and confirmed selecting an existing creator from the list
+still works exactly as before with no regression.
+
+---
+
+## Sizing chart references are now cell-specific, and highlights got a more noticeable animation
+
+### Sizing chart: highlights one exact cell, not the whole row
+
+Selecting a sizing-chart reference now works at the level of one specific
+cell - a size, a measurement point, and a stage (e.g. "Adult S · Sleeve ·
+Pre-Production Sample") - instead of the entire row for that size.
+Every individual cell in the Sizing Details table is its own click
+target during a reference pick, with its own precise label built in, and
+clicking a "Report Attachment" for one now highlights only that one
+cell - confirmed directly that the other 8 cells in the same row stay
+untouched. Old references saved before this change (row-level) still
+resolve correctly - this was added as a new option alongside the old one,
+not a replacement, so nothing already saved gets a broken link.
+
+### Photo references: confirmed the jump-and-highlight already worked, made it more visible
+
+Checked this directly rather than assuming - clicking a photo's "Report
+Attachment" was already scrolling to and highlighting the actual original
+photo on the page, not just the small thumbnail preview. Since the
+highlight itself (a thin outline) is naturally much less noticeable on a
+photo than the background-color change on a table cell, added a brief
+pulse animation on top of the outline for anything highlighted - visible
+regardless of what's underneath it (a photo, a table cell, anything),
+so it reads clearly as "this is the thing being pointed at" either way.
+
+Verified all of this against the real UI: selected a specific size/point/
+stage cell and confirmed only that exact cell highlights, confirmed the
+label attached to a saved comment names the precise cell picked, and
+confirmed clicking a photo attachment scrolls to and highlights the
+original photo (not the thumbnail) with the new pulse effect visible.

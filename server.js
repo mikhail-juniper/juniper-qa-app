@@ -634,6 +634,7 @@ app.post('/api/purchase-orders', (req, res) => {
       return res.status(409).json({ error: 'A PO with this number already exists' });
     }
     addNewOptionIfMissing('productDevelopmentLeads', body.productDevelopmentLead);
+    addNewOptionIfMissing('creators', body.creator);
     const id = uuidv4();
 
     // If this SKU already has an established apparel fit from a prior PO,
