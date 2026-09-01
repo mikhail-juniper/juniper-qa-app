@@ -1650,8 +1650,14 @@ function attachStageHandlers() {
       const target = document.querySelector(selector);
       if (!target) { showToast(bi('referenceTargetMissing', "Can't find that anymore - it may have been replaced since this comment was written.").en, true); return; }
       target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      target.classList.add('reference-highlight');
-      setTimeout(() => target.classList.remove('reference-highlight'), 2500);
+      // A photo inside one of the bordered comparison frames sits under a
+      // parent with overflow:hidden - an outline on the <img> itself would
+      // be clipped away by that parent, invisibly. An element's own
+      // overflow never clips its own outline, only an ancestor's, so
+      // highlight the frame instead whenever one wraps the actual target.
+      const highlightTarget = target.closest('.photo-compare-col-frame, .photo-gallery-large-frame') || target;
+      highlightTarget.classList.add('reference-highlight');
+      setTimeout(() => highlightTarget.classList.remove('reference-highlight'), 2500);
     });
   });
   document.querySelectorAll('[data-approval-risk]').forEach((el) => {

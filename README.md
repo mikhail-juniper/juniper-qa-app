@@ -609,3 +609,29 @@ stage cell and confirmed only that exact cell highlights, confirmed the
 label attached to a saved comment names the precise cell picked, and
 confirmed clicking a photo attachment scrolls to and highlights the
 original photo (not the thumbnail) with the new pulse effect visible.
+
+---
+
+## Fixed: photo reference highlight was invisible in a real browser
+
+Found the actual cause. Photos in the comparison views sit inside a
+bordered frame with `overflow: hidden` (added earlier for the
+photo-shadow fix). Applying the highlight to the `<img>` itself put an
+outline just outside the image's own edge - exactly where the frame's
+`overflow: hidden` clips it away, so the highlight was genuinely
+invisible even though the class was being added correctly.
+
+This is a case worth being upfront about: my testing at the time only
+confirmed the highlight class was being toggled on the right element,
+via jsdom - which doesn't render real CSS layout, so it had no way to
+catch that the effect was invisible once actually laid out and clipped
+in a real browser. The size-chart highlight worked fine because table
+cells aren't wrapped in an overflow-hidden frame, so that one never hit
+this problem - only photos did.
+
+Fixed by highlighting the frame wrapper instead of the image itself
+whenever one wraps the actual target, since an element's own outline is
+never clipped by its own overflow, only by an ancestor's. Verified with
+an actual screenshot this time, not just a jsdom class check - the
+outline is now clearly visible around the full photo, both immediately
+after clicking and once the pulse settles.
