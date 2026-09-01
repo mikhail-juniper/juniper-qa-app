@@ -761,11 +761,15 @@ app.post('/api/approval/:poNumber/:stage', upload.any(), (req, res) => {
 
     // If this Sample Approval established an apparel sizing standard, write it
     // back onto the PO record so future POs of the same SKU can find and copy
-    // it forward automatically (see poStore.getEstablishedFitForSku).
+    // it forward automatically (see poStore.getEstablishedFitForSku). Records
+    // only the sizes actually submitted here, not the fit's entire generic
+    // range - a Sample covering 3 sizes shouldn't make a future PO of the
+    // same SKU default to all 12 of the fit's possible sizes.
     if (req.params.stage === 'sample' && po.category === 'apparel' && data.sizing && data.sizing.fit) {
       const fitDef = fits.fits[data.sizing.fit];
       if (fitDef) {
-        poStore.updatePo(po.id, { fitKey: data.sizing.fit, fitSizes: Object.keys(fitDef.sizes) });
+        const submittedSizes = (data.sizing.sizeRows || []).map((r) => r.size).filter(Boolean);
+        poStore.updatePo(po.id, { fitKey: data.sizing.fit, fitSizes: submittedSizes });
       }
     }
 

@@ -12,6 +12,7 @@ const newPoState = {
   category: null, subcategory: null,
   poNumber: '', sku: '', orderDate: todayStr(), creator: '', productTitle: '', orderQuantity: '', productDevelopmentLead: '',
   sizesIncluded: [],
+  sizesPreFilled: false,
   establishedFit: null, // { fitKey, sizes } - looked up once SKU is entered, if this SKU already has one on file
   skuChecked: null,
   pdLeadOtherMode: false,
@@ -707,10 +708,14 @@ function attachChooserHandlers() {
 function renderNewPoSizesBlock() {
   if (newPoState.category !== 'apparel') return '';
   const universalSizes = (CONFIG.fits && CONFIG.fits.universalSizes) || [];
+  const preFilledNote = newPoState.sizesPreFilled
+    ? `<div class="section-help" style="color:var(--jc-teal-dark); margin-top:6px;">${escapeHtml(bi('sizesPreFilledNote', 'Pre-filled from a previous order for this SKU - click any size to adjust.').en)}<br/>${escapeHtml(bi('sizesPreFilledNote').zh)}</div>`
+    : '';
   return `
     <div class="card">
       <div class="section-title">${biBlockHtml('sizesInPo', 'Sizes Included in this PO')}</div>
       <div class="section-help">${escapeHtml(bi('sizesInPoHelp').en)}<br/>${escapeHtml(bi('sizesInPoHelp').zh)}</div>
+      ${preFilledNote}
       <div class="segmented" style="flex-wrap:wrap; margin-top:8px;">
         ${universalSizes.map((s) => `<div class="segmented-option ${newPoState.sizesIncluded.includes(s) ? 'selected' : ''}" data-po-size="${escapeHtml(s)}" style="flex:0 0 auto; min-width:90px;">${escapeHtml(s)}</div>`).join('')}
       </div>
@@ -851,6 +856,7 @@ function attachNewPoSizeHandlers() {
       const idx = newPoState.sizesIncluded.indexOf(s);
       if (idx > -1) newPoState.sizesIncluded.splice(idx, 1);
       else newPoState.sizesIncluded.push(s);
+      newPoState.sizesPreFilled = false;
       render();
     });
   });
@@ -868,6 +874,7 @@ async function checkSkuEstablishedFit() {
     if (data.fit && !newPoState.sizesIncluded.length) {
       const universalSizes = (CONFIG.fits && CONFIG.fits.universalSizes) || [];
       newPoState.sizesIncluded = universalSizes.filter((canonical) => (data.fit.sizes || []).some((fitSize) => sizeMatchesCanonical(fitSize, canonical)));
+      newPoState.sizesPreFilled = newPoState.sizesIncluded.length > 0;
     }
   } catch (e) {
     console.error('Failed to check established fit', e);
@@ -1009,7 +1016,7 @@ function renderNewPoSuccess(data) {
   document.getElementById('btnPoStartOver').addEventListener('click', () => {
     Object.assign(newPoState, {
       category: null, subcategory: null, poNumber: '', sku: '', orderDate: todayStr(), creator: '', productTitle: '',
-      orderQuantity: '', productDevelopmentLead: '', sizesIncluded: [], establishedFit: null, skuChecked: null, pdLeadOtherMode: false, creatorOtherMode: false, asanaTaskLink: ''
+      orderQuantity: '', productDevelopmentLead: '', sizesIncluded: [], sizesPreFilled: false, establishedFit: null, skuChecked: null, pdLeadOtherMode: false, creatorOtherMode: false, asanaTaskLink: ''
     });
     appMode = 'newPO';
     render();

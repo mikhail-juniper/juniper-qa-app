@@ -635,3 +635,34 @@ never clipped by its own overflow, only by an ancestor's. Verified with
 an actual screenshot this time, not just a jsdom class check - the
 outline is now clearly visible around the full photo, both immediately
 after clicking and once the pulse settles.
+
+---
+
+## Found and fixed: size tiles weren't a color bug, they were a real pre-fill bug
+
+Checked the actual CSS before touching anything - the color mapping was
+already correct everywhere (white by default, green when selected, the
+standard convention), and this class is shared across many parts of the
+app (risk level, checklist status, etc.), so flipping it globally would
+have broken all of those instead of fixing anything.
+
+The real cause: whenever a repeat SKU already had an established apparel
+fit from a prior PO, a genuine bug was recording *every single size the
+generic fit definition supports* (e.g. all 14 universal sizes) as
+"established" for that SKU - rather than just the specific sizes that
+Golden Sample actually covered. So a Sample submitted for 3 sizes would
+make every future PO of that SKU default to all 14 sizes pre-selected,
+which is exactly the "everything starts green" experience described.
+Fixed it to record only the sizes actually submitted.
+
+Also added a small explanatory note that now appears above the tiles
+whenever sizes get pre-filled this way ("Pre-filled from a previous
+order for this SKU - click any size to adjust"), so it's clear why
+something already shows as selected - it disappears again once anything
+is manually clicked.
+
+Verified directly: a brand new SKU still starts with nothing selected;
+a repeat SKU now pre-fills only its actual previously-used sizes (tested
+with 3 of 14 sizes, confirmed exactly those 3 highlight and the other 11
+correctly stay white); confirmed the note appears with the pre-fill and
+disappears the moment a tile is manually toggled.

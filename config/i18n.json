@@ -1015,6 +1015,10 @@
     "en": "Select which sizes are part of this order - only these will show up later when adding photos or measurements.",
     "zh": "请选择该订单包含的尺码——之后添加照片或测量数据时，只会显示这些尺码。"
   },
+  "sizesPreFilledNote": {
+    "en": "Pre-filled from a previous order for this SKU - click any size to adjust.",
+    "zh": "已根据该SKU的往期订单自动填充——点击任意尺码即可调整。"
+  },
   "noEstablishedFitYet": {
     "en": "No sizing standard is on file yet for this SKU. It'll be set during QA/QC Approval and copied forward automatically to future POs.",
     "zh": "该SKU尚无已建立的尺寸标准。该标准将在质检审批阶段设定，并自动应用于以后的订单。"
