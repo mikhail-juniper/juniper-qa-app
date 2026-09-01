@@ -1123,7 +1123,7 @@ function renderReferencePhotosSection() {
     if (!slots.length) return '';
     const tiles = slots.flatMap((slotKey) => photosMap[slotKey].map((url) => `
       <div class="photo-tile">
-        <img src="${escapeHtml(url)}" class="js-lightbox" />
+        <div class="photo-gallery-large-frame"><img src="${escapeHtml(url)}" class="js-lightbox" /></div>
         <div class="photo-tile-caption">${escapeHtml(slotKey)}</div>
       </div>
     `)).join('');

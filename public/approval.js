@@ -964,7 +964,7 @@ function renderGenericSlotComparison(columns, slotKeys) {
         ${columns.map((col) => `
           <div class="photo-compare-col">
             <div class="photo-compare-col-label">${escapeHtml(col.label.en)} ${escapeHtml(col.label.zh)} · ${escapeHtml(label.en)} ${escapeHtml(label.zh)}</div>
-            ${(col.photos[slotKey] || []).map((u) => `<img src="${escapeHtml(u)}" class="js-lightbox" data-photo-target="${escapeHtml(u)}" />`).join('') || `<div class="section-help">${escapeHtml(bi('noPhotosYet').en)}<span class="zh">${escapeHtml(bi('noPhotosYet').zh)}</span></div>`}
+            ${(col.photos[slotKey] || []).map((u) => `<div class="photo-compare-col-frame"><img src="${escapeHtml(u)}" class="js-lightbox" data-photo-target="${escapeHtml(u)}" /></div>`).join('') || `<div class="section-help">${escapeHtml(bi('noPhotosYet').en)}<span class="zh">${escapeHtml(bi('noPhotosYet').zh)}</span></div>`}
           </div>
         `).join('')}
       </div>
@@ -998,7 +998,7 @@ function renderPhotoComparisonLarge(columns, category, sizesIncluded, sampledSiz
                 return `
                   <div class="photo-compare-col">
                     <div class="photo-compare-col-label">${escapeHtml(col.label.en)} ${escapeHtml(col.label.zh)} · ${escapeHtml(slot.label_zh)} ${escapeHtml(slot.label_en)}</div>
-                    ${urls.length ? urls.map((u) => `<img src="${escapeHtml(u)}" class="js-lightbox" data-photo-target="${escapeHtml(u)}" />`).join('') : `<div class="section-help">${escapeHtml(bi('noPhotosYet').en)}<span class="zh">${escapeHtml(bi('noPhotosYet').zh)}</span></div>`}
+                    ${urls.length ? urls.map((u) => `<div class="photo-compare-col-frame"><img src="${escapeHtml(u)}" class="js-lightbox" data-photo-target="${escapeHtml(u)}" /></div>`).join('') : `<div class="section-help">${escapeHtml(bi('noPhotosYet').en)}<span class="zh">${escapeHtml(bi('noPhotosYet').zh)}</span></div>`}
                   </div>
                 `;
               }
@@ -1006,7 +1006,7 @@ function renderPhotoComparisonLarge(columns, category, sizesIncluded, sampledSiz
               return `
                 <div class="photo-compare-col">
                   <div class="photo-compare-col-label">${escapeHtml(col.label.en)} ${escapeHtml(col.label.zh)} · ${escapeHtml(slot.label_zh)} ${escapeHtml(slot.label_en)}</div>
-                  ${urls.length ? urls.map((u) => `<img src="${escapeHtml(u)}" class="js-lightbox" data-photo-target="${escapeHtml(u)}" />`).join('') : `<div class="section-help">${escapeHtml(bi('noPhotosYet').en)}<span class="zh">${escapeHtml(bi('noPhotosYet').zh)}</span></div>`}
+                  ${urls.length ? urls.map((u) => `<div class="photo-compare-col-frame"><img src="${escapeHtml(u)}" class="js-lightbox" data-photo-target="${escapeHtml(u)}" /></div>`).join('') : `<div class="section-help">${escapeHtml(bi('noPhotosYet').en)}<span class="zh">${escapeHtml(bi('noPhotosYet').zh)}</span></div>`}
                 </div>
               `;
             }).join('')}

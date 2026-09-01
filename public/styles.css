@@ -674,12 +674,17 @@ tr.reference-highlight { outline-offset: -2px; background: var(--jc-mint-light) 
   gap: 10px;
   margin-top: 8px;
 }
-.photo-gallery-large img {
-  width: 100%;
-  aspect-ratio: 1;
-  object-fit: cover;
+.photo-gallery-large-frame {
   border-radius: 8px;
   border: 1px solid var(--jc-border);
+  overflow: hidden;
+  aspect-ratio: 1;
+}
+.photo-gallery-large img {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
   cursor: zoom-in;
   display: block;
 }
@@ -708,12 +713,17 @@ tr.reference-highlight { outline-offset: -2px; background: var(--jc-mint-light) 
   text-transform: uppercase;
   letter-spacing: 0.02em;
 }
-.photo-compare-col img {
-  width: 100%;
-  aspect-ratio: 1;
-  object-fit: cover;
+.photo-compare-col-frame {
   border-radius: 8px;
   border: 1px solid var(--jc-border);
+  overflow: hidden;
+  aspect-ratio: 1;
+}
+.photo-compare-col img {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
   cursor: zoom-in;
   display: block;
 }

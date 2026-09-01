@@ -473,3 +473,31 @@ that exact photo. Repeated the same for a size-row reference. Also
 confirmed the reference is correctly saved server-side, and confirmed a
 comment with no reference selected still submits and displays completely
 normally.
+
+---
+
+## Merged in a fix made directly against an older file version
+
+Two files (approval.js, styles.css) came back edited from a separate
+conversation, based on a version of the app from before the custom
+sizing columns and comment-reference features existed in this session.
+Diffed them directly against the current working files rather than
+assuming - confirmed they were missing both of those features (would
+have been lost if used as-is), but also contained a genuine fix neither
+had: photos in the comparison views (Approved Sample vs Pre-Production vs
+Bulk, and the Reporting flow's photo gallery) now sit inside a bordered,
+fixed-aspect-ratio frame with `overflow: hidden`, rather than relying on
+the `<img>` tag's own `border-radius` and `aspect-ratio` to clip
+correctly on their own - a likely fix for the inconsistent photo
+edge/shadow artifact raised earlier, since a wrapping frame reliably
+clips regardless of a given photo's actual dimensions.
+
+Merged the frame fix into the current, complete version rather than
+picking one or the other - applied it to all three photo-comparison
+spots in approval.js and the Reporting flow's own photo gallery in
+app.js (which needed the same wrapper added, since the underlying CSS
+rule this fix relies on had moved off the bare `<img>` tag). Re-diffed
+against the originally uploaded files afterward to confirm every part of
+the fix made it in, and confirmed both the custom sizing columns and
+comment-reference features (the ones that would have been lost) are
+intact and still working after the merge.
