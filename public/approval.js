@@ -94,6 +94,33 @@ function openLightbox(url) {
 let compareMode = false;
 let compareSelection = []; // up to 2 image URLs
 
+/* ---- Report Reference selection: pick one photo or sizing-chart row
+ * anywhere on the page to attach to a specific reply draft. Only one
+ * reply form can be actively selecting at a time (tracked by stage key),
+ * and it takes priority over Compare Mode if both are somehow active. ---- */
+let referenceSelectStage = null;
+
+function startReferenceSelect(stage) {
+  // Starting a reference pick always wins over an in-progress photo
+  // compare, since only one "what does a click do right now" mode makes
+  // sense at a time.
+  compareMode = false;
+  compareSelection = [];
+  referenceSelectStage = (referenceSelectStage === stage) ? null : stage; // click again to cancel
+  render();
+}
+
+function pickReferenceTarget(ref) {
+  const stage = referenceSelectStage;
+  if (!stage) return;
+  if (!approvalState.replyDrafts[stage]) approvalState.replyDrafts[stage] = { author: '', approvalStatus: '', text: '', reference: null };
+  approvalState.replyDrafts[stage].reference = ref;
+  referenceSelectStage = null;
+  render();
+  const btn = document.querySelector(`[data-start-reference-select="${stage}"]`);
+  if (btn) btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
 function updateCompareToggleButton() {
   const btn = document.getElementById('compareModeToggle');
   const label = document.getElementById('compareToggleLabel');
@@ -134,8 +161,27 @@ function attachLightboxHandlers() {
   document.querySelectorAll('.js-lightbox').forEach((el) => {
     el.addEventListener('click', () => {
       const url = el.getAttribute('src');
+      if (referenceSelectStage) {
+        const items = getReferenceableItems(referenceSelectStage);
+        const match = items.find((it) => it.type === 'photo' && it.targetId === url);
+        pickReferenceTarget({ type: 'photo', targetId: url, label: match ? match.label : bi('referencePhotoFallback', 'Photo').en });
+        return;
+      }
       if (compareMode) toggleCompareSelection(url);
       else openLightbox(url);
+    });
+    el.classList.toggle('reference-selectable', !!referenceSelectStage);
+  });
+  document.querySelectorAll('[data-size-target]').forEach((el) => {
+    el.classList.toggle('reference-selectable', !!referenceSelectStage);
+    if (el._referenceClickWired) return;
+    el._referenceClickWired = true;
+    el.addEventListener('click', () => {
+      if (!referenceSelectStage) return;
+      const size = el.getAttribute('data-size-target');
+      const items = getReferenceableItems(referenceSelectStage);
+      const match = items.find((it) => it.type === 'size' && it.targetId === size);
+      pickReferenceTarget({ type: 'size', targetId: size, label: match ? match.label : `${bi('sizeChartRefLabel', 'Size chart').en}: ${size}` });
     });
   });
   applyCompareSelectionHighlights();
@@ -518,11 +564,27 @@ function renderCommentCard(c, stage) {
         ${badge}
       </div>
       ${c.text ? `<div class="prior-issue-desc" style="margin-top:4px;">${escapeHtml(c.text)}</div>` : `<div class="prior-issue-desc" style="margin-top:4px; font-style:italic; color:var(--jc-muted);">${escapeHtml(bi('noCommentTextProvided').en)}<span class="zh">${escapeHtml(bi('noCommentTextProvided').zh)}</span></div>`}
-      ${c.reference ? `<button type="button" class="reference-chip" data-scroll-to-reference='${escapeHtml(JSON.stringify(c.reference))}'>🔗 ${escapeHtml(c.reference.label)}</button>` : ''}
+      ${c.reference ? renderCommentReferenceAttachment(c.reference) : ''}
       <div class="section-help">${escapeHtml(c.author)} · ${new Date(c.timestamp).toLocaleString()}</div>
       ${(c.photos || []).map((url) => `<img src="${escapeHtml(url)}" class="prior-issue-photo js-lightbox" data-photo-target="${escapeHtml(url)}" />`).join('')}
     </div>
   `;
+}
+
+/** A submitted comment's "Report Attachment" - a small labeled thumbnail
+ *  for a photo reference, or a text chip for a size-chart reference.
+ *  Either way, clicking it jumps to and highlights the live original. */
+function renderCommentReferenceAttachment(ref) {
+  const label = `📎 ${escapeHtml(bi('reportAttachment', 'Report Attachment').en)} / ${escapeHtml(bi('reportAttachment').zh)}`;
+  if (ref.type === 'photo') {
+    return `
+      <div class="reference-preview" style="margin-top:8px;">
+        <img src="${escapeHtml(ref.targetId)}" class="reference-preview-thumb" data-scroll-to-reference='${escapeHtml(JSON.stringify(ref))}' title="${escapeHtml(ref.label)}" />
+        <span class="section-help">${label}</span>
+      </div>
+    `;
+  }
+  return `<button type="button" class="reference-chip" data-scroll-to-reference='${escapeHtml(JSON.stringify(ref))}' style="display:block;">${label}: ${escapeHtml(ref.label)}</button>`;
 }
 
 /** The comment/reply form for a stage. First-ever comment requires an
@@ -625,22 +687,41 @@ function renderReplyForm(stage, hasComments) {
         <label class="field-label">${biBlockHtml('commentText', 'Comment')}</label>
         <textarea data-reply-text="${stage}" placeholder="${escapeHtml(bi(hasComments ? 'replyPlaceholder' : 'commentPlaceholder').en)}">${escapeHtml(draft.text)}</textarea>
       </div>
-      ${(() => {
-        const items = getReferenceableItems(stage);
-        if (!items.length) return '';
-        const selectedIdx = draft.reference ? items.findIndex((it) => it.type === draft.reference.type && it.targetId === draft.reference.targetId) : -1;
-        return `
-          <div class="field">
-            <label class="field-label">${biBlockHtml('referenceObject', 'Reference (optional)')}</label>
-            <select data-reply-reference="${stage}">
-              <option value="-1">${escapeHtml(bi('referenceNone', 'None').en)} / ${escapeHtml(bi('referenceNone').zh)}</option>
-              ${items.map((it, i) => `<option value="${i}" ${i === selectedIdx ? 'selected' : ''}>${escapeHtml(it.label)}</option>`).join('')}
-            </select>
-          </div>
-        `;
-      })()}
-      ${renderPhotoSlot('_reply_' + stage, 'Photos', '照片', null, true)}
+      <div class="field">
+        <label class="field-label">${biBlockHtml('attachmentsTitle', 'Attachments')}</label>
+        ${renderPhotoSlot('_reply_' + stage, 'Photos', '照片', null, true)}
+        <button type="button" class="reference-select-btn ${referenceSelectStage === stage ? 'active' : ''}" data-start-reference-select="${stage}" style="margin-top:10px;">
+          ${referenceSelectStage === stage
+            ? `${escapeHtml(bi('clickToSelectReference', 'Click a photo or sizing row to select').en)} / ${escapeHtml(bi('clickToSelectReference').zh)}`
+            : `🔗 ${escapeHtml(bi('reportReference', 'Report Reference').en)} / ${escapeHtml(bi('reportReference').zh)}`}
+        </button>
+        ${draft.reference ? renderSelectedReferencePreview(draft.reference, stage) : ''}
+      </div>
       <button type="button" class="btn btn-primary" data-submit-reply="${stage}" style="margin-top:10px;">${biBlockHtml(hasComments ? 'submitReply' : 'submitApproval', hasComments ? 'Submit Reply' : 'Submit Approval')}</button>
+    </div>
+  `;
+}
+
+/** The reply draft's currently-picked reference, shown right in the reply
+ *  form so it's clear something was selected. A photo reference gets an
+ *  actual thumbnail (closest to how commenting directly on an image looks
+ *  in a doc editor); a size-chart reference is a text chip, since there's
+ *  no single image to show. Both are clickable to jump to and highlight
+ *  the live original, and both have a small "x" to clear the pick. */
+function renderSelectedReferencePreview(ref, stage) {
+  const removeBtn = `<button type="button" class="reference-preview-remove" data-clear-reference="${stage}" title="${escapeHtml(bi('remove', 'Remove').en)}">✕</button>`;
+  if (ref.type === 'photo') {
+    return `
+      <div class="reference-preview">
+        <img src="${escapeHtml(ref.targetId)}" class="reference-preview-thumb" data-scroll-to-reference='${escapeHtml(JSON.stringify(ref))}' />
+        ${removeBtn}
+      </div>
+    `;
+  }
+  return `
+    <div class="reference-preview">
+      <button type="button" class="reference-chip" data-scroll-to-reference='${escapeHtml(JSON.stringify(ref))}'>🔗 ${escapeHtml(ref.label)}</button>
+      ${removeBtn}
     </div>
   `;
 }
@@ -1571,6 +1652,16 @@ function attachStageHandlers() {
   document.querySelectorAll('[data-approval-risk]').forEach((el) => {
     el.addEventListener('click', () => { approvalState.productRisk = el.getAttribute('data-approval-risk'); render(); });
   });
+  document.querySelectorAll('[data-start-reference-select]').forEach((el) => {
+    el.addEventListener('click', () => startReferenceSelect(el.getAttribute('data-start-reference-select')));
+  });
+  document.querySelectorAll('[data-clear-reference]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const stage = el.getAttribute('data-clear-reference');
+      if (approvalState.replyDrafts[stage]) approvalState.replyDrafts[stage].reference = null;
+      render();
+    });
+  });
   document.querySelectorAll('[data-approval-select-other]').forEach((el) => {
     el.addEventListener('change', (e) => {
       const id = el.getAttribute('data-approval-select-other');
@@ -1748,15 +1839,6 @@ function attachStageHandlers() {
       const stage = el.getAttribute('data-reply-status');
       if (!approvalState.replyDrafts[stage]) approvalState.replyDrafts[stage] = { author: '', approvalStatus: '', text: '', reference: null };
       approvalState.replyDrafts[stage].approvalStatus = e.target.value;
-    });
-  });
-  document.querySelectorAll('[data-reply-reference]').forEach((el) => {
-    el.addEventListener('change', (e) => {
-      const stage = el.getAttribute('data-reply-reference');
-      if (!approvalState.replyDrafts[stage]) approvalState.replyDrafts[stage] = { author: '', approvalStatus: '', text: '', reference: null };
-      const idx = parseInt(e.target.value, 10);
-      const items = getReferenceableItems(stage);
-      approvalState.replyDrafts[stage].reference = (idx >= 0 && items[idx]) ? { type: items[idx].type, targetId: items[idx].targetId, label: items[idx].label } : null;
     });
   });
   document.querySelectorAll('[data-reply-text]').forEach((el) => {

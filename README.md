@@ -501,3 +501,48 @@ against the originally uploaded files afterward to confirm every part of
 the fix made it in, and confirmed both the custom sizing columns and
 comment-reference features (the ones that would have been lost) are
 intact and still working after the merge.
+
+---
+
+## Reference feature redesigned: click-to-select instead of a dropdown
+
+The plain dropdown for attaching a reference to a comment was hard to
+read (a list of raw text labels, no visual cue for what each one
+actually was), so it's been replaced with an interaction that mirrors
+Compare Photos, which was already a known, well-liked pattern in the
+app.
+
+The reply form's "Reference (optional)" dropdown is gone. In its place,
+an "Attachments" section holds the existing Photos upload plus a new
+"Report Reference" button. Clicking it turns on a selection mode: every
+photo and every sizing-chart row on the page gets a dashed teal outline
+to show it's clickable, and clicking any of them attaches it to the
+reply draft and exits selection mode automatically - clicking the button
+again before picking anything cancels it. A photo reference shows an
+actual small thumbnail right in the form (closer to commenting directly
+on an image, which was the original ask); a sizing-row reference shows a
+text chip, since there's no single image to show for that. Either can be
+removed with a small "x" before submitting.
+
+Once submitted, a comment with a reference shows a "Report Attachment" -
+a thumbnail for a photo, a chip for a sizing row - and clicking it jumps
+to and briefly highlights the actual live photo or row wherever it sits
+on the page, same behavior as before.
+
+One coexistence detail worth knowing: starting a reference pick
+automatically cancels an in-progress Compare Photos selection, since
+having two different "what does clicking a photo do" modes active at
+once would be confusing - only one can be active at a time.
+
+Also fixed the wording on Compare Photos itself, per direct feedback:
+"Select 2 more photo(s)" is now "Select 2 photos".
+
+Tested the complete flow end-to-end through the real UI: entering
+selection mode, confirming photos and sizing rows both get the visual
+"selectable" cue, selecting each type and confirming the right preview
+appears in the draft, submitting and confirming the "Report Attachment"
+appears correctly on the saved comment, clicking it to confirm the jump
+and highlight lands on the right target, and confirming a comment
+submitted with no reference at all still works exactly as before. Also
+confirmed Compare Photos still works correctly on its own and doesn't
+conflict with the new mode.

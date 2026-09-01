@@ -1259,6 +1259,26 @@
     "en": "Reference (optional)",
     "zh": "引用对象（选填）"
   },
+  "attachmentsTitle": {
+    "en": "Attachments",
+    "zh": "附件"
+  },
+  "reportReference": {
+    "en": "Report Reference",
+    "zh": "报告引用"
+  },
+  "clickToSelectReference": {
+    "en": "Click a photo or sizing row to select",
+    "zh": "点击图片或尺寸行以选择"
+  },
+  "referencePhotoFallback": {
+    "en": "Photo",
+    "zh": "照片"
+  },
+  "reportAttachment": {
+    "en": "Report Attachment",
+    "zh": "报告附件"
+  },
   "referenceNone": {
     "en": "None",
     "zh": "无"
@@ -1376,8 +1396,8 @@
     "zh": "对比照片"
   },
   "selectNPhotos": {
-    "en": "Select {n} more photo(s)",
-    "zh": "再选择{n}张照片"
+    "en": "Select {n} photos",
+    "zh": "选择{n}张照片"
   },
   "exitCompareMode": {
     "en": "Exit Compare Mode",

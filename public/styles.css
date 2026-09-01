@@ -658,6 +658,60 @@ input:focus, select:focus, textarea:focus {
 }
 tr.reference-highlight { outline-offset: -2px; background: var(--jc-mint-light) !important; }
 
+.reference-select-btn {
+  width: 100%;
+  padding: 10px;
+  border: 1.5px dashed var(--jc-teal);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--jc-teal-dark);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+.reference-select-btn.active {
+  background: var(--jc-teal);
+  border-style: solid;
+  color: #fff;
+  animation: reference-pulse 1.4s ease-in-out infinite;
+}
+@keyframes reference-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(42,172,141,0.35); }
+  50% { box-shadow: 0 0 0 6px rgba(42,172,141,0); }
+}
+
+/* Applied to every photo and sizing-chart row while a reference pick is
+   in progress, so it's obvious what's clickable right now. */
+.reference-selectable { cursor: pointer !important; outline: 2px dashed var(--jc-teal); outline-offset: 2px; }
+tr.reference-selectable { outline-offset: -2px; }
+.reference-selectable:hover { outline-color: var(--jc-teal-dark); background: var(--jc-mint-light); }
+
+.reference-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.reference-preview-thumb {
+  width: 56px; height: 56px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--jc-teal);
+  cursor: pointer;
+}
+.reference-preview-remove {
+  flex-shrink: 0;
+  width: 28px; height: 28px;
+  border: 1.5px solid var(--jc-border);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--jc-muted);
+  font-size: 12px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.reference-preview-remove:hover { border-color: var(--jc-fail); color: var(--jc-fail); }
+
 .prior-issue-photo {
   display: block;
   max-width: 100%;
