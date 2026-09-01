@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<title>Juniper QA/QC - Approval</title>
+<link rel="icon" type="image/x-icon" href="favicon.ico" />
+<link rel="icon" type="image/png" href="assets/favicon.png" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="app-header">
+      <div class="brand">
+        <a href="index.html" class="brand-mark" title="Home / 首页"><img src="assets/juniper-mark-white.png" alt="Juniper" /></a>
+        <div class="brand-text">
+          <div class="brand-name">Juniper Creates</div>
+          <div class="brand-sub">QA/QC Approval</div>
+        </div>
+      </div>
+    </header>
+    <main id="approvalRoot" class="form-root"></main>
+    <div id="toast" class="toast hidden"></div>
+  </div>
+  <div id="lightboxOverlay" class="lightbox-overlay hidden"><img id="lightboxImg" src="" /></div>
+
+  <button id="compareModeToggle" class="compare-toggle-btn">
+    <span id="compareToggleLabel"></span>
+  </button>
+
+  <div id="compareOverlay" class="compare-overlay hidden">
+    <button id="compareCloseBtn" class="compare-close-btn">✕</button>
+    <div class="compare-panes">
+      <div class="compare-pane" data-compare-pane="0">
+        <div class="compare-pane-viewport">
+          <img class="compare-pane-img" data-compare-img="0" src="" />
+        </div>
+        <div class="compare-pane-controls">
+          <button data-compare-zoom-out="0">−</button>
+          <button data-compare-zoom-reset="0" class="compare-reset-btn"></button>
+          <button data-compare-zoom-in="0">+</button>
+        </div>
+      </div>
+      <div class="compare-pane" data-compare-pane="1">
+        <div class="compare-pane-viewport">
+          <img class="compare-pane-img" data-compare-img="1" src="" />
+        </div>
+        <div class="compare-pane-controls">
+          <button data-compare-zoom-out="1">−</button>
+          <button data-compare-zoom-reset="1" class="compare-reset-btn"></button>
+          <button data-compare-zoom-in="1">+</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="approval.js"></script>
+</body>
+</html>

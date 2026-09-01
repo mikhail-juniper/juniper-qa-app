@@ -10,6 +10,10 @@ let selectedFitKey = '';
 let draftNewFit = { label_en: '', label_zh: '', group: 'other', points: [], pointLabels: {}, sizes: {} };
 let draftNewFitKey = '';
 let dirty = false;
+let backupStatus = null;
+let restoreMode = 'ignore';
+let restoreResult = null;
+let restoreInProgress = false;
 
 const NEW_FIT_SENTINEL = '__new_fit__';
 const FIT_GROUPS = ['hoodie', 'crewnecks', 't_shirt', 'jacket', 'hat', 'other'];
@@ -17,7 +21,8 @@ const FIT_GROUPS = ['hoodie', 'crewnecks', 't_shirt', 'jacket', 'hat', 'other'];
 const LISTS = [
   { key: 'factoryCodes', labelKey: 'factoryCode', pluralEn: 'Factory Codes', pluralZh: '工厂代码' },
   { key: 'creators', labelKey: 'creator', pluralEn: 'Creators / Brands', pluralZh: '创作者 / 品牌方' },
-  { key: 'qaLeads', labelKey: 'qaLead', pluralEn: 'QA/QC Leads', pluralZh: 'QA/QC 负责人' }
+  { key: 'qaLeads', labelKey: 'qaLead', pluralEn: 'QA/QC Leads', pluralZh: 'QA/QC 负责人' },
+  { key: 'productDevelopmentLeads', labelKey: 'productDevelopmentLead', pluralEn: 'Product Development Leads', pluralZh: '产品开发负责人' }
 ];
 const RISKS = ['high', 'medium', 'low'];
 const BANDS = ['>20k', '5-20k', '<5k'];
@@ -48,13 +53,14 @@ function showToast(msg, isError = false) {
 
 async function loadEverything() {
   try {
-    const [configRes, optionsRes, tiersRes, recRes, costsRes, fitsRes] = await Promise.all([
+    const [configRes, optionsRes, tiersRes, recRes, costsRes, fitsRes, backupStatusRes] = await Promise.all([
       fetch('/api/config'),
       fetch('/api/options'),
       fetch('/api/creator-tiers'),
       fetch('/api/aql-recommendation'),
       fetch('/api/unit-costs'),
-      fetch('/api/fits')
+      fetch('/api/fits'),
+      fetch('/api/backup/status')
     ]);
     const config = await configRes.json();
     I18N = config.i18n || {};
@@ -63,10 +69,50 @@ async function loadEverything() {
     currentAqlRecommendation = await recRes.json();
     currentUnitCosts = await costsRes.json();
     currentFits = await fitsRes.json();
+    backupStatus = await backupStatusRes.json();
   } catch (e) {
     console.error(e);
     showToast('Failed to load settings / 加载设置失败', true);
   }
+}
+
+/* ---- Backup: download everything, and flag if DATA_DIR isn't set up
+ * right (which is otherwise invisible - it looks fine until a deploy wipes
+ * it). ---- */
+function renderBackupCard() {
+  const warning = backupStatus && backupStatus.warning
+    ? `<div class="card" style="background:#fde2e1; border-color:var(--jc-fail);">
+        <div class="section-title" style="color:var(--jc-fail);">⚠ ${escapeHtml(bi('dataDirWarningTitle', 'Data storage is not set up correctly').en)} / ${escapeHtml(bi('dataDirWarningTitle', 'Data storage is not set up correctly').zh)}</div>
+        <div class="section-help" style="color:var(--jc-text);">${escapeHtml(backupStatus.warning)}</div>
+      </div>`
+    : '';
+  const resultBanner = restoreResult
+    ? `<div class="section-help" style="margin-top:10px; padding:10px; border-radius:var(--radius-sm); background:var(--jc-mint-light); color:var(--jc-teal-dark);">
+        ${escapeHtml(bi('restoreResultAdded', 'Added').en)}: ${restoreResult.added} · ${escapeHtml(bi('restoreResultOverridden', 'Replaced').en)}: ${restoreResult.overridden} · ${escapeHtml(bi('restoreResultSkipped', 'Skipped (already existed)').en)}: ${restoreResult.skipped}
+      </div>`
+    : '';
+  return `
+    <div class="card">
+      <div class="section-title">${escapeHtml(bi('backupTitle', 'Backup').en)} / ${escapeHtml(bi('backupTitle', 'Backup').zh)}</div>
+      <div class="section-help">${escapeHtml(bi('backupHelp').en)}<br/>${escapeHtml(bi('backupHelp').zh)}</div>
+      ${warning}
+      <a href="/api/backup/download" class="btn btn-primary" style="display:inline-block; width:auto; padding:10px 18px; text-decoration:none; margin-top:10px;">${escapeHtml(bi('downloadBackup').en)} / ${escapeHtml(bi('downloadBackup').zh)}</a>
+
+      <div style="margin-top:20px; padding-top:16px; border-top:1px solid var(--jc-border);">
+        <div class="section-title" style="font-size:15px;">${escapeHtml(bi('restoreBackupTitle', 'Restore from Backup').en)} / ${escapeHtml(bi('restoreBackupTitle', 'Restore from Backup').zh)}</div>
+        <div class="section-help">${escapeHtml(bi('restoreBackupHelp', "Upload a previously downloaded backup zip. Any PO it contains that isn't already in the system gets added. Choose below what happens for a PO that already exists.").en)}<br/>${escapeHtml(bi('restoreBackupHelp').zh)}</div>
+        <div class="field" style="margin-top:10px;">
+          <label class="field-label">${escapeHtml(bi('duplicatePoHandling', 'If a PO already exists').en)} / ${escapeHtml(bi('duplicatePoHandling').zh)}</label>
+          <select id="restoreModeSelect">
+            <option value="ignore" ${restoreMode === 'ignore' ? 'selected' : ''}>${escapeHtml(bi('restoreModeIgnore', 'Skip it - keep the current data').en)} / ${escapeHtml(bi('restoreModeIgnore').zh)}</option>
+            <option value="override" ${restoreMode === 'override' ? 'selected' : ''}>${escapeHtml(bi('restoreModeOverride', 'Replace it with the backup version').en)} / ${escapeHtml(bi('restoreModeOverride').zh)}</option>
+          </select>
+        </div>
+        <input type="file" id="restoreFileInput" accept=".zip" style="margin-top:10px;" ${restoreInProgress ? 'disabled' : ''} />
+        ${resultBanner}
+      </div>
+    </div>
+  `;
 }
 
 function render() {
@@ -77,6 +123,7 @@ function render() {
     </a>
     <div class="step-title">${escapeHtml(bi('manageDropdowns').en)}<span class="zh">${escapeHtml(bi('manageDropdowns').zh)}</span></div>
     <div class="section-help" style="margin-bottom:16px;">${escapeHtml(bi('manageDropdownsHelp').en)}<br/>${escapeHtml(bi('manageDropdownsHelp').zh)}</div>
+    ${renderBackupCard()}
     ${LISTS.map(renderListCard).join('')}
 
     ${renderCreatorTiersCard()}
@@ -550,6 +597,41 @@ function attachHandlers() {
 
   const btnSave = document.getElementById('btnSave');
   if (btnSave) btnSave.addEventListener('click', saveSettings);
+
+  const restoreModeSelect = document.getElementById('restoreModeSelect');
+  if (restoreModeSelect) restoreModeSelect.addEventListener('change', (e) => { restoreMode = e.target.value; });
+
+  const restoreFileInput = document.getElementById('restoreFileInput');
+  if (restoreFileInput) {
+    restoreFileInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const modeLabel = restoreMode === 'override'
+        ? 'Replace any PO that already exists with the backup version? This cannot be undone.'
+        : 'Add any POs from this backup that are missing, skipping ones that already exist?';
+      if (!confirm(modeLabel)) { restoreFileInput.value = ''; return; }
+
+      restoreInProgress = true;
+      restoreResult = null;
+      render();
+
+      try {
+        const formData = new FormData();
+        formData.append('backup', file);
+        formData.append('mode', restoreMode);
+        const res = await fetch('/api/backup/upload', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Restore failed');
+        restoreResult = data;
+        showToast(`Restore complete - ${data.added} added, ${data.overridden} replaced, ${data.skipped} skipped.`);
+      } catch (err) {
+        showToast(err.message || 'Restore failed', true);
+      } finally {
+        restoreInProgress = false;
+        render();
+      }
+    });
+  }
 }
 
 function addItem(key) {
@@ -589,7 +671,7 @@ async function saveSettings() {
     const results = await Promise.all([
       fetch('/api/options', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ creators: currentOptions.creators, factoryCodes: currentOptions.factoryCodes, qaLeads: currentOptions.qaLeads })
+        body: JSON.stringify({ creators: currentOptions.creators, factoryCodes: currentOptions.factoryCodes, qaLeads: currentOptions.qaLeads, productDevelopmentLeads: currentOptions.productDevelopmentLeads })
       }),
       fetch('/api/creator-tiers', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },

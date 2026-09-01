@@ -1,6 +1,6 @@
 const PDFDocument = require('pdfkit');
 const path = require('path');
-const { isOutOfTolerance, formatStandard } = require('./passFail');
+const { isOutOfTolerance, formatStandard, establishedStandardFor } = require('./passFail');
 
 // ---- Juniper brand palette (pulled from the official pricing deck template) ----
 const BRAND = {
@@ -234,13 +234,21 @@ class ReportPDF {
     doc.moveDown(0.4);
   }
 
-  referenceChartTable(fitDef) {
+  referenceChartTable(fitDef, fitKey, establishedSizing) {
     const doc = this.doc;
-    const points = fitDef.points;
+    const customPoints = (establishedSizing && establishedSizing.fit === fitKey && Array.isArray(establishedSizing.customPoints))
+      ? establishedSizing.customPoints
+      : [];
+    const points = fitDef.points.concat(customPoints.map((cp) => cp.key));
+    const labelFor = (p) => {
+      const cp = customPoints.find((c) => c.key === p);
+      if (cp) { const label = cp.label || 'Untitled Column'; return { zh: label, en: label }; }
+      return fitDef.pointLabels[p];
+    };
     const cols = ['size', ...points];
     const labels = cols.map((c) => {
       if (c === 'size') return bi(this.i18n, 'size');
-      const pl = fitDef.pointLabels[c];
+      const pl = labelFor(c);
       return pl ? `${pl.zh} ${pl.en}` : c;
     });
     const colWidths = [1.2, ...points.map(() => 1)];
@@ -266,9 +274,12 @@ class ReportPDF {
       doc.font('Bold').fontSize(8).fillColor(BRAND.text).text(sizeName, x + 4, y + 3, { width: colPx[0] - 8 });
       x += colPx[0];
       points.forEach((p, i) => {
-        const std = standard[p];
+        // Custom columns have no generic template value - they only exist
+        // because the Golden Sample defined them, so use that established
+        // value directly instead of a fits.json lookup.
+        const val = fitDef.points.includes(p) ? standard[p] : establishedStandardFor(sizeName, p, fitKey, fitDef, establishedSizing);
         doc.font('Regular').fontSize(8).fillColor(BRAND.muted)
-          .text(formatStandard(std), x + 4, y + 3, { width: colPx[i + 1] - 8 });
+          .text(formatStandard(val), x + 4, y + 3, { width: colPx[i + 1] - 8 });
         x += colPx[i + 1];
       });
       y += rowH;
@@ -277,13 +288,21 @@ class ReportPDF {
     doc.x = PAGE_MARGIN;
   }
 
-  sizeChartTable(fitDef, sizeRows, toleranceInches, filesByField) {
+  sizeChartTable(fitDef, sizeRows, toleranceCm, filesByField, fitKey, establishedSizing) {
     const doc = this.doc;
-    const points = fitDef.points;
+    const customPoints = (establishedSizing && establishedSizing.fit === fitKey && Array.isArray(establishedSizing.customPoints))
+      ? establishedSizing.customPoints
+      : [];
+    const points = fitDef.points.concat(customPoints.map((cp) => cp.key));
+    const labelFor = (p) => {
+      const cp = customPoints.find((c) => c.key === p);
+      if (cp) { const label = cp.label || 'Untitled Column'; return { zh: label, en: label }; }
+      return fitDef.pointLabels[p];
+    };
     const cols = ['size', ...points];
     const labels = cols.map((c) => {
       if (c === 'size') return bi(this.i18n, 'size');
-      const pl = fitDef.pointLabels[c];
+      const pl = labelFor(c);
       return pl ? `${pl.zh} ${pl.en}` : c;
     });
 
@@ -309,7 +328,6 @@ class ReportPDF {
     doc.font('Regular').fontSize(7).fillColor(BRAND.muted);
 
     sizeRows.forEach((row) => {
-      const standard = fitDef.sizes[row.size] || {};
       const cellRowH = 26;
       this.ensureSpace(cellRowH);
       if (doc.y !== y) y = doc.y;
@@ -321,9 +339,13 @@ class ReportPDF {
       x += colPx[0];
 
       points.forEach((p, i) => {
-        const std = standard[p];
+        // Custom columns have no generic template value - they only exist
+        // because the Golden Sample defined them, so use that established
+        // value directly instead of a fits.json lookup (same fix as the
+        // reference chart table above).
+        const std = fitDef.points.includes(p) ? (fitDef.sizes[row.size] || {})[p] : establishedStandardFor(row.size, p, fitKey, fitDef, establishedSizing);
         const measured = row.measured && row.measured[p] !== undefined && row.measured[p] !== '' ? parseFloat(row.measured[p]) : null;
-        const outOfTol = isOutOfTolerance(std, measured, toleranceInches);
+        const outOfTol = isOutOfTolerance(std, measured, toleranceCm);
         const cellX = x;
         if (outOfTol) {
           doc.rect(cellX, y, colPx[i + 1], cellRowH).fill(BRAND.failBg);
@@ -366,7 +388,7 @@ class ReportPDF {
     images.forEach((img, idx) => {
       const cx = PAGE_MARGIN + col * (cellW + gap);
       try {
-        doc.image(img.buffer, cx, rowY, { fit: [cellW, cellH], align: 'center', valign: 'center' });
+        doc.image(img.buffer || img.path, cx, rowY, { fit: [cellW, cellH], align: 'center', valign: 'center' });
       } catch (e) {
         doc.rect(cx, rowY, cellW, cellH).strokeColor(BRAND.border).stroke();
       }
@@ -551,7 +573,7 @@ function checklistSection(pdf, sectionTitleKey, rows, filesByField, i18n, photoS
   }
 }
 
-async function buildPdf(payload, filesByField, fitsConfig, i18n, overallResult, categoriesConfig, recommendation) {
+async function buildPdf(payload, filesByField, fitsConfig, i18n, overallResult, categoriesConfig, recommendation, establishedSizing) {
   return new Promise((resolve, reject) => {
     try {
       const pdf = new ReportPDF(i18n);
@@ -609,33 +631,58 @@ async function buildPdf(payload, filesByField, fitsConfig, i18n, overallResult, 
         const fitDef = fitsConfig.fits[cd.fit];
         pdf.sectionTitle('referenceChart', 'Approved Reference Chart');
         pdf.subheading(`${fitDef.label_zh} ${fitDef.label_en}`);
-        pdf.referenceChartTable(fitDef);
+        pdf.referenceChartTable(fitDef, cd.fit, establishedSizing);
 
         const sizeRows = (cd.sizeRows || []).map((r, idx) => ({ ...r, _origIndex: idx })).filter((r) => r.size);
         if (sizeRows.length) {
           pdf.sectionTitle('sizeChart', 'Measurement Chart');
-          pdf.sizeChartTable(fitDef, sizeRows, fitsConfig.toleranceInches || 0.5, filesByField);
+          pdf.sizeChartTable(fitDef, sizeRows, fitsConfig.toleranceCm || 1.27, filesByField, cd.fit, establishedSizing);
         }
       }
 
       // --- Apparel: custom size chart ("Other / Custom Sizing") ---
       if (payload.category === 'apparel' && cd.fit === OTHER_FIT_VALUE) {
-        const customRows = (cd.customSizeRows || []).map((r, idx) => ({ ...r, _origIndex: idx })).filter((r) => r.sizeName || r.measurements);
-        if (customRows.length) {
+        const isSimplified = payload.subcategory === 'hat' || payload.subcategory === 'socks';
+        if (isSimplified) {
           pdf.sectionTitle('customSizeChartTitle', 'Custom Size Chart');
-          customRows.forEach((row) => {
-            pdf.subheading(row.sizeName || '-');
-            doc.font('Regular').fontSize(9).fillColor(BRAND.text).text(row.measurements || '-', { width: pdf.pageWidth });
-            doc.moveDown(0.3);
-            const rowPhotos = (filesByField[`photo_customsizerow_${row._origIndex}`] || []).map((f) => ({ buffer: f.buffer }));
-            if (rowPhotos.length) pdf.photoGridSync(rowPhotos, 4);
-            doc.moveDown(0.3);
-          });
+          doc.font('Regular').fontSize(9).fillColor(BRAND.text).text(cd.simpleSizeValue || '-', { width: pdf.pageWidth });
+          doc.moveDown(0.3);
+          const simplePhotos = (filesByField['photo_simplesize'] || []).map((f) => ({ buffer: f.buffer }));
+          if (simplePhotos.length) pdf.photoGridSync(simplePhotos, 4);
+        } else {
+          const customRows = (cd.customSizeRows || []).map((r, idx) => ({ ...r, _origIndex: idx })).filter((r) => r.sizeName || r.measurements);
+          if (customRows.length) {
+            pdf.sectionTitle('customSizeChartTitle', 'Custom Size Chart');
+            customRows.forEach((row) => {
+              pdf.subheading(row.sizeName || '-');
+              doc.font('Regular').fontSize(9).fillColor(BRAND.text).text(row.measurements || '-', { width: pdf.pageWidth });
+              doc.moveDown(0.3);
+              const rowPhotos = (filesByField[`photo_customsizerow_${row._origIndex}`] || []).map((f) => ({ buffer: f.buffer }));
+              if (rowPhotos.length) pdf.photoGridSync(rowPhotos, 4);
+              doc.moveDown(0.3);
+            });
+          }
         }
         const chartPhotos = (filesByField['photo_chart'] || []).map((f) => ({ buffer: f.buffer }));
         if (chartPhotos.length) {
           pdf.sectionTitle('chartPhotoTitle', 'Reference Chart Photo');
           pdf.photoGridSync(chartPhotos, 4);
+        }
+      }
+
+      // --- Non-apparel: Height / Width / Depth dimensions ---
+      if (payload.category !== 'apparel' && cd.dimensions) {
+        const dim = cd.dimensions;
+        if (dim.height || dim.width || dim.depth) {
+          pdf.sectionTitle('sizingTitle', 'Sizing');
+          pdf.keyValueGrid([
+            [bi(i18n, 'dimensionHeight') || 'Height (cm)', dim.height ? `${dim.height} cm` : '-'],
+            [bi(i18n, 'dimensionWidth') || 'Width (cm)', dim.width ? `${dim.width} cm` : '-'],
+            [bi(i18n, 'dimensionDepth') || 'Depth (cm)', dim.depth ? `${dim.depth} cm` : '-'],
+          ], 3);
+          if (dim.notes && dim.notes.trim()) {
+            pdf.paragraph(bi(i18n, 'dimensionsNotes'), dim.notes);
+          }
         }
       }
 
@@ -670,10 +717,11 @@ async function buildPdf(payload, filesByField, fitsConfig, i18n, overallResult, 
           pdf.subheading(bi(i18n, 'sectionPhotos'));
           pdf.photoGridSync(sizingPhotos, 4);
         }
-      } else {
-        // Non-apparel, and apparel with "Other / Custom Sizing" (no automatic
-        // tolerance check exists for it, so the manual Pass/Fail + defect log
-        // is the actual QC record, alongside the custom chart above).
+      } else if (payload.category === 'apparel' && cd.fit === OTHER_FIT_VALUE) {
+        // Apparel with "Other / Custom Sizing" (no automatic tolerance check
+        // exists for it, so the manual Pass/Fail + defect log is the actual
+        // QC record, alongside the custom chart above - full chart for most
+        // subcategories, the simplified single-field version for Hat/Socks).
         checklistSection(pdf, 'sizingSection', sizingRows, filesByField, i18n, 'sizing');
       }
 
@@ -684,19 +732,6 @@ async function buildPdf(payload, filesByField, fitsConfig, i18n, overallResult, 
 
       if (payload.category === 'other') {
         pdf.paragraph(bi(i18n, 'customNotes'), cd.customNotes);
-      }
-
-      // --- Final approval photos ---
-      pdf.sectionTitle('finalApprovalPhotos', 'Final Approval Photos');
-      const generalPhotos = (filesByField['photo_general'] || []).map((f) => ({ buffer: f.buffer }));
-      const tagPhotos = (filesByField['photo_tags'] || []).map((f) => ({ buffer: f.buffer }));
-      if (generalPhotos.length) {
-        pdf.subheading(bi(i18n, 'generalPhotos'));
-        pdf.photoGridSync(generalPhotos, 3);
-      }
-      if (tagPhotos.length) {
-        pdf.subheading(bi(i18n, 'tagPhotos'));
-        pdf.photoGridSync(tagPhotos, 3);
       }
 
       // --- Additional Issues (catch-all, separate from per-section logged defects) ---
@@ -728,4 +763,4 @@ async function buildPdf(payload, filesByField, fitsConfig, i18n, overallResult, 
   });
 }
 
-module.exports = { buildPdf };
+module.exports = { buildPdf, ReportPDF, BRAND };

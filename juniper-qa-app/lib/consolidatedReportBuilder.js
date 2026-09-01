@@ -64,6 +64,13 @@ function drawApprovalStageSection(pdf, doc, stageKey, stage) {
   if (d.qaLead) infoRows.push([bilingual('QA/QC Lead', 'QA/QC 负责人'), d.qaLead]);
   if (d.productRisk) infoRows.push([bilingual('Product Risk', '产品风险'), d.productRisk]);
   if (d.sizing && d.sizing.fit) infoRows.push([bilingual('Sizing Standard', '尺寸标准'), d.sizing.fit]);
+  if (d.sizing && d.sizing.dimensions) {
+    const dim = d.sizing.dimensions;
+    if (dim.height) infoRows.push([bilingual('Height', '高度'), `${dim.height} cm`]);
+    if (dim.width) infoRows.push([bilingual('Width', '宽度'), `${dim.width} cm`]);
+    if (dim.depth) infoRows.push([bilingual('Depth', '深度'), `${dim.depth} cm`]);
+    if (dim.notes && dim.notes.trim()) infoRows.push([bilingual('Additional Notes', '补充备注'), dim.notes]);
+  }
   if (infoRows.length) pdf.keyValueGrid(infoRows, 3);
 
   if (d.notes) pdf.paragraph(bilingual('Notes', '备注'), d.notes);
@@ -140,6 +147,13 @@ async function buildConsolidatedReport(po, approval, reportingHistory, i18n) {
   // --- Pre-Production Approval, then the full Pre-Production inspection report(s) ---
   if (approval && approval.preProductionApproval && approval.preProductionApproval.submitted) {
     buffers.push(await buildSectionPdf(i18n, (pdf, doc) => drawApprovalStageSection(pdf, doc, 'preProductionApproval', approval.preProductionApproval)));
+  } else if (approval && approval.preProductionApproval && approval.preProductionApproval.skipped) {
+    const title = STAGE_TITLES.preProductionApproval;
+    buffers.push(await buildSectionPdf(i18n, (pdf, doc) => {
+      pdf.sectionTitle(null, `${title.zh} ${title.en}`);
+      doc.font('Bold').fontSize(11).fillColor(BRAND.text).text('已跳过 Skipped', { paragraphGap: 4 });
+      doc.font('Regular').fontSize(9).fillColor(BRAND.muted).text('此阶段已针对该订单被主动跳过。 This stage was intentionally bypassed for this PO.');
+    }));
   }
   preProdReports.forEach((r) => {
     if (!r.pdfFilename) return;

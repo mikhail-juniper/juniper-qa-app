@@ -1,8 +1,22 @@
 /* Juniper QA/QC Report - frontend wizard (vanilla JS, no build step) */
 
-let CONFIG = { fits: { fits: {}, toleranceInches: 0.5 }, i18n: {}, options: {}, categories: { categories: {} }, aql: null };
+let CONFIG = { fits: { fits: {}, toleranceCm: 1.27 }, i18n: {}, options: {}, categories: { categories: {} }, aql: null };
 let I18N = {};
 let OPTIONS = {};
+
+// 'chooser' (pick New PO / Pre-Production / Bulk Sampling) -> 'newPO' (create a
+// PO record) or 'wizard' (the existing step-based inspection report flow).
+let appMode = 'chooser';
+
+const newPoState = {
+  category: null, subcategory: null,
+  poNumber: '', sku: '', orderDate: todayStr(), creator: '', productTitle: '', orderQuantity: '', productDevelopmentLead: '',
+  sizesIncluded: [],
+  establishedFit: null, // { fitKey, sizes } - looked up once SKU is entered, if this SKU already has one on file
+  skuChecked: null,
+  pdLeadOtherMode: false,
+  asanaTaskLink: ''
+};
 
 let idCounter = 0;
 function genId() { idCounter += 1; return `d${Date.now().toString(36)}${idCounter}`; }
@@ -13,6 +27,8 @@ function emptyDefect() { return { id: genId(), description: '', severity: 'minor
 const state = {
   category: null,
   subcategory: null,
+  sku: '', poSizesIncluded: [], pdNotes: [], approvalSizingData: null,
+  approvalReferencePhotos: { sample: {}, preProduction: {} }, productionNotesData: null,
   poNumber: '', factoryCode: '', date: todayStr(), qaLead: '',
   creator: '', productTitle: '', qaType: 'pre_production',
   poQuantity: '', inspectionLevel: 'II', majorAql: 2.5, minorAql: 4.0,
@@ -23,7 +39,7 @@ const state = {
     fit: '',
     sizeRows: [],
     customSizeRows: [],
-    chartPhotos: [],
+    chartPhotos: [], simpleSizeValue: '', simpleSizePhotos: [], dimensions: { height: '', width: '', depth: '', notes: '' },
     fabricColorMatch: emptyChecklistEntry(),
     fabricWeightMatch: emptyChecklistEntry(),
     embroideryColorMatch: emptyChecklistEntry(),
@@ -42,7 +58,7 @@ const state = {
 };
 
 let step = 0;
-const STEPS = ['category', 'orderInfo', 'inspectionDetails', 'sizing', 'photos', 'issues', 'review'];
+const STEPS = ['poLookup', 'orderInfo', 'productionNotes', 'inspectionDetails', 'sizing', 'issues', 'review'];
 const CATEGORY_ORDER = ['apparel', 'plush', 'bags', 'accessories', 'other'];
 // Fixed industry-standard AQL values (Major 2.5%, Minor 4.0%) - not user-editable.
 // Critical is always zero-tolerance (Ac=0/Re=1), handled directly in the plan functions.
@@ -104,11 +120,11 @@ function formatStandard(standard) {
   if (standard === undefined || standard === null) return '-';
   if (typeof standard === 'object') {
     if (standard.min === undefined || standard.max === undefined) return '-';
-    return `${standard.min}-${standard.max}"`;
+    return `${standard.min}-${standard.max} cm`;
   }
   const n = parseFloat(standard);
   if (isNaN(n) || n === 0) return '-';
-  return `${n}"`;
+  return `${n} cm`;
 }
 
 /* ---------------- AQL HELPERS (mirror lib/aql.js) ---------------- */
@@ -291,9 +307,30 @@ function showToast(msg, isError = false) {
   t.className = 'toast' + (isError ? ' error' : '');
   setTimeout(() => { t.className = 'toast hidden'; }, 3800);
 }
+function openLightbox(url) {
+  const overlay = document.getElementById('lightboxOverlay');
+  if (!overlay) return;
+  document.getElementById('lightboxImg').src = url;
+  overlay.classList.remove('hidden');
+}
+function attachLightboxHandlers() {
+  document.querySelectorAll('.js-lightbox').forEach((el) => {
+    el.addEventListener('click', () => openLightbox(el.getAttribute('src')));
+  });
+  const overlay = document.getElementById('lightboxOverlay');
+  if (overlay && !overlay._wired) {
+    overlay.addEventListener('click', () => overlay.classList.add('hidden'));
+    overlay._wired = true;
+  }
+}
 function updateProgress() {
   const pct = Math.round(((step) / (STEPS.length - 1)) * 100);
   document.getElementById('progressFill').style.width = Math.max(8, pct) + '%';
+}
+function updateProgressForMode() {
+  const fill = document.getElementById('progressFill');
+  if (!fill) return;
+  fill.style.width = appMode === 'chooser' ? '0%' : '8%';
 }
 function goTo(newStep) {
   step = newStep;
@@ -321,7 +358,7 @@ function checklistDefsForStep(name) {
       ['packagingCardMatch', 'packagingCardMatch'], ['bagTagsCorrect', 'bagTagsCorrect']
     ];
   }
-  if (name === 'sizing' && (state.category !== 'apparel' || state.categoryData.fit === OTHER_FIT_VALUE)) {
+  if (name === 'sizing' && state.category === 'apparel' && state.categoryData.fit === OTHER_FIT_VALUE) {
     return [['generalSizingMatch', 'generalSizingMatch']];
   }
   return [];
@@ -415,8 +452,47 @@ function validateStep(s) {
         showToast(bi('selectFitRequired').en + ' / ' + bi('selectFitRequired').zh, true);
         ok = false;
       }
-    } else {
+    } else if (state.category === 'apparel' && state.categoryData.fit === OTHER_FIT_VALUE) {
       ok = validateChecklistStepGeneric(name);
+
+      const sizingEntry = state.categoryData.generalSizingMatch;
+      if (!sizingEntry.notes || !sizingEntry.notes.trim()) {
+        markChecklistError('generalSizingMatch');
+        showToast(bi('sizingNotesRequired').en + ' / ' + bi('sizingNotesRequired').zh, true);
+        ok = false;
+      }
+
+      if (isSimplifiedCustomSizing(state.subcategory)) {
+        if (!state.categoryData.simpleSizeValue || !state.categoryData.simpleSizeValue.trim()) {
+          markError('simpleSizeInput');
+          showToast(bi('simpleSizeRequired').en + ' / ' + bi('simpleSizeRequired').zh, true);
+          ok = false;
+        }
+      } else {
+        // Every size row needs its measurements written out - that's the
+        // only record of what was actually measured.
+        const rows = state.categoryData.customSizeRows || [];
+        const emptyRows = rows.filter((r) => !r.measurements || !r.measurements.trim());
+        if (!rows.length) {
+          showToast(bi('customSizeRowRequired').en + ' / ' + bi('customSizeRowRequired').zh, true);
+          ok = false;
+        } else if (emptyRows.length) {
+          rows.forEach((r, idx) => {
+            if (!r.measurements || !r.measurements.trim()) markError(`customSizeMeasurements-${idx}`);
+          });
+          showToast(bi('customSizeMeasurementsRequired').en + ' / ' + bi('customSizeMeasurementsRequired').zh, true);
+          ok = false;
+        }
+      }
+    } else {
+      // Non-apparel: Height/Width/Length are the sizing record now.
+      const dims = state.categoryData.dimensions;
+      const missing = ['height', 'width', 'depth'].filter((k) => !dims[k] || !String(dims[k]).trim());
+      if (missing.length) {
+        missing.forEach((k) => markError(k));
+        showToast(bi('dimensionsRequired').en + ' / ' + bi('dimensionsRequired').zh, true);
+        ok = false;
+      }
     }
   }
   return ok;
@@ -468,6 +544,21 @@ function getAllValidationProblems() {
 
   if (state.category === 'apparel' && state.categoryData.fit !== OTHER_FIT_VALUE && apparelSizingIncomplete()) problems.push(bi('selectFitRequired'));
 
+  if (state.category === 'apparel' && state.categoryData.fit === OTHER_FIT_VALUE) {
+    const sizingEntry = state.categoryData.generalSizingMatch;
+    if (!sizingEntry.notes || !sizingEntry.notes.trim()) problems.push(bi('sizingNotesRequired'));
+    if (isSimplifiedCustomSizing(state.subcategory)) {
+      if (!state.categoryData.simpleSizeValue || !state.categoryData.simpleSizeValue.trim()) problems.push(bi('simpleSizeRequired'));
+    } else {
+      const rows = state.categoryData.customSizeRows || [];
+      if (!rows.length || rows.some((r) => !r.measurements || !r.measurements.trim())) problems.push(bi('customSizeMeasurementsRequired'));
+    }
+  }
+  if (state.category !== 'apparel') {
+    const dims = state.categoryData.dimensions;
+    if (!dims.height || !dims.width || !dims.depth) problems.push(bi('dimensionsRequired'));
+  }
+
   return problems;
 }
 
@@ -476,17 +567,18 @@ function getAllValidationProblems() {
 function computeOverallResult() {
   const reasons = [];
   const cd = state.categoryData;
-  const tol = CONFIG.fits.toleranceInches || 0.5;
+  const tol = CONFIG.fits.toleranceCm || 1.27;
 
   if (state.category === 'apparel' && cd.fit && CONFIG.fits.fits[cd.fit]) {
     const fitDef = CONFIG.fits.fits[cd.fit];
+    const allPoints = fitDef.points.concat(getCustomPointsForCurrentFit().map((cp) => cp.key));
     outer:
     for (const row of (cd.sizeRows || [])) {
-      const standard = fitDef.sizes[row.size] || {};
-      for (const point of fitDef.points) {
+      for (const point of allPoints) {
+        const standard = establishedStandardFor(row.size, point, fitDef);
         const measured = row.measured && row.measured[point] !== undefined && row.measured[point] !== ''
           ? parseFloat(row.measured[point]) : null;
-        if (isOutOfTolerance(standard[point], measured, tol)) { reasons.push('tolerance'); break outer; }
+        if (isOutOfTolerance(standard, measured, tol)) { reasons.push('tolerance'); break outer; }
       }
     }
   }
@@ -528,6 +620,7 @@ function getPhotoArray(fieldId) {
   if (fieldId.startsWith('sizerow:')) return state.categoryData.sizeRows[parseInt(fieldId.split(':')[1], 10)].photos;
   if (fieldId.startsWith('customsizerow:')) return state.categoryData.customSizeRows[parseInt(fieldId.split(':')[1], 10)].photos;
   if (fieldId === 'chartphotos') return state.categoryData.chartPhotos;
+  if (fieldId === 'simplesize') return state.categoryData.simpleSizePhotos;
   if (fieldId.startsWith('defect:')) {
     const d = findDefectById(fieldId.split(':')[1]);
     return d ? d.photos : [];
@@ -539,21 +632,644 @@ function getPhotoArray(fieldId) {
 
 function render() {
   const root = document.getElementById('formRoot');
+  if (appMode === 'chooser') {
+    root.innerHTML = renderChooserScreen();
+    attachChooserHandlers();
+    updateProgressForMode();
+    return;
+  }
+  if (appMode === 'newPO') {
+    root.innerHTML = renderNewPoScreen();
+    attachNewPoHandlers();
+    updateProgressForMode();
+    return;
+  }
   const name = STEPS[step];
   let html = '';
-  if (name === 'category') html = renderCategoryStep();
+  if (name === 'poLookup') html = renderPoLookupStep();
   else if (name === 'orderInfo') html = renderOrderInfoStep();
+  else if (name === 'productionNotes') html = renderProductionNotesStep();
   else if (name === 'inspectionDetails') html = renderInspectionDetailsStep();
   else if (name === 'sizing') html = renderSizingStep();
-  else if (name === 'photos') html = renderPhotosStep();
   else if (name === 'issues') html = renderAdditionalIssuesStep();
   else if (name === 'review') html = renderReviewStep();
 
   root.innerHTML = html;
   attachStepHandlers(name);
+  attachLightboxHandlers();
 }
 
 /* ---- Step 0: Category + Subcategory ---- */
+/* ---- Chooser: New Purchase Order / Pre-Production / Bulk Sampling Reporting ---- */
+function renderChooserScreen() {
+  return `
+    <div style="display:flex; justify-content:flex-end; gap:16px; margin-bottom:16px;">
+      <a href="analytics.html" class="settings-link" title="Analytics">📊 ${biBlockHtml('analyticsLink', 'Analytics')}</a>
+      <a href="settings.html" class="settings-link" title="Settings">⚙️ ${biBlockHtml('settingsTitle', 'Settings')}</a>
+    </div>
+    <div class="step-title">质检报告 QA/QC Reporting</div>
+    <div class="section-help" style="margin-bottom:16px;">${escapeHtml(bi('chooserHelp').en)}<br/>${escapeHtml(bi('chooserHelp').zh)}</div>
+
+    <div class="home-nav-card" data-chooser="pre_production">
+      <div class="home-nav-icon">🔍</div>
+      <div class="home-nav-text">
+        <div class="home-nav-title">${biBlockHtml('chooserPreProd', 'Pre-Production Sample Reporting')}</div>
+        <div class="home-nav-desc">${biBlockHtml('chooserPreProdDesc', 'Inspect a small hand-checked sample before the full run')}</div>
+      </div>
+    </div>
+    <div class="home-nav-card" data-chooser="production">
+      <div class="home-nav-icon">📦</div>
+      <div class="home-nav-text">
+        <div class="home-nav-title">${biBlockHtml('chooserBulk', 'Bulk Sampling Reporting')}</div>
+        <div class="home-nav-desc">${biBlockHtml('chooserBulkDesc', 'Inspect a spot-checked sample of the full production run')}</div>
+      </div>
+    </div>
+    <a href="index.html" class="settings-link" style="display:block; text-align:center; margin-top:8px;">← ${biBlockHtml('backToApp', 'Back to Home')}</a>
+  `;
+}
+function attachChooserHandlers() {
+  document.querySelectorAll('[data-chooser]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const choice = el.getAttribute('data-chooser');
+      if (choice === 'newPO') {
+        appMode = 'newPO';
+        render();
+      } else {
+        state.qaType = choice;
+        appMode = 'wizard';
+        goTo(0);
+      }
+    });
+  });
+}
+
+function renderNewPoSizesBlock() {
+  if (newPoState.category !== 'apparel') return '';
+  const universalSizes = (CONFIG.fits && CONFIG.fits.universalSizes) || [];
+  return `
+    <div class="card">
+      <div class="section-title">${biBlockHtml('sizesInPo', 'Sizes Included in this PO')}</div>
+      <div class="section-help">${escapeHtml(bi('sizesInPoHelp').en)}<br/>${escapeHtml(bi('sizesInPoHelp').zh)}</div>
+      <div class="segmented" style="flex-wrap:wrap; margin-top:8px;">
+        ${universalSizes.map((s) => `<div class="segmented-option ${newPoState.sizesIncluded.includes(s) ? 'selected' : ''}" data-po-size="${escapeHtml(s)}" style="flex:0 0 auto; min-width:90px;">${escapeHtml(s)}</div>`).join('')}
+      </div>
+    </div>
+  `;
+}
+
+/* ---- New Purchase Order ---- */
+function renderNewPoScreen() {
+  const cats = (CONFIG.categories && CONFIG.categories.categories) || {};
+  const catOptions = CATEGORY_ORDER.filter((k) => cats[k]).map((k) => `<option value="${k}" ${newPoState.category === k ? 'selected' : ''}>${escapeHtml(cats[k].label_zh)} ${escapeHtml(cats[k].label_en)}</option>`).join('');
+  const catDef = newPoState.category ? cats[newPoState.category] : null;
+  const subOptions = (catDef && catDef.subcategories || []).map((s) => `<option value="${s.key}" ${newPoState.subcategory === s.key ? 'selected' : ''}>${escapeHtml(s.label_zh)} ${escapeHtml(s.label_en)}</option>`).join('');
+
+  return `
+    <div class="step-title">🆕 ${biBlockHtml('chooserNewPO', 'New Purchase Order')}</div>
+    <div class="card">
+      <div class="field">
+        <label class="field-label">${biBlockHtml('selectCategory', 'Product Category')}</label>
+        <select id="newPoCategory">
+          <option value="">${escapeHtml(bi('selectPlaceholder').en)}</option>
+          ${catOptions}
+        </select>
+      </div>
+      ${catDef && catDef.subcategories && catDef.subcategories.length ? `
+        <div class="field">
+          <label class="field-label">${biBlockHtml('selectSubcategory', 'Type')}</label>
+          <select id="newPoSubcategory">
+            <option value="">${escapeHtml(bi('selectPlaceholder').en)}</option>
+            ${subOptions}
+          </select>
+        </div>
+      ` : ''}
+    </div>
+
+    <div class="card">
+      ${textField2('newPoNumber', 'poNumber', newPoState.poNumber, { required: true, placeholderKey: 'poNumberPlaceholder' })}
+      ${textField2('newPoSku', 'productSku', newPoState.sku, { required: true, placeholderKey: 'productSkuPlaceholder' })}
+      <div class="field-row">
+        <div style="flex:1">${dateField2('newPoOrderDate', 'orderDateLabel', newPoState.orderDate, { required: true })}</div>
+        <div style="flex:1">${textField2('newPoQuantity', 'poQuantity', newPoState.orderQuantity, { required: true, placeholderKey: 'poQuantityPlaceholder', numeric: true })}</div>
+      </div>
+      ${selectFieldPlain('newPoCreator', 'creator', newPoState.creator, OPTIONS.creators || [])}
+      ${textField2('newPoProductTitle', 'productTitle', newPoState.productTitle, {})}
+      ${newPoSelectFieldWithOther('newPoPdLead', 'productDevelopmentLead', newPoState.productDevelopmentLead, OPTIONS.productDevelopmentLeads || [], newPoState.pdLeadOtherMode)}
+      ${textField2('newPoAsanaLink', 'asanaTaskLink', newPoState.asanaTaskLink, { placeholderKey: 'asanaTaskLinkPlaceholder' })}
+    </div>
+
+    <div id="newPoSizesBlock">${renderNewPoSizesBlock()}</div>
+
+    <div class="nav-buttons">
+      <button class="btn btn-secondary" id="btnNewPoBack">${biBlockHtml('back', 'Back')}</button>
+      <button class="btn btn-primary" id="btnNewPoSubmit">${biBlockHtml('createPo', 'Create Purchase Order')}</button>
+    </div>
+  `;
+}
+
+function textField2(id, i18nKey, value, opts = {}) {
+  const l = bi(i18nKey);
+  const ph = opts.placeholderKey ? bi(opts.placeholderKey) : { en: '', zh: '' };
+  return `
+    <div class="field" data-field="${id}">
+      <label class="field-label">${escapeHtml(l.en)} <span class="zh">${escapeHtml(l.zh)}</span>${opts.required ? '<span class="required">*</span>' : ''}</label>
+      <input type="${opts.numeric ? 'number' : 'text'}" id="${id}" value="${escapeHtml(value || '')}" placeholder="${escapeHtml(ph.en)} / ${escapeHtml(ph.zh)}" />
+    </div>
+  `;
+}
+function dateField2(id, i18nKey, value, opts = {}) {
+  const l = bi(i18nKey);
+  return `
+    <div class="field" data-field="${id}">
+      <label class="field-label">${escapeHtml(l.en)} <span class="zh">${escapeHtml(l.zh)}</span>${opts.required ? '<span class="required">*</span>' : ''}</label>
+      <input type="date" id="${id}" value="${escapeHtml(value || '')}" />
+    </div>
+  `;
+}
+function selectFieldPlain(id, i18nKey, value, optionsList) {
+  const l = bi(i18nKey);
+  const ph = bi('selectPlaceholder');
+  return `
+    <div class="field" data-field="${id}">
+      <label class="field-label">${escapeHtml(l.en)} <span class="zh">${escapeHtml(l.zh)}</span></label>
+      <select id="${id}">
+        <option value="">${escapeHtml(ph.en)} / ${escapeHtml(ph.zh)}</option>
+        ${optionsList.map((o) => `<option value="${escapeHtml(o)}" ${value === o ? 'selected' : ''}>${escapeHtml(o)}</option>`).join('')}
+      </select>
+    </div>
+  `;
+}
+
+/** Same idea as selectFieldWithOther (dropdown + "Other" reveals a text
+ *  field to type something new), but for the New Purchase Order screen,
+ *  which keeps its own state object separate from the main wizard. */
+function newPoSelectFieldWithOther(id, i18nKey, value, optionsList, otherModeOn) {
+  const l = bi(i18nKey);
+  const ph = bi('selectPlaceholder');
+  const otherLabel = bi('other');
+  const otherPh = bi('otherPlaceholder');
+  const isOther = otherModeOn || (!!value && !optionsList.includes(value));
+  const optsHtml = optionsList.map((o) => `<option value="${escapeHtml(o)}" ${!isOther && value === o ? 'selected' : ''}>${escapeHtml(o)}</option>`).join('');
+  return `
+    <div class="field" data-field="${id}">
+      <label class="field-label">${escapeHtml(l.en)} <span class="zh">${escapeHtml(l.zh)}</span></label>
+      <select data-newpo-select-other="${id}">
+        <option value="">${escapeHtml(ph.en)} / ${escapeHtml(ph.zh)}</option>
+        ${optsHtml}
+        <option value="${OTHER_VALUE}" ${isOther ? 'selected' : ''}>${escapeHtml(otherLabel.en)} / ${escapeHtml(otherLabel.zh)}</option>
+      </select>
+      ${isOther ? `<input type="text" data-newpo-other-text="${id}" value="${escapeHtml(value || '')}" placeholder="${escapeHtml(otherPh.en)} / ${escapeHtml(otherPh.zh)}" style="margin-top:8px;" />` : ''}
+    </div>
+  `;
+}
+
+function sizeMatchesCanonical(fitSizeKey, canonicalSize) {
+  return fitSizeKey === canonicalSize || fitSizeKey.startsWith(canonicalSize + ' ') || fitSizeKey.startsWith(canonicalSize + '(');
+}
+
+/** Puts a PO's sizes in Youth XS -> Adult 5XL order (matching
+ *  fits.json's universalSizes), regardless of what order they were
+ *  originally selected/stored in - fixes display for POs created before
+ *  this sort was applied at save time too. */
+function sortSizesCanonically(sizes) {
+  const canonical = (CONFIG.fits && CONFIG.fits.universalSizes) || [];
+  return [...(sizes || [])].sort((a, b) => {
+    const ia = canonical.indexOf(a);
+    const ib = canonical.indexOf(b);
+    if (ia === -1 && ib === -1) return 0;
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+}
+
+function attachNewPoSizeHandlers() {
+  document.querySelectorAll('[data-po-size]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const s = el.getAttribute('data-po-size');
+      const idx = newPoState.sizesIncluded.indexOf(s);
+      if (idx > -1) newPoState.sizesIncluded.splice(idx, 1);
+      else newPoState.sizesIncluded.push(s);
+      render();
+    });
+  });
+}
+
+async function checkSkuEstablishedFit() {
+  const sku = newPoState.sku.trim();
+  if (!sku || sku === newPoState.skuChecked) return;
+  try {
+    const res = await fetch(`/api/sku-established-fit/${encodeURIComponent(sku)}`);
+    const data = await res.json();
+    newPoState.establishedFit = data.fit;
+    // Convenience: pre-check whichever universal sizes match this SKU's
+    // previously-established fit, if nothing's been manually selected yet.
+    if (data.fit && !newPoState.sizesIncluded.length) {
+      const universalSizes = (CONFIG.fits && CONFIG.fits.universalSizes) || [];
+      newPoState.sizesIncluded = universalSizes.filter((canonical) => (data.fit.sizes || []).some((fitSize) => sizeMatchesCanonical(fitSize, canonical)));
+    }
+  } catch (e) {
+    console.error('Failed to check established fit', e);
+    newPoState.establishedFit = null;
+  } finally {
+    newPoState.skuChecked = sku;
+    // Targeted update instead of a full render() - a full re-render here
+    // would destroy whatever field the user has already moved on to and
+    // focused (this runs on SKU blur, so they're very likely already
+    // interacting with the next field, like PO Quantity, when it resolves).
+    const container = document.getElementById('newPoSizesBlock');
+    if (container) {
+      container.innerHTML = renderNewPoSizesBlock();
+      attachNewPoSizeHandlers();
+    }
+  }
+}
+
+function attachNewPoHandlers() {
+  const bindText = (id, field, numeric) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', (e) => { newPoState[field] = e.target.value; });
+  };
+  bindText('newPoNumber', 'poNumber');
+  bindText('newPoOrderDate', 'orderDate');
+  bindText('newPoQuantity', 'orderQuantity');
+  bindText('newPoProductTitle', 'productTitle');
+  bindText('newPoAsanaLink', 'asanaTaskLink');
+
+  const pdLeadSelect = document.querySelector('[data-newpo-select-other="newPoPdLead"]');
+  if (pdLeadSelect) {
+    pdLeadSelect.addEventListener('change', (e) => {
+      if (e.target.value === OTHER_VALUE) { newPoState.pdLeadOtherMode = true; newPoState.productDevelopmentLead = ''; }
+      else { newPoState.pdLeadOtherMode = false; newPoState.productDevelopmentLead = e.target.value; }
+      render();
+    });
+  }
+  const pdLeadOtherInput = document.querySelector('[data-newpo-other-text="newPoPdLead"]');
+  if (pdLeadOtherInput) pdLeadOtherInput.addEventListener('input', (e) => { newPoState.productDevelopmentLead = e.target.value; });
+
+  const skuInput = document.getElementById('newPoSku');
+  if (skuInput) {
+    skuInput.addEventListener('input', (e) => { newPoState.sku = e.target.value; });
+    skuInput.addEventListener('blur', checkSkuEstablishedFit);
+  }
+  const creatorSelect = document.getElementById('newPoCreator');
+  if (creatorSelect) creatorSelect.addEventListener('change', (e) => { newPoState.creator = e.target.value; });
+
+  const catSelect = document.getElementById('newPoCategory');
+  if (catSelect) {
+    catSelect.addEventListener('change', (e) => {
+      newPoState.category = e.target.value || null;
+      newPoState.subcategory = null;
+      render();
+    });
+  }
+  const subSelect = document.getElementById('newPoSubcategory');
+  if (subSelect) subSelect.addEventListener('change', (e) => { newPoState.subcategory = e.target.value || null; });
+
+  attachNewPoSizeHandlers();
+
+  const btnBack = document.getElementById('btnNewPoBack');
+  if (btnBack) btnBack.addEventListener('click', () => { appMode = 'chooser'; render(); });
+
+  const btnSubmit = document.getElementById('btnNewPoSubmit');
+  if (btnSubmit) btnSubmit.addEventListener('click', submitNewPo);
+}
+
+async function submitNewPo() {
+  const missing = [];
+  if (!newPoState.category) missing.push('Product Category');
+  if (!newPoState.poNumber.trim()) missing.push('PO Number');
+  if (!newPoState.sku.trim()) missing.push('Product SKU');
+  if (!newPoState.orderDate) missing.push('Order Date');
+  if (!newPoState.orderQuantity) missing.push('Order Quantity');
+  if (!newPoState.productDevelopmentLead.trim()) missing.push('Product Development Lead');
+  if (missing.length) {
+    showToast('Please fill in: ' + missing.join(', '), true);
+    return;
+  }
+
+  const btn = document.getElementById('btnNewPoSubmit');
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spinner"></span>...`;
+  try {
+    const res = await fetch('/api/purchase-orders', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        poNumber: newPoState.poNumber, sku: newPoState.sku, category: newPoState.category, subcategory: newPoState.subcategory,
+        orderDate: newPoState.orderDate, creator: newPoState.creator, productTitle: newPoState.productTitle, orderQuantity: newPoState.orderQuantity,
+        productDevelopmentLead: newPoState.productDevelopmentLead, sizesIncluded: newPoState.sizesIncluded,
+        asanaTaskLink: newPoState.asanaTaskLink
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showToast(data.error || 'Failed to create purchase order', true);
+      btn.disabled = false;
+      btn.innerHTML = biBlockHtml('createPo', 'Create Purchase Order');
+      return;
+    }
+    renderNewPoSuccess(data);
+  } catch (e) {
+    console.error(e);
+    showToast('Failed to create purchase order', true);
+    btn.disabled = false;
+    btn.innerHTML = biBlockHtml('createPo', 'Create Purchase Order');
+  }
+}
+
+function renderNewPoSuccess(data) {
+  const root = document.getElementById('formRoot');
+  const fullUrl = `${location.origin}${data.approvalUrl}`;
+  root.innerHTML = `
+    <div class="success-screen">
+      <div class="success-icon">✓</div>
+      <div class="success-title">${escapeHtml(bi('poCreated').en)}</div>
+      <div class="success-sub">${escapeHtml(bi('poCreated').zh)}</div>
+      <div class="card" style="text-align:left; margin-top:16px;">
+        <div class="section-title">${biBlockHtml('shareLinkTitle', 'Share this link for QA/QC Approval')}</div>
+        <input type="text" readonly value="${escapeHtml(fullUrl)}" id="approvalLinkInput" style="margin-top:8px;" onclick="this.select()" />
+        <button class="btn btn-secondary" id="btnCopyLink" style="margin-top:8px;">${escapeHtml(bi('copyLink').en)} / ${escapeHtml(bi('copyLink').zh)}</button>
+      </div>
+      <button class="btn btn-secondary" id="btnPoStartOver" style="max-width:280px; margin:16px auto 0 auto;">${biBlockHtml('submitAnotherPo', 'Submit Another PO')}</button>
+      <a href="index.html" class="btn btn-secondary" style="max-width:280px; margin:10px auto 0 auto; text-decoration:none; display:block; text-align:center;">${biBlockHtml('goHome', 'Go Home')}</a>
+    </div>
+  `;
+  document.getElementById('btnCopyLink').addEventListener('click', () => {
+    navigator.clipboard.writeText(fullUrl).then(() => showToast(bi('linkCopied').en + ' / ' + bi('linkCopied').zh));
+  });
+  document.getElementById('btnPoStartOver').addEventListener('click', () => {
+    Object.assign(newPoState, {
+      category: null, subcategory: null, poNumber: '', sku: '', orderDate: todayStr(), creator: '', productTitle: '',
+      orderQuantity: '', productDevelopmentLead: '', sizesIncluded: [], establishedFit: null, skuChecked: null, pdLeadOtherMode: false, asanaTaskLink: ''
+    });
+    appMode = 'newPO';
+    render();
+  });
+}
+
+/* ---- PO Lookup: replaces the old Category step. Category, order info, and
+ * sizing standard now all come from the PO record + QA/QC Approval data. ---- */
+function renderPoLookupStep() {
+  return `
+    <div class="step-eyebrow">${biHtml('step', 'Step')} 1 / 7</div>
+    <div class="step-title">${biBlockHtml(stageTitleKeyForQaType(), 'Pre-Production Sample Reporting')}</div>
+    <div class="card">
+      <div class="field">
+        <label class="field-label">${biBlockHtml('poNumber', 'Purchase Order Number')}<span class="required">*</span></label>
+        <input type="text" id="poLookupInput" value="${escapeHtml(state.poNumber)}" placeholder="${escapeHtml(bi('poNumberPlaceholder').en)}" />
+      </div>
+      <button class="btn btn-primary" id="btnPoLookupSubmit" style="margin-top:10px;">${biBlockHtml('next', 'Next')}</button>
+    </div>
+  `;
+}
+function stageTitleKeyForQaType() {
+  return state.qaType === 'production' ? 'chooserBulk' : 'chooserPreProd';
+}
+async function submitPoLookup() {
+  const po = document.getElementById('poLookupInput').value.trim();
+  if (!po) return;
+  const btn = document.getElementById('btnPoLookupSubmit');
+  btn.disabled = true;
+  try {
+    const poRes = await fetch(`/api/purchase-orders?poNumber=${encodeURIComponent(po)}`);
+    const poData = await poRes.json();
+    if (!poData.pos || !poData.pos.length) {
+      showToast(bi('poNotFound').en + ' / ' + bi('poNotFound').zh, true);
+      btn.disabled = false;
+      return;
+    }
+    const record = poData.pos[0];
+    state.poNumber = record.poNumber;
+    state.sku = record.sku;
+    state.category = record.category;
+    state.subcategory = record.subcategory;
+    state.creator = record.creator || '';
+    state.productTitle = record.productTitle || '';
+    state.poQuantity = record.orderQuantity ? String(record.orderQuantity) : '';
+    state.poSizesIncluded = sortSizesCanonically(record.sizesIncluded || []);
+
+    // Pull Factory Code / Product Risk / sizing standard from QA/QC Approval's
+    // Sample Approval, if it's been completed for this PO. Also gather
+    // reference photos + notes for the Production Notes step.
+    try {
+      const approvalRes = await fetch(`/api/approval/${encodeURIComponent(po)}`);
+      if (approvalRes.ok) {
+        const approvalData = await approvalRes.json();
+        const sample = approvalData.approval && approvalData.approval.sampleApproval;
+        const preProd = approvalData.approval && approvalData.approval.preProductionApproval;
+        if (sample && sample.submitted) {
+          state.factoryCode = sample.data.factoryCode || '';
+          state.productRisk = sample.data.productRisk || 'medium';
+          if (sample.data.sizing) {
+            state.approvalSizingData = sample.data.sizing;
+            if (state.category === 'apparel') state.categoryData.fit = sample.data.sizing.fit || '';
+          }
+        }
+        // Collect every PD comment across all three stages for the Notes section.
+        const allComments = [];
+        ['sampleApproval', 'preProductionApproval', 'bulkApproval'].forEach((key) => {
+          const stage = approvalData.approval && approvalData.approval[key];
+          if (stage && stage.pdComments) {
+            stage.pdComments.forEach((c) => allComments.push({ ...c, stage: key }));
+          }
+        });
+        allComments.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        state.pdNotes = allComments;
+
+        // Reference photos for Step 3 - Approved Sample, and Pre-Production once it exists.
+        state.approvalReferencePhotos = {
+          sample: (sample && sample.submitted && sample.data.photos) || {},
+          preProduction: (preProd && preProd.submitted && preProd.data.photos) || {}
+        };
+
+        // Per-stage notes (the free-text field entered when that stage was
+        // submitted, separate from PD's comments) plus a link to the
+        // Pre-Production inspection report, if one has been filed.
+        const history = approvalData.reportingHistory || [];
+        const preProdReport = history.find((h) => h.qaType === 'pre_production' && h.poNumber === state.poNumber);
+        state.productionNotesData = {
+          sample: {
+            reportNotes: (sample && sample.submitted && sample.data.notes) || '',
+            pdComments: (sample && sample.pdComments) || []
+          },
+          preProduction: {
+            reportNotes: (preProd && preProd.submitted && preProd.data.notes) || '',
+            pdComments: (preProd && preProd.pdComments) || [],
+            linkedReport: preProdReport || null
+          }
+        };
+      }
+    } catch (e) { console.error('Failed to load approval data for pre-fill', e); }
+
+    goTo(1);
+  } catch (e) {
+    console.error(e);
+    showToast(bi('poNotFound').en + ' / ' + bi('poNotFound').zh, true);
+    btn.disabled = false;
+  }
+}
+
+/* ---- Step 3: Production Notes (reference images, notes from every approval
+ * stage, and every issue found on previous POs of this SKU) ---- */
+function renderReferencePhotosSection() {
+  const sample = state.approvalReferencePhotos.sample || {};
+  const preProd = state.approvalReferencePhotos.preProduction || {};
+  const hasSample = Object.values(sample).some((arr) => arr && arr.length);
+  const hasPreProd = Object.values(preProd).some((arr) => arr && arr.length);
+  if (!hasSample && !hasPreProd) return '';
+
+  const gallery = (photosMap, titleKey, fallback) => {
+    const slots = Object.keys(photosMap).filter((k) => (photosMap[k] || []).length);
+    if (!slots.length) return '';
+    const tiles = slots.flatMap((slotKey) => photosMap[slotKey].map((url) => `
+      <div class="photo-tile">
+        <img src="${escapeHtml(url)}" class="js-lightbox" />
+        <div class="photo-tile-caption">${escapeHtml(slotKey)}</div>
+      </div>
+    `)).join('');
+    return `
+      <div class="section-photos-block" style="margin-top:10px;">
+        <div class="section-title" style="font-size:14px;">${biBlockHtml(titleKey, fallback)}</div>
+        <div class="photo-gallery-large">${tiles}</div>
+      </div>
+    `;
+  };
+
+  return `
+    <div class="card">
+      <div class="section-title">${biBlockHtml('referenceImagesTitle', 'Reference Images')}</div>
+      ${gallery(sample, 'sampleApprovalTitle', 'Sample Approval')}
+      ${gallery(preProd, 'preProductionApprovalTitle', 'Pre-Production Approval')}
+    </div>
+  `;
+}
+
+function renderProductionNotesSection() {
+  const data = state.productionNotesData;
+  if (!data) return '';
+
+  const stageBlock = (stageData, titleKey, fallback) => {
+    const hasReportNotes = stageData.reportNotes && stageData.reportNotes.trim();
+    const hasComments = stageData.pdComments && stageData.pdComments.length;
+    if (!hasReportNotes && !hasComments && !stageData.linkedReport) return '';
+    return `
+      <div style="margin-top:12px; padding-top:12px; border-top:1px dashed var(--jc-border);">
+        <div class="section-photos-label">${biBlockHtml(titleKey, fallback)}</div>
+        ${hasReportNotes ? `<div class="prior-issue-desc" style="margin-top:6px;">${escapeHtml(stageData.reportNotes)}</div>` : ''}
+        ${hasComments ? stageData.pdComments.map((c) => `
+          <div class="defect-card comment-card ${approvalStatusColorClass(c.approvalStatus)}" style="margin-top:8px;">
+            ${c.text ? `<div class="prior-issue-desc">${escapeHtml(c.text)}</div>` : `<div class="prior-issue-desc" style="font-style:italic; color:var(--jc-muted);">${escapeHtml(bi('noCommentTextProvided').en)}<span class="zh">${escapeHtml(bi('noCommentTextProvided').zh)}</span></div>`}
+            <div class="section-help">${escapeHtml(c.author)} · ${new Date(c.timestamp).toLocaleDateString()}</div>
+          </div>
+        `).join('') : ''}
+        ${stageData.linkedReport ? `
+          <a href="/submissions/${encodeURIComponent(stageData.linkedReport.pdfFilename)}" target="_blank" rel="noopener" class="btn btn-secondary" style="display:block; text-decoration:none; text-align:center; margin-top:8px; max-width:240px;">${biBlockHtml('downloadFullReport', 'Download Full Report')}</a>
+        ` : ''}
+      </div>
+    `;
+  };
+
+  const body = stageBlock(data.sample, 'sampleApprovalTitle', 'Approved Sample Notes') + stageBlock(data.preProduction, 'preProductionApprovalTitle', 'Pre-Production Sample Notes');
+  if (!body.trim()) return '';
+
+  return `
+    <div class="card">
+      <div class="section-title">${biBlockHtml('productionNotesTitle', 'Production Notes')}</div>
+      ${body}
+    </div>
+  `;
+}
+
+/** Issues flagged in THIS PO's own Pre-Production sample report - part of
+ *  the main section, distinct from Production Notes (which is free-text
+ *  notes/comments only) and from Previous PO References (other POs). */
+function renderProductionIssuesSection() {
+  const ownPreProdReports = priorReports.filter((r) => r.poNumber === state.poNumber && r.qaType === 'pre_production');
+  if (!ownPreProdReports.length) return '';
+  const withIssues = ownPreProdReports.filter((r) => r.issues && r.issues.length);
+  if (!withIssues.length) return '';
+
+  return `
+    <div class="card">
+      <div class="section-title">${biBlockHtml('productionIssuesTitle', 'Production Issues')}</div>
+      ${withIssues.map((r) => r.issues.map((iss) => {
+        const sevLabel = bi(iss.severity);
+        return `
+          <div class="prior-issue-card">
+            <div class="prior-issue-header">
+              <span class="prior-issue-desc">${escapeHtml(iss.description || '-')}</span>
+              <span class="severity-badge severity-${escapeHtml(iss.severity)}">${escapeHtml(sevLabel.en)} ${escapeHtml(sevLabel.zh)}</span>
+            </div>
+            <div class="section-help">${escapeHtml(bi('unitsAffected').en)}<span class="zh">${escapeHtml(bi('unitsAffected').zh)}</span>: ${iss.unitsAffected}</div>
+            ${iss.photoUrl ? `<img src="${escapeHtml(iss.photoUrl)}" class="prior-issue-photo js-lightbox" />` : ''}
+          </div>
+        `;
+      }).join('')).join('')}
+    </div>
+  `;
+}
+
+/** Only Major/Critical issues from OTHER POs of the same SKU - this PO's own
+ *  issues live in Production Issues above, not here. Rendered with a large
+ *  header and a visible divider so it reads as clearly a different section. */
+function renderPreviousPoReferencesSection() {
+  const otherPoReports = priorReports.filter((r) => r.poNumber !== state.poNumber);
+  const withMajorCritical = otherPoReports
+    .map((r) => ({ ...r, issues: (r.issues || []).filter((iss) => iss.severity === 'major' || iss.severity === 'critical') }))
+    .filter((r) => r.issues.length);
+  if (!withMajorCritical.length) return '';
+
+  return `
+    <div class="major-divider"></div>
+    <div class="step-title" style="font-size:20px; margin-bottom:10px;">${biBlockHtml('previousPoReferencesTitle', 'Previous PO References')}</div>
+    <div class="card">
+      <div class="section-title">${biBlockHtml('previousProductionIssuesTitle', 'Previous Production Issues')}</div>
+      ${withMajorCritical.map((r) => {
+        const qaTypeLabel = r.qaType === 'production' ? bi('production') : bi('prePro');
+        const resultLabel = r.overallResult === 'pass' ? bi('resultPass') : bi('resultFail');
+        const issuesHtml = r.issues.map((iss) => {
+              const sevLabel = bi(iss.severity);
+              return `
+                <div class="prior-issue-card">
+                  <div class="prior-issue-header">
+                    <span class="prior-issue-desc">${escapeHtml(iss.description || '-')}</span>
+                    <span class="severity-badge severity-${escapeHtml(iss.severity)}">${escapeHtml(sevLabel.en)} ${escapeHtml(sevLabel.zh)}</span>
+                  </div>
+                  <div class="section-help">${escapeHtml(bi('unitsAffected').en)}<span class="zh">${escapeHtml(bi('unitsAffected').zh)}</span>: ${iss.unitsAffected}</div>
+                  ${iss.photoUrl ? `<img src="${escapeHtml(iss.photoUrl)}" class="prior-issue-photo js-lightbox" />` : ''}
+                </div>
+              `;
+            }).join('');
+        return `
+          <div style="margin-top:12px; padding-top:12px; border-top:1px dashed var(--jc-border);">
+            <div class="section-help">
+              ${escapeHtml(r.poNumber || '')} · ${escapeHtml(qaTypeLabel.en)} ${escapeHtml(qaTypeLabel.zh)} · ${escapeHtml(r.date || '')} ·
+              <strong style="color:${r.overallResult === 'pass' ? 'var(--jc-teal-dark)' : 'var(--jc-fail)'}">${escapeHtml(resultLabel.en)} ${escapeHtml(resultLabel.zh)}</strong>
+            </div>
+            ${issuesHtml}
+            <a href="/submissions/${encodeURIComponent(r.pdfFilename)}" target="_blank" rel="noopener" class="btn btn-secondary" style="display:block; text-decoration:none; text-align:center; margin-top:8px; max-width:220px;">${biBlockHtml('downloadFullReport', 'Download Full Report')}</a>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+function renderProductionNotesStep() {
+  return `
+    <div class="step-eyebrow">${biHtml('step', 'Step')} 3 / 7</div>
+    <div class="step-title">${biBlockHtml('productionNotesStepTitle', 'Production Notes & References')}</div>
+    <div id="referencePhotosArea">${renderReferencePhotosSection()}</div>
+    ${renderProductionNotesSection()}
+    ${renderProductionIssuesSection()}
+    ${renderPreviousPoReferencesSection()}
+    <div class="nav-buttons">
+      <button class="btn btn-secondary" id="btnBack">${biBlockHtml('back', 'Back')}</button>
+      <button class="btn btn-primary" id="btnNext">${biBlockHtml('next', 'Next')}</button>
+    </div>
+  `;
+}
+
 function renderCategoryStep() {
   const cats = (CONFIG.categories && CONFIG.categories.categories) || {};
   const orderedKeys = CATEGORY_ORDER.filter((k) => cats[k]);
@@ -590,8 +1306,8 @@ function renderCategoryStep() {
 
   return `
     <div style="display:flex; justify-content:flex-end; gap:16px; margin-bottom:4px;">
-      <a href="analytics.html" class="settings-link" title="Analytics">📊 ${escapeHtml(bi('analyticsLink').en)}</a>
-      <a href="settings.html" class="settings-link" title="Settings">⚙️ ${escapeHtml(bi('settingsTitle').en)}</a>
+      <a href="analytics.html" class="settings-link" title="Analytics">📊 ${biBlockHtml('analyticsLink', 'Analytics')}</a>
+      <a href="settings.html" class="settings-link" title="Settings">⚙️ ${biBlockHtml('settingsTitle', 'Settings')}</a>
     </div>
     <div class="step-eyebrow">${biHtml('step', 'Step')} 1 / 7</div>
     <div class="step-title">选择产品类别<span class="zh">Select Product Category</span></div>
@@ -604,11 +1320,11 @@ function renderCategoryStep() {
 
 /** Looks up prior reports for the currently-entered PO Number and refreshes the card. */
 async function fetchPriorReports() {
-  const po = (state.poNumber || '').trim();
-  if (!po || po === priorReportsPoChecked) return;
-  priorReportsPoChecked = po;
+  const sku = (state.sku || '').trim();
+  if (!sku || sku === priorReportsPoChecked) return;
+  priorReportsPoChecked = sku;
   try {
-    const res = await fetch(`/api/submission-history/${encodeURIComponent(po)}`);
+    const res = await fetch(`/api/submission-history-by-sku/${encodeURIComponent(sku)}`);
     if (!res.ok) { priorReports = []; return; }
     const data = await res.json();
     priorReports = data.reports || [];
@@ -616,12 +1332,8 @@ async function fetchPriorReports() {
     console.error('Failed to fetch prior reports', e);
     priorReports = [];
   } finally {
-    if (tryAutoFillFromPrior()) {
-      render(); // fields changed across the whole step - full redraw is simplest and safe here (not mid-typing)
-    } else {
-      const card = document.getElementById('priorReportCard');
-      if (card) card.innerHTML = renderPriorReportCard();
-    }
+    const card = document.getElementById('priorReportCard');
+    if (card) card.innerHTML = renderPriorReportCard();
   }
 }
 
@@ -686,7 +1398,7 @@ function renderPriorReportCard() {
               <span class="prior-issue-desc">${escapeHtml(iss.description || '-')}</span>
               <span class="severity-badge severity-${escapeHtml(iss.severity)}">${escapeHtml(sevLabel.en)} ${escapeHtml(sevLabel.zh)}</span>
             </div>
-            <div class="section-help">${escapeHtml(bi('unitsAffected').en)}: ${iss.unitsAffected}</div>
+            <div class="section-help">${escapeHtml(bi('unitsAffected').en)}<span class="zh">${escapeHtml(bi('unitsAffected').zh)}</span>: ${iss.unitsAffected}</div>
             ${iss.photoUrl ? `<img src="${escapeHtml(iss.photoUrl)}" class="prior-issue-photo" />` : ''}
           </div>
         `;
@@ -712,29 +1424,81 @@ function renderPriorReportCard() {
 
 /* ---- Step 1: Order Info (+ AQL setup) ---- */
 function renderOrderInfoStep() {
+  const catDef = currentCategoryDef();
+  const catLabel = catDef ? { en: catDef.label_zh, zh: catDef.label_en } : { en: '', zh: '' };
+  const subDef = catDef && state.subcategory ? (catDef.subcategories || []).find((s) => s.key === state.subcategory) : null;
+  const subLabel = subDef ? { en: subDef.label_zh, zh: subDef.label_en } : null;
+
   return `
     <div class="step-eyebrow">${biHtml('step', 'Step')} 2 / 7</div>
     <div class="step-title">订单信息<span class="zh">Order Information</span></div>
     <div class="card">
-      ${textField('poNumber', 'poNumber', state.poNumber, { required: true, placeholderKey: 'poNumberPlaceholder' })}
+      ${state.autoFilledForPo || state.factoryCode || state.productRisk !== 'medium' ? `<div class="section-help" style="margin-bottom:10px; color:var(--jc-teal-dark);">${escapeHtml(bi('prefilledFromPoNotice').en)}<br/>${escapeHtml(bi('prefilledFromPoNotice').zh)}</div>` : ''}
+      <div class="review-row"><span class="k">类别 / Category</span><span class="v">${escapeHtml(catLabel.en)} ${escapeHtml(catLabel.zh)}</span></div>
+      ${subLabel ? `<div class="review-row"><span class="k">类型 / Type</span><span class="v">${escapeHtml(subLabel.en)} ${escapeHtml(subLabel.zh)}</span></div>` : ''}
+      <div class="review-row"><span class="k">${escapeHtml(bi('poNumber').en)}</span><span class="v">${escapeHtml(state.poNumber)}</span></div>
+      <div class="review-row"><span class="k">${escapeHtml(bi('productSku').en)}</span><span class="v">${escapeHtml(state.sku)}</span></div>
+      ${state.productTitle ? `<div class="review-row"><span class="k">${escapeHtml(bi('productTitle').en)}</span><span class="v">${escapeHtml(state.productTitle)}</span></div>` : ''}
+      ${selectFieldWithOther('factoryCode', 'factoryCode', state.factoryCode, OPTIONS.factoryCodes || [], { required: true })}
+      <div class="field-row">
+        <div style="flex:1">${dateField('date', 'date', state.date, { required: true })}</div>
+      </div>
+      <div class="field-row">
+        <div style="flex:1">${selectFieldWithOther('creator', 'creator', state.creator, OPTIONS.creators || [], {})}</div>
+      </div>
+      ${numberField('poQuantity', 'poQuantity', state.poQuantity, { required: true, placeholderKey: 'poQuantityPlaceholder' })}
       <div class="field">
-        <label class="field-label">${biBlockHtml('qaType', 'QA Type')}</label>
-        <div class="segmented" id="qaTypeSeg">
-          ${segOption('qaType', 'pre_production', 'prePro', state.qaType)}
-          ${segOption('qaType', 'production', 'production', state.qaType)}
+        <label class="field-label">${biBlockHtml('productRisk', 'Product Complexity/Risk')}</label>
+        <div class="segmented">
+          ${['high', 'medium', 'low'].map((r) => `<div class="segmented-option ${state.productRisk === r ? 'selected' : ''}" data-seg="productRisk" data-val="${r}">${escapeHtml(bi('risk' + r.charAt(0).toUpperCase() + r.slice(1)).en)}<span class="zh">${escapeHtml(bi('risk' + r.charAt(0).toUpperCase() + r.slice(1)).zh)}</span></div>`).join('')}
         </div>
       </div>
     </div>
 
-    <div id="restOfOrderInfo">${renderRestOfOrderInfo()}</div>
+    <div class="card">
+      <div class="section-title">${biBlockHtml('freshEntrySection', 'For This Inspection')}</div>
+      ${selectFieldWithOther('qaLead', 'qaLead', state.qaLead, OPTIONS.qaLeads || [], { required: true })}
+    </div>
 
     <div id="aqlSection">${renderAqlSection()}</div>
-
-    <div id="priorReportCard">${renderPriorReportCard()}</div>
 
     <div class="nav-buttons">
       <button class="btn btn-secondary" id="btnBack">${biBlockHtml('back', 'Back')}</button>
       <button class="btn btn-primary" id="btnNext">${biBlockHtml('next', 'Next')}</button>
+    </div>
+  `;
+}
+
+function approvalStatusLabelKey(status) {
+  if (status === 'minorIssue') return 'statusMinorIssue';
+  if (status === 'majorCriticalIssue') return 'statusMajorCriticalIssue';
+  if (status === 'approved') return 'statusApproved';
+  if (status === 'approvedWithComments') return 'statusApprovedWithComments';
+  return 'statusGeneral';
+}
+function approvalStatusColorClass(status) {
+  if (status === 'minorIssue') return 'comment-minor';
+  if (status === 'majorCriticalIssue') return 'comment-major';
+  if (status === 'approved') return 'comment-approved';
+  if (status === 'approvedWithComments') return 'comment-approved';
+  return 'comment-general';
+}
+
+function renderPdNotesSection() {
+  if (!state.pdNotes || !state.pdNotes.length) return '';
+  return `
+    <div class="card">
+      <div class="section-title">${biBlockHtml('pdNotesTitle', 'Notes from Product Development')}</div>
+      ${state.pdNotes.map((n) => `
+        <div class="defect-card comment-card ${approvalStatusColorClass(n.approvalStatus)}">
+          <div class="prior-issue-header">
+            ${n.text ? `<span class="prior-issue-desc">${escapeHtml(n.text)}</span>` : `<span class="prior-issue-desc" style="font-style:italic; color:var(--jc-muted);">${escapeHtml(bi('noCommentTextProvided').en)}<span class="zh">${escapeHtml(bi('noCommentTextProvided').zh)}</span></span>`}
+            <span class="severity-badge comment-badge-${approvalStatusColorClass(n.approvalStatus)}">${escapeHtml(bi(approvalStatusLabelKey(n.approvalStatus)).en)} ${escapeHtml(bi(approvalStatusLabelKey(n.approvalStatus)).zh)}</span>
+          </div>
+          <div class="section-help">${escapeHtml(n.author)} · ${new Date(n.timestamp).toLocaleDateString()}</div>
+          ${(n.photos || []).map((url) => `<img src="${escapeHtml(url)}" class="prior-issue-photo" />`).join('')}
+        </div>
+      `).join('')}
     </div>
   `;
 }
@@ -821,11 +1585,8 @@ function renderUnitsCheckedDerived() {
   const computedPercent = (state.actualUnitsChecked && state.poQuantity)
     ? Math.round((parseInt(state.actualUnitsChecked, 10) / parseInt(state.poQuantity, 10)) * 1000) / 10
     : null;
-  const result = computeOverallResult();
-  const recapTableBlock = (result.aql && result.aql.isActual) ? foundAcceptedTableHtml(result.aql) : `<div class="section-help" style="margin-top:10px;">${escapeHtml(bi('enterActualSpotCheckFirst').en)}<br/>${escapeHtml(bi('enterActualSpotCheckFirst').zh)}</div>`;
   return `
     ${computedPercent !== null ? `<div class="section-help" style="margin-top:6px;">≈ <strong>${computedPercent}%</strong> ${escapeHtml(bi('computedPercentOfPo').en)} <span class="zh">${escapeHtml(bi('computedPercentOfPo').zh)}</span></div>` : ''}
-    ${recapTableBlock}
   `;
 }
 
@@ -982,7 +1743,7 @@ function renderInspectionDetailsStep() {
   }
 
   return `
-    <div class="step-eyebrow">${biHtml('step', 'Step')} 3 / 7</div>
+    <div class="step-eyebrow">${biHtml('step', 'Step')} 4 / 7</div>
     <div class="step-title">检验详情<span class="zh">Inspection Details</span></div>
     ${body}
     <div class="nav-buttons">
@@ -1087,8 +1848,34 @@ function fitsForCurrentSubcategory() {
 
 const OTHER_FIT_VALUE = '__other_fit__';
 
+function renderApprovalSizingReferenceTile() {
+  if (!state.approvalSizingData) return '';
+  const d = state.approvalSizingData;
+  let content = '';
+  if (d.fit) {
+    const fitDef = CONFIG.fits && CONFIG.fits.fits && CONFIG.fits.fits[d.fit];
+    content = fitDef ? `${fitDef.label_zh} ${fitDef.label_en}` : d.fit;
+  } else if (d.dimensions && (d.dimensions.height || d.dimensions.width || d.dimensions.depth)) {
+    const dim = d.dimensions;
+    content = `${dim.height || '-'} x ${dim.width || '-'} x ${dim.depth || '-'} cm (${bi('dimensionHeight').en}/${bi('dimensionWidth').en}/${bi('dimensionDepth').en})`;
+    if (dim.notes && dim.notes.trim()) content += ` — ${dim.notes}`;
+  } else if (d.simpleSizeValue) {
+    content = d.simpleSizeValue;
+  } else if (d.notes) {
+    content = d.notes;
+  }
+  if (!content) return '';
+  return `
+    <div class="card" style="background:var(--jc-mint-light); border-color:var(--jc-teal);">
+      <div class="section-title">${biBlockHtml('approvalSizingReferenceTitle', 'Sizing (from QA/QC Approval)')}</div>
+      <div class="section-help" style="color:var(--jc-text);">${escapeHtml(content)}</div>
+    </div>
+  `;
+}
+
 function renderSizingStep() {
   let body = '';
+  body += renderApprovalSizingReferenceTile();
   if (state.category === 'apparel') {
     body += renderFitPicker();
     if (state.categoryData.fit === OTHER_FIT_VALUE) {
@@ -1100,11 +1887,11 @@ function renderSizingStep() {
     }
   } else {
     body += renderToleranceGuidance();
-    body += checklistCard('sizingSection', [['generalSizingMatch', 'generalSizingMatch']], 'sizing');
+    body += renderDimensionsFields();
   }
 
   return `
-    <div class="step-eyebrow">${biHtml('step', 'Step')} 4 / 7</div>
+    <div class="step-eyebrow">${biHtml('step', 'Step')} 5 / 7</div>
     <div class="step-title">尺寸<span class="zh">Sizing</span></div>
     ${body}
     <div class="nav-buttons">
@@ -1116,20 +1903,67 @@ function renderSizingStep() {
 /** For apparel's "Other / Custom Sizing" option: a fillable chart with freeform
  *  size rows (name + measurement notes + a photo per size), plus a general photo
  *  slot for snapping a paper reference chart if that's faster than typing it out. */
+function isSimplifiedCustomSizing(subcategory) {
+  return subcategory === 'hat' || subcategory === 'socks';
+}
+
+function renderDimensionsFields() {
+  const dims = state.categoryData.dimensions;
+  const field = (key, i18nKey, fallback) => `
+    <div class="field" style="flex:1;">
+      <label class="field-label">${biBlockHtml(i18nKey, fallback)}<span class="required">*</span></label>
+      <input type="number" step="0.1" inputmode="decimal" data-dimension="${key}" value="${escapeHtml(dims[key])}" placeholder="0.0" />
+    </div>
+  `;
+  return `
+    <div class="card">
+      <div class="section-title">${biBlockHtml('sizingTitle', 'Sizing')}</div>
+      <div class="field-row">
+        ${field('height', 'dimensionHeight', 'Height (cm)')}
+        ${field('width', 'dimensionWidth', 'Width (cm)')}
+        ${field('depth', 'dimensionDepth', 'Depth (cm)')}
+      </div>
+      <div class="field">
+        <label class="field-label">${biBlockHtml('dimensionsNotes', 'Additional Notes')} <span class="section-help">(${escapeHtml(bi('optional').en)})</span></label>
+        <textarea data-dimension="notes" placeholder="${escapeHtml(bi('dimensionsNotesPlaceholder').en)}">${escapeHtml(dims.notes || '')}</textarea>
+      </div>
+    </div>
+  `;
+}
+
 function renderCustomSizeChart() {
+  if (isSimplifiedCustomSizing(state.subcategory)) {
+    return `
+      <div class="card">
+        <div class="section-title">${biBlockHtml('customSizeChartTitle', 'Custom Size Chart')}</div>
+        <div class="field">
+          <label class="field-label">${biBlockHtml('simpleSizeLabel', 'Size / Measurement')}</label>
+          <input type="text" id="simpleSizeInput" value="${escapeHtml(state.categoryData.simpleSizeValue || '')}" placeholder="${escapeHtml(bi('simpleSizePlaceholder').en)}" />
+        </div>
+        <div class="section-photos-block">
+          <div class="section-photos-label">${biBlockHtml('sizingPhotosForSize', 'Photos for this size')}</div>
+          ${photoGrid('simplesize', true, true)}
+        </div>
+      </div>
+    `;
+  }
+
+  if (!state.categoryData.customSizeRows.length && state.poSizesIncluded && state.poSizesIncluded.length) {
+    state.categoryData.customSizeRows = state.poSizesIncluded.map((size) => ({ sizeName: size, measurements: '', photos: [] }));
+  }
   const rows = state.categoryData.customSizeRows.map((row, ridx) => `
     <div class="size-card">
       <div class="field">
         <label class="field-label">${biBlockHtml('customSizeName', 'Size Name')}</label>
         <input type="text" data-custom-size-name="${ridx}" value="${escapeHtml(row.sizeName)}" placeholder="${escapeHtml(bi('customSizeNamePlaceholder').en)}" />
       </div>
-      <div class="field">
-        <label class="field-label">${biBlockHtml('customSizeMeasurements', 'Measurements')}</label>
+      <div class="field" data-field="customSizeMeasurements-${ridx}">
+        <label class="field-label">${biBlockHtml('customSizeMeasurements', 'Measurements')}<span class="required">*</span></label>
         <textarea data-custom-size-measurements="${ridx}" placeholder="${escapeHtml(bi('customSizeMeasurementsPlaceholder').en)}">${escapeHtml(row.measurements)}</textarea>
       </div>
       <div class="size-card-photos">
         <div class="section-photos-label">${biBlockHtml('sizingPhotosForSize', 'Photos for this size')}</div>
-        ${photoGrid('customsizerow:' + ridx, true)}
+        ${photoGrid('customsizerow:' + ridx, true, true)}
       </div>
       <button type="button" class="remove-defect-btn" data-remove-custom-size="${ridx}">${escapeHtml(bi('removeIssue').en)} / ${escapeHtml(bi('removeIssue').zh)}</button>
     </div>
@@ -1171,16 +2005,59 @@ function renderFitPicker() {
     </div>
   `;
 }
+/** The PO's own established Golden Sample measurement for a size+point, if
+ *  one exists - this is what Pre-Production/Bulk should actually be
+ *  compared against, since the Golden Sample may have been edited away
+ *  from the generic fit template for this specific product. Falls back to
+ *  the generic template's standard when no Golden Sample value exists yet
+ *  (e.g. Pre-Production being filed before Sample Approval, if that ever
+ *  happens) or for a size the Golden Sample didn't cover. */
+function establishedStandardFor(sizeName, point, fitDef) {
+  const sizing = state.approvalSizingData;
+  if (sizing && sizing.fit === state.categoryData.fit && sizing.sizeRows) {
+    const row = sizing.sizeRows.find((r) => r.size === sizeName);
+    if (row && row.measured && row.measured[point] !== undefined && row.measured[point] !== '') {
+      return row.measured[point];
+    }
+  }
+  const generic = fitDef.sizes[sizeName];
+  return generic ? generic[point] : undefined;
+}
+
+/** Additional columns (e.g. "Inseam") added on this PO's own Golden Sample -
+ *  product-specific, so they only exist once a Sample Approval with them
+ *  has actually been submitted for the currently selected fit. */
+function getCustomPointsForCurrentFit() {
+  const sizing = state.approvalSizingData;
+  if (sizing && sizing.fit === state.categoryData.fit && Array.isArray(sizing.customPoints)) {
+    return sizing.customPoints;
+  }
+  return [];
+}
+
+/** Label for either a standard fit measurement point or a custom column -
+ *  custom columns only have a single freeform label (not bilingual), so
+ *  the same text is used for both slots. */
+function pointLabelFor(p, fitDef, customPoints) {
+  const cp = customPoints.find((c) => c.key === p);
+  if (cp) { const label = cp.label || bi('untitledColumn').en; return { en: label, zh: label }; }
+  return fitDef.pointLabels[p] || { en: p, zh: '' };
+}
+
 function renderReferenceChart() {
   const fitDef = CONFIG.fits.fits[state.categoryData.fit];
   if (!fitDef) return '';
-  const pointCols = fitDef.points.map((p) => {
-    const pl = fitDef.pointLabels[p] || { en: p, zh: '' };
+  const customPoints = getCustomPointsForCurrentFit();
+  const allPoints = fitDef.points.concat(customPoints.map((cp) => cp.key));
+  const pointCols = allPoints.map((p) => {
+    const pl = pointLabelFor(p, fitDef, customPoints);
     return `<th>${escapeHtml(pl.zh || pl.en)}<span class="zh">${escapeHtml(pl.en)}</span></th>`;
   }).join('');
-  const rows = Object.keys(fitDef.sizes).map((sizeName) => {
-    const std = fitDef.sizes[sizeName];
-    const cells = fitDef.points.map((p) => `<td>${escapeHtml(formatStandard(std[p]))}</td>`).join('');
+  const sizeNames = (state.poSizesIncluded && state.poSizesIncluded.length)
+    ? Object.keys(fitDef.sizes).filter((s) => state.poSizesIncluded.some((canonical) => sizeMatchesCanonical(s, canonical)))
+    : Object.keys(fitDef.sizes);
+  const rows = sizeNames.map((sizeName) => {
+    const cells = allPoints.map((p) => `<td>${escapeHtml(formatStandard(establishedStandardFor(sizeName, p, fitDef)))}</td>`).join('');
     return `<tr><td class="size-name">${escapeHtml(sizeName)}</td>${cells}</tr>`;
   }).join('');
   return `
@@ -1199,30 +2076,34 @@ function renderReferenceChart() {
 function renderSizeEntryTable() {
   const fitDef = CONFIG.fits.fits[state.categoryData.fit];
   if (!fitDef) return '';
-  const tol = CONFIG.fits.toleranceInches || 0.5;
+  const tol = CONFIG.fits.toleranceCm || 1.27;
   const cd = state.categoryData;
+  const customPoints = getCustomPointsForCurrentFit();
+  const allPoints = fitDef.points.concat(customPoints.map((cp) => cp.key));
 
   if (!cd.sizeRows.length || cd._fitForRows !== cd.fit) {
-    cd.sizeRows = Object.keys(fitDef.sizes).map((size) => ({ size, measured: {}, photos: [] }));
+    const availableSizes = (state.poSizesIncluded && state.poSizesIncluded.length)
+      ? Object.keys(fitDef.sizes).filter((s) => state.poSizesIncluded.some((canonical) => sizeMatchesCanonical(s, canonical)))
+      : Object.keys(fitDef.sizes);
+    cd.sizeRows = availableSizes.map((size) => ({ size, measured: {}, photos: [] }));
     cd._fitForRows = cd.fit;
   }
 
   const cards = cd.sizeRows.map((row, ridx) => {
-    const standard = fitDef.sizes[row.size] || {};
-    const pointFields = fitDef.points.map((p) => {
-      const pl = fitDef.pointLabels[p] || { en: p, zh: '' };
-      const std = standard[p];
+    const pointFields = allPoints.map((p) => {
+      const pl = pointLabelFor(p, fitDef, customPoints);
+      const std = establishedStandardFor(row.size, p, fitDef);
       const measuredVal = row.measured[p] !== undefined ? row.measured[p] : '';
       const measuredNum = parseFloat(measuredVal);
       const outOfTol = isOutOfTolerance(std, measuredVal === '' ? null : measuredNum, tol);
       return `
         <div class="size-point-field ${outOfTol ? 'out-of-tol' : ''}" id="sizecell_${ridx}_${p}">
           <label class="size-point-label">${escapeHtml(pl.zh || pl.en)} <span class="zh">${escapeHtml(pl.en)}</span></label>
-          <span class="std-val">${escapeHtml(bi('standard').en)}: ${escapeHtml(formatStandard(std))}</span>
+          <span class="std-val">${escapeHtml(bi('standard').en)}<span class="zh">${escapeHtml(bi('standard').zh)}</span>: ${escapeHtml(formatStandard(std))}</span>
           <input type="number" step="0.1" inputmode="decimal" value="${escapeHtml(measuredVal)}"
             class="${outOfTol ? 'out-of-tol' : ''}"
             data-size-row="${ridx}" data-size-point="${p}" placeholder="0.0" />
-          <span class="tol-flag" style="display:${outOfTol ? 'inline' : 'none'}">${escapeHtml(bi('outOfTolerance').en)}</span>
+          <span class="tol-flag" style="display:${outOfTol ? 'inline' : 'none'}">${escapeHtml(bi('outOfTolerance').en)}<span class="zh">${escapeHtml(bi('outOfTolerance').zh)}</span></span>
         </div>
       `;
     }).join('');
@@ -1233,7 +2114,7 @@ function renderSizeEntryTable() {
         <div class="size-point-grid">${pointFields}</div>
         <div class="size-card-photos">
           <div class="section-photos-label">${biBlockHtml('sizingPhotosForSize', 'Photos for this size')}</div>
-          ${photoGrid('sizerow:' + ridx, true)}
+          ${photoGrid('sizerow:' + ridx, true, true)}
         </div>
       </div>
     `;
@@ -1292,7 +2173,7 @@ function renderPhotosStep() {
     </div>
   `;
 }
-function photoGrid(fieldId, compact) {
+function photoGrid(fieldId, compact, mini) {
   const arr = getPhotoArray(fieldId);
   const thumbs = arr.map((file, idx) => `
     <div class="photo-thumb">
@@ -1302,12 +2183,12 @@ function photoGrid(fieldId, compact) {
   `).join('');
   const inputId = `photoInput_${fieldId.replace(/[:]/g, '_')}`;
   return `
-    <div class="photo-grid ${compact ? 'compact' : ''}">
+    <div class="photo-grid ${mini ? 'mini' : (compact ? 'compact' : '')}">
       ${thumbs}
       <label class="photo-add" for="${inputId}">
         <span class="plus">+</span>
         <span>${escapeHtml(bi('addPhoto').en)}</span>
-        <input type="file" id="${inputId}" accept="image/*" capture="environment" multiple
+        <input type="file" id="${inputId}" accept="image/*" multiple
           data-photo-input="${fieldId}" />
       </label>
     </div>
@@ -1322,6 +2203,10 @@ function renderAdditionalIssuesStep() {
     <div class="step-eyebrow">${biHtml('step', 'Step')} 6 / 7</div>
     <div class="step-title">${biBlockHtml('additionalIssuesSection', 'Additional Issues')}</div>
     <div class="section-help" style="margin-bottom:14px;">${escapeHtml(bi('additionalIssuesHelp').en)}<br/>${escapeHtml(bi('additionalIssuesHelp').zh)}</div>
+    <div class="card" style="background:var(--jc-mint-light); border-color:var(--jc-teal); margin-bottom:16px;">
+      <div class="section-title" style="font-size:14px;">${biBlockHtml('severityGuideTitle', 'How to classify an issue')}</div>
+      <div class="section-help">${escapeHtml(bi('severityGuideText').en)}<br/>${escapeHtml(bi('severityGuideText').zh)}</div>
+    </div>
     ${state.additionalIssues.length === 0 ? `<div class="no-issues-note">${escapeHtml(bi('noIssues').en)} / ${escapeHtml(bi('noIssues').zh)}</div>` : issuesHtml}
     <button class="add-issue-btn" id="btnAddIssue">${escapeHtml(bi('addDefect').en)} / ${escapeHtml(bi('addDefect').zh)}</button>
     <div id="issuesAqlLive">${renderAqlTallyCard()}</div>
@@ -1429,11 +2314,6 @@ function renderReviewStep() {
         <div class="review-row"><span class="k">${bi('qaType').en}</span><span class="v">${escapeHtml(qaTypeLabel.en)} ${escapeHtml(qaTypeLabel.zh)}</span></div>
       </div>
       <div class="review-block">
-        <div class="review-block-title">${bi('finalApprovalPhotos').en} / ${bi('finalApprovalPhotos').zh}</div>
-        <div class="review-row"><span class="k">${bi('generalPhotos').en}</span><span class="v">${state.photos.general.length}</span></div>
-        <div class="review-row"><span class="k">${bi('tagPhotos').en}</span><span class="v">${state.photos.tags.length}</span></div>
-      </div>
-      <div class="review-block">
         <div class="review-block-title">${bi('additionalIssuesSection').en} / ${bi('additionalIssuesSection').zh}</div>
         <div class="review-row"><span class="k">Total</span><span class="v">${state.additionalIssues.length}</span></div>
       </div>
@@ -1500,6 +2380,13 @@ function attachStepHandlers(name) {
   attachDataBindLiveHandlers(document);
   attachUnitsCheckedHandler(document);
 
+  if (name === 'poLookup') {
+    const input = document.getElementById('poLookupInput');
+    if (input) input.addEventListener('input', (e) => { state.poNumber = e.target.value; });
+    const btn = document.getElementById('btnPoLookupSubmit');
+    if (btn) btn.addEventListener('click', submitPoLookup);
+  }
+
   if (name === 'category') {
     document.querySelectorAll('.category-option').forEach((el) => {
       el.addEventListener('click', () => {
@@ -1521,17 +2408,12 @@ function attachStepHandlers(name) {
   }
 
   if (name === 'orderInfo') {
-    const poInput = document.querySelector('[data-bind="poNumber"]');
-    if (poInput) {
-      poInput.addEventListener('blur', fetchPriorReports);
-      if (state.poNumber) fetchPriorReports();
-    }
+    if (state.sku) fetchPriorReports();
     document.querySelectorAll('[data-seg]').forEach((el) => {
       el.addEventListener('click', () => {
         const field = el.getAttribute('data-seg');
         state[field] = el.getAttribute('data-val');
         if (field === 'productRisk') state._productRiskTouched = true;
-        if (field === 'qaType') tryAutoFillFromPrior();
         render();
       });
     });
@@ -1590,6 +2472,11 @@ function attachStepHandlers(name) {
         state.categoryData.sizeRows[ridx].measured[point] = e.target.value;
         updateSizeCellInPlace(ridx, point);
       });
+    });
+    const simpleSizeInput = document.getElementById('simpleSizeInput');
+    if (simpleSizeInput) simpleSizeInput.addEventListener('input', (e) => { state.categoryData.simpleSizeValue = e.target.value; });
+    document.querySelectorAll('[data-dimension]').forEach((el) => {
+      el.addEventListener('input', (e) => { state.categoryData.dimensions[el.getAttribute('data-dimension')] = e.target.value; });
     });
     const btnAddCustomSize = document.getElementById('btnAddCustomSize');
     if (btnAddCustomSize) {
@@ -1678,12 +2565,12 @@ function setStateValue(path, value) {
 function updateSizeCellInPlace(ridx, point) {
   const fitDef = CONFIG.fits.fits[state.categoryData.fit];
   if (!fitDef) return;
-  const tol = CONFIG.fits.toleranceInches || 0.5;
+  const tol = CONFIG.fits.toleranceCm || 1.27;
   const row = state.categoryData.sizeRows[ridx];
-  const standard = fitDef.sizes[row.size] || {};
+  const standard = establishedStandardFor(row.size, point, fitDef);
   const measuredVal = row.measured[point] !== undefined ? row.measured[point] : '';
   const measuredNum = parseFloat(measuredVal);
-  const outOfTol = isOutOfTolerance(standard[point], measuredVal === '' ? null : measuredNum, tol);
+  const outOfTol = isOutOfTolerance(standard, measuredVal === '' ? null : measuredNum, tol);
   const cell = document.getElementById(`sizecell_${ridx}_${point}`);
   if (!cell) return;
   const input = cell.querySelector('input');
@@ -1799,6 +2686,8 @@ async function submitReport() {
         fit: cd.fit,
         sizeRows: (cd.sizeRows || []).map((row) => ({ size: row.size, measured: row.measured })),
         customSizeRows: (cd.customSizeRows || []).map((row) => ({ sizeName: row.sizeName, measurements: row.measurements })),
+        simpleSizeValue: cd.simpleSizeValue || '',
+        dimensions: cd.dimensions || { height: '', width: '', depth: '' },
         ...Object.fromEntries(CHECKLIST_KEYS.map((key) => [key, {
           status: cd[key].status, notes: cd[key].notes,
           defects: (cd[key].defects || []).map(serializeDefect)
@@ -1828,6 +2717,7 @@ async function submitReport() {
       (row.photos || []).forEach((f) => formData.append(`photo_customsizerow_${ridx}`, f, f.name));
     });
     (state.categoryData.chartPhotos || []).forEach((f) => formData.append('photo_chart', f, f.name));
+    (state.categoryData.simpleSizePhotos || []).forEach((f) => formData.append('photo_simplesize', f, f.name));
 
     const res = await fetch('/api/submit', { method: 'POST', body: formData });
     if (!res.ok) {
@@ -1846,12 +2736,6 @@ async function submitReport() {
 
 function renderSuccessScreen(result = {}) {
   const root = document.getElementById('formRoot');
-  const testModeNotice = result.testMode ? `
-    <div class="test-mode-banner">
-      <strong>Test Mode</strong> / 测试模式 — no email was sent because SMTP isn't configured yet.
-      The PDF was generated and saved locally so you can review it below.
-    </div>
-  ` : '';
   const viewLink = result.pdfUrl ? `
     <a class="btn btn-primary" style="max-width:280px;margin:0 auto 12px auto;display:block;text-decoration:none;" href="${result.pdfUrl}" target="_blank" rel="noopener">
       View Generated PDF / 查看生成的报告
@@ -1862,7 +2746,6 @@ function renderSuccessScreen(result = {}) {
       <div class="success-icon">✓</div>
       <div class="success-title">${escapeHtml(bi('submitSuccess').en)}</div>
       <div class="success-sub">${escapeHtml(bi('submitSuccess').zh)}</div>
-      ${testModeNotice}
       ${viewLink}
       <button class="btn btn-secondary" id="btnStartOver" style="max-width:280px;margin:0 auto;">${biBlockHtml('startOver', 'Start New Report')}</button>
     </div>
@@ -1879,6 +2762,8 @@ function resetApp() {
   priorReportsPoChecked = null;
   Object.assign(state, {
     category: null, subcategory: null,
+    sku: '', poSizesIncluded: [], pdNotes: [], approvalSizingData: null,
+  approvalReferencePhotos: { sample: {}, preProduction: {} }, productionNotesData: null,
     poNumber: '', factoryCode: '', date: todayStr(), qaLead: '',
     creator: '', productTitle: '', qaType: 'pre_production',
     poQuantity: '', inspectionLevel: 'II', majorAql: 2.5, minorAql: 4.0,
@@ -1886,7 +2771,7 @@ function resetApp() {
     autoFilledForPo: null, _productRiskTouched: false,
     materials: '', printingMethod: '',
     categoryData: {
-      fit: '', sizeRows: [], customSizeRows: [], chartPhotos: [],
+      fit: '', sizeRows: [], customSizeRows: [], chartPhotos: [], simpleSizeValue: '', simpleSizePhotos: [], dimensions: { height: '', width: '', depth: '', notes: '' },
       fabricColorMatch: emptyChecklistEntry(),
       fabricWeightMatch: emptyChecklistEntry(),
       embroideryColorMatch: emptyChecklistEntry(),
@@ -1903,13 +2788,16 @@ function resetApp() {
     photos: { general: [], tags: [] },
     additionalIssues: []
   });
-  goTo(0);
+  appMode = 'chooser';
+  render();
 }
 
 /* ---------------- INIT ---------------- */
 
 (async function init() {
   await loadConfig();
-  updateProgress();
+  const params = new URLSearchParams(location.search);
+  if (params.get('mode') === 'newPO') appMode = 'newPO';
+  updateProgressForMode();
   render();
 })();

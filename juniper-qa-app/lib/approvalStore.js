@@ -32,7 +32,7 @@ function saveAll(entries) {
 }
 
 function emptyStage() {
-  return { submitted: false, submittedAt: null, data: null, pdComments: [] };
+  return { submitted: false, submittedAt: null, data: null, pdComments: [], skipped: false, skippedAt: null };
 }
 
 function getOrCreateByPoNumber(poNumber, sku) {
@@ -79,7 +79,24 @@ function updateStage(poNumber, sku, stageKey, data) {
     entries.push(entry);
   }
   if (sku && !entry.sku) entry.sku = sku;
-  entry[stageKey] = { submitted: true, submittedAt: new Date().toISOString(), data, pdComments: (entry[stageKey] && entry[stageKey].pdComments) || [] };
+  entry[stageKey] = { submitted: true, submittedAt: new Date().toISOString(), data, pdComments: (entry[stageKey] && entry[stageKey].pdComments) || [], skipped: false, skippedAt: null };
+  saveAll(entries);
+  return entry;
+}
+
+/** Marks a stage as deliberately bypassed rather than pending - used for
+ *  Pre-Production Approval on repeat POs of an already-established product,
+ *  where the team typically goes straight from Golden Sample to Bulk. Kept
+ *  as a distinct state from "not yet submitted" so it's clear this was an
+ *  intentional decision, not something overlooked. */
+function skipStage(poNumber, stageKey) {
+  const entries = loadAll();
+  let entry = entries.find((e) => e.poNumber && String(e.poNumber).trim().toLowerCase() === String(poNumber).trim().toLowerCase());
+  if (!entry) {
+    entry = { poNumber, sku: null, sampleApproval: emptyStage(), preProductionApproval: emptyStage(), bulkApproval: emptyStage() };
+    entries.push(entry);
+  }
+  entry[stageKey] = { submitted: false, submittedAt: null, data: null, pdComments: [], skipped: true, skippedAt: new Date().toISOString() };
   saveAll(entries);
   return entry;
 }
@@ -95,6 +112,6 @@ function addPdComment(poNumber, stageKey, comment) {
 }
 
 module.exports = {
-  getOrCreateByPoNumber, getByPoNumber, getPriorSampleApprovalForSku, updateStage, addPdComment,
+  getOrCreateByPoNumber, getByPoNumber, getPriorSampleApprovalForSku, updateStage, addPdComment, skipStage,
   APPROVAL_PATH, APPROVAL_PHOTO_DIR
 };

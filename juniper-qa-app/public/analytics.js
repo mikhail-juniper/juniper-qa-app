@@ -15,6 +15,8 @@ const PERIOD_PRESETS = {
 
 const state = {
   period: '90',
+  customStart: '',
+  customEnd: '',
   filterMode: 'vendor',
   vendor: '',
   factoryCode: ''
@@ -40,6 +42,11 @@ function showToast(msg, isError = false) {
 
 function periodToRange(periodKey) {
   const end = new Date();
+  if (periodKey === 'custom') {
+    const start = state.customStart ? new Date(state.customStart) : new Date('2020-01-01');
+    const customEnd = state.customEnd ? new Date(state.customEnd) : end;
+    return { start, end: customEnd };
+  }
   if (periodKey === 'all') {
     return { start: new Date('2020-01-01'), end };
   }
@@ -93,8 +100,21 @@ function render() {
         <label class="field-label">${escapeHtml(bi('timePeriod').en)} <span class="zh">${escapeHtml(bi('timePeriod').zh)}</span></label>
         <select id="periodSelect">
           ${Object.keys(PERIOD_PRESETS).map((k) => `<option value="${k}" ${state.period === k ? 'selected' : ''}>${escapeHtml(bi(PERIOD_PRESETS[k].labelKey).en)} / ${escapeHtml(bi(PERIOD_PRESETS[k].labelKey).zh)}</option>`).join('')}
+          <option value="custom" ${state.period === 'custom' ? 'selected' : ''}>${escapeHtml(bi('customDateRange', 'Custom Range').en)} / ${escapeHtml(bi('customDateRange', 'Custom Range').zh)}</option>
         </select>
       </div>
+      ${state.period === 'custom' ? `
+        <div class="field-row" style="margin-top:10px;">
+          <div class="field" style="flex:1;">
+            <label class="field-label">${escapeHtml(bi('startDate', 'Start Date').en)} <span class="zh">${escapeHtml(bi('startDate', 'Start Date').zh)}</span></label>
+            <input type="date" id="customStartInput" value="${escapeHtml(state.customStart)}" />
+          </div>
+          <div class="field" style="flex:1;">
+            <label class="field-label">${escapeHtml(bi('endDate', 'End Date').en)} <span class="zh">${escapeHtml(bi('endDate', 'End Date').zh)}</span></label>
+            <input type="date" id="customEndInput" value="${escapeHtml(state.customEnd)}" />
+          </div>
+        </div>
+      ` : ''}
     </div>
 
     <div class="step-title" style="font-size:19px;">${escapeHtml(bi('overallStatsTitle').en)}<span class="zh">${escapeHtml(bi('overallStatsTitle').zh)}</span></div>
@@ -130,10 +150,59 @@ function render() {
   attachHandlers();
 }
 
-function statsTableHtml(monthRows, totalRow) {
+const exportDataRegistry = {};
+
+/** Builds an Excel/Sheets-friendly CSV string - UTF-8 BOM so accented/
+ *  non-Latin characters display correctly, CRLF line endings, and quoting
+ *  around any value that contains a comma, quote, or newline. */
+function buildCsvContent(monthRows, totalRow) {
+  const cols = [
+    ['month', 'month'],
+    ['posPlaced', 'posPlaced'],
+    ['manufacturedQuantity', 'manufacturedQuantity'],
+    ['unitsCheckedStat', 'unitsChecked'],
+    ['unitsRejectedStat', 'unitsRejected'],
+    ['defectiveRate', 'defectiveRate'],
+    ['passRate', 'passRate']
+  ];
+  const csvCell = (val) => {
+    const s = val === null || val === undefined ? '' : String(val);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  // bi() swaps .en/.zh internally to match this app's Chinese-first display
+  // convention, so a header needs both sides pulled out explicitly rather
+  // than reused as-is - "Month / 月份", not just one language.
+  const bilingual = (l) => `${l.zh} / ${l.en}`;
+  const rawVal = (key, row, isTotal) => {
+    if (key === 'month') return isTotal ? bilingual(bi('totalRow')) : row.month;
+    const v = row[key];
+    if (v === null || v === undefined) return '';
+    if (key === 'defectiveRate' || key === 'passRate') return `${v}%`;
+    return v;
+  };
+  const header = cols.map(([labelKey]) => csvCell(bilingual(bi(labelKey)))).join(',');
+  const rowLine = (row, isTotal) => cols.map(([, dataKey]) => csvCell(rawVal(dataKey, row, isTotal))).join(',');
+  const lines = [header, ...monthRows.map((r) => rowLine(r, false)), rowLine(totalRow, true)];
+  return '\ufeff' + lines.join('\r\n');
+}
+
+function downloadCsv(filename, csvContent) {
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function statsTableHtml(monthRows, totalRow, exportKey, exportLabel) {
   if (!monthRows.length) {
     return `<div class="section-help" style="padding:14px 0;">${escapeHtml(bi('noDataForPeriod').en)}<br/>${escapeHtml(bi('noDataForPeriod').zh)}</div>`;
   }
+  if (exportKey) exportDataRegistry[exportKey] = { monthRows, totalRow, label: exportLabel || exportKey };
   const cols = [
     ['month', 'month'],
     ['posPlaced', 'posPlaced'],
@@ -155,6 +224,11 @@ function statsTableHtml(monthRows, totalRow) {
     </tr>
   `;
   return `
+    ${exportKey ? `
+      <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
+        <button class="btn btn-secondary" style="width:auto; padding:6px 14px; font-size:12px;" data-export-csv="${escapeHtml(exportKey)}">${escapeHtml(bi('exportCsv').en)} / ${escapeHtml(bi('exportCsv').zh)}</button>
+      </div>
+    ` : ''}
     <div class="size-table-wrap">
       <table class="size-table analytics-table">
         <thead><tr>${cols.map(([labelKey]) => `<th>${escapeHtml(bi(labelKey).en)}<span class="zh">${escapeHtml(bi(labelKey).zh)}</span></th>`).join('')}</tr></thead>
@@ -169,22 +243,26 @@ function statsTableHtml(monthRows, totalRow) {
 
 function renderCategorySection() {
   if (!categoryData) return `<div class="section-help">...</div>`;
-  return categoryData.map((cat) => `
+  return categoryData.map((cat) => {
+    const label = bi(CATEGORY_LABEL_KEYS[cat.category]).en;
+    return `
     <div class="card">
       <div class="section-title">${escapeHtml(bi(CATEGORY_LABEL_KEYS[cat.category]).en)}<span class="zh">${escapeHtml(bi(CATEGORY_LABEL_KEYS[cat.category]).zh)}</span></div>
-      ${statsTableHtml(cat.months, cat.total)}
+      ${statsTableHtml(cat.months, cat.total, `category_${cat.category}`, label)}
     </div>
-  `).join('');
+  `;
+  }).join('');
 }
 
 function renderVendorSection() {
   const filterVal = state.filterMode === 'vendor' ? state.vendor : state.factoryCode;
   if (!filterVal) return `<div class="section-help" style="margin:10px 0;">${escapeHtml(bi('selectVendor').en)}</div>`;
   if (!vendorData) return `<div class="section-help">...</div>`;
+  const label = vendorData.creator || vendorData.factoryCode;
   return `
     <div class="card">
-      <div class="section-title">${escapeHtml(vendorData.creator || vendorData.factoryCode)}</div>
-      ${statsTableHtml(vendorData.months, vendorData.total)}
+      <div class="section-title">${escapeHtml(label)}</div>
+      ${statsTableHtml(vendorData.months, vendorData.total, `vendor_${label}`, label)}
     </div>
   `;
 }
@@ -194,11 +272,29 @@ function attachHandlers() {
   if (periodSelect) {
     periodSelect.addEventListener('change', async (e) => {
       state.period = e.target.value;
+      if (state.period === 'custom') {
+        // Just show the date fields - wait for the user to actually pick
+        // dates before firing off requests with an incomplete range.
+        render();
+        return;
+      }
       await Promise.all([loadCategoryStats(), loadVendorStats()]);
       document.getElementById('categorySection').innerHTML = renderCategorySection();
       document.getElementById('vendorSection').innerHTML = renderVendorSection();
     });
   }
+  const customStartInput = document.getElementById('customStartInput');
+  const customEndInput = document.getElementById('customEndInput');
+  const reloadIfCustomRangeComplete = async (e) => {
+    if (e.target === customStartInput) state.customStart = e.target.value;
+    else state.customEnd = e.target.value;
+    if (!state.customStart || !state.customEnd) return;
+    await Promise.all([loadCategoryStats(), loadVendorStats()]);
+    document.getElementById('categorySection').innerHTML = renderCategorySection();
+    document.getElementById('vendorSection').innerHTML = renderVendorSection();
+  };
+  if (customStartInput) customStartInput.addEventListener('change', reloadIfCustomRangeComplete);
+  if (customEndInput) customEndInput.addEventListener('change', reloadIfCustomRangeComplete);
   document.querySelectorAll('[data-filter-mode]').forEach((el) => {
     el.addEventListener('click', () => {
       state.filterMode = el.getAttribute('data-filter-mode');
@@ -228,6 +324,18 @@ function attachHandlers() {
 
 (async function init() {
   try {
+    // Delegated once, since the category/vendor sections get replaced
+    // independently of a full page render (attachHandlers only runs on
+    // those) - this keeps working no matter how the tables get redrawn.
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-export-csv]');
+      if (!btn) return;
+      const key = btn.getAttribute('data-export-csv');
+      const entry = exportDataRegistry[key];
+      if (!entry) return;
+      const safeLabel = String(entry.label).replace(/[^a-zA-Z0-9_-]+/g, '_');
+      downloadCsv(`juniper-qa-analytics-${safeLabel}-${isoDate(new Date())}.csv`, buildCsvContent(entry.monthRows, entry.totalRow));
+    });
     await loadConfig();
     await loadCategoryStats();
     render();

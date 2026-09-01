@@ -4,12 +4,29 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
-const nodemailer = require('nodemailer');
+const archiver = require('archiver');
 
 const { buildPdf } = require('./lib/pdfBuilder');
 const { computeOverallResult, collectAllDefects } = require('./lib/passFail');
 const { getRecommendation } = require('./lib/aqlRecommendation');
 const submissionLog = require('./lib/submissionLog');
+const poStore = require('./lib/poStore');
+const approvalStore = require('./lib/approvalStore');
+const approvalPhotoSets = require('./config/approvalPhotoSets.json');
+const asanaClient = require('./lib/asanaClient');
+const AdmZip = require('adm-zip');
+const ASANA_FIELD_MAP_PATH = path.join(__dirname, 'config', 'asanaFieldMap.json');
+function loadAsanaFieldMap() { return loadJson(ASANA_FIELD_MAP_PATH); }
+
+/** Picks the right named photo-slot set for a product: apparel and plush by
+ *  top-level category, "book" for Notebook/Sketchbook (an accessories
+ *  subcategory), everything else falls back to the default set. */
+function resolvePhotoSet(category, subcategory) {
+  if (category === 'apparel') return approvalPhotoSets.sets.apparel;
+  if (category === 'plush') return approvalPhotoSets.sets.plush;
+  if (subcategory === 'notebook') return approvalPhotoSets.sets.book;
+  return approvalPhotoSets.sets.default;
+}
 const analytics = require('./lib/analytics');
 let fits = require('./config/fits.json');
 const i18n = require('./config/i18n.json');
@@ -21,20 +38,63 @@ const CREATOR_TIERS_PATH = path.join(__dirname, 'config', 'creatorTiers.json');
 const AQL_RECOMMENDATION_PATH = path.join(__dirname, 'config', 'aqlRecommendation.json');
 const UNIT_COSTS_PATH = path.join(__dirname, 'config', 'unitCosts.json');
 const FITS_PATH = path.join(__dirname, 'config', 'fits.json');
-const EDITABLE_OPTION_LISTS = ['creators', 'factoryCodes', 'qaLeads'];
+const EDITABLE_OPTION_LISTS = ['creators', 'factoryCodes', 'qaLeads', 'productDevelopmentLeads'];
 
 function loadJson(p) { return JSON.parse(fs.readFileSync(p, 'utf8')); }
 function saveJson(p, data) { fs.writeFileSync(p, JSON.stringify(data, null, 2)); }
 function loadOptions() { return loadJson(OPTIONS_PATH); }
 function saveOptions(newOptions) { saveJson(OPTIONS_PATH, newOptions); }
 
+/** If someone types a value that isn't already in one of the editable
+ *  dropdown lists (Factory Code, QA/QC Lead, Product Development Lead),
+ *  save it so it shows up as an option for everyone going forward. Case-
+ *  insensitive match to avoid near-duplicates like "chloe" vs "Chloe". */
+function addNewOptionIfMissing(listKey, value) {
+  const trimmed = value && String(value).trim();
+  if (!trimmed) return;
+  const options = loadOptions();
+  if (!Array.isArray(options[listKey])) return;
+  const alreadyExists = options[listKey].some((v) => String(v).trim().toLowerCase() === trimmed.toLowerCase());
+  if (alreadyExists) return;
+  options[listKey].push(trimmed);
+  saveOptions(options);
+}
+
+/** Puts a PO's selected sizes in Youth XS -> Adult 5XL order (matching
+ *  fits.json's universalSizes) instead of whatever order they were clicked
+ *  in on the New Purchase Order form. */
+function sortSizesCanonically(sizes) {
+  const canonical = (fits && fits.universalSizes) || [];
+  return [...(sizes || [])].sort((a, b) => {
+    const ia = canonical.indexOf(a);
+    const ib = canonical.indexOf(b);
+    if (ia === -1 && ib === -1) return 0;
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+}
+
 const app = express();
+// Render (and most hosts) sit behind a proxy that terminates HTTPS and
+// forwards requests internally as HTTP - without this, req.protocol would
+// incorrectly report "http" even for a real HTTPS visitor, which matters
+// for building the correct absolute approval link sent to Asana below.
+app.set('trust proxy', true);
 const PORT = process.env.PORT || 3000;
 
 // ---- Storage for uploaded photos (temp, per-submission) ----
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 15 * 1024 * 1024, files: 60 } // 15MB/photo, 60 photos max per submission
+});
+
+// Separate, much larger limit specifically for restoring a downloaded
+// backup zip - these accumulate PDFs and photos over time and can be far
+// bigger than any single photo upload.
+const uploadBackup = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 1024 * 1024 * 1024 } // 1GB
 });
 
 app.use(express.json({ limit: '5mb' }));
@@ -44,9 +104,161 @@ app.use(express.static(path.join(__dirname, 'public')));
 // once a persistent disk is attached (e.g. on Render's paid tier).
 app.use('/submissions', express.static(submissionLog.PDF_ARCHIVE_DIR));
 app.use('/issue-photos', express.static(submissionLog.PHOTO_ARCHIVE_DIR));
+app.use('/approval-photos', express.static(approvalStore.APPROVAL_PHOTO_DIR));
 
 // Serve the fit library + translations + dropdown options + category tree + AQL
 // reference table + creator tiers + recommendation table + unit costs to the frontend
+// ---- Backup: download everything in DATA_DIR as a zip, and check where
+// data is actually being read/written from (helps confirm the persistent
+// disk is actually wired up correctly, since a misconfigured DATA_DIR is
+// silently invisible otherwise - everything looks fine until a deploy wipes
+// it). Do this BEFORE trusting DATA_DIR with real data, and periodically
+// as an extra safety net even once it's confirmed working. ----
+app.get('/api/backup/status', (req, res) => {
+  // Catches both "DATA_DIR isn't set at all" and "DATA_DIR is set but still
+  // a relative path" - the second one matters because .env.example ships
+  // with DATA_DIR=./data as a documented local-dev default, so someone
+  // could have DATA_DIR "set" on Render and still be pointed at a folder
+  // that lives inside the app code (wiped on every deploy) rather than an
+  // actual persistent disk mount, which is always an absolute path.
+  const raw = process.env.DATA_DIR;
+  const isUnsetOrRelative = !raw || !path.isAbsolute(raw);
+  let diskFree = null;
+  try {
+    const stat = fs.statfsSync ? fs.statfsSync(submissionLog.DATA_DIR) : null;
+    if (stat) diskFree = Math.round((stat.bfree * stat.bsize) / (1024 * 1024));
+  } catch (e) { /* statfsSync may not exist on all platforms; not critical */ }
+  res.json({
+    resolvedDataDir: submissionLog.DATA_DIR,
+    usingDefaultLocalFolder: isUnsetOrRelative,
+    warning: isUnsetOrRelative
+      ? (!raw
+          ? 'DATA_DIR is not set - this is using a local folder next to the app code, which Render wipes on every deploy. Set DATA_DIR to your persistent disk\'s mount path (an absolute path, e.g. /var/data) in the Environment tab.'
+          : `DATA_DIR is set to "${raw}", which is a relative path - it still resolves to a folder next to the app code, not a persistent disk, so it will be wiped on every deploy. Set it to your disk's absolute mount path instead (e.g. /var/data).`)
+      : null,
+    freeDiskSpaceMb: diskFree
+  });
+});
+
+app.get('/api/backup/download', (req, res) => {
+  const dir = submissionLog.DATA_DIR;
+  const filename = `juniper-qa-backup-${new Date().toISOString().slice(0, 10)}.zip`;
+  res.attachment(filename);
+  const archive = archiver('zip', { zlib: { level: 9 } });
+  archive.on('error', (err) => {
+    console.error('Backup zip failed:', err);
+    if (!res.headersSent) res.status(500).json({ error: 'Failed to build backup', detail: String(err.message || err) });
+  });
+  archive.pipe(res);
+  if (fs.existsSync(dir)) archive.directory(dir, false);
+  archive.finalize();
+});
+
+/** Restores POs (and their approvals, submission history, and referenced
+ *  photos/PDFs) from a previously downloaded backup zip - merging into the
+ *  current data rather than replacing it wholesale. Any PO in the backup
+ *  that isn't already in the live data gets added. For a PO that already
+ *  exists, "mode" decides what happens: 'override' replaces the live
+ *  record (and its approvals/submissions) with the backup's version;
+ *  'ignore' (the default, and the safer choice) leaves the live version
+ *  untouched. Photo/PDF files are copied for any added-or-overridden PO;
+ *  the shared JSON files are only rewritten once, at the end, so a bad
+ *  entry partway through the zip can't leave the data half-updated. */
+app.post('/api/backup/upload', uploadBackup.single('backup'), (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No backup file provided' });
+    const mode = req.body.mode === 'override' ? 'override' : 'ignore';
+
+    let zip;
+    try {
+      zip = new AdmZip(req.file.buffer);
+    } catch (err) {
+      return res.status(400).json({ error: 'That file does not look like a valid zip archive' });
+    }
+    const entries = zip.getEntries();
+
+    const readJsonEntry = (name) => {
+      const entry = entries.find((e) => e.entryName === name);
+      if (!entry) return null;
+      try { return JSON.parse(entry.getData().toString('utf8')); } catch { return null; }
+    };
+    const backupPOs = readJsonEntry('purchaseOrders.json');
+    if (!Array.isArray(backupPOs)) {
+      return res.status(400).json({ error: "This doesn't look like a Juniper QA backup - purchaseOrders.json is missing or invalid." });
+    }
+    const backupApprovals = readJsonEntry('approvals.json') || [];
+    const backupSubmissions = readJsonEntry('submissions.json') || [];
+
+    const dataDir = submissionLog.DATA_DIR;
+    const poPath = path.join(dataDir, 'purchaseOrders.json');
+    const approvalsPath = path.join(dataDir, 'approvals.json');
+    const submissionsPath = path.join(dataDir, 'submissions.json');
+    const livePOs = fs.existsSync(poPath) ? JSON.parse(fs.readFileSync(poPath, 'utf8')) : [];
+    const liveApprovals = fs.existsSync(approvalsPath) ? JSON.parse(fs.readFileSync(approvalsPath, 'utf8')) : [];
+    const liveSubmissions = fs.existsSync(submissionsPath) ? JSON.parse(fs.readFileSync(submissionsPath, 'utf8')) : [];
+
+    const norm = (s) => String(s || '').trim().toLowerCase();
+    const affected = new Set(); // PO numbers being added or overridden - their approvals/submissions/files come along too
+    let added = 0, overridden = 0, skipped = 0;
+
+    backupPOs.forEach((po) => {
+      const key = norm(po.poNumber);
+      const existingIdx = livePOs.findIndex((p) => norm(p.poNumber) === key);
+      if (existingIdx === -1) {
+        livePOs.push(po);
+        added++;
+        affected.add(key);
+      } else if (mode === 'override') {
+        livePOs[existingIdx] = po;
+        overridden++;
+        affected.add(key);
+      } else {
+        skipped++;
+      }
+    });
+
+    backupApprovals.forEach((a) => {
+      if (!affected.has(norm(a.poNumber))) return;
+      const idx = liveApprovals.findIndex((x) => norm(x.poNumber) === norm(a.poNumber));
+      if (idx === -1) liveApprovals.push(a); else liveApprovals[idx] = a;
+    });
+
+    backupSubmissions.forEach((s) => {
+      if (!affected.has(norm(s.poNumber))) return;
+      const idx = liveSubmissions.findIndex((x) => x.submissionId === s.submissionId);
+      if (idx === -1) liveSubmissions.push(s); else liveSubmissions[idx] = s;
+    });
+
+    // Copy every file from the backup's photo/PDF folders - filenames
+    // already carry a random ID (see saveApprovalPhotos, etc.), so
+    // collisions with unrelated, already-current files are effectively
+    // impossible. Simpler and safer than trying to filter by PO number
+    // against a filename convention that could drift over time.
+    const extractDir = (zipFolder, diskDir) => {
+      const inZip = entries.filter((e) => !e.isDirectory && e.entryName.startsWith(zipFolder + '/'));
+      if (!inZip.length) return;
+      fs.mkdirSync(diskDir, { recursive: true });
+      inZip.forEach((e) => {
+        const filename = e.entryName.slice(zipFolder.length + 1);
+        if (!filename || filename.includes('/')) return;
+        fs.writeFileSync(path.join(diskDir, filename), e.getData());
+      });
+    };
+    extractDir('approval-photos', approvalStore.APPROVAL_PHOTO_DIR);
+    extractDir('submissions', submissionLog.PDF_ARCHIVE_DIR);
+    extractDir('issue-photos', submissionLog.PHOTO_ARCHIVE_DIR);
+
+    fs.writeFileSync(poPath, JSON.stringify(livePOs, null, 2));
+    fs.writeFileSync(approvalsPath, JSON.stringify(liveApprovals, null, 2));
+    fs.writeFileSync(submissionsPath, JSON.stringify(liveSubmissions, null, 2));
+
+    res.json({ ok: true, added, overridden, skipped, mode });
+  } catch (err) {
+    console.error('Backup upload failed:', err);
+    res.status(500).json({ error: 'Failed to process backup upload', detail: String(err.message || err) });
+  }
+});
+
 app.get('/api/config', (req, res) => {
   res.json({
     fits,
@@ -239,6 +451,7 @@ app.post('/api/submit', upload.any(), async (req, res) => {
       return res.status(400).json({ error: 'Missing payload' });
     }
     const payload = JSON.parse(req.body.payload);
+    addNewOptionIfMissing('qaLeads', payload.qaLead);
     const files = req.files || [];
 
     // Group files by their logical field name (set client-side)
@@ -249,57 +462,22 @@ app.post('/api/submit', upload.any(), async (req, res) => {
     }
 
     const submissionId = uuidv4();
-    const overallResult = computeOverallResult(payload, fits);
+    // Pull this PO's own established Golden Sample sizing (if any) so the
+    // pass/fail tolerance check compares against the actual approved
+    // measurements for this product, not just the generic fit template.
+    const approvalRecord = approvalStore.getByPoNumber(payload.poNumber);
+    const establishedSizing = (approvalRecord && approvalRecord.sampleApproval && approvalRecord.sampleApproval.submitted)
+      ? approvalRecord.sampleApproval.data.sizing
+      : null;
+    const overallResult = computeOverallResult(payload, fits, establishedSizing);
     const recommendation = getRecommendation(
       { category: payload.category, subcategory: payload.subcategory, poQuantity: payload.poQuantity, creator: payload.creator, risk: payload.productRisk },
       { unitCosts: loadJson(UNIT_COSTS_PATH), aqlRecConfig: loadJson(AQL_RECOMMENDATION_PATH), creatorTiersConfig: loadJson(CREATOR_TIERS_PATH) }
     );
-    const pdfBuffer = await buildPdf(payload, filesByField, fits, i18n, overallResult, categories, recommendation);
+    const pdfBuffer = await buildPdf(payload, filesByField, fits, i18n, overallResult, categories, recommendation, establishedSizing);
 
     const fileSafePo = (payload.poNumber || 'QA-Report').replace(/[^a-z0-9\-_]+/gi, '_');
     const pdfFilename = `${fileSafePo}_QA_Report_${submissionId.slice(0, 8)}.pdf`;
-
-    const smtpConfigured = !!process.env.SMTP_HOST;
-    let emailSent = false;
-
-    // Build email
-    const recipients = (process.env.REPORT_RECIPIENTS || 'mikhail@junipercreates.com')
-      .split(',').map(s => s.trim()).filter(Boolean);
-
-    const attachments = [{ filename: pdfFilename, content: pdfBuffer, contentType: 'application/pdf' }];
-
-    if (process.env.ATTACH_FULL_RES_PHOTOS === 'true') {
-      files.forEach((f, idx) => {
-        attachments.push({
-          filename: `photo_${idx + 1}_${f.originalname || 'image.jpg'}`,
-          content: f.buffer,
-          contentType: f.mimetype
-        });
-      });
-    }
-
-    if (smtpConfigured) {
-      const transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: Number(process.env.SMTP_PORT || 587),
-        secure: process.env.SMTP_SECURE === 'true',
-        auth: process.env.SMTP_USER ? {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS
-        } : undefined
-      });
-
-      await transporter.sendMail({
-        from: process.env.SMTP_FROM || process.env.SMTP_USER,
-        to: recipients.join(','),
-        subject: `QA/QC Report - ${payload.poNumber || 'Unknown PO'} (${payload.category || ''}) - ${overallResult.overall.toUpperCase()}`,
-        text: `New QA/QC report submitted for PO ${payload.poNumber || 'N/A'}.\nCategory: ${payload.category}\nQA Lead: ${payload.qaLead || 'N/A'}\n\nSee attached PDF report.`,
-        attachments
-      });
-      emailSent = true;
-    } else {
-      console.warn('SMTP_HOST not configured - running in local test mode. The PDF will be saved and viewable, but no email will be sent.');
-    }
 
     // Persist a copy so it can be viewed/downloaded, and referenced later by the
     // report-history and analytics features - now always on, backed by the
@@ -330,6 +508,7 @@ app.post('/api/submit', upload.any(), async (req, res) => {
     submissionLog.appendSubmission({
       id: submissionId,
       poNumber: payload.poNumber || null,
+      sku: payload.sku || (poStore.getPoByNumber(payload.poNumber) || {}).sku || null,
       category: payload.category || null,
       subcategory: payload.subcategory || null,
       creator: payload.creator || null,
@@ -358,18 +537,20 @@ app.post('/api/submit', upload.any(), async (req, res) => {
       sizingCarryForward: {
         fit: (payload.categoryData && payload.categoryData.fit) || null,
         sizeRows: (payload.categoryData && payload.categoryData.sizeRows) || [],
-        customSizeRows: (payload.categoryData && payload.categoryData.customSizeRows) || []
+        customSizeRows: (payload.categoryData && payload.categoryData.customSizeRows) || [],
+        simpleSizeValue: (payload.categoryData && payload.categoryData.simpleSizeValue) || null,
+        dimensions: (payload.categoryData && payload.categoryData.dimensions) || null
       }
     });
 
-    res.json({ ok: true, submissionId, filename: pdfFilename, pdfUrl, emailSent, testMode: !smtpConfigured, overallResult });
+    res.json({ ok: true, submissionId, filename: pdfFilename, pdfUrl, overallResult });
   } catch (err) {
     console.error('Submission failed:', err);
     res.status(500).json({ error: 'Failed to process submission', detail: String(err.message || err) });
   }
 });
 
-// ---- Report history: reference a prior report for the same PO Number ----
+// ---- Report history: reference prior reports for the same PO or the same SKU ----
 app.get('/api/submission-history/:poNumber', (req, res) => {
   try {
     const prior = submissionLog.findPriorReportsByPoNumber(req.params.poNumber, req.query.excludeId);
@@ -377,6 +558,15 @@ app.get('/api/submission-history/:poNumber', (req, res) => {
   } catch (err) {
     console.error('Failed to look up submission history:', err);
     res.status(500).json({ error: 'Failed to look up submission history', detail: String(err.message || err) });
+  }
+});
+app.get('/api/submission-history-by-sku/:sku', (req, res) => {
+  try {
+    const prior = submissionLog.findPriorReportsBySku(req.params.sku, req.query.excludeId);
+    res.json({ reports: prior });
+  } catch (err) {
+    console.error('Failed to look up submission history by SKU:', err);
+    res.status(500).json({ error: 'Failed to look up submission history by SKU', detail: String(err.message || err) });
   }
 });
 
@@ -422,9 +612,303 @@ app.get('/api/analytics/category', (req, res) => {
   }
 });
 
+// ---- Purchase Orders: created via "New Purchase Order", the shared source of
+// truth that Pre-Production/Bulk Sampling Reporting and QA/QC Approval both
+// pre-fill against. ----
+/** Pulls the task GID out of any Asana task URL (the numeric ID after
+ *  "/task/"), so the Asana integration can call the API directly with it
+ *  regardless of which exact URL format someone pastes in. */
+function extractAsanaTaskGid(link) {
+  if (!link) return null;
+  const match = String(link).match(/\/task\/(\d+)/);
+  return match ? match[1] : null;
+}
+
+app.post('/api/purchase-orders', (req, res) => {
+  try {
+    const body = req.body || {};
+    if (!body.poNumber || !body.sku) {
+      return res.status(400).json({ error: 'poNumber and sku are required' });
+    }
+    if (poStore.getPoByNumber(body.poNumber)) {
+      return res.status(409).json({ error: 'A PO with this number already exists' });
+    }
+    addNewOptionIfMissing('productDevelopmentLeads', body.productDevelopmentLead);
+    const id = uuidv4();
+
+    // If this SKU already has an established apparel fit from a prior PO,
+    // carry it forward automatically.
+    const established = body.category === 'apparel' ? poStore.getEstablishedFitForSku(body.sku) : null;
+
+    const entry = poStore.createPo({
+      id,
+      poNumber: body.poNumber,
+      sku: body.sku,
+      category: body.category || null,
+      subcategory: body.subcategory || null,
+      orderDate: body.orderDate || null,
+      creator: body.creator || null,
+      orderQuantity: body.orderQuantity ? parseInt(body.orderQuantity, 10) : null,
+      productTitle: body.productTitle || null,
+      productDevelopmentLead: body.productDevelopmentLead || null,
+      sizesIncluded: sortSizesCanonically(Array.isArray(body.sizesIncluded) ? body.sizesIncluded : []),
+      fitKey: established ? established.fitKey : null,
+      fitSizes: established ? established.sizes : [],
+      asanaTaskLink: body.asanaTaskLink || null,
+      asanaTaskGid: extractAsanaTaskGid(body.asanaTaskLink),
+      createdAt: new Date().toISOString()
+    });
+    res.json({ ok: true, po: entry, approvalUrl: `/approval.html?po=${encodeURIComponent(id)}` });
+
+    // Best-effort Asana sync: drop this PO's approval page link directly
+    // onto the task's QA/QC Drive Link field, so anyone on the task can
+    // click straight through without hunting for the right PO in this app.
+    if (entry.asanaTaskGid) {
+      const fieldMap = loadAsanaFieldMap();
+      if (fieldMap.qaqcDriveLinkFieldGid) {
+        const approvalLink = `${req.protocol}://${req.get('host')}/approval.html?po=${encodeURIComponent(id)}`;
+        asanaClient.setTextCustomField(entry.asanaTaskGid, fieldMap.qaqcDriveLinkFieldGid, approvalLink);
+      }
+    }
+  } catch (err) {
+    console.error('Failed to create purchase order:', err);
+    res.status(500).json({ error: 'Failed to create purchase order', detail: String(err.message || err) });
+  }
+});
+
+app.get('/api/purchase-orders/:id', (req, res) => {
+  const po = poStore.getPoById(req.params.id);
+  if (!po) return res.status(404).json({ error: 'Purchase order not found' });
+  res.json({ po });
+});
+
+app.get('/api/purchase-orders', (req, res) => {
+  if (req.query.poNumber) {
+    const po = poStore.getPoByNumber(req.query.poNumber);
+    return res.json({ pos: po ? [po] : [] });
+  }
+  if (req.query.sku) {
+    return res.json({ pos: poStore.getPosBySku(req.query.sku) });
+  }
+  res.status(400).json({ error: 'poNumber or sku query param is required' });
+});
+
+app.get('/api/sku-established-fit/:sku', (req, res) => {
+  res.json({ fit: poStore.getEstablishedFitForSku(req.params.sku) });
+});
+
+// ---- QA/QC Approval workflow ----
+const STAGE_KEY_MAP = { sample: 'sampleApproval', preProduction: 'preProductionApproval', bulk: 'bulkApproval' };
+
+function saveApprovalPhotos(files, prefix) {
+  fs.mkdirSync(approvalStore.APPROVAL_PHOTO_DIR, { recursive: true });
+  const urls = [];
+  (files || []).forEach((f, i) => {
+    const filename = `${prefix}_${i}_${uuidv4().slice(0, 8)}.jpg`;
+    fs.writeFileSync(path.join(approvalStore.APPROVAL_PHOTO_DIR, filename), f.buffer);
+    urls.push(`/approval-photos/${encodeURIComponent(filename)}`);
+  });
+  return urls;
+}
+
+app.get('/api/approval/:poNumber', (req, res) => {
+  try {
+    const po = poStore.getPoByNumber(req.params.poNumber);
+    if (!po) return res.status(404).json({ error: 'Purchase order not found - has it been created via New Purchase Order?' });
+
+    const photoSet = resolvePhotoSet(po.category, po.subcategory);
+    const approval = approvalStore.getOrCreateByPoNumber(po.poNumber, po.sku);
+    const priorSampleApproval = approvalStore.getPriorSampleApprovalForSku(po.sku, po.poNumber);
+    const reportingHistory = submissionLog.findPriorReportsBySku(po.sku);
+
+    res.json({ po, photoSet, approval, priorSampleApproval, reportingHistory });
+  } catch (err) {
+    console.error('Failed to load approval record:', err);
+    res.status(500).json({ error: 'Failed to load approval record', detail: String(err.message || err) });
+  }
+});
+
+app.post('/api/approval/:poNumber/:stage', upload.any(), (req, res) => {
+  try {
+    const stageKey = STAGE_KEY_MAP[req.params.stage];
+    if (!stageKey) return res.status(400).json({ error: 'Unknown approval stage' });
+    const po = poStore.getPoByNumber(req.params.poNumber);
+    if (!po) return res.status(404).json({ error: 'Purchase order not found' });
+
+    const data = JSON.parse((req.body && req.body.data) || '{}');
+    if (req.params.stage === 'sample') {
+      addNewOptionIfMissing('factoryCodes', data.factoryCode);
+      addNewOptionIfMissing('qaLeads', data.qaLead);
+    }
+    const filesByField = {};
+    (req.files || []).forEach((f) => {
+      if (!filesByField[f.fieldname]) filesByField[f.fieldname] = [];
+      filesByField[f.fieldname].push(f);
+    });
+
+    // Photos come in per named slot (e.g. photo_front, photo_back) or, for
+    // per-size apparel Pre-Production/Bulk Approval, per slot+size
+    // (photo_front__Adult_M). Save each and build a slot -> URLs map.
+    const photos = {};
+    Object.keys(filesByField).forEach((field) => {
+      if (!field.startsWith('photo_')) return;
+      const slotKey = field.slice('photo_'.length);
+      photos[slotKey] = saveApprovalPhotos(filesByField[field], `${po.poNumber}_${req.params.stage}_${slotKey}`);
+    });
+
+    const entry = approvalStore.updateStage(po.poNumber, po.sku, stageKey, { ...data, photos });
+
+    // If this Sample Approval established an apparel sizing standard, write it
+    // back onto the PO record so future POs of the same SKU can find and copy
+    // it forward automatically (see poStore.getEstablishedFitForSku).
+    if (req.params.stage === 'sample' && po.category === 'apparel' && data.sizing && data.sizing.fit) {
+      const fitDef = fits.fits[data.sizing.fit];
+      if (fitDef) {
+        poStore.updatePo(po.id, { fitKey: data.sizing.fit, fitSizes: Object.keys(fitDef.sizes) });
+      }
+    }
+
+    res.json({ ok: true, approval: entry });
+
+    // Best-effort Asana sync: mark this stage "Waiting for Product Dev" the
+    // moment China's photos land, so PD sees it needs their attention
+    // without having to check this app. Never blocks or fails the response
+    // above - fired after responding, errors are just logged.
+    if (po.asanaTaskGid) {
+      const fieldMap = loadAsanaFieldMap();
+      const stageMap = fieldMap[req.params.stage];
+      const optionGid = stageMap && stageMap.statusOptions && stageMap.statusOptions.submitted;
+      if (stageMap && stageMap.fieldGid && optionGid) {
+        asanaClient.setEnumCustomField(po.asanaTaskGid, stageMap.fieldGid, optionGid);
+      }
+    }
+  } catch (err) {
+    console.error('Failed to save approval stage:', err);
+    res.status(500).json({ error: 'Failed to save approval stage', detail: String(err.message || err) });
+  }
+});
+
+/** Deliberately bypass Pre-Production Approval - for repeat POs of an
+ *  already-established product, where the team typically goes straight
+ *  from Golden Sample to Bulk. Only Pre-Production can be skipped; Sample
+ *  and Bulk are always required. */
+app.post('/api/approval/:poNumber/:stage/skip', (req, res) => {
+  try {
+    if (req.params.stage !== 'preProduction') {
+      return res.status(400).json({ error: 'Only the Pre-Production stage can be skipped' });
+    }
+    const po = poStore.getPoByNumber(req.params.poNumber);
+    if (!po) return res.status(404).json({ error: 'Purchase order not found' });
+    const entry = approvalStore.skipStage(po.poNumber, 'preProductionApproval');
+    res.json({ ok: true, approval: entry });
+
+    // Best-effort Asana sync: mark this stage Not Applicable, matching the
+    // deliberate "skip" decision made here.
+    if (po.asanaTaskGid) {
+      const fieldMap = loadAsanaFieldMap();
+      const stageMap = fieldMap.preProduction;
+      const optionGid = stageMap && stageMap.statusOptions && stageMap.statusOptions.notApplicable;
+      if (stageMap && stageMap.fieldGid && optionGid) {
+        asanaClient.setEnumCustomField(po.asanaTaskGid, stageMap.fieldGid, optionGid);
+      }
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to skip stage' });
+  }
+});
+
+app.post('/api/approval/:poNumber/:stage/comment', upload.any(), (req, res) => {
+  try {
+    const stageKey = STAGE_KEY_MAP[req.params.stage];
+    if (!stageKey) return res.status(400).json({ error: 'Unknown approval stage' });
+    const text = ((req.body && req.body.text) || '').trim();
+    const author = ((req.body && req.body.author) || '').trim();
+    const approvalStatus = ((req.body && req.body.approvalStatus) || '').trim();
+    // A comment can optionally point at one specific photo or size row from
+    // this stage's own submission, so a reply can say "see this" instead of
+    // describing it in words - see the "reference" picker in the reply form.
+    let reference = null;
+    if (req.body && req.body.reference) {
+      try { reference = JSON.parse(req.body.reference); } catch { reference = null; }
+    }
+    if (!author) return res.status(400).json({ error: 'author is required' });
+    // Only the formal first decision uses the Product Development Lead
+    // dropdown - replies are free text for either team, so don't add those.
+    if (approvalStatus) addNewOptionIfMissing('productDevelopmentLeads', author);
+
+    const photos = saveApprovalPhotos(req.files, `${req.params.poNumber}_${req.params.stage}_comment`);
+    const entry = approvalStore.addPdComment(req.params.poNumber, stageKey, { text, author, approvalStatus, photos, reference });
+    if (!entry) return res.status(404).json({ error: 'Purchase order not found' });
+    res.json({ ok: true, approval: entry });
+
+    // Best-effort Asana sync: a formal decision (Approved, Approved with
+    // Comments, Minor Issue, Major/Critical) moves this stage's field to
+    // match. Free-text replies with no status attached don't touch Asana.
+    if (approvalStatus) {
+      const po = poStore.getPoByNumber(req.params.poNumber);
+      if (po && po.asanaTaskGid) {
+        const fieldMap = loadAsanaFieldMap();
+        const stageMap = fieldMap[req.params.stage];
+        const optionGid = stageMap && stageMap.statusOptions && stageMap.statusOptions[approvalStatus];
+        if (stageMap && stageMap.fieldGid && optionGid) {
+          asanaClient.setEnumCustomField(po.asanaTaskGid, stageMap.fieldGid, optionGid);
+        }
+
+        // Once Bulk is fully approved, the PO's journey is done - attach
+        // the final consolidated report (every stage, every inspection)
+        // directly to the Asana task so it's on record there too, without
+        // anyone needing to come back to this app to find it.
+        if (req.params.stage === 'bulk' && approvalStatus === 'approved') {
+          (async () => {
+            try {
+              const fullApproval = approvalStore.getByPoNumber(po.poNumber);
+              const reportingHistory = submissionLog.findPriorReportsByPoNumber(po.poNumber);
+              const buffer = await buildConsolidatedReport(po, fullApproval, reportingHistory, i18n);
+              await asanaClient.attachFileToTask(po.asanaTaskGid, buffer, `${po.poNumber}_Consolidated_Report.pdf`, 'application/pdf');
+            } catch (err) {
+              console.error(`Failed to attach consolidated report to Asana task for ${po.poNumber}:`, err.message || err);
+            }
+          })();
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Failed to save PD comment:', err);
+    res.status(500).json({ error: 'Failed to save PD comment', detail: String(err.message || err) });
+  }
+});
+
+// ---- Reports: consolidated PDF combining PO info, every QA/QC Approval
+// stage, and every Reporting-side inspection for that PO ----
+const { buildConsolidatedReport } = require('./lib/consolidatedReportBuilder');
+
+app.get('/api/reports/by-sku/:sku', (req, res) => {
+  try {
+    res.json({ pos: poStore.getPosBySku(req.params.sku) });
+  } catch (err) {
+    console.error('Failed to look up POs by SKU:', err);
+    res.status(500).json({ error: 'Failed to look up POs by SKU', detail: String(err.message || err) });
+  }
+});
+
+app.get('/api/consolidated-report/:poNumber', async (req, res) => {
+  try {
+    const po = poStore.getPoByNumber(req.params.poNumber);
+    if (!po) return res.status(404).json({ error: 'Purchase order not found' });
+    const approval = approvalStore.getByPoNumber(po.poNumber);
+    const reportingHistory = submissionLog.findPriorReportsByPoNumber(po.poNumber);
+
+    const buffer = await buildConsolidatedReport(po, approval, reportingHistory, i18n);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${po.poNumber}_Consolidated_Report.pdf"`);
+    res.send(buffer);
+  } catch (err) {
+    console.error('Failed to build consolidated report:', err);
+    res.status(500).json({ error: 'Failed to build consolidated report', detail: String(err.message || err) });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Juniper QA/QC app listening on port ${PORT}`);
-  if (!process.env.SMTP_HOST) {
-    console.warn('WARNING: SMTP_HOST is not set. Emails will not be sent until configured in .env');
-  }
 });

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>Juniper QA/QC Report</title>
+<title>Juniper QA/QC</title>
 <link rel="icon" type="image/x-icon" href="favicon.ico" />
 <link rel="icon" type="image/png" href="assets/favicon.png" />
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
@@ -13,25 +13,21 @@
   <div id="app">
     <header class="app-header">
       <div class="brand">
-        <div class="brand-mark"><img src="assets/juniper-mark-white.png" alt="Juniper" /></div>
+        <a href="index.html" class="brand-mark" title="Home / 首页"><img src="assets/juniper-mark-white.png" alt="Juniper" /></a>
         <div class="brand-text">
           <div class="brand-name">Juniper Creates</div>
-          <div class="brand-sub" data-i18n="appTitle">QA/QC Report</div>
+          <div class="brand-sub" data-i18n="appTitle">QA/QC</div>
         </div>
       </div>
     </header>
 
-    <div class="progress-bar">
-      <div class="progress-fill" id="progressFill"></div>
-    </div>
-
-    <main id="formRoot" class="form-root">
-      <!-- injected by app.js -->
+    <main id="homeRoot" class="form-root">
+      <!-- injected by home.js -->
     </main>
 
     <div id="toast" class="toast hidden"></div>
   </div>
 
-  <script src="app.js"></script>
+  <script src="home.js"></script>
 </body>
 </html>

@@ -1,0 +1,37 @@
+{
+  "_readme": "Filled in from the QA App Test project on 2026-08-28. 'minorIssue' currently points at the same option as 'approvedWithComments' since Asana only has one 'Approved with Issues Flagged' option covering both - confirm this is what you want. 'notApplicable' is used when Pre-Production Approval gets explicitly skipped in the app (see the Skip Pre-Production button) - Sample has no matching option since Sample can't be skipped, so it stays null there. qaqcDriveLinkFieldGid is the GID of the plain text 'QA/QC Drive Link' field on the task (not an enum field, so it takes a text field GID here, no separate option GIDs).",
+  "qaqcDriveLinkFieldGid": "1204435953266994",
+  "sample": {
+    "fieldGid": "1204435953266958",
+    "statusOptions": {
+      "submitted": "1204761788668919",
+      "approved": "1204435953266959",
+      "approvedWithComments": "1204435953266960",
+      "minorIssue": "1204435953266960",
+      "majorCriticalIssue": "1204435953266961",
+      "notApplicable": null
+    }
+  },
+  "preProduction": {
+    "fieldGid": "1204435953266963",
+    "statusOptions": {
+      "submitted": "1204761788668920",
+      "approved": "1204435953266964",
+      "approvedWithComments": "1204435953266965",
+      "minorIssue": "1204435953266965",
+      "majorCriticalIssue": "1204435953266966",
+      "notApplicable": "1217951161554411"
+    }
+  },
+  "bulk": {
+    "fieldGid": "1204435953266974",
+    "statusOptions": {
+      "submitted": "1205013515035315",
+      "approved": "1204435953266975",
+      "approvedWithComments": "1204435953266976",
+      "minorIssue": "1204435953266976",
+      "majorCriticalIssue": "1204435953266977",
+      "notApplicable": "1217951161554412"
+    }
+  }
+}

@@ -60,6 +60,23 @@ function computeQuantityRecap(quantityChecked, majorCount, criticalCount, poQuan
   };
 }
 
+/** Mirrors the client-side helper of the same name: prefers the actual
+ *  measurement recorded on this PO's own Golden Sample (since that's the
+ *  real approved baseline production should match), falling back to the
+ *  generic fit template only when no established value exists for that
+ *  size/point. Used by both the live "out of tolerance" flagging and the
+ *  final pass/fail determination, so the two always agree with each other. */
+function establishedStandardFor(sizeName, point, fitKey, fitDef, establishedSizing) {
+  if (establishedSizing && establishedSizing.fit === fitKey && establishedSizing.sizeRows) {
+    const row = establishedSizing.sizeRows.find((r) => r.size === sizeName);
+    if (row && row.measured && row.measured[point] !== undefined && row.measured[point] !== '') {
+      return row.measured[point];
+    }
+  }
+  const generic = fitDef.sizes[sizeName];
+  return generic ? generic[point] : undefined;
+}
+
 /**
  * Pass/fail logic:
  *  - FAIL if any apparel measurement is outside tolerance (independent of everything else)
@@ -71,20 +88,24 @@ function computeQuantityRecap(quantityChecked, majorCount, criticalCount, poQuan
  *    reviewed turned out defective - a partial defect rate does NOT auto-reject the
  *    whole PO; it's reflected in the Quantity Approved/Rejected recap instead.
  */
-function computeOverallResult(payload, fitsConfig) {
+function computeOverallResult(payload, fitsConfig, establishedSizing) {
   const reasons = [];
 
   if (payload.category === 'apparel' && payload.categoryData && payload.categoryData.fit && fitsConfig) {
     const fitDef = fitsConfig.fits[payload.categoryData.fit];
-    const tol = fitsConfig.toleranceInches || 0.5;
+    const tol = fitsConfig.toleranceCm || 1.27;
     if (fitDef) {
+      const customPointKeys = (establishedSizing && establishedSizing.fit === payload.categoryData.fit && Array.isArray(establishedSizing.customPoints))
+        ? establishedSizing.customPoints.map((cp) => cp.key)
+        : [];
+      const allPoints = fitDef.points.concat(customPointKeys);
       const rows = payload.categoryData.sizeRows || [];
       outer: for (const row of rows) {
-        const standard = fitDef.sizes[row.size] || {};
-        for (const point of fitDef.points) {
+        for (const point of allPoints) {
+          const standard = establishedStandardFor(row.size, point, payload.categoryData.fit, fitDef, establishedSizing);
           const measured = row.measured && row.measured[point] !== undefined && row.measured[point] !== ''
             ? parseFloat(row.measured[point]) : null;
-          if (isOutOfTolerance(standard[point], measured, tol)) {
+          if (isOutOfTolerance(standard, measured, tol)) {
             reasons.push('tolerance');
             break outer;
           }
@@ -136,7 +157,7 @@ function computeOverallResult(payload, fitsConfig) {
  * jacket width, hat circumference) - checked against [min - tolerance, max + tolerance].
  * Returns false if there isn't enough info to judge (missing/blank/zero standard).
  */
-function isOutOfTolerance(standard, measured, toleranceInches) {
+function isOutOfTolerance(standard, measured, toleranceCm) {
   if (standard === undefined || standard === null) return false;
   if (measured === null || measured === undefined || isNaN(measured)) return false;
 
@@ -144,12 +165,12 @@ function isOutOfTolerance(standard, measured, toleranceInches) {
     const min = parseFloat(standard.min);
     const max = parseFloat(standard.max);
     if (isNaN(min) || isNaN(max)) return false;
-    return measured < (min - toleranceInches) || measured > (max + toleranceInches);
+    return measured < (min - toleranceCm) || measured > (max + toleranceCm);
   }
 
   const std = parseFloat(standard);
   if (isNaN(std) || std === 0) return false;
-  return Math.abs(measured - std) > toleranceInches;
+  return Math.abs(measured - std) > toleranceCm;
 }
 
 /** Formats a standard value (number or range) for display, e.g. '27"' or '47-48.5"'. */
@@ -157,12 +178,12 @@ function formatStandard(standard) {
   if (standard === undefined || standard === null) return '-';
   if (typeof standard === 'object') {
     if (standard.min === undefined || standard.max === undefined) return '-';
-    return `${standard.min}-${standard.max}"`;
+    return `${standard.min}-${standard.max} cm`;
   }
   const n = parseFloat(standard);
   if (isNaN(n) || n === 0) return '-';
-  return `${n}"`;
+  return `${n} cm`;
 }
 
-module.exports = { computeOverallResult, isOutOfTolerance, formatStandard, collectAllDefects, sumDefectsBySeverity, computeQuantityRecap, CHECKLIST_KEYS };
+module.exports = { computeOverallResult, isOutOfTolerance, formatStandard, collectAllDefects, sumDefectsBySeverity, computeQuantityRecap, CHECKLIST_KEYS, establishedStandardFor };
 

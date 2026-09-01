@@ -83,6 +83,11 @@
         "key": "hangTag",
         "label_en": "Hang Tag",
         "label_zh": "\u6302\u724c"
+      },
+      {
+        "key": "accessory",
+        "label_en": "Accessory",
+        "label_zh": "\u914d\u4ef6"
       }
     ],
     "book": [

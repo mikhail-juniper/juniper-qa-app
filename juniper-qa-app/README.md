@@ -1,513 +1,475 @@
-# Juniper QA/QC Report App
+# Juniper QA/QC App
 
-A mobile-friendly web app for logging QA/QC inspections (Apparel, Plush Toys, Other),
-capturing photos, flagging out-of-tolerance measurements automatically, and generating
-a bilingual (English/Chinese) branded PDF report.
+An internal tool for Juniper Creates that manages the quality-control
+lifecycle of a purchase order: creating a PO, getting Product Development
+to approve a Golden Sample from China's factory team, then running
+Pre-Production and Bulk inspection reports against that approved
+standard. It's bilingual (English/Chinese) throughout, since the people
+using it day-to-day are split between Juniper's Toronto office and
+factory-side QA staff in China.
 
-This first version is set up for **local testing** so we can nail down the workflow,
-fields, and wording before wiring up real email delivery and hosting it somewhere
-reachable from China.
+This document is written for an engineer picking this up cold - how it's
+built, how the pieces fit together, what to watch out for, and what
+changes if it moves off Render onto AWS.
 
----
+## Who uses it, and the core workflow
 
-## 1. Run it locally (5 minutes)
+Two groups, two different needs:
+- **Juniper Creates staff** (Product Development leads, ops) - create
+  POs, review and approve/reject Golden Samples, read reports.
+- **China-side QA/factory staff** - upload sample photos, fill out
+  Pre-Production and Bulk inspection reports, respond to PD's feedback.
 
-You need [Node.js](https://nodejs.org) installed (v18 or newer).
+The lifecycle for one product, in order:
 
-```bash
-cd juniper-qa-app
-npm install
-npm start
+1. **New Purchase Order** (`/index.html`) - someone at Juniper logs a PO:
+   PO number, SKU, category, quantity, creator/brand, PD lead, and
+   optionally an Asana task link. This is the shared record everything
+   else hangs off of.
+2. **QA/QC Approval** (`/approval.html?po=<id>`) - a three-stage,
+   sequential workflow tied to that one PO:
+   - **Sample Approval** - China's QA team uploads photos of the Golden
+     Sample plus its measurements (for apparel). This becomes the
+     approved standard everything downstream gets measured against.
+   - **Pre-Production Approval** - same idea, for a small hand-checked
+     batch before full production starts. Can be explicitly skipped for
+     repeat POs of an already-established product (see "Skip
+     Pre-Production" below).
+   - **Bulk Approval** - the final production run's own sample.
+
+   Each stage has a back-and-forth: China submits, Product Development
+   responds with a decision (Approved / Approved with Issues Flagged /
+   Not Approved) and/or free-text comments, China can reply, and this can
+   go back and forth an arbitrary number of times before the next stage
+   unlocks. See "The PD approval thread" below for exactly how this
+   works.
+3. **QA/QC Reporting** (`/reporting.html`) - the actual inspection
+   reports: Pre-Production Sample Reporting and Bulk Sampling Reporting.
+   A 7-step wizard (order info -> production notes -> inspection
+   checklist -> sizing -> other issues -> review -> submit) that produces
+   a PDF and a pass/fail result, using the approved Golden Sample's own
+   measurements (not a generic template) as the standard to measure
+   against.
+4. **Reports** (`/reports.html`) - look up and download prior reports by
+   SKU, or a single consolidated PDF combining a PO's entire QA/QC
+   Approval history and every inspection report against it.
+5. **Analytics** (`/analytics.html`) - pass/fail rates and defect trends
+   by vendor, factory, and category.
+6. **Settings** (`/settings.html`) - editable reference data: factory
+   codes, QA leads, PD leads, creator tiers, AQL recommendation table,
+   unit costs, apparel sizing charts (fits), and a one-click backup
+   download of all persistent data.
+
+## Architecture at a glance
+
+- **Node.js + Express**, single server process, no build step.
+- **Frontend is vanilla JS** - no framework, no bundler. Each page is a
+  plain HTML file plus one big JS file that renders everything by
+  building HTML strings and re-rendering on state change. `styles.css`
+  is shared across all pages.
+- **Storage is flat JSON files on disk**, not a database. Simple, but it
+  means the disk itself needs to be persistent (see "The one thing that
+  will bite you" below) and there's no query language - all the
+  filtering/sorting logic lives in the `lib/*Store.js` files.
+- **PDF generation** via PDFKit (report PDFs) and pdf-lib (merging PDF
+  sections together for the consolidated report).
+- **Photo uploads** via Multer, stored to disk as JPEGs, served back as
+  static files.
+- **No user accounts, no auth.** Anyone with the URL can use it. This is
+  an intentional simplicity trade-off for an internal tool with a small,
+  trusted user base - flag this if that assumption ever changes.
+
+## Directory structure
+
+```
+server.js                    All Express routes - the entire backend API surface
+lib/
+  poStore.js                 Purchase Order CRUD (purchaseOrders.json)
+  approvalStore.js           QA/QC Approval CRUD (approvals.json)
+  submissionLog.js           Inspection report log (submissions.json) + DATA_DIR definition
+  passFail.js                Pass/fail + tolerance logic, mirrored client-side in public/app.js
+  aql.js / aqlRecommendation.js   AQL sampling table lookups
+  analytics.js                Vendor/factory/category stats over the submission log
+  pdfBuilder.js               Builds one inspection report's PDF (PDFKit)
+  consolidatedReportBuilder.js  Builds the "everything for this PO" PDF (pdf-lib, merges sections)
+  asanaClient.js              Thin wrapper around Asana's REST API (enum fields, text fields, attachments)
+config/
+  *.json                     All editable reference data - see "Config files" below
+public/
+  index.html + home.js        New Purchase Order page
+  approval.html + approval.js QA/QC Approval page
+  reporting.html + app.js     QA/QC Reporting wizard (this is the largest JS file - ~130KB)
+  reports.html + reports.js   Report lookup/download
+  analytics.html + analytics.js
+  settings.html + settings.js
+  styles.css                  Shared styles for every page
+data/                         NOT in git - created at runtime, see DATA_DIR below
 ```
 
-Then open **http://localhost:3000** in your browser.
+## Config files (`config/*.json`)
 
-That's it — no email setup, no cloud account needed. Because no SMTP settings are
-configured yet, the app automatically runs in **Test Mode**:
+These are reference data, not code - edited either directly, or through
+the Settings page (which writes back to the same files). Each one has a
+`_readme` field at the top explaining its own structure and how it's
+used, worth reading before touching one:
 
-- Fill out the form like a real inspection.
-- Hit Submit.
-- Instead of emailing anything, it generates the real PDF and gives you a
-  **"View Generated PDF"** link right there so you can check it immediately.
-- Every test PDF is also saved in the `submissions/` folder on your computer, so you
-  can look back at past test runs.
+| File | Purpose |
+|---|---|
+| `i18n.json` | Every bilingual (en/zh) label in the app - by far the largest file. A missing key here silently shows nothing, so check this first if text seems to disappear. |
+| `categories.json` | Product category/subcategory tree. Apparel subcategories link to a `fitGroup` in `fits.json`. |
+| `fits.json` | Apparel sizing standards - each "fit" (e.g. Hoodie - Oversized) has a set of sizes and measurement points with generic standard values. Editable via Settings. |
+| `options.json` | The editable dropdown lists: factory codes, creators, QA leads, PD leads. New values typed into these dropdowns get auto-added here (see `addNewOptionIfMissing` in server.js). |
+| `aql.json` | The static AQL (Acceptable Quality Level) sampling table, standard reference data, not editable via Settings. |
+| `aqlRecommendation.json` | Tier x Risk x PO-Size -> recommended Inspection Level and Point Check % range. Editable via Settings. |
+| `creatorTiers.json` | Creator/brand -> QA Tier (1/2/3) mapping, feeds into the AQL recommendation. Editable via Settings. |
+| `unitCosts.json` | Category/subcategory -> $ per unit, used for cost estimates in the Reporting flow. Editable via Settings. |
+| `approvalPhotoSets.json` | Which named photo slots (Front, Back, Hang Tag, etc.) appear on the QA/QC Approval page, per category. |
+| `asanaFieldMap.json` | Asana integration config - see "Asana integration" below. |
 
-## 2. Testing on your phone (recommended, since this is built for iPhone/tablet use)
+## Data model (`data/*.json`, created at runtime)
 
-The camera capture and mobile layout only really make sense on a phone/tablet, so it's
-worth testing there instead of just in a desktop browser:
+Three files, each an append-only-ish array of records (updates rewrite
+the whole file - fine at this scale, would need to change for a real
+database):
 
-1. Make sure your phone and computer are on the **same WiFi network**.
-2. Find your computer's local IP address:
-   - Mac: System Settings → Wi-Fi → Details (something like `192.168.1.23`)
-   - Windows: `ipconfig` in Command Prompt, look for "IPv4 Address"
-3. On your phone's browser, go to `http://<that-ip>:3000` (e.g. `http://192.168.1.23:3000`)
-4. Add it to your home screen (Safari: Share → Add to Home Screen) so it opens full-screen
-   like an app while you're testing.
+**`purchaseOrders.json`** - one entry per PO. Key fields: `id` (uuid,
+used in the approval page URL), `poNumber`, `sku`, `category`,
+`subcategory`, `productDevelopmentLead`, `sizesIncluded`, `fitKey` +
+`fitSizes` (the established apparel sizing standard for this PO's SKU,
+so a repeat PO of the same product can inherit it automatically),
+`asanaTaskLink` + `asanaTaskGid` (the raw pasted link and the numeric ID
+extracted from it).
 
-## 3. What to check while testing
+**`approvals.json`** - one entry per PO (matched by `poNumber`), holding
+all three stages:
+```
+{
+  poNumber, sku,
+  sampleApproval: { submitted, submittedAt, data, pdComments, skipped, skippedAt },
+  preProductionApproval: { ...same shape... },
+  bulkApproval: { ...same shape... }
+}
+```
+`data` is whatever China submitted for that stage (photos, factory code,
+QA lead, sizing measurements, etc. - shape varies slightly by
+category/stage). `pdComments` is a plain chronological array - see "The
+PD approval thread" below for how this is actually used.
 
-- Does the step order make sense for how your team actually does an inspection?
-- Are the bilingual labels accurate? (I did my best on the Chinese translations, but
-  your team should sanity-check the QA/manufacturing terminology.)
-- Try the Apparel flow: pick a fit, type in some measurements more than 0.5" off from
-  the placeholder standard, and confirm they get flagged in red — both in the app and
-  in the generated PDF.
-- Take a few real photos on your phone (general, tags, and on an issue) and confirm
-  they land correctly in the PDF's photo sections.
-- Open the generated PDF on your phone too, not just desktop, to make sure it's easy
-  to review on a small screen.
+**`submissions.json`** - one entry per inspection report submitted
+through the Reporting wizard (Pre-Production or Bulk). This is the
+system of record for pass/fail history, analytics, and the "reference a
+prior report" feature. Each entry embeds its own `overallResult`,
+`issues` (with photo URLs), and a `sizingCarryForward` block so a later
+report on the same PO can pre-fill from it.
 
-Anything that feels off — wrong fields, missing checks, wording, extra steps you don't
-need — flag it and we'll adjust before moving to the real deployment.
+Generated PDFs and uploaded photos live in subfolders of the same
+`DATA_DIR` (`submissions/`, `issue-photos/`, `approval-photos/`) and are
+served back as static files - see the `app.use('/submissions', ...)`
+lines near the top of `server.js`.
 
----
+## Key design decisions worth understanding
 
-## What's still placeholder / to confirm before going live
+### The established standard vs. the generic template
 
-- **`config/fits.json`** — now populated with real approved measurements imported
-  from `Juniper - Size Charts.xlsx` for Crewnecks (4 fits), T-Shirt (9 fits), Hoodie
-  (7 fits), Jacket (5 fits), and Hat (1 fit) — 26 fits total. Jacket width and Hat
-  circumference are stored as approved ranges (e.g. "47-48.5 in") rather than a single
-  target number, and the tolerance check treats a measurement as out-of-range only if
-  it falls outside that range by more than the 0.5" buffer. Socks, Slippers, Onesie,
-  Shorts, and Sweatpants/Joggers were intentionally left out of this round (either no
-  data yet, or a different sizing model like shoe sizes) — let me know if you want
-  those added next.
-- **`config/options.json`** — the dropdown lists for Creator/Brand, Factory Code, Point
-  Check Rate, and QA/QC Lead. Plain JSON, easy to edit directly.
-- **Chinese translations** — in `config/i18n.json`, one line per label.
-- **Pass/Fail logic** — FAIL if any apparel measurement is out of tolerance, FAIL if
-  3+ minor issues, FAIL if 1+ major/critical issue, otherwise PASS. Lives in
-  `lib/passFail.js`.
-- **Fail requires a photo** — marking any check as "Fail" makes that section's photo
-  upload required before moving on or submitting.
-- **The form won't let you submit** until every check has a Pass/Fail/N-A selected, any
-  required fail-photos are attached, and (for Apparel) a fit is picked with at least
-  one measurement entered. Anything still missing shows up in a red list on the Review
-  screen.
-- **"Other" option** on Factory Code, Creator/Brand, and QA/QC Lead dropdowns — picking
-  it reveals a text box for a one-off custom value. That value is only used for that
-  report; if it should be a permanent option going forward, add it via Settings (see
-  below).
-- **Settings page** — a gear icon on the first screen (category selection) opens
-  `settings.html`, where you can add or remove entries in the Factory Code,
-  Creator/Brand, and QA/QC Lead lists. Changes save to `config/options.json` on the
-  server and apply immediately for everyone using the app - no redeploy needed. Point
-  Check Rate isn't editable here since it's a fixed 10-100% scale.
-- **Mobile photo uploads** now get resized and compressed in the browser before being
-  held in memory or uploaded (down to roughly 100-400KB each, from several MB straight
-  off a phone camera). This should fix the low-memory crash when adding new photos on
-  a phone. If it still happens on a particular device, let me know - it likely means
-  that device needs an even smaller size cap than the current default.
-- **Product categories now have a two-level structure**: Apparel (Hoodie, T-Shirt,
-  Sweatshirt, Hat, Other), Plush Toys (Standard, Mini, Electronic), Bags (Backpack,
-  Lunchbox, Purse, Tote, Other), Accessories (Keychain, Pin, Notebook/Sketchbook,
-  Other), and Other. Only Apparel's subcategories link to real measurement charts
-  (`config/fits.json`), since that's the only category with real spreadsheet data.
-  One thing to flag: your Apparel subcategory list didn't include "Jacket," but we do
-  have real Jacket measurements from your spreadsheet - I mapped Apparel → "Other" to
-  show the full fit list including Jacket as a fallback. Let me know if Jacket should
-  be its own subcategory instead.
-- **Real AQL sampling (ANSI/ASQ Z1.4 / ISO 2859-1)** replaces the old ad-hoc pass/fail
-  rule. On the Order Info step, enter the **Lot Size** (total units in the PO) and pick
-  an **Inspection Level** (defaults to General II, the standard choice) and **AQL
-  values** for Major/Minor defects (defaults 2.5/4.0, the industry standard - Critical
-  is always zero-tolerance, Accept 0/Reject 1). As soon as a lot size is entered, the
-  app shows the exact sample size code letter, required sample size, and Accept/Reject
-  thresholds for reference during the physical inspection. That same reference re-
-  appears live on the Issues step (updating as you log defects) and on the Review step,
-  and the full breakdown is now a section in the generated PDF. If a chosen AQL/lot
-  size combination requires more units than the sample size implies (edge case where
-  the underlying published table has no direct entry and points to a different sample
-  size), the app inspects at the larger of the two implied sample sizes - a
-  conservative, standard-referenced simplification of applying the full arrow logic
-  by hand. If no lot size is entered, the app falls back to the old simple heuristic
-  (3+ minor issues, or 1+ major/critical issue) so it still works, but this is meant as
-  a stopgap, not the primary way to use it now.
-- **Defects are now logged inline, where they're found** — each section (Fabric,
-  Embroidery, Printing, Washing Tags, Sizing, Packaging) opens a small defect log
-  right there when you mark it "Fail": description, severity, **units affected**, and
-  a photo, all in one place. You can log more than one defect per section - matches
-  how an inspection actually happens on the floor, noting the problem the moment you
-  find it rather than reconstructing a list afterward.
-- **"Additional Issues" (last step before Review) is now a catch-all**, not the
-  primary place defects get counted - for anything that doesn't fit neatly into a
-  section above.
-- **The AQL tally sums units affected, not the number of log entries.** This fixes a
-  real gap in the first version: logging "found a defect across 20 units" as one
-  entry only counted as 1 toward the AQL threshold. It now correctly counts as 20.
-  Every defect requires a "Units Affected" count (defaults to 1) alongside its
-  description and photo.
+This is the single most important pattern in the app, and the source of
+a couple of real bugs earlier in the project's life, so it's worth
+understanding explicitly.
 
----
+`fits.json` has a **generic** standard measurement for e.g. "Hoodie -
+Oversized, Youth S, Sleeve: 62.2cm". But every PO's actual Golden Sample
+can (and does) differ from that generic template - that's the whole
+point of Sample Approval. Once established, PP and Bulk reports should
+be measured against *that PO's own approved sample*, not the generic
+fits.json number.
 
-## Sharing a test version with a colleague
+Both the client (`establishedStandardFor()` in `public/app.js`) and the
+server (`establishedStandardFor()` in `lib/passFail.js` - a separate,
+parallel implementation, not shared code) implement this same fallback:
+check the PO's own submitted Sample Approval sizing first, fall back to
+the generic `fits.json` value only if nothing's been established yet.
+**Any new code that reads a sizing standard needs to go through this
+path, not read `fits.json` directly** - that exact mistake caused a real
+bug (tolerance flagging using the wrong baseline) that took real
+debugging effort to track down.
 
-Since your colleague has Google Workspace access in Canada (no China connectivity
-constraints for this test), there are two easy ways to get them a working version
-without needing your computer to stay on:
+### Size label matching
 
-### Option A — Quick temporary link (fastest, good for a live walkthrough)
+Apparel sizes are stored two ways depending on context: a plain canonical
+name ("Youth S") on a PO's `sizesIncluded`, versus a fit-specific label
+with an age range ("Youth S (6/7 yrs)") inside `fits.json` and in
+submitted sizing data. Matching between the two needs to go through
+`sizeMatchesCanonical()` (public/app.js) - a direct string comparison
+between these two forms will silently fail to match and has caused real
+bugs (sizes disappearing from a form) in the past.
 
-While the app is running locally (`npm start`), you can expose it with a free
-tunneling tool called [ngrok](https://ngrok.com/download):
+### The PD approval thread
 
-1. Download and install ngrok, then sign up for a free account (needed for the
-   authtoken step it walks you through).
-2. In a **second** terminal window (leave `npm start` running in the first one):
-   ```
-   ngrok http 3000
-   ```
-3. Ngrok prints a public URL like `https://random-name.ngrok-free.app` — send that
-   to your colleague. It stays live as long as both `npm start` and `ngrok` are
-   running on your machine.
+Each stage's `pdComments` array is rendered as a **plain chronological
+list** - not "the first comment is the official decision, forever." Any
+comment can optionally carry an `approvalStatus`
+(`approved`/`approvedWithComments`/`minorIssue`/`majorCriticalIssue`);
+the most prominent badge shown reflects whichever comment most recently
+carried one. This means a Minor Issue flagged early in the conversation,
+followed by discussion, followed by a later Approved, displays exactly
+like that sequence - nothing is hidden or overwritten. `minorIssue` is
+kept as a valid stored/displayed value for old data but is no longer
+offered as a new choice in the dropdown (which now only offers three
+options, matching Asana's wording - see below).
 
-This is the fastest option but is temporary — closing either terminal window ends it.
+### Skip Pre-Production
 
-### Option B — Persistent hosted link (better if they'll test on their own time)
+For a repeat PO of an already-established product, the team often skips
+Pre-Production Approval and goes straight from Golden Sample to Bulk.
+`approvalStore.skipStage()` marks a stage `skipped: true` (distinct from
+`submitted: false`, so it's visually clear this was a deliberate choice,
+not something overlooked) - only Pre-Production supports this; Sample
+and Bulk are always required.
 
-[Render.com](https://render.com) has a free tier for small Node apps and doesn't
-require a credit card to start:
+### Bilingual text conventions
 
-1. Push this project to a GitHub repo (or use Render's manual upload/CLI deploy if
-   you'd rather not use GitHub).
-2. In Render, choose **New > Web Service**, connect the repo.
-3. Build command: `npm install` — Start command: `npm start`
-4. Add the environment variables from `.env.example` under the service's
-   **Environment** tab (see Gmail setup below for real email during testing).
-5. Render gives you a permanent URL like `https://juniper-qa.onrender.com` you can
-   share directly — your colleague just opens it, no setup on their end.
+Every user-facing label goes through `i18n.json` via a `bi(key)` helper
+that returns `{ en, zh }`. Two rendering patterns exist side by side:
+stacked (Chinese on top, English smaller below - the default for most
+labels, via `biBlockHtml()`) and inline slash-separated ("English /
+中文" - used for compact contexts like table headers). If you add a new
+label and it looks jammed together with no spacing, it's almost always
+because the CSS default (`.zh { display: block; ... }` in styles.css)
+got overridden by a more specific selector for that context - check for
+one before assuming it's a JS bug.
 
-(Free-tier Render services sleep after inactivity and take ~30s to wake up on the
-first request — fine for a test, worth knowing so it doesn't seem broken.)
+## The pass/fail and AQL logic
 
-### Real email for this test (optional)
+`lib/passFail.js` (server-side, authoritative) and its close mirror in
+`public/app.js` (client-side, live preview during the wizard) both
+implement:
+- **Tolerance check**: any apparel measurement more than `toleranceCm`
+  (from `fits.json`, currently 1.27cm) off the established standard fails
+  the report outright, regardless of everything else.
+- **Pre-Production**: no formal AQL sampling applies - it just records
+  defect counts on the small hand-checked batch.
+- **Bulk/Production**: uses the AQL table (`config/aql.json`) plus the
+  recommended Inspection Level (from Tier x Risk x PO Size, via
+  `aqlRecommendation.json`) to determine Accept/Reject counts. A report
+  only fails outright if *every* unit checked was defective - a partial
+  defect rate doesn't auto-reject the whole PO, it's reflected in the
+  Quantity Approved/Rejected recap instead.
 
-Since this test isn't constrained by China connectivity, Gmail SMTP works fine here
-if you want your colleague to see the actual "email arrives with PDF attached" flow
-instead of just the in-app PDF preview:
+## Asana integration
 
-1. On the Google account you want to send from, turn on 2-Step Verification if it
-   isn't already on.
-2. Go to [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
-   and generate an App Password (choose "Mail" as the app).
-3. Set these in `.env` (or Render's Environment tab):
-   ```
-   SMTP_HOST=smtp.gmail.com
-   SMTP_PORT=587
-   SMTP_SECURE=false
-   SMTP_USER=your-gmail-address@gmail.com
-   SMTP_PASS=the-16-character-app-password
-   SMTP_FROM=your-gmail-address@gmail.com
-   REPORT_RECIPIENTS=mikhail@junipercreates.com,colleague@example.com
-   ```
-   Note this is just for this Canada-based test — the real production deployment in
-   China will need a different provider, as covered below.
+Three separate sync points, all "best-effort" by design: if
+`ASANA_ACCESS_TOKEN` isn't set, a PO has no Asana link, or Asana's API
+call fails for any reason, the app logs a warning and moves on - an
+Asana hiccup should never block or fail someone's actual work in this
+app. All three fire *after* the response has already been sent to the
+person using the app (fire-and-forget), so they add no latency.
 
----
+1. **QA/QC Drive Link** (text field) - written once, when a PO with an
+   Asana task link is created. Value is this PO's own approval page URL.
+2. **Sample/PP/Bulk Approval fields** (enum/dropdown fields, one per
+   stage) - updated to "Waiting for Product Dev" the moment China
+   submits a stage, and to the matching option
+   (Approved/Proceed / Approved with Issues Flagged / Not Approved / Not
+   Applicable) whenever PD records a formal decision, or Pre-Production
+   gets explicitly skipped.
+3. **Consolidated report attachment** - when Bulk gets marked Approved,
+   the same PDF available from the Reports page gets generated and
+   attached directly to the Asana task's activity feed.
 
-## Next step: China hosting + real email
+All of this is driven by `config/asanaFieldMap.json` - the field GIDs
+and enum option GIDs for this specific Asana project (these are internal
+Asana IDs, not exposed in Asana's normal UI - see the file's own
+`_readme` for how to fetch them via Asana's `custom_field_settings` API
+endpoint). **Moving to a different Asana project requires regenerating
+this whole file** - the GIDs are project-specific.
 
-Once the workflow is confirmed, the remaining pieces to go live for your China-based
-team are:
+`lib/asanaClient.js` is the actual HTTP layer: `setEnumCustomField`,
+`setTextCustomField`, and `attachFileToTask`, each a thin wrapper around
+Asana's REST API using a Bearer token. No Asana SDK dependency - just
+`fetch` (native in Node 18+).
 
-1. **Hosting**: deploy this Node.js app somewhere reachable from mainland China without
-   a VPN — e.g. Alibaba Cloud, Tencent Cloud, or a Hong Kong/Singapore-based host. The
-   app itself doesn't depend on any Google services, so this is a standard Node
-   deployment.
-2. **Email**: since Gmail/Google Workspace SMTP isn't reliable from China, we'll use a
-   China-friendly provider (Alibaba Cloud DirectMail, Tencent Cloud SES) or a global
-   provider like SendGrid — the important part is that the *app server* (not your
-   phone) is what talks to the email provider, so it just needs the server to be
-   hosted somewhere with good connectivity.
-3. Set the real `SMTP_*` variables in `.env` for that provider once chosen.
+## Environment variables
 
-I'm happy to help with either of those once you're ready.
+| Variable | Required | Purpose |
+|---|---|---|
+| `PORT` | No (defaults to 3000) | HTTP port to listen on |
+| `DATA_DIR` | **Yes, in any real deployment** | Absolute path to persistent storage - see below |
+| `ASANA_ACCESS_TOKEN` | No | Asana Personal Access Token; leave unset to disable the Asana integration entirely |
 
+See `.env.example` for the copy-pasteable version with fuller comments.
 
----
+## The one thing that will bite you: DATA_DIR must be a real persistent disk
 
-## AQL recommendation is now automatic
+`DATA_DIR` defaults to a local `./data` folder next to the app code. That
+folder **gets wiped on every deploy** on most hosting platforms,
+including Render, because the app code itself gets redeployed fresh -
+this has actually happened during this project's history and cost real
+data.
 
-Instead of manually picking Inspection Level and a Point Check %, the app now
-recommends both automatically based on your actual company policy:
+`DATA_DIR` must point at the **absolute path of an actually-persistent
+disk mount** - on Render, this means provisioning a paid persistent disk
+and setting `DATA_DIR` to its mount path (e.g. `/var/data`). The app
+has a built-in check for this: `GET /api/backup/status` (also surfaced
+in the Settings page UI) flags both "not set at all" and "set to a
+relative path" as misconfigurations, since both silently resolve to a
+non-persistent folder. **Always check this after any redeploy or
+migration** - it looks completely fine until the next deploy wipes it.
 
-- **PO Quantity** (renamed from Lot Size) x a rough per-unit cost (by category/
-  subcategory, see `config/unitCosts.json`) estimates the **Order Value**.
-- Order Value buckets into a **PO Size** band (>$20k, $5-20k, <$5k).
-- The selected **Creator** maps to a **QA Tier** (1/2/3) via `config/creatorTiers.json`
-  - all 218 creators from your Creator_List_QA.xlsx are pre-loaded, with a default
-  tier of 2 for anyone not listed.
-- **Product Complexity/Risk** (High/Medium/Low) is a new required field you set per
-  report.
-- Tier x Risk x PO Size looks up a recommended Inspection Level + Point Check % range
-  in `config/aqlRecommendation.json` (this is the reduced form of your spreadsheet -
-  every creator sharing a tier had identical recommendations, so it collapses to a
-  clean 27-cell table instead of 218 rows).
+There's also a one-click full backup: `GET /api/backup/download` zips
+the entire `DATA_DIR` on demand. Worth doing before any migration or
+risky change.
 
-The recommended Inspection Level auto-fills the existing Inspection Level control,
-but you can still override it manually if needed - once you touch it, the app stops
-auto-following the recommendation for that report.
+## Local development
 
-**Actual Spot Check Percentage** moved out of the top Order Info section to the
-Review step, since it's the real, as-inspected number (which may differ from the
-recommendation during busy periods) rather than an upfront input.
+```bash
+npm install
+cp .env.example .env
+# DATA_DIR=./data is fine for local dev - just don't use that on a real deploy
+node server.js
+```
 
-All three new datasets (Creator Tiers, the AQL Recommendation table, and Unit Costs)
-are editable from the Settings page (gear icon on the category screen) - no code
-changes needed if tiers, policy, or costs change.
+No build step, no watch mode set up - restart the process to pick up
+server.js changes; frontend JS/CSS changes just need a browser refresh.
 
-**"Additional Issues" is now framed as "Tolerance & Placement Issues"** - for finer
-issues like an off-center graphic or a slightly misaligned print, since the sections
-above already cover major issues like material and construction.
+## Deployment
 
----
+### Currently: Render
 
-## Pre-Production vs Production Sample now work differently
+A standard Render web service (`node server.js` via `npm start`), with a
+paid-tier persistent disk attached and `DATA_DIR` pointed at its mount
+path. Environment variables set in Render's dashboard under the service's
+Environment tab. Deploys are git-push-triggered.
 
-- **Top section of Order Info** (PO Number, Factory Code, Date, QA Lead, Creator,
-  Product Title, QA Type, PO Quantity, Product Complexity/Risk) is always filled in
-  regardless of QA Type.
-- **Pre-Production Sample**: AQL sampling doesn't apply at all - the whole AQL card is
-  replaced with a short note. You still go through every inspection section, just on
-  a handful of hand-checked units (at least one per size).
-- **Production Sample**: the full AQL card appears, showing:
-  1. A **recommendation** (Creator Tier, Estimated Order Value, recommended Point
-     Check % and Inspection Level) computed live from Creator + PO Quantity + Risk.
-  2. A **reference threshold table** for that recommendation (informational).
-  3. An **Actual Spot Check %** field (required for Production) - once filled in,
-  4. An **Actual Thresholds** table appears, using the real number of units checked
-     (PO Quantity x Actual %) to determine Accept/Reject - not the theoretical
-     recommended sample size. Checking fewer units than recommended (e.g. during a
-     busy period) correctly tightens the allowable defect count, and vice versa.
+### Moving to AWS
 
-One nuance worth knowing: the published AQL standard has a ceiling for a given AQL
-value - checking far more units than the standard's own table defines for that AQL
-doesn't keep expanding the allowed defect count indefinitely (that's a property of
-the real ANSI/ASQ Z1.4 table itself, not a shortcut on my end).
+The recommended path is **AWS Lightsail**, not raw EC2 - Lightsail is
+AWS's simplified VPS product (flat pricing, built-in static IP, simple
+firewall UI) and is the closest match to how Render feels to operate,
+without EC2's extra setup surface (security groups, elastic IPs, volume
+attachment as separate manual steps). Given this app's audience includes
+China-based factory staff, Lightsail's Hong Kong region (`ap-east-1`) is
+worth specifically considering for latency - though note AWS's Hong Kong
+region uses standard internet routing rather than a China-optimized
+backbone, so it's a meaningful improvement over hosting further away,
+not a guarantee of great performance from every part of mainland China.
 
-## Other changes this round
+What changes and what doesn't, moving off Render:
 
-- **Category → Subcategory** now displays inline - selecting a category shows its
-  subcategory chips directly attached below that card, not below the whole list.
-- **General section photos are back**, alongside the per-defect photos from last
-  time - each inspection section (Fabric, Embroidery, Printing, Washing Tags, Sizing,
-  Packaging) now has both a general documentation photo area (always available) and
-  the required photo(s) on any logged defect.
-- **Apparel sizing now has a photo box per size** instead of one shared "Sizing
-  Photos" area - easier to keep organized when checking multiple sizes.
-- **Tolerance guidance placeholders** added for Plush, Bags, Accessories, and Other on
-  the Sizing step - these are clearly marked as placeholder text and need your real
-  numbers; apparel's real tolerance already comes from the measurement chart itself.
-- **"Additional Issues" → "Tolerance & Placement Issues"** - reframed as the spot for
-  finer issues like an off-center graphic or slightly misaligned print, since the
-  sections above already cover major issues like material and construction.
+- **DATA_DIR**: same concept, different disk. Provision a separate
+  Lightsail **Block Storage** volume (not just the instance's own root
+  volume) and mount it independently, so the data survives even if
+  something happens to the instance itself - this is the same principle
+  that mattered on Render, just a different product name.
+- **Environment variables**: move `DATA_DIR` and `ASANA_ACCESS_TOKEN`
+  into a `.env` file on the instance (this app already uses `dotenv`, no
+  code change needed) rather than a platform dashboard.
+- **HTTPS**: Render handles this automatically; on Lightsail this needs
+  Nginx as a reverse proxy in front of the Node process, with a free
+  Let's Encrypt certificate via `certbot`.
+- **Process management**: Render restarts the process automatically on
+  crash/deploy; on Lightsail, use `pm2` (or systemd) for the same
+  behavior.
+- **Deploys**: Render's git-push-to-deploy doesn't exist on a raw
+  instance. Either SSH in and run `git pull && npm install && pm2
+  restart` manually, or set up a small GitHub Actions workflow to do
+  that automatically on every push (SSH-based, using repo secrets for
+  the host/user/key - this touches nothing else in the AWS account
+  beyond that one instance, no AWS access keys involved).
+- **Nothing about the application code changes.** No AWS SDK, no S3, no
+  Lambda - this is a plain Node process reading/writing a local disk,
+  and that model carries over directly.
 
 ---
 
-## AQL simplified further, and a Recap section added
+## New: Upload/Restore from Backup
 
-- **Actual Spot Check is now a plain number** ("e.g. 400" units checked), not a
-  percentage - the app auto-computes and displays the percentage next to it. This
-  also feeds the pass/fail math directly, with no rounding round-trip through a %.
-- **Inspection Level, Major AQL, and Minor AQL are no longer shown or editable.**
-  Major/Minor are fixed at the industry-standard 2.5% / 4.0%, and Inspection Level
-  is derived silently from the Creator Tier table - neither needs a decision from
-  QA staff anymore.
-- **Code Letter removed everywhere** - only the plain Accept/Reject numbers show,
-  no ANSI table jargon.
-- **Recommendation now shows an actual quantity range** (e.g. "400 - 700 (40-70%)")
-  instead of a bare percentage, computed against the PO Quantity.
-- **Severity definitions added** under the Minor/Major/Critical picker on every
-  defect card, based on how AQL classification actually works in practice: Minor
-  means the unit is still saleable, Major means that specific unit is rejected
-  (not automatically the whole batch), Critical means zero tolerance - even one
-  can fail the entire batch. (Source: https://www.qcadvisor.com/blog/acceptable-quality-limit-classification/)
-- **Pre-Production Sample now shows nothing at all** for the AQL section - no card,
-  no notice, since AQL sampling genuinely doesn't apply to a small hand-checked
-  sample.
-- **New Recap section**, at the very end of the report (Production only): Quantity
-  Checked, Quantity Approved, and Quantity Rejected. A unit is only counted as
-  rejected if it has a Major or Critical defect logged against it - units with only
-  Minor defects stay in the Approved count, since minor issues don't make a unit
-  unsaleable. One caveat worth knowing: since defects are logged as counts rather
-  than tracked to a specific physical unit, a unit with both a Major and a Critical
-  defect could in principle be counted in both tallies - this is a reasonable
-  estimate given the data the app collects, not an exact unit-by-unit ledger.
+Settings now has a "Restore from Backup" section right below the existing
+Download Backup button. Upload a previously downloaded backup zip, and
+it merges into the current data rather than replacing it wholesale:
 
----
+- Any PO in the backup that isn't already in the live data gets added
+- For a PO that already exists, a dropdown chooses what happens:
+  **Skip it** (default, the safer option - keeps whatever's currently
+  live) or **Replace it with the backup version** (overwrites the live
+  record with the backup's)
+- Referenced photos and PDFs come along automatically for anything added
+  or replaced - filenames already carry a random ID, so there's no risk
+  of accidentally overwriting an unrelated current file
+- A confirmation prompt appears before anything happens, with different
+  wording depending on which mode is selected, since "replace" is the
+  more consequential of the two choices
+- Server-side validation rejects anything that isn't a real zip, or a
+  zip that doesn't actually look like a Juniper QA backup - with a clear
+  message either way, not a generic error
 
-## Chinese-first, and AQL simplified to a pure accept/reject model
+New endpoint: `POST /api/backup/upload` (multipart, fields: `backup` file
++ `mode` of `ignore` or `override`), using a separate, much larger upload
+size limit than regular photo uploads, since backups accumulate PDFs and
+photos over time.
 
-- **Chinese now displays first everywhere** (app and PDF) - English is the secondary
-  language, flipped from before. This was done at the source (the `bi()` translation
-  helper in each file), so it's consistent throughout without needing per-line changes.
-- **Step 2 ("Spot Check Recommendation", renamed from "AQL Recommendation")** no
-  longer shows the "Reference Thresholds" table - just the recommendation itself
-  (Creator Tier, Estimated Order Value, Recommended Units to Check).
-- **The overall pass/fail policy changed.** A PO is no longer auto-rejected just
-  because it has a lot of major defects. Instead: individual defective units
-  (Major or Critical) are rejected, the rest of the reviewed quantity is approved
-  (including units with only Minor issues - minor issues don't make a unit
-  unsaleable). The report only fails outright if every single unit reviewed turned
-  out defective. A partial defect rate is reflected honestly in the Quantity
-  Approved/Rejected numbers, not treated as a batch-wide failure. Tested with a
-  150-of-400-major-defects scenario: the report correctly stays "合格 PASS" with
-  250 approved / 150 rejected shown plainly, rather than auto-failing.
-- **The Critical/Major/Minor table now shows Found / Accepted instead of
-  Accept/Reject thresholds.** Minor's "Accepted" always equals its "Found" count
-  (minor issues stay accepted); Major and Critical always show 0 accepted (that
-  specific unit is rejected).
-- **The Recap now includes PO Size** alongside Quantity Checked, Approved, and
-  Rejected - both on the Review step and in the PDF (shown once near the AQL
-  section for context, and restated at the very end of the report as a clean
-  bottom line).
-- **Apparel sizing now has an "Other / Custom Sizing" option** in the fit dropdown,
-  for cases with a different approved sizing not covered by the standard charts.
-  Selecting it swaps in the same general Pass/Fail/defect-logging checklist that
-  non-apparel categories use, instead of the numeric measurement chart.
-- **Fixed a PDF bug found during this update**: the footer page-number text was
-  being drawn inside the page's bottom margin, which confused PDFKit's own
-  auto-pagination into silently inserting extra blank pages at the end of every
-  report (a 3-page report was coming out as 6 pages). Fixed by temporarily
-  zeroing the bottom margin while the footer draws.
+Tested the full round trip: downloaded a real backup, simulated a PO
+going missing and another PO diverging from its backed-up version, then
+restored in "skip" mode (confirmed the missing PO came back and the
+diverged one was correctly left alone) and separately in "replace" mode
+(confirmed the diverged PO was correctly overwritten back to the backup's
+values). Also confirmed photos are restored correctly, confirmed clear
+error messages for a non-zip file and for a zip that isn't a real backup,
+and confirmed regular photo uploads and report submissions are
+unaffected by the new, separate upload configuration.
 
 ---
 
-## Report history, analytics dashboard, and a favicon
+## Both features from the team's feedback are now complete and tested
 
-### Fixed: "Units Checked" needing a click between every digit
+### Apparel Sizing Charts: additional columns
 
-Typing into that field was triggering a full re-render of the section it lives
-in (to update the live preview), which destroyed and recreated the input on
-every keystroke and dropped focus. Fixed by splitting the input from the
-derived content around it, so only the preview updates live now - the input
-itself is untouched while you type.
+A "+ Add Additional Column" button on the Golden Sample setup screen lets
+someone add a product-specific measurement point (e.g. "Inseam") beyond
+the fit's standard ones - name it, remove it if added by mistake, and
+fill in a value per size. That column then flows everywhere the standard
+ones do: the Reporting flow's reference chart and measurement entry, the
+Sizing Details comparison table, tolerance/pass-fail checking (both
+client preview and the authoritative server-side check), and the
+generated PDF report (both the reference table and the measurement
+table).
 
-### Report history (needs a persistent disk to actually stick around)
+Two real bugs were caught and fixed while finishing this: the PDF's
+measurement table was still comparing a custom column against the
+generic fits.json template (which never has that column, so it would
+have shown nothing and never flagged tolerance correctly), and the
+"Add Column" button itself crashed on click because it called a helper
+function that only exists in a different file.
 
-Every submission now gets logged to `DATA_DIR/submissions.json` (see
-`lib/submissionLog.js`), and every generated PDF is saved to
-`DATA_DIR/submissions/` - both always on now, not just in test mode. Set
-`DATA_DIR` in `.env` to match your Render persistent disk's mount path so this
-survives restarts; it defaults to a local `./data` folder otherwise.
+Verified end-to-end through the real UI, not just code review: added an
+Inseam column, filled it in, submitted the Golden Sample, confirmed it
+appears correctly in Reporting with the right established value,
+confirmed tolerance flagging correctly catches a bad value and clears a
+good one, and downloaded and visually inspected the actual generated PDF
+to confirm the column renders with correct red tolerance highlighting.
 
-When you start filling out a new report and enter a **PO Number** that matches
-an earlier submission (case-insensitive, exact string match - e.g.
-"JDAN01PLU1-PO3"), a **"Previous Report Found"** card appears right below the
-PO Number field: date, result, every issue that was logged, and a link to
-download that report's full PDF. This is how a Production report can
-reference the Pre-Production report for the same PO.
+### QA/QC Approval comments: reference a photo or a size row
 
-### Analytics dashboard (new page, linked from the category screen)
+A "Reference (optional)" dropdown in the comment/reply form lists every
+photo uploaded for that stage, plus (Golden Sample only, since that's the
+one stage with its own inline size chart) every size row. Picking one
+attaches it to the comment. A submitted comment with a reference shows a
+small clickable chip; clicking it smoothly scrolls to and briefly
+highlights the actual photo or size-chart row it points at, wherever that
+lives on the page.
 
-A new 📊 Analytics link sits next to ⚙️ Settings on the first screen. It has
-two sections:
+A few judgment calls made building this, worth knowing about:
+- One reference per comment, not several
+- Jump-and-highlight, not an inline preview thumbnail
+- Only Golden Sample can reference a size row, since Pre-Production and
+  Bulk don't have their own inline size chart in the Approval page (their
+  sizing lives in the separate Reporting flow's report history instead)
+- If the referenced photo or size no longer exists by the time someone
+  clicks the chip (unlikely, but possible if data changed since), it
+  shows a clear message instead of doing nothing or breaking
 
-- **Overall Stats** - all POs, broken down by top-level category (Apparel,
-  Plush Toys, Bags, Accessories, Other), organized by month.
-- **Vendor Stats** - pick a Creator from a dropdown, see the same breakdown
-  scoped to just that vendor.
-
-Both default to the last 90 days, with a dropdown for 30 days / 90 days / 6
-months / 1 year / all time. Each month (and a totals row) shows: POs Placed
-(distinct PO numbers), Manufactured Quantity (sum of PO Quantity across
-Production reports completed that month), Units Checked, Units Rejected,
-Defective Rate, and Pass Rate. "Manufactured" is keyed to when a Production
-Sample report was completed, per your instruction - Pre-Production reports
-don't contribute to quantity/rate figures since they don't carry a formal
-checked quantity.
-
-This is all computed live from the same submission log above, so it's only as
-complete as your submission history - same persistence caveat applies.
-
-### Favicon
-
-Generated from the existing teal tree logo (`public/assets/juniper-mark.png`)
-at the standard sizes (favicon.ico, 32x32 PNG, 180x180 apple-touch-icon) and
-wired into all three pages (main app, Settings, Analytics).
-
----
-
-## Bug fix and refinements
-
-### Fixed: phantom "photo required" error with nothing visibly logged
-
-Found the exact cause of the bug you screenshotted: marking a checklist item
-"Fail" auto-creates an empty defect placeholder (so you don't hit a dead end
-if you tap Fail and add details a moment later). If you then changed your mind
-and switched it back to Pass or N/A, that placeholder stayed behind invisibly
-in the underlying data - the UI only shows the defects area while a section is
-marked Fail, so there was no way to see or remove it. Submission then correctly
-saw an incomplete defect (no description, no photo) and blocked with the
-confusing error, even though nothing appeared to be logged. Fixed by clearing
-a section's defects whenever its status changes away from Fail.
-
-### Recap changes
-
-- No more mentions of "AQL" in the Recap's plain-language notices.
-- **PO Size now always shows** in the main Order Information section of every
-  report, not just buried in the Production recap.
-- **Pre-Production now has its own "Quantity Checked" field** - a simple
-  manual count of how many units you physically hand-checked - which now
-  shows up in both the app's live recap and the PDF's Recap section
-  alongside PO Size and the Critical/Major/Minor counts.
-
-### "Previous Report Found" - moved and upgraded
-
-- Now sits at the bottom of the Order Info step as its own dedicated section,
-  after everything else, instead of squeezed under the PO Number field.
-- Each issue now displays as a larger card - description, a proper severity
-  badge, units affected, and the actual defect photo shown inline - matching
-  how the PDF itself presents a defect, instead of a small text-only bullet
-  list. This needed new backend support: defect photos are now saved
-  separately to persistent storage (alongside the PDF) specifically so they
-  can be pulled back up here without needing to open the full report.
-
-### Analytics: filter by Vendor or Factory Code
-
-The Vendor Stats section now has a toggle - Vendor or Factory Code - and
-switches the dropdown and the underlying query accordingly. Both use the same
-month-by-month stats format as before.
-
----
-
-## Custom sizing, pre-fill, and a sizing chart editor
-
-### Apparel "Other / Custom Sizing" now has a real chart
-
-Instead of falling back to the same generic checklist as plush/bags/etc, "Other"
-now gets: a fillable chart (add a size, type in its measurements freeform, attach
-a photo of that specific size) plus a separate "Reference Chart Photo" upload for
-snapping a whole paper breakdown if that's faster than typing. The Pass/Fail
-sizing check still applies too, since there's no automatic tolerance comparison
-for a custom fit - the manual check is the actual QC record here.
-
-(Fixed a related bug while building this: apparel with "Other" fit was silently
-skipping the sizing Pass/Fail checklist entirely - that logic only made sense for
-standard fits with automatic tolerance checking, not "Other," which has none.)
-
-### Pre-fill from the Pre-Production report
-
-Step 2 is now two boxes: the first is just **PO Number + QA Type**. Once you enter
-a PO Number that matches an earlier report and select **Production Sample**, the
-second box (Factory Code, Date, QA Lead, Creator, Product Title, PO Quantity,
-Risk) - plus the sizing chart itself, if apparel - fills in automatically from
-whatever was entered on the Pre-Production report for that same PO. Anything you've
-already typed is never overwritten, and a small note flags when a field was
-auto-filled so it's obvious to double-check. Photos are never carried forward -
-only text and measurements - since photos are physical evidence tied to a specific
-inspection, not something that should be silently reused.
-
-### Settings: edit apparel sizing charts
-
-New section at the bottom of Settings - pick a standard from a dropdown to edit
-its chart (sizes, measurement points, and values - a value can be a plain number
-like `24` or a range like `24-26`), or add a brand new standard from scratch.
-Changes take effect immediately, no restart needed.
-
-### Bag category
-
-"Purse" is now labeled "Sling Bag" (the underlying data key is unchanged, so this
-doesn't affect existing reports or analytics).
+Tested the complete flow for both reference types: selected a photo
+reference, submitted the comment, confirmed the chip appears with the
+correct label, confirmed clicking it correctly targets and highlights
+that exact photo. Repeated the same for a size-row reference. Also
+confirmed the reference is correctly saved server-side, and confirmed a
+comment with no reference selected still submits and displays completely
+normally.
