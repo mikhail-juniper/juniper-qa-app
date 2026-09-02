@@ -59,6 +59,18 @@
   min-width: 0;
 }
 
+/* Same centered-width treatment as order-management.css's .om-root, applied
+   here so every other page (New Purchase Order, QA/QC Reporting, Approval,
+   Reports, Analytics, Settings) gets it too without each needing their own
+   copy - order-management.html/sizing-charts.html/clients.html already
+   carry both classes, so this and .om-root simply agree with each other. */
+.form-root {
+  max-width: 1700px;
+  margin: 0 auto;
+  padding: 28px 40px 80px 40px;
+  box-sizing: border-box;
+}
+
 @media (max-width: 860px) {
   .app-body-flex { flex-direction: column; }
   .app-sidebar { width: 100%; flex: none; position: static; max-height: none; padding: 12px 0; }
