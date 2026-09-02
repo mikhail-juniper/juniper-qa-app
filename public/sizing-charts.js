@@ -42,7 +42,7 @@ function renderList(charts) {
   root.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
       <h2 class="om-view-title" style="margin:0;">Sizing Charts</h2>
-      <button class="btn btn-primary" id="scNewBtn" style="width:auto;padding:10px 18px;">+ New sizing chart</button>
+      <button class="btn btn-primary" id="scNewBtn" style="flex:none;width:auto;padding:10px 18px;">+ New sizing chart</button>
     </div>
     ${charts.length ? `
       <div class="om-tile-grid">
@@ -105,12 +105,12 @@ function openChartForm(chart) {
 
     <div class="om-section-title">Sizes</div>
     <div id="scRows"></div>
-    <button type="button" class="btn btn-secondary" id="scAddRow" style="width:auto;padding:8px 14px;margin-top:6px;">+ Add size</button>
+    <button type="button" class="btn btn-secondary" id="scAddRow" style="flex:none;width:auto;padding:8px 14px;margin-top:6px;">+ Add size</button>
 
     <div style="margin-top:22px;display:flex;gap:10px;flex-wrap:wrap;">
-      <button class="btn btn-secondary" id="scCancel" style="width:auto;padding:10px 18px;">Cancel</button>
-      ${chart ? `<button class="btn btn-secondary" id="scDelete" style="width:auto;padding:10px 18px;color:var(--jc-fail);">Delete</button>` : ''}
-      <button class="btn btn-primary" id="scSave" style="width:auto;padding:10px 18px;">${chart ? 'Save changes' : 'Create chart'}</button>
+      <button class="btn btn-secondary" id="scCancel" style="flex:none;width:auto;padding:10px 18px;">Cancel</button>
+      ${chart ? `<button class="btn btn-secondary" id="scDelete" style="flex:none;width:auto;padding:10px 18px;color:var(--jc-fail);">Delete</button>` : ''}
+      <button class="btn btn-primary" id="scSave" style="flex:none;width:auto;padding:10px 18px;">${chart ? 'Save changes' : 'Create chart'}</button>
     </div>
    </div>
   `;

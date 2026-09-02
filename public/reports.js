@@ -35,7 +35,6 @@ async function loadConfig() {
 function render() {
   const root = document.getElementById('reportsRoot');
   root.innerHTML = `
-    <a href="index.html" class="btn btn-secondary" style="display:inline-block;width:auto;padding:10px 18px;margin-bottom:16px;text-decoration:none;">← ${biBlockHtml('goHome', 'Go Home')}</a>
     <div class="step-title">${biBlockHtml('homeReportsTitle', 'Reports')}</div>
     <div class="card">
       <div class="field">

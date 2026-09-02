@@ -24,7 +24,7 @@ function escapeHtml(str) {
 
 let clientNames = [];
 let tiers = {};
-let defaultTier = 2;
+const DEFAULT_TIER = 2; // only used to seed a brand-new client's tier - never shown or editable as a global setting
 
 async function loadClients() {
   const root = document.getElementById('clRoot');
@@ -38,7 +38,19 @@ async function loadClients() {
     const tiersData = await tiersRes.json();
     clientNames = options.creators || [];
     tiers = tiersData.tiers || {};
-    defaultTier = tiersData.defaultTier || 2;
+
+    // Every client needs its OWN stored tier - if any are missing one
+    // (falling back to the shared default), assign and persist an explicit
+    // value now so it can never again drift just because someone changes
+    // what new clients default to.
+    let needsSave = false;
+    clientNames.forEach((name) => {
+      if (tiers[name] === undefined) {
+        tiers[name] = DEFAULT_TIER;
+        needsSave = true;
+      }
+    });
+    if (needsSave) await saveClients(false);
     render();
   } catch (e) { showToast(e.message, true); }
 }
@@ -48,13 +60,6 @@ function render() {
   const rows = clientNames.slice().sort((a, b) => a.localeCompare(b));
   root.innerHTML = `
     <h2 class="om-view-title">Clients</h2>
-    <div class="om-field-grid" style="max-width:300px;margin-bottom:16px;">
-      <div><label>Default tier for new clients</label>
-        <select id="clDefaultTier">
-          ${[1, 2, 3].map((t) => `<option value="${t}" ${defaultTier === t ? 'selected' : ''}>${t}</option>`).join('')}
-        </select>
-      </div>
-    </div>
     <div class="om-table-wrap">
       <table class="om-table">
         <thead><tr><th>Client / Creator / Brand</th><th>Creator Tier</th><th></th></tr></thead>
@@ -64,7 +69,7 @@ function render() {
               <td><strong>${escapeHtml(name)}</strong></td>
               <td>
                 <select data-tier-for="${escapeHtml(name)}">
-                  ${[1, 2, 3].map((t) => `<option value="${t}" ${(tiers[name] || defaultTier) === t ? 'selected' : ''}>${t}</option>`).join('')}
+                  ${[1, 2, 3].map((t) => `<option value="${t}" ${tiers[name] === t ? 'selected' : ''}>${t}</option>`).join('')}
                 </select>
               </td>
               <td><button type="button" class="om-file-remove" data-remove="${escapeHtml(name)}" title="Remove">&times;</button></td>
@@ -80,14 +85,10 @@ function render() {
         <option value="2" selected>Tier 2</option>
         <option value="3">Tier 3</option>
       </select>
-      <button class="btn btn-primary" id="clAddBtn" style="width:auto;padding:8px 16px;">+ Add client</button>
+      <button class="btn btn-primary" id="clAddBtn" style="flex:none;width:auto;padding:8px 16px;">+ Add client</button>
     </div>
   `;
 
-  document.getElementById('clDefaultTier').addEventListener('change', (e) => {
-    defaultTier = parseInt(e.target.value, 10);
-    saveClients();
-  });
   root.querySelectorAll('[data-tier-for]').forEach((sel) => {
     sel.addEventListener('change', (e) => {
       tiers[sel.dataset.tierFor] = parseInt(e.target.value, 10);
@@ -113,7 +114,7 @@ function render() {
   });
 }
 
-async function saveClients() {
+async function saveClients(showConfirmation) {
   try {
     await Promise.all([
       fetch('/api/options', {
@@ -122,11 +123,13 @@ async function saveClients() {
       }),
       fetch('/api/creator-tiers', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tiers, defaultTier })
+        body: JSON.stringify({ tiers, defaultTier: DEFAULT_TIER })
       })
     ]);
-    showToast('Saved');
-    render();
+    if (showConfirmation !== false) {
+      showToast('Saved');
+      render();
+    }
   } catch (e) { showToast(e.message, true); }
 }
 

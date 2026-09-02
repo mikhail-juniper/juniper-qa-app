@@ -665,10 +665,6 @@ function render() {
 /* ---- Chooser: New Purchase Order / Pre-Production / Bulk Sampling Reporting ---- */
 function renderChooserScreen() {
   return `
-    <div style="display:flex; justify-content:flex-end; gap:16px; margin-bottom:16px;">
-      <a href="analytics.html" class="settings-link" title="Analytics">📊 ${biBlockHtml('analyticsLink', 'Analytics')}</a>
-      <a href="settings.html" class="settings-link" title="Settings">⚙️ ${biBlockHtml('settingsTitle', 'Settings')}</a>
-    </div>
     <div class="step-title">质检报告 QA/QC Reporting</div>
     <div class="section-help" style="margin-bottom:16px;">${escapeHtml(bi('chooserHelp').en)}<br/>${escapeHtml(bi('chooserHelp').zh)}</div>
 
@@ -686,7 +682,6 @@ function renderChooserScreen() {
         <div class="home-nav-desc">${biBlockHtml('chooserBulkDesc', 'Inspect a spot-checked sample of the full production run')}</div>
       </div>
     </div>
-    <a href="index.html" class="settings-link" style="display:block; text-align:center; margin-top:8px;">← ${biBlockHtml('backToApp', 'Back to Home')}</a>
   `;
 }
 function attachChooserHandlers() {

@@ -8,7 +8,7 @@
 
 .app-body-flex {
   display: flex;
-  align-items: flex-start;
+  align-items: stretch;
   min-height: calc(100vh - 72px);
 }
 
@@ -16,13 +16,15 @@
   flex: 0 0 220px;
   width: 220px;
   background: #ececec;
-  padding: 24px 0;
   box-sizing: border-box;
+}
+
+.app-sidebar-inner {
   position: sticky;
   top: 72px;
-  align-self: flex-start;
   max-height: calc(100vh - 72px);
   overflow-y: auto;
+  padding: 24px 0;
 }
 
 .app-sidebar-section { padding: 0 0 14px 0; }

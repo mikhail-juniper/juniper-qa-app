@@ -2,7 +2,7 @@
    shared design tokens/classes in styles.css (.card, .btn, .btn-primary,
    .btn-secondary, --jc-* color variables). */
 
-.om-root { max-width: none; margin: 0; padding: 24px 32px 80px 32px; }
+.om-root { max-width: 1500px; margin: 0; padding: 28px 40px 80px 40px; }
 
 .app-header { display: flex; align-items: center; justify-content: space-between; }
 .om-menu-toggle {

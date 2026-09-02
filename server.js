@@ -1124,7 +1124,9 @@ function migrateFactoryCodesToSuppliers() {
     factoryCodes.forEach((code) => {
       const trimmed = String(code).trim();
       if (!trimmed || existingNames.has(trimmed.toLowerCase())) return;
-      supplierStore.createSupplier({ id: uuidv4(), name: trimmed });
+      // Vendor code is the real identifier here - name is a placeholder
+      // (the code itself) until the actual factory name is filled in.
+      supplierStore.createSupplier({ id: uuidv4(), name: trimmed, vendorCode: trimmed });
       existingNames.add(trimmed.toLowerCase());
       migrated += 1;
     });

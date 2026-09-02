@@ -44,27 +44,39 @@ const APP_NAV = [
 
 function isActiveNavItem(item) {
   const path = location.pathname.split('/').pop() || 'index.html';
-  const targetPath = item.href.split('?')[0];
+  const [targetPath, targetQuery] = item.href.split('?');
   if (path !== targetPath) return false;
-  if (targetPath !== 'order-management.html') return true;
-  // On order-management.html, disambiguate Order Management / Suppliers /
-  // Finances by the ?view= param (defaulting to the home dashboard).
-  const params = new URLSearchParams(location.search);
-  const view = params.get('view') || 'home';
-  return view === item.omView;
+
+  if (targetPath === 'order-management.html') {
+    // Disambiguate Order Management / Suppliers / Finances / Products /
+    // Components by the ?view= param (defaulting to the home dashboard).
+    const view = new URLSearchParams(location.search).get('view') || 'home';
+    return view === item.omView;
+  }
+
+  if (targetPath === 'reporting.html') {
+    // reporting.html serves both "New Purchase Order" (?mode=newPO) and
+    // plain "QA/QC Reporting" from the same URL - without checking the
+    // query string both links would show active at once.
+    const hasNewPoMode = new URLSearchParams(location.search).get('mode') === 'newPO';
+    const itemWantsNewPoMode = (targetQuery || '').includes('mode=newPO');
+    return hasNewPoMode === itemWantsNewPoMode;
+  }
+
+  return true;
 }
 
 function buildSidebar() {
   const nav = document.createElement('nav');
   nav.className = 'app-sidebar';
-  nav.innerHTML = APP_NAV.map((section, idx) => `
+  nav.innerHTML = `<div class="app-sidebar-inner">${APP_NAV.map((section, idx) => `
     <div class="app-sidebar-section ${idx > 0 ? 'app-sidebar-section-divided' : ''}">
       <div class="app-sidebar-group">${section.group.toUpperCase()}</div>
       ${section.items.map((item) => `
         <a class="app-sidebar-link ${isActiveNavItem(item) ? 'active' : ''}" href="${item.href}">${item.label}</a>
       `).join('')}
     </div>
-  `).join('');
+  `).join('')}</div>`;
   return nav;
 }
 

@@ -417,7 +417,7 @@ function render() {
 }
 
 function backHomeLink() {
-  return `<a href="index.html" class="btn btn-secondary" style="display:inline-block;width:auto;padding:10px 18px;margin-bottom:16px;text-decoration:none;">← ${biBlockHtml('goHome', 'Go Home')}</a>`;
+  return ''; // redundant now that the persistent sidebar handles navigation
 }
 
 function renderPoEntry() {

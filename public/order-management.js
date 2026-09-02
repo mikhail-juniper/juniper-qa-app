@@ -100,13 +100,14 @@ function render() {
   return renderCategoryShell(root);
 }
 
+// The sidebar now covers all navigation, so the in-page "back to hub" link
+// is redundant - kept as no-ops rather than touching every call site.
 function backToHubHtml() {
-  return `<button class="om-back-link" id="omBackToHub">&larr; Order Management Hub</button>`;
+  return '';
 }
 
 function bindBackToHub() {
-  const btn = document.getElementById('omBackToHub');
-  if (btn) btn.addEventListener('click', () => { currentView = 'home'; render(); });
+  // no-op
 }
 
 // ---- Home / tile dashboard ----
@@ -180,7 +181,7 @@ async function renderHome(root) {
     ${categoryTile('other')}
   `;
 
-  root.querySelectorAll('.om-category-tile').forEach((tile) => {
+  root.querySelectorAll('.om-category-tile[data-tab]').forEach((tile) => {
     const productLine = tile.dataset.tab;
     tile.querySelectorAll('.om-subtab-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -281,7 +282,7 @@ async function renderSuppliersShell(root) {
     ${backToHubHtml()}
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
       <h2 class="om-view-title" style="margin:0;">Suppliers</h2>
-      <button class="btn btn-primary" id="omNewSupplierBtn" style="width:auto;padding:10px 18px;">+ New supplier</button>
+      <button class="btn btn-primary" id="omNewSupplierBtn" style="flex:none;width:auto;padding:10px 18px;">+ New supplier</button>
     </div>
     <div id="omSuppliersHost" class="om-table-wrap"><div class="om-empty">Loading...</div></div>
   `;
@@ -304,21 +305,21 @@ function renderSuppliersTable(suppliers) {
     <table class="om-table">
       <thead>
         <tr>
-          <th>Supplier name</th><th>Company name</th><th>Vendor code</th><th>Product type</th>
-          <th>Contact name</th><th>Phone</th><th>WeChat</th><th>Currency</th>
+          <th>Supplier name</th><th>Shipping address</th><th>Vendor code</th><th>Product type</th>
+          <th>Company name</th><th>Contact name</th><th>Phone number</th><th>Business license</th>
         </tr>
       </thead>
       <tbody>
         ${suppliers.map((s) => `
           <tr data-id="${escapeHtml(s.id)}">
             <td><strong>${escapeHtml(s.name)}</strong></td>
-            <td>${escapeHtml(s.companyName || '—')}</td>
+            <td>${escapeHtml(s.shippingAddress || '—')}</td>
             <td>${escapeHtml(s.vendorCode || '—')}</td>
             <td>${escapeHtml(s.productType || '—')}</td>
+            <td>${escapeHtml(s.companyName || '—')}</td>
             <td>${escapeHtml(s.contactName || '—')}</td>
             <td>${escapeHtml(s.phoneNumber || '—')}</td>
-            <td>${escapeHtml(s.wechat || '—')}</td>
-            <td>${escapeHtml(s.currency || '—')}</td>
+            <td>${escapeHtml(s.businessLicense || '—')}</td>
           </tr>
         `).join('')}
       </tbody>
@@ -361,13 +362,13 @@ function openSupplierForm(supplier) {
     <div class="om-field-grid" style="margin-top:10px;">
       <div style="grid-column:1/-1;"><label>Mailing address</label><input id="spMailingAddress" type="text" value="${val(supplier && supplier.mailingAddress)}" /></div>
       <div style="grid-column:1/-1;"><label>Shipping address</label><input id="spShippingAddress" type="text" value="${val(supplier && supplier.shippingAddress)}" /></div>
-      <div style="grid-column:1/-1;"><label>Business info</label><input id="spBusinessInfo" type="text" value="${val(supplier && supplier.businessInfo)}" /></div>
+      <div style="grid-column:1/-1;"><label>Business license</label><input id="spBusinessLicense" type="text" value="${val(supplier && supplier.businessLicense)}" /></div>
       <div style="grid-column:1/-1;"><label>Notes</label><input id="spNotes" type="text" value="${val(supplier && supplier.notes)}" /></div>
     </div>
     <div style="margin-top:22px;display:flex;gap:10px;flex-wrap:wrap;">
-      <button class="btn btn-secondary" id="spCancel" style="width:auto;padding:10px 18px;">Cancel</button>
-      ${supplier ? `<button class="btn btn-secondary" id="spDelete" style="width:auto;padding:10px 18px;color:var(--jc-fail);">Delete</button>` : ''}
-      <button class="btn btn-primary" id="spSave" style="width:auto;padding:10px 18px;">${supplier ? 'Save changes' : 'Create supplier'}</button>
+      <button class="btn btn-secondary" id="spCancel" style="flex:none;width:auto;padding:10px 18px;">Cancel</button>
+      ${supplier ? `<button class="btn btn-secondary" id="spDelete" style="flex:none;width:auto;padding:10px 18px;color:var(--jc-fail);">Delete</button>` : ''}
+      <button class="btn btn-primary" id="spSave" style="flex:none;width:auto;padding:10px 18px;">${supplier ? 'Save changes' : 'Create supplier'}</button>
     </div>
    </div>
   `;
@@ -402,7 +403,7 @@ function openSupplierForm(supplier) {
       currency: document.getElementById('spCurrency').value,
       mailingAddress: document.getElementById('spMailingAddress').value,
       shippingAddress: document.getElementById('spShippingAddress').value,
-      businessInfo: document.getElementById('spBusinessInfo').value,
+      businessLicense: document.getElementById('spBusinessLicense').value,
       notes: document.getElementById('spNotes').value
     };
     try {
@@ -632,8 +633,8 @@ function renderSettlementTable(orders) {
             <td>${o.settlement.paidDate ? fmtDate(o.settlement.paidDate) : '—'}</td>
             <td>
               ${o.settlement.status === 'Paid'
-                ? `<button class="btn btn-secondary om-settle-btn" data-id="${escapeHtml(o.id)}" data-status="Pending" style="width:auto;padding:5px 10px;font-size:12px;">Mark Pending</button>`
-                : `<button class="btn btn-primary om-settle-btn" data-id="${escapeHtml(o.id)}" data-status="Paid" style="width:auto;padding:5px 10px;font-size:12px;">Mark Paid</button>`}
+                ? `<button class="btn btn-secondary om-settle-btn" data-id="${escapeHtml(o.id)}" data-status="Pending" style="flex:none;width:auto;padding:5px 10px;font-size:12px;">Mark Pending</button>`
+                : `<button class="btn btn-primary om-settle-btn" data-id="${escapeHtml(o.id)}" data-status="Paid" style="flex:none;width:auto;padding:5px 10px;font-size:12px;">Mark Paid</button>`}
             </td>
           </tr>
         `).join('')}
@@ -889,7 +890,7 @@ async function openDetailPanel(id) {
     </div>
 
     <div style="position:sticky;top:56px;z-index:5;background:#fff;padding:8px 0;margin-bottom:4px;display:flex;justify-content:flex-end;">
-      <button class="btn btn-primary" id="omSaveOrder" style="width:auto;padding:9px 20px;">Save changes</button>
+      <button class="btn btn-primary" id="omSaveOrder" style="flex:none;width:auto;padding:9px 20px;">Save changes</button>
     </div>
 
     <div class="om-section-title">Status</div>
@@ -950,16 +951,16 @@ async function openDetailPanel(id) {
       </div>
       <div class="om-section-title">Size distribution</div>
       <div id="omSizeRows"></div>
-      <button type="button" class="btn btn-secondary" id="omAddSizeRow" style="width:auto;padding:8px 14px;margin-top:6px;">+ Add size row</button>
+      <button type="button" class="btn btn-secondary" id="omAddSizeRow" style="flex:none;width:auto;padding:8px 14px;margin-top:6px;">+ Add size row</button>
     </div>
 
     <div class="om-section-title">Accessories / parts</div>
     <div id="omAccessoryRows"></div>
-    <button type="button" class="btn btn-secondary" id="omAddAccessoryRow" style="width:auto;padding:8px 14px;margin-top:6px;">+ Add accessory / part</button>
+    <button type="button" class="btn btn-secondary" id="omAddAccessoryRow" style="flex:none;width:auto;padding:8px 14px;margin-top:6px;">+ Add accessory / part</button>
 
     <div class="om-section-title" style="display:flex;justify-content:space-between;align-items:center;">
       <span>Fulfillment &amp; tracking</span>
-      <button class="btn btn-primary" id="omSaveFulfillmentEdit" style="width:auto;padding:6px 14px;font-size:12.5px;">Save fulfillment</button>
+      <button class="btn btn-primary" id="omSaveFulfillmentEdit" style="flex:none;width:auto;padding:6px 14px;font-size:12.5px;">Save fulfillment</button>
     </div>
     <div class="om-field-grid">
       <div><label>Packing list number</label><input id="fFulfillPacking" type="text" value="${val(order.fulfillment.packingListNumber)}" /></div>
@@ -985,7 +986,7 @@ async function openDetailPanel(id) {
     </div>
     <div style="margin-top:14px;font-size:12px;font-weight:700;color:var(--jc-muted);text-transform:uppercase;">Replacement sizes</div>
     <div id="omReplacementRows"></div>
-    <button type="button" class="btn btn-secondary" id="omAddReplacementRow" style="width:auto;padding:8px 14px;margin-top:6px;">+ Add replacement size row</button>
+    <button type="button" class="btn btn-secondary" id="omAddReplacementRow" style="flex:none;width:auto;padding:8px 14px;margin-top:6px;">+ Add replacement size row</button>
 
     <div class="om-section-title">Costs</div>
     <div class="om-field-grid">
@@ -1000,8 +1001,8 @@ async function openDetailPanel(id) {
     <div class="om-detail-row"><span class="om-label">Status</span><span class="om-value">${escapeHtml(order.settlement.status)}</span></div>
     ${order.settlement.paidDate ? `<div class="om-detail-row"><span class="om-label">Paid on</span><span class="om-value">${fmtDate(order.settlement.paidDate)}</span></div>` : ''}
     <div class="om-settlement-toggle">
-      <button class="btn btn-secondary" id="omMarkPending" style="width:auto;padding:8px 14px;">Mark Pending</button>
-      <button class="btn btn-primary" id="omMarkPaid" style="width:auto;padding:8px 14px;">Mark Paid</button>
+      <button class="btn btn-secondary" id="omMarkPending" style="flex:none;width:auto;padding:8px 14px;">Mark Pending</button>
+      <button class="btn btn-primary" id="omMarkPaid" style="flex:none;width:auto;padding:8px 14px;">Mark Paid</button>
     </div>
 
     <div class="om-section-title">Files</div>
@@ -1023,7 +1024,7 @@ async function openDetailPanel(id) {
       </select>
       <input type="text" id="omFileRelatedTo" placeholder="Related part/accessory (optional)" style="flex:1 1 160px;padding:8px 10px;border-radius:var(--radius-sm);border:1.5px solid var(--jc-border);font-size:12.5px;" />
       <input type="file" id="omFileInput" />
-      <button class="btn btn-secondary" id="omFileUploadBtn" style="width:auto;padding:8px 14px;">Upload</button>
+      <button class="btn btn-secondary" id="omFileUploadBtn" style="flex:none;width:auto;padding:8px 14px;">Upload</button>
     </div>
 
     <div class="om-section-title">Change log</div>
@@ -1376,12 +1377,12 @@ function openNewOrderPanel(existingOrder) {
 
       <div class="om-section-title">Size distribution</div>
       <div id="omSizeRows"></div>
-      <button type="button" class="btn btn-secondary" id="omAddSizeRow" style="width:auto;padding:8px 14px;margin-top:6px;">+ Add size row</button>
+      <button type="button" class="btn btn-secondary" id="omAddSizeRow" style="flex:none;width:auto;padding:8px 14px;margin-top:6px;">+ Add size row</button>
     </div>
 
     <div class="om-section-title">Accessories / parts</div>
     <div id="omAccessoryRows"></div>
-    <button type="button" class="btn btn-secondary" id="omAddAccessoryRow" style="width:auto;padding:8px 14px;margin-top:6px;">+ Add accessory / part</button>
+    <button type="button" class="btn btn-secondary" id="omAddAccessoryRow" style="flex:none;width:auto;padding:8px 14px;margin-top:6px;">+ Add accessory / part</button>
 
     <div class="om-section-title">Costs</div>
     <div class="om-field-grid">
@@ -1392,12 +1393,12 @@ function openNewOrderPanel(existingOrder) {
     </div>
 
     <div style="margin-top:22px;display:flex;gap:10px;flex-wrap:wrap;">
-      <button class="btn btn-secondary" id="omCancelNew" style="width:auto;padding:10px 18px;">Cancel</button>
+      <button class="btn btn-secondary" id="omCancelNew" style="flex:none;width:auto;padding:10px 18px;">Cancel</button>
       ${isEdit ? `
-        <button class="btn btn-secondary" id="omSaveDraft" style="width:auto;padding:10px 18px;">Save &amp; complete later</button>
-        ${o.status === 'New request' ? `<button class="btn btn-primary" id="omSubmitManufacturing" style="width:auto;padding:10px 18px;">Submit for manufacturing</button>` : ''}
+        <button class="btn btn-secondary" id="omSaveDraft" style="flex:none;width:auto;padding:10px 18px;">Save &amp; complete later</button>
+        ${o.status === 'New request' ? `<button class="btn btn-primary" id="omSubmitManufacturing" style="flex:none;width:auto;padding:10px 18px;">Submit for manufacturing</button>` : ''}
       ` : `
-        <button class="btn btn-primary" id="omSubmitNew" style="width:auto;padding:10px 18px;">Create request</button>
+        <button class="btn btn-primary" id="omSubmitNew" style="flex:none;width:auto;padding:10px 18px;">Create request</button>
       `}
     </div>
    </div>
