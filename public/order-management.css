@@ -2,7 +2,7 @@
    shared design tokens/classes in styles.css (.card, .btn, .btn-primary,
    .btn-secondary, --jc-* color variables). */
 
-.om-root { max-width: 1180px; }
+.om-root { max-width: 1180px; margin: 0 auto; padding: 24px 20px 80px 20px; }
 
 .om-back-link {
   background: none; border: none; color: var(--jc-teal-dark); font-weight: 600; font-size: 13.5px;
@@ -35,7 +35,99 @@
 .om-tile-suppliers { border-left-color: #1F6FA5; }
 .om-tile-settlement { border-left-color: #B9770E; }
 
+/* PO Requests (full-width) + category sections + widget cards, mirroring
+   QingFlow's Employee Portal dashboard layout. */
+.om-po-requests {
+  border: 1px solid var(--jc-border);
+  border-radius: var(--radius);
+  background: #fff;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+.om-category-section { margin-bottom: 26px; }
+.om-category-heading {
+  font-size: 16px; font-weight: 800; margin-bottom: 10px; color: var(--jc-text);
+}
+.om-widget-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+.om-widget {
+  background: #fff;
+  border: 1px solid var(--jc-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  cursor: pointer;
+  transition: box-shadow 0.15s, transform 0.1s;
+}
+.om-widget:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.08); transform: translateY(-1px); }
+.om-widget-header {
+  border-top: 4px solid var(--jc-teal);
+  padding: 12px 14px;
+  font-weight: 700;
+  font-size: 13.5px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #fafbfa;
+}
+.om-widget-count { font-weight: 800; color: var(--jc-teal-dark); font-size: 15px; }
+.om-widget-body { padding: 12px 14px; font-size: 12px; color: var(--jc-muted); }
+
+@media (max-width: 860px) {
+  .om-widget-row { grid-template-columns: 1fr; }
+}
+
+.om-monthly-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.om-month-card {
+  background: #fff;
+  border: 1px solid var(--jc-border);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+}
+.om-month-label { font-size: 12px; font-weight: 700; color: var(--jc-muted); text-transform: uppercase; margin-bottom: 6px; }
+.om-month-total { font-size: 20px; font-weight: 800; margin-bottom: 6px; }
+.om-month-split { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px; }
+.om-month-paid { color: #2C8A4D; font-weight: 600; }
+.om-month-pending { color: var(--jc-warn); font-weight: 600; }
+.om-month-count { font-size: 11px; color: var(--jc-muted-light); }
+
+.om-file-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 10px; border: 1px solid var(--jc-border); border-radius: var(--radius-sm);
+  margin-bottom: 6px; font-size: 13px;
+}
+.om-file-link { color: var(--jc-text); text-decoration: none; }
+.om-file-link:hover { text-decoration: underline; }
+.om-file-category {
+  display: inline-block; font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+  color: var(--jc-teal-dark); background: var(--jc-mint-light); border-radius: 999px;
+  padding: 2px 8px; margin-right: 8px;
+}
+.om-file-related {
+  display: inline-block; font-size: 11px; color: var(--jc-muted); margin-left: 8px; font-style: italic;
+}
+.om-file-remove {
+  background: none; border: none; color: var(--jc-muted); font-size: 18px; cursor: pointer; line-height: 1;
+}
+.om-file-remove:hover { color: var(--jc-fail); }
+.om-file-upload-row {
+  display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center;
+}
+.om-file-upload-row select {
+  padding: 8px 10px; border-radius: var(--radius-sm); border: 1.5px solid var(--jc-border); font-size: 13px;
+}
+.om-file-upload-row input[type="file"] { flex: 1 1 160px; font-size: 12.5px; }
+
 @media (max-width: 640px) {
+  .om-field-grid { grid-template-columns: 1fr; }
+  .om-repeat-row { grid-template-columns: 1fr 1fr; grid-template-areas: "sku size" "qty remove"; }
   .om-tile-grid { grid-template-columns: 1fr; }
 }
 
@@ -119,25 +211,27 @@
   z-index: 30;
 }
 
-/* Slide-over detail / new-order panel */
-.om-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 40;
-}
+/* Full-screen detail / new-order panel (matches QingFlow's full-screen
+   record view rather than a side drawer). */
 .om-panel {
-  position: fixed; top: 0; right: 0; bottom: 0;
-  width: min(560px, 100vw);
+  position: fixed; inset: 0;
   background: #fff;
   z-index: 41;
   overflow-y: auto;
-  padding: 20px;
-  box-shadow: -8px 0 24px rgba(0,0,0,0.12);
+}
+.om-panel-inner {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 24px 28px 60px 28px;
 }
 .om-panel-header {
   display: flex; justify-content: space-between; align-items: flex-start;
   margin-bottom: 14px;
+  position: sticky; top: 0; background: #fff; padding: 16px 0 14px 0; margin: 0 0 10px 0;
+  border-bottom: 1px solid var(--jc-border);
 }
 .om-panel-close {
-  background: none; border: none; font-size: 22px; cursor: pointer; color: var(--jc-muted);
+  background: none; border: none; font-size: 26px; cursor: pointer; color: var(--jc-muted);
   line-height: 1;
 }
 .om-section-title {
@@ -199,8 +293,3 @@
   background: #fafbfa;
 }
 .om-row-remove-block { margin-top: 10px; width: auto !important; padding: 6px 12px !important; font-size: 12.5px; }
-
-@media (max-width: 640px) {
-  .om-field-grid { grid-template-columns: 1fr; }
-  .om-repeat-row { grid-template-columns: 1fr 1fr; grid-template-areas: "sku size" "qty remove"; }
-}

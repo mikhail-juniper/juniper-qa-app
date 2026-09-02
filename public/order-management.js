@@ -4,6 +4,7 @@
  */
 
 let STATUSES = [];
+let FILE_CATEGORIES = [];
 let currentView = 'home'; // 'home' | 'orders' | 'suppliers' | 'settlement'
 let currentTab = 'toys'; // 'toys' | 'clothing' (only relevant when currentView === 'orders')
 let currentStatusFilter = '';
@@ -41,9 +42,19 @@ function fmtDate(d) {
   try { return new Date(d).toLocaleDateString(); } catch (e) { return d; }
 }
 
+let currentSupplierFilter = '';
+let currentAccessoryFilter = '';
+
+const CATEGORY_META = {
+  clothing: { label: 'Apparel', color: '#B9540E' },
+  toys: { label: 'Toys', color: 'var(--jc-teal)' },
+  other: { label: 'Other', color: '#1F6FA5' }
+};
+
 function refreshCurrentView() {
   if (currentView === 'orders') return loadOrders();
-  if (currentView === 'suppliers') return renderSuppliersShell(document.getElementById('omRoot'));
+  if (currentView === 'suppliers') return renderSuppliersShell(document.getElementById('omRoot'), currentSupplierFilter);
+  if (currentView === 'accessories') return renderAccessoriesShell(document.getElementById('omRoot'), currentAccessoryFilter);
   if (currentView === 'settlement') return renderSettlementShell(document.getElementById('omRoot'));
   return render();
 }
@@ -65,6 +76,11 @@ async function loadStatuses() {
   STATUSES = data.statuses || [];
 }
 
+async function loadFileCategories() {
+  const data = await api('/api/order-management/file-categories');
+  FILE_CATEGORIES = data.categories || [];
+}
+
 async function loadOrders() {
   const params = new URLSearchParams({ productLine: currentTab });
   if (currentStatusFilter) params.set('status', currentStatusFilter);
@@ -77,7 +93,8 @@ async function loadOrders() {
 function render() {
   const root = document.getElementById('omRoot');
   if (currentView === 'home') return renderHome(root);
-  if (currentView === 'suppliers') return renderSuppliersShell(root);
+  if (currentView === 'suppliers') return renderSuppliersShell(root, currentSupplierFilter);
+  if (currentView === 'accessories') return renderAccessoriesShell(root, currentAccessoryFilter);
   if (currentView === 'settlement') return renderSettlementShell(root);
   return renderOrdersShell(root);
 }
@@ -95,52 +112,118 @@ function bindBackToHub() {
 
 async function renderHome(root) {
   root.innerHTML = `<div class="om-empty">Loading...</div>`;
-  let counts = { toys: 0, clothing: 0, suppliers: 0, settlementPending: 0 };
+  let counts = { toys: 0, clothing: 0, other: 0, suppliers: 0, settlementPending: 0, newRequests: 0 };
+  let newRequests = [];
   try {
     counts = await api('/api/order-management/counts');
+    const req = await api('/api/order-management/orders?status=' + encodeURIComponent('New request'));
+    newRequests = req.orders || [];
   } catch (e) { showToast(e.message, true); }
 
+  const categorySection = (productLine) => {
+    const meta = CATEGORY_META[productLine];
+    return `
+      <div class="om-category-section">
+        <div class="om-category-heading">${meta.label}</div>
+        <div class="om-widget-row">
+          <div class="om-widget" data-view="orders" data-tab="${productLine}">
+            <div class="om-widget-header" style="border-color:${meta.color};">
+              <span>${meta.label} Purchase Orders</span>
+              <span class="om-widget-count">${counts[productLine] || 0}</span>
+            </div>
+            <div class="om-widget-body">Full PO records: costing, dates, status, sizing, and accessories</div>
+          </div>
+          <div class="om-widget" data-view="suppliers" data-tab="${productLine}">
+            <div class="om-widget-header" style="border-color:${meta.color};">
+              <span>${meta.label} Main Component Suppliers</span>
+            </div>
+            <div class="om-widget-body">Supplier directory for main components in this category</div>
+          </div>
+          <div class="om-widget" data-view="accessories" data-tab="${productLine}">
+            <div class="om-widget-header" style="border-color:${meta.color};">
+              <span>${meta.label} Accessory Suppliers</span>
+            </div>
+            <div class="om-widget-body">Parts and accessories across every ${meta.label.toLowerCase()} PO</div>
+          </div>
+        </div>
+      </div>
+    `;
+  };
+
   root.innerHTML = `
-    <div class="om-tile-grid">
-      <div class="om-tile om-tile-toys" data-view="orders" data-tab="toys">
-        <div class="om-tile-title">Toy Purchase Orders</div>
-        <div class="om-tile-count">${counts.toys}</div>
-        <div class="om-tile-desc">Active and completed toy POs, main components, and accessories</div>
+    <div class="om-po-requests">
+      <div class="om-widget-header" style="border-color:var(--jc-teal);">
+        <span>PO Requests</span>
+        <span class="om-widget-count">${counts.newRequests || 0}</span>
       </div>
-      <div class="om-tile om-tile-clothing" data-view="orders" data-tab="clothing">
-        <div class="om-tile-title">Clothing Purchase Orders</div>
-        <div class="om-tile-count">${counts.clothing}</div>
-        <div class="om-tile-desc">Active and completed clothing POs, sizing, and accessories</div>
-      </div>
-      <div class="om-tile om-tile-suppliers" data-view="suppliers">
-        <div class="om-tile-title">Suppliers</div>
-        <div class="om-tile-count">${counts.suppliers}</div>
-        <div class="om-tile-desc">Every supplier referenced across your Toy and Clothing orders</div>
-      </div>
-      <div class="om-tile om-tile-settlement" data-view="settlement">
-        <div class="om-tile-title">Settlement Statement</div>
-        <div class="om-tile-count">${counts.settlementPending}</div>
-        <div class="om-tile-desc">Orders with a pending settlement, across both product lines</div>
+      <div id="omPoRequestsHost">
+        ${newRequests.length ? `
+          <table class="om-table" style="min-width:0;">
+            <thead><tr><th>PO Number</th><th>Product line</th><th>Buyer</th><th>Supplier</th><th>Desired entry</th></tr></thead>
+            <tbody>
+              ${newRequests.map((o) => `
+                <tr data-id="${escapeHtml(o.id)}">
+                  <td><strong>${escapeHtml(o.poNumber)}</strong></td>
+                  <td>${escapeHtml(CATEGORY_META[o.productLine] ? CATEGORY_META[o.productLine].label : o.productLine)}</td>
+                  <td>${escapeHtml(o.buyer || '—')}</td>
+                  <td>${escapeHtml(o.supplier && o.supplier.name || '—')}</td>
+                  <td>${fmtDate(o.desiredEntryDate)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        ` : '<div class="om-empty">No new PO requests right now.</div>'}
       </div>
     </div>
+
+    ${categorySection('clothing')}
+    ${categorySection('toys')}
+    ${categorySection('other')}
+
+    <div class="om-category-section">
+      <div class="om-category-heading">General</div>
+      <div class="om-widget-row">
+        <div class="om-widget" data-view="suppliers">
+          <div class="om-widget-header" style="border-color:#1F6FA5;"><span>All Suppliers</span><span class="om-widget-count">${counts.suppliers}</span></div>
+          <div class="om-widget-body">Every supplier across all product lines</div>
+        </div>
+        <div class="om-widget" data-view="settlement">
+          <div class="om-widget-header" style="border-color:#B9770E;"><span>Settlement Statement</span><span class="om-widget-count">${counts.settlementPending}</span></div>
+          <div class="om-widget-body">Financials and payment status across every order</div>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn btn-primary om-fab" id="omNewBtnHome" style="width:auto;padding:12px 20px;border-radius:999px;">+ New Purchase Order Request</button>
   `;
-  root.querySelectorAll('.om-tile').forEach((tile) => {
+
+  root.querySelectorAll('.om-widget').forEach((tile) => {
     tile.addEventListener('click', () => {
-      currentView = tile.dataset.view;
-      if (tile.dataset.tab) currentTab = tile.dataset.tab;
+      const view = tile.dataset.view;
+      const tab = tile.dataset.tab;
+      currentView = view;
+      if (view === 'orders' && tab) currentTab = tab;
+      if (view === 'suppliers') currentSupplierFilter = tab || '';
+      if (view === 'accessories') currentAccessoryFilter = tab || '';
       render();
-      if (currentView === 'orders') loadOrders();
+      if (view === 'orders') loadOrders();
     });
   });
+  root.querySelectorAll('#omPoRequestsHost tbody tr').forEach((tr) => {
+    tr.addEventListener('click', () => openDetailPanel(tr.dataset.id));
+  });
+  document.getElementById('omNewBtnHome').addEventListener('click', openNewOrderPanel);
 }
 
 // ---- Suppliers view ----
 
-async function renderSuppliersShell(root) {
-  root.innerHTML = `${backToHubHtml()}<h2 class="om-view-title">Suppliers</h2><div id="omSuppliersHost" class="om-table-wrap"><div class="om-empty">Loading...</div></div>`;
+async function renderSuppliersShell(root, productLine) {
+  const title = productLine && CATEGORY_META[productLine] ? `${CATEGORY_META[productLine].label} Suppliers` : 'Suppliers';
+  root.innerHTML = `${backToHubHtml()}<h2 class="om-view-title">${escapeHtml(title)}</h2><div id="omSuppliersHost" class="om-table-wrap"><div class="om-empty">Loading...</div></div>`;
   bindBackToHub();
   try {
-    const data = await api('/api/order-management/suppliers');
+    const params = productLine ? `?productLine=${encodeURIComponent(productLine)}` : '';
+    const data = await api(`/api/order-management/suppliers${params}`);
     renderSuppliersTable(data.suppliers || []);
   } catch (e) { showToast(e.message, true); }
 }
@@ -161,7 +244,7 @@ function renderSuppliersTable(suppliers) {
             <td><strong>${escapeHtml(s.name)}</strong></td>
             <td>${escapeHtml(s.contact || '—')}</td>
             <td>${escapeHtml(s.code || '—')}</td>
-            <td>${s.productLines.map((p) => escapeHtml(p)).join(', ')}</td>
+            <td>${s.productLines.map((p) => escapeHtml(CATEGORY_META[p] ? CATEGORY_META[p].label : p)).join(', ')}</td>
             <td>${s.orderCount}</td>
           </tr>
         `).join('')}
@@ -170,18 +253,100 @@ function renderSuppliersTable(suppliers) {
   `;
 }
 
-// ---- Settlement view ----
+// ---- Accessory suppliers view (flattened across orders) ----
 
-async function renderSettlementShell(root) {
-  root.innerHTML = `${backToHubHtml()}<h2 class="om-view-title">Settlement Statement</h2><div id="omSettlementHost" class="om-table-wrap"><div class="om-empty">Loading...</div></div>`;
+async function renderAccessoriesShell(root, productLine) {
+  const title = productLine && CATEGORY_META[productLine] ? `${CATEGORY_META[productLine].label} Accessory Suppliers` : 'Accessory Suppliers';
+  root.innerHTML = `${backToHubHtml()}<h2 class="om-view-title">${escapeHtml(title)}</h2><div id="omAccessoriesHost" class="om-table-wrap"><div class="om-empty">Loading...</div></div>`;
   bindBackToHub();
   try {
-    const [toys, clothing] = await Promise.all([
-      api('/api/order-management/orders?productLine=toys'),
-      api('/api/order-management/orders?productLine=clothing')
-    ]);
-    renderSettlementTable([...(toys.orders || []), ...(clothing.orders || [])]);
+    const params = new URLSearchParams();
+    if (productLine) params.set('productLine', productLine);
+    const data = await api(`/api/order-management/orders?${params.toString()}`);
+    const rows = [];
+    (data.orders || []).forEach((o) => {
+      (o.accessories || []).forEach((a) => rows.push({ order: o, accessory: a }));
+    });
+    renderAccessoriesTable(rows);
   } catch (e) { showToast(e.message, true); }
+}
+
+function renderAccessoriesTable(rows) {
+  const host = document.getElementById('omAccessoriesHost');
+  if (!host) return;
+  if (!rows.length) {
+    host.innerHTML = `<div class="om-empty">No accessories/parts recorded yet.</div>`;
+    return;
+  }
+  host.innerHTML = `
+    <table class="om-table">
+      <thead><tr><th>Part name</th><th>PO Number</th><th>Supplier</th><th>Qty</th><th>Unit price</th><th>Total</th></tr></thead>
+      <tbody>
+        ${rows.map(({ order, accessory: a }) => `
+          <tr data-id="${escapeHtml(order.id)}">
+            <td><strong>${escapeHtml(a.partName || 'Unnamed part')}</strong></td>
+            <td>${escapeHtml(order.poNumber)}</td>
+            <td>${escapeHtml(a.supplierName || '—')}</td>
+            <td>${escapeHtml(a.quantity ?? '—')}</td>
+            <td>${fmtMoney(a.unitPrice)}</td>
+            <td>${fmtMoney(a.totalPrice)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+  host.querySelectorAll('tbody tr').forEach((tr) => {
+    tr.addEventListener('click', () => openDetailPanel(tr.dataset.id));
+  });
+}
+
+// ---- Settlement view ----
+
+function computeOrderTotal(order) {
+  const mc = order.mainComponent || {};
+  const mainTotal = Number(mc.totalPurchasePrice) ||
+    (Number(mc.factoryPrice) || 0) * (Number(mc.purchaseQuantity) || Number(mc.salesVolume) || 0);
+  const accessoriesTotal = (order.accessories || []).reduce((sum, a) => sum + (Number(a.totalPrice) || 0), 0);
+  const costs = order.costs || {};
+  const feesTotal = (Number(costs.assemblyFee) || 0) + (Number(costs.laborCosts) || 0) +
+    (Number(costs.transportationFees) || 0) + (Number(costs.otherExpenses) || 0);
+  return Math.round((mainTotal + accessoriesTotal + feesTotal) * 100) / 100;
+}
+
+async function renderSettlementShell(root) {
+  root.innerHTML = `${backToHubHtml()}<h2 class="om-view-title">Settlement Statement</h2><div id="omMonthlyHost"></div><div id="omSettlementHost" class="om-table-wrap"><div class="om-empty">Loading...</div></div>`;
+  bindBackToHub();
+  try {
+    const [monthly, toys, clothing, other] = await Promise.all([
+      api('/api/order-management/financials/monthly'),
+      api('/api/order-management/orders?productLine=toys'),
+      api('/api/order-management/orders?productLine=clothing'),
+      api('/api/order-management/orders?productLine=other')
+    ]);
+    renderMonthlyFinancials(monthly.months || []);
+    renderSettlementTable([...(toys.orders || []), ...(clothing.orders || []), ...(other.orders || [])]);
+  } catch (e) { showToast(e.message, true); }
+}
+
+function renderMonthlyFinancials(months) {
+  const host = document.getElementById('omMonthlyHost');
+  if (!host) return;
+  if (!months.length) { host.innerHTML = ''; return; }
+  host.innerHTML = `
+    <div class="om-monthly-grid">
+      ${months.map((m) => `
+        <div class="om-month-card">
+          <div class="om-month-label">${escapeHtml(m.month)}</div>
+          <div class="om-month-total">${fmtMoney(m.total)}</div>
+          <div class="om-month-split">
+            <span class="om-month-paid">Paid ${fmtMoney(m.paid)}</span>
+            <span class="om-month-pending">Pending ${fmtMoney(m.pending)}</span>
+          </div>
+          <div class="om-month-count">${m.orderCount} order${m.orderCount === 1 ? '' : 's'}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
 }
 
 function renderSettlementTable(orders) {
@@ -193,13 +358,14 @@ function renderSettlementTable(orders) {
   }
   host.innerHTML = `
     <table class="om-table">
-      <thead><tr><th>PO Number</th><th>Product line</th><th>Supplier</th><th>Settlement</th><th>Paid on</th><th>Action</th></tr></thead>
+      <thead><tr><th>PO Number</th><th>Product line</th><th>Supplier</th><th>Total owed</th><th>Settlement</th><th>Paid on</th><th>Action</th></tr></thead>
       <tbody>
         ${orders.map((o) => `
           <tr data-id="${escapeHtml(o.id)}">
             <td><strong>${escapeHtml(o.poNumber)}</strong></td>
-            <td>${o.productLine === 'clothing' ? 'Clothing' : 'Toys'}</td>
+            <td>${escapeHtml(CATEGORY_META[o.productLine] ? CATEGORY_META[o.productLine].label : o.productLine)}</td>
             <td>${escapeHtml(o.supplier && o.supplier.name || '—')}</td>
+            <td>${fmtMoney(computeOrderTotal(o))}</td>
             <td>${escapeHtml(o.settlement.status)}</td>
             <td>${o.settlement.paidDate ? fmtDate(o.settlement.paidDate) : '—'}</td>
             <td>
@@ -237,8 +403,9 @@ function renderOrdersShell(root) {
     ${backToHubHtml()}
     <div class="om-toolbar">
       <div class="om-tabs">
+        <button class="om-tab ${currentTab === 'clothing' ? 'active' : ''}" data-tab="clothing">Apparel</button>
         <button class="om-tab ${currentTab === 'toys' ? 'active' : ''}" data-tab="toys">Toys</button>
-        <button class="om-tab ${currentTab === 'clothing' ? 'active' : ''}" data-tab="clothing">Clothing</button>
+        <button class="om-tab ${currentTab === 'other' ? 'active' : ''}" data-tab="other">Other</button>
       </div>
       <input class="om-search" id="omSearch" type="text" placeholder="Search PO number, supplier, SKU..." value="${escapeHtml(currentSearch)}" />
       <select class="om-status-filter" id="omStatusFilter">
@@ -315,6 +482,15 @@ function renderTable() {
 
 function closePanel() {
   document.querySelectorAll('.om-overlay, .om-panel').forEach((el) => el.remove());
+  document.removeEventListener('keydown', handlePanelEscapeKey);
+}
+
+function handlePanelEscapeKey(e) {
+  if (e.key === 'Escape') closePanel();
+}
+
+function bindPanelEscape() {
+  document.addEventListener('keydown', handlePanelEscapeKey);
 }
 
 async function openDetailPanel(id) {
@@ -326,13 +502,10 @@ async function openDetailPanel(id) {
     return showToast(e.message, true);
   }
 
-  const overlay = document.createElement('div');
-  overlay.className = 'om-overlay';
-  overlay.addEventListener('click', closePanel);
-
   const panel = document.createElement('div');
   panel.className = 'om-panel';
   panel.innerHTML = `
+   <div class="om-panel-inner">
     <div class="om-panel-header">
       <div>
         <div style="font-size:19px;font-weight:700;">${escapeHtml(order.poNumber)}</div>
@@ -395,10 +568,14 @@ async function openDetailPanel(id) {
         <div class="om-accessory-row">
           <strong>${escapeHtml(a.partName || 'Unnamed part')}</strong><br/>
           Qty: ${escapeHtml(a.quantity ?? '—')} &middot; Unit price: ${fmtMoney(a.unitPrice)} &middot; Total: ${fmtMoney(a.totalPrice)}<br/>
+          ${a.specifications ? `Specifications: ${escapeHtml(a.specifications)}<br/>` : ''}
           ${a.dimensions ? `Dimensions: ${escapeHtml(a.dimensions)}<br/>` : ''}
           ${a.material ? `Material: ${escapeHtml(a.material)}<br/>` : ''}
+          ${a.expectedDeliveryDate ? `Expected delivery: ${fmtDate(a.expectedDeliveryDate)}<br/>` : ''}
           Supplier: ${escapeHtml(a.supplierName || '—')}${a.supplierContact ? ' · ' + escapeHtml(a.supplierContact) : ''}
           ${a.deliveryAddress ? `<br/>Delivery: ${escapeHtml(a.deliveryAddress)}` : ''}
+          ${a.waybillNumber ? `<br/>Waybill: ${escapeHtml(a.waybillNumber)}${a.shipmentQuantity ? ' (qty ' + escapeHtml(a.shipmentQuantity) + ')' : ''}` : ''}
+          ${a.refundOrderNumber ? `<br/>Refund order: ${escapeHtml(a.refundOrderNumber)}` : ''}
           ${a.remark ? `<br/><em>${escapeHtml(a.remark)}</em>` : ''}
         </div>
       `).join('') : '<div class="om-cl-meta">No accessories/parts recorded yet.</div>'}
@@ -412,11 +589,67 @@ async function openDetailPanel(id) {
       </div>
     </div>
 
+    <div class="om-section-title" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>Fulfillment &amp; tracking</span>
+      <button class="btn btn-secondary" id="omEditFulfillment" style="width:auto;padding:5px 12px;font-size:12px;">Edit</button>
+    </div>
+    <div id="omFulfillmentView">
+      <div class="om-detail-row"><span class="om-label">Packing list number</span><span class="om-value">${escapeHtml(order.fulfillment.packingListNumber || '—')}</span></div>
+      <div class="om-detail-row"><span class="om-label">Waybill number</span><span class="om-value">${escapeHtml(order.fulfillment.waybillNumber || '—')}</span></div>
+      <div class="om-detail-row"><span class="om-label">Warehouse entry date</span><span class="om-value">${fmtDate(order.fulfillment.warehouseEntryDate)}</span></div>
+      <div class="om-detail-row"><span class="om-label">Warehouse overdue?</span><span class="om-value">${escapeHtml(order.fulfillment.warehouseOverdue || '—')}</span></div>
+      <div class="om-detail-row"><span class="om-label">Quantity received</span><span class="om-value">${escapeHtml(order.fulfillment.quantityReceived ?? '—')}</span></div>
+      <div class="om-detail-row"><span class="om-label">All accessories received?</span><span class="om-value">${escapeHtml(order.fulfillment.allAccessoriesReceived || '—')}</span></div>
+      <div class="om-detail-row"><span class="om-label">Return tracking number</span><span class="om-value">${escapeHtml(order.fulfillment.returnTrackingNumber || '—')}</span></div>
+      ${order.fulfillment.exceptionHandlingResults ? `<div class="om-detail-row"><span class="om-label">Exception handling</span><span class="om-value">${escapeHtml(order.fulfillment.exceptionHandlingResults)}</span></div>` : ''}
+      ${order.fulfillment.replacementSizes && order.fulfillment.replacementSizes.length ? `
+        <div style="margin-top:10px;font-size:12px;font-weight:700;color:var(--jc-muted);">Replacement sizes</div>
+        <table class="om-table" style="min-width:0;">
+          <thead><tr><th>SKU</th><th>Size</th><th>Replacement qty</th></tr></thead>
+          <tbody>
+            ${order.fulfillment.replacementSizes.map((r) => `<tr><td>${escapeHtml(r.sku || '—')}</td><td>${escapeHtml(r.size || '—')}</td><td>${escapeHtml(r.quantity ?? '—')}</td></tr>`).join('')}
+          </tbody>
+        </table>
+      ` : ''}
+    </div>
+    <div id="omFulfillmentEdit" style="display:none;">
+      <div class="om-field-grid">
+        <div><label>Packing list number</label><input id="fFulfillPacking" type="text" value="${escapeHtml(order.fulfillment.packingListNumber || '')}" /></div>
+        <div><label>Waybill number</label><input id="fFulfillWaybill" type="text" value="${escapeHtml(order.fulfillment.waybillNumber || '')}" /></div>
+        <div><label>Warehouse entry date</label><input id="fFulfillEntryDate" type="date" value="${escapeHtml(order.fulfillment.warehouseEntryDate || '')}" /></div>
+        <div><label>Warehouse overdue?</label>
+          <select id="fFulfillOverdue">
+            <option value="" ${!order.fulfillment.warehouseOverdue ? 'selected' : ''}>—</option>
+            <option value="On time" ${order.fulfillment.warehouseOverdue === 'On time' ? 'selected' : ''}>On time</option>
+            <option value="Overdue" ${order.fulfillment.warehouseOverdue === 'Overdue' ? 'selected' : ''}>Overdue</option>
+          </select>
+        </div>
+        <div><label>Quantity received</label><input id="fFulfillQtyReceived" type="number" value="${escapeHtml(order.fulfillment.quantityReceived ?? '')}" /></div>
+        <div><label>All accessories received?</label>
+          <select id="fFulfillAllReceived">
+            <option value="" ${!order.fulfillment.allAccessoriesReceived ? 'selected' : ''}>—</option>
+            <option value="Yes, complete" ${order.fulfillment.allAccessoriesReceived === 'Yes, complete' ? 'selected' : ''}>Yes, complete</option>
+            <option value="Incomplete parts, cannot be shipped" ${order.fulfillment.allAccessoriesReceived === 'Incomplete parts, cannot be shipped' ? 'selected' : ''}>Incomplete parts, cannot be shipped</option>
+          </select>
+        </div>
+        <div><label>Return tracking number</label><input id="fFulfillReturnTracking" type="text" value="${escapeHtml(order.fulfillment.returnTrackingNumber || '')}" /></div>
+        <div style="grid-column:1/-1;"><label>Exception handling results</label><input id="fFulfillException" type="text" value="${escapeHtml(order.fulfillment.exceptionHandlingResults || '')}" /></div>
+      </div>
+      <div style="margin-top:14px;font-size:12px;font-weight:700;color:var(--jc-muted);text-transform:uppercase;">Replacement sizes</div>
+      <div id="omReplacementRows"></div>
+      <button type="button" class="btn btn-secondary" id="omAddReplacementRow" style="width:auto;padding:8px 14px;margin-top:6px;">+ Add replacement size row</button>
+      <div style="display:flex;gap:10px;margin-top:14px;">
+        <button class="btn btn-secondary" id="omCancelFulfillmentEdit" style="width:auto;padding:8px 14px;">Cancel</button>
+        <button class="btn btn-primary" id="omSaveFulfillmentEdit" style="width:auto;padding:8px 14px;">Save fulfillment</button>
+      </div>
+    </div>
+
     <div class="om-section-title">Costs</div>
     <div class="om-detail-row"><span class="om-label">Assembly fee</span><span class="om-value">${fmtMoney(order.costs.assemblyFee)}</span></div>
     <div class="om-detail-row"><span class="om-label">Labor costs</span><span class="om-value">${fmtMoney(order.costs.laborCosts)}</span></div>
     <div class="om-detail-row"><span class="om-label">Transportation fees</span><span class="om-value">${fmtMoney(order.costs.transportationFees)}</span></div>
     <div class="om-detail-row"><span class="om-label">Other expenses</span><span class="om-value">${fmtMoney(order.costs.otherExpenses)}</span></div>
+    <div class="om-detail-row"><span class="om-label"><strong>Total owed</strong></span><span class="om-value">${fmtMoney(computeOrderTotal(order))}</span></div>
 
     <div class="om-section-title">Settlement</div>
     <div class="om-detail-row"><span class="om-label">Status</span><span class="om-value">${escapeHtml(order.settlement.status)}</span></div>
@@ -424,6 +657,28 @@ async function openDetailPanel(id) {
     <div class="om-settlement-toggle">
       <button class="btn btn-secondary" id="omMarkPending" style="width:auto;padding:8px 14px;">Mark Pending</button>
       <button class="btn btn-primary" id="omMarkPaid" style="width:auto;padding:8px 14px;">Mark Paid</button>
+    </div>
+
+    <div class="om-section-title">Files</div>
+    <div id="omFilesList">
+      ${order.files && order.files.length ? order.files.map((f) => `
+        <div class="om-file-row" data-file-id="${escapeHtml(f.id)}">
+          <a href="${escapeHtml(f.url)}" target="_blank" rel="noopener" class="om-file-link">
+            <span class="om-file-category">${escapeHtml(f.category)}</span>
+            ${escapeHtml(f.originalName)}
+            ${f.relatedTo ? `<span class="om-file-related">for: ${escapeHtml(f.relatedTo)}</span>` : ''}
+          </a>
+          <button class="om-file-remove" data-remove-file="${escapeHtml(f.id)}" title="Remove">&times;</button>
+        </div>
+      `).join('') : '<div class="om-cl-meta">No files uploaded yet.</div>'}
+    </div>
+    <div class="om-file-upload-row">
+      <select id="omFileCategory">
+        ${FILE_CATEGORIES.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')}
+      </select>
+      <input type="text" id="omFileRelatedTo" placeholder="Related part/accessory (optional)" style="flex:1 1 160px;padding:8px 10px;border-radius:var(--radius-sm);border:1.5px solid var(--jc-border);font-size:12.5px;" />
+      <input type="file" id="omFileInput" />
+      <button class="btn btn-secondary" id="omFileUploadBtn" style="width:auto;padding:8px 14px;">Upload</button>
     </div>
 
     <div class="om-section-title">Change log</div>
@@ -435,10 +690,11 @@ async function openDetailPanel(id) {
         </li>
       `).join('') || '<li class="om-cl-meta">No changes logged yet.</li>'}
     </ul>
+   </div>
   `;
 
-  document.body.appendChild(overlay);
   document.body.appendChild(panel);
+  bindPanelEscape();
 
   document.getElementById('omClosePanel').addEventListener('click', closePanel);
   panel.querySelectorAll('.om-status-step').forEach((btn) => {
@@ -456,6 +712,46 @@ async function openDetailPanel(id) {
   });
   document.getElementById('omMarkPaid').addEventListener('click', () => setSettlement(order.id, 'Paid'));
   document.getElementById('omMarkPending').addEventListener('click', () => setSettlement(order.id, 'Pending'));
+
+  // ---- Files ----
+  panel.querySelectorAll('[data-remove-file]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      try {
+        await api(`/api/order-management/orders/${encodeURIComponent(order.id)}/files/${encodeURIComponent(btn.dataset.removeFile)}`, {
+          method: 'DELETE'
+        });
+        showToast('File removed');
+        closePanel();
+        openDetailPanel(order.id);
+        refreshCurrentView();
+      } catch (e) { showToast(e.message, true); }
+    });
+  });
+  document.getElementById('omFileUploadBtn').addEventListener('click', async () => {
+    const input = document.getElementById('omFileInput');
+    const file = input.files[0];
+    if (!file) return showToast('Choose a file first', true);
+    const category = document.getElementById('omFileCategory').value;
+    const relatedTo = document.getElementById('omFileRelatedTo').value;
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('category', category);
+    formData.append('relatedTo', relatedTo);
+    try {
+      const res = await fetch(`/api/order-management/orders/${encodeURIComponent(order.id)}/files`, {
+        method: 'POST',
+        body: formData
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || 'Upload failed');
+      }
+      showToast('File uploaded');
+      closePanel();
+      openDetailPanel(order.id);
+      refreshCurrentView();
+    } catch (e) { showToast(e.message, true); }
+  });
 
   // ---- Editable accessories/parts ----
   let editAccessoryRowCount = 0;
@@ -497,6 +793,59 @@ async function openDetailPanel(id) {
       refreshCurrentView();
     } catch (e) { showToast(e.message, true); }
   });
+
+  // ---- Fulfillment & tracking ----
+  let replacementRowCount = 0;
+  const replacementRowsHost = panel.querySelector('#omReplacementRows');
+
+  function addReplacementRow(data) {
+    replacementRowsHost.insertAdjacentHTML('beforeend', replacementRowHtml(replacementRowCount, data));
+    const idx = replacementRowCount;
+    panel.querySelector(`[data-remove-replacement="${idx}"]`).addEventListener('click', () => {
+      panel.querySelector(`[data-replacement-row="${idx}"]`).remove();
+    });
+    replacementRowCount++;
+  }
+
+  panel.querySelector('#omEditFulfillment').addEventListener('click', () => {
+    replacementRowsHost.innerHTML = '';
+    replacementRowCount = 0;
+    (order.fulfillment.replacementSizes && order.fulfillment.replacementSizes.length
+      ? order.fulfillment.replacementSizes : []
+    ).forEach(addReplacementRow);
+    panel.querySelector('#omFulfillmentView').style.display = 'none';
+    panel.querySelector('#omFulfillmentEdit').style.display = 'block';
+    panel.querySelector('#omEditFulfillment').style.display = 'none';
+  });
+  panel.querySelector('#omAddReplacementRow').addEventListener('click', () => addReplacementRow());
+  panel.querySelector('#omCancelFulfillmentEdit').addEventListener('click', () => {
+    panel.querySelector('#omFulfillmentView').style.display = 'block';
+    panel.querySelector('#omFulfillmentEdit').style.display = 'none';
+    panel.querySelector('#omEditFulfillment').style.display = 'inline-block';
+  });
+  panel.querySelector('#omSaveFulfillmentEdit').addEventListener('click', async () => {
+    const fulfillment = {
+      packingListNumber: document.getElementById('fFulfillPacking').value,
+      waybillNumber: document.getElementById('fFulfillWaybill').value,
+      warehouseEntryDate: document.getElementById('fFulfillEntryDate').value || null,
+      warehouseOverdue: document.getElementById('fFulfillOverdue').value,
+      quantityReceived: document.getElementById('fFulfillQtyReceived').value || null,
+      allAccessoriesReceived: document.getElementById('fFulfillAllReceived').value,
+      returnTrackingNumber: document.getElementById('fFulfillReturnTracking').value,
+      exceptionHandlingResults: document.getElementById('fFulfillException').value,
+      replacementSizes: collectReplacementRows(replacementRowsHost)
+    };
+    try {
+      await api(`/api/order-management/orders/${encodeURIComponent(order.id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ patch: { fulfillment }, actor: 'Web user' })
+      });
+      showToast('Fulfillment updated');
+      closePanel();
+      openDetailPanel(order.id);
+      refreshCurrentView();
+    } catch (e) { showToast(e.message, true); }
+  });
 }
 
 async function setSettlement(id, status) {
@@ -527,19 +876,44 @@ function sizeRowHtml(idx) {
   `;
 }
 
+function replacementRowHtml(idx, data) {
+  data = data || {};
+  return `
+    <div class="om-repeat-row" data-replacement-row="${idx}">
+      <input type="text" placeholder="SKU name" class="om-repl-sku" value="${escapeHtml(data.sku || '')}" />
+      <input type="text" placeholder="Size (e.g. Adult M)" class="om-repl-size" value="${escapeHtml(data.size || '')}" />
+      <input type="number" placeholder="Replacement qty" class="om-repl-qty" value="${escapeHtml(data.quantity ?? '')}" />
+      <button type="button" class="om-row-remove" data-remove-replacement="${idx}">&times;</button>
+    </div>
+  `;
+}
+
+function collectReplacementRows(container) {
+  return Array.from(container.querySelectorAll('[data-replacement-row]')).map((row) => ({
+    sku: row.querySelector('.om-repl-sku').value,
+    size: row.querySelector('.om-repl-size').value,
+    quantity: row.querySelector('.om-repl-qty').value || null
+  })).filter((r) => r.sku || r.size || r.quantity);
+}
+
 function accessoryRowHtml(idx, data) {
   data = data || {};
   return `
     <div class="om-accessory-form-row" data-accessory-row="${idx}">
       <div class="om-field-grid">
         <div><label>Part name</label><input type="text" class="om-acc-name" value="${escapeHtml(data.partName || '')}" /></div>
+        <div><label>Specifications</label><input type="text" class="om-acc-specs" value="${escapeHtml(data.specifications || '')}" /></div>
         <div><label>Dimensions</label><input type="text" class="om-acc-dims" value="${escapeHtml(data.dimensions || '')}" /></div>
         <div><label>Material</label><input type="text" class="om-acc-material" value="${escapeHtml(data.material || '')}" /></div>
         <div><label>Quantity</label><input type="number" class="om-acc-qty" value="${escapeHtml(data.quantity ?? '')}" /></div>
         <div><label>Unit price</label><input type="number" step="0.01" class="om-acc-unit-price" value="${escapeHtml(data.unitPrice ?? '')}" /></div>
         <div><label>Total price</label><input type="number" step="0.01" class="om-acc-total-price" value="${escapeHtml(data.totalPrice ?? '')}" /></div>
+        <div><label>Expected delivery date</label><input type="date" class="om-acc-expected-delivery" value="${escapeHtml(data.expectedDeliveryDate || '')}" /></div>
         <div><label>Accessory supplier</label><input type="text" class="om-acc-supplier" value="${escapeHtml(data.supplierName || '')}" /></div>
         <div><label>Supplier contact</label><input type="text" class="om-acc-supplier-contact" value="${escapeHtml(data.supplierContact || '')}" /></div>
+        <div><label>Waybill number</label><input type="text" class="om-acc-waybill" value="${escapeHtml(data.waybillNumber || '')}" /></div>
+        <div><label>Shipment quantity</label><input type="number" class="om-acc-shipment-qty" value="${escapeHtml(data.shipmentQuantity ?? '')}" /></div>
+        <div><label>Refund order number</label><input type="text" class="om-acc-refund" value="${escapeHtml(data.refundOrderNumber || '')}" /></div>
         <div style="grid-column:1/-1;"><label>Delivery address</label><input type="text" class="om-acc-address" value="${escapeHtml(data.deliveryAddress || '')}" /></div>
         <div style="grid-column:1/-1;"><label>Remark</label><input type="text" class="om-acc-remark" value="${escapeHtml(data.remark || '')}" /></div>
       </div>
@@ -552,13 +926,10 @@ function openNewOrderPanel() {
   sizeRowCount = 0;
   accessoryRowCount = 0;
 
-  const overlay = document.createElement('div');
-  overlay.className = 'om-overlay';
-  overlay.addEventListener('click', closePanel);
-
   const panel = document.createElement('div');
   panel.className = 'om-panel';
   panel.innerHTML = `
+   <div class="om-panel-inner">
     <div class="om-panel-header">
       <div style="font-size:19px;font-weight:700;">New Purchase Order Request</div>
       <button class="om-panel-close" id="omClosePanel">&times;</button>
@@ -568,8 +939,9 @@ function openNewOrderPanel() {
     <div class="om-field-grid">
       <div><label>Product line</label>
         <select id="fProductLine">
+          <option value="clothing" ${currentTab === 'clothing' ? 'selected' : ''}>Apparel</option>
           <option value="toys" ${currentTab === 'toys' ? 'selected' : ''}>Toys</option>
-          <option value="clothing" ${currentTab === 'clothing' ? 'selected' : ''}>Clothing</option>
+          <option value="other" ${currentTab === 'other' ? 'selected' : ''}>Other</option>
         </select>
       </div>
       <div><label>PO number *</label><input id="fPoNumber" type="text" placeholder="e.g. JCRP01TSH1-PO1" /></div>
@@ -626,9 +998,10 @@ function openNewOrderPanel() {
       <button class="btn btn-secondary" id="omCancelNew" style="width:auto;padding:10px 18px;">Cancel</button>
       <button class="btn btn-primary" id="omSubmitNew" style="width:auto;padding:10px 18px;">Create request</button>
     </div>
+   </div>
   `;
-  document.body.appendChild(overlay);
   document.body.appendChild(panel);
+  bindPanelEscape();
 
   document.getElementById('omClosePanel').addEventListener('click', closePanel);
   document.getElementById('omCancelNew').addEventListener('click', closePanel);
@@ -676,14 +1049,19 @@ function collectAccessoryRows(container) {
   const scope = container || document;
   return Array.from(scope.querySelectorAll('[data-accessory-row]')).map((row) => ({
     partName: row.querySelector('.om-acc-name').value,
+    specifications: row.querySelector('.om-acc-specs').value,
     dimensions: row.querySelector('.om-acc-dims').value,
     material: row.querySelector('.om-acc-material').value,
     quantity: row.querySelector('.om-acc-qty').value || null,
     unitPrice: row.querySelector('.om-acc-unit-price').value || null,
     totalPrice: row.querySelector('.om-acc-total-price').value || null,
+    expectedDeliveryDate: row.querySelector('.om-acc-expected-delivery').value || null,
     supplierName: row.querySelector('.om-acc-supplier').value,
     supplierContact: row.querySelector('.om-acc-supplier-contact').value,
     deliveryAddress: row.querySelector('.om-acc-address').value,
+    waybillNumber: row.querySelector('.om-acc-waybill').value,
+    shipmentQuantity: row.querySelector('.om-acc-shipment-qty').value || null,
+    refundOrderNumber: row.querySelector('.om-acc-refund').value,
     remark: row.querySelector('.om-acc-remark').value
   })).filter((a) => a.partName || a.supplierName);
 }
@@ -732,6 +1110,7 @@ async function submitNewOrder() {
     showToast('Purchase order request created');
     closePanel();
     currentTab = payload.productLine;
+    currentView = 'orders';
     render();
     loadOrders();
   } catch (e) { showToast(e.message, true); }
@@ -739,7 +1118,7 @@ async function submitNewOrder() {
 
 (async function init() {
   try {
-    await loadStatuses();
+    await Promise.all([loadStatuses(), loadFileCategories()]);
     render();
   } catch (e) {
     showToast(e.message, true);

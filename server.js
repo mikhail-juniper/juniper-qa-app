@@ -106,6 +106,24 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/submissions', express.static(submissionLog.PDF_ARCHIVE_DIR));
 app.use('/issue-photos', express.static(submissionLog.PHOTO_ARCHIVE_DIR));
 app.use('/approval-photos', express.static(approvalStore.APPROVAL_PHOTO_DIR));
+app.use('/order-management-files', express.static(orderManagementStore.ORDER_FILES_DIR));
+
+// Order Management file uploads (style pictures, design docs, packing lists)
+// write straight to disk under DATA_DIR/order-management-files/<orderId>/,
+// unlike the QA/QC photo uploads above which buffer in memory first - these
+// can include larger design files, so streaming to disk avoids holding them
+// all in memory at once.
+const uploadOrderFile = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const dir = path.join(orderManagementStore.ORDER_FILES_DIR, req.params.id);
+      fs.mkdirSync(dir, { recursive: true });
+      cb(null, dir);
+    },
+    filename: (req, file, cb) => cb(null, `${uuidv4()}-${file.originalname}`)
+  }),
+  limits: { fileSize: 25 * 1024 * 1024 } // 25MB per file
+});
 
 // Serve the fit library + translations + dropdown options + category tree + AQL
 // reference table + creator tiers + recommendation table + unit costs to the frontend
@@ -764,11 +782,52 @@ app.post('/api/order-management/orders/:id/settlement', (req, res) => {
 });
 
 app.get('/api/order-management/suppliers', (req, res) => {
-  res.json({ suppliers: orderManagementStore.listSuppliers() });
+  res.json({ suppliers: orderManagementStore.listSuppliers(req.query.productLine) });
 });
 
 app.get('/api/order-management/counts', (req, res) => {
   res.json(orderManagementStore.getCounts());
+});
+
+app.get('/api/order-management/financials/monthly', (req, res) => {
+  res.json({ months: orderManagementStore.getMonthlyFinancials() });
+});
+
+app.get('/api/order-management/file-categories', (req, res) => {
+  res.json({ categories: orderManagementStore.FILE_CATEGORIES });
+});
+
+app.post('/api/order-management/orders/:id/files', uploadOrderFile.single('file'), (req, res) => {
+  try {
+    if (!orderManagementStore.getOrderById(req.params.id)) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const category = orderManagementStore.FILE_CATEGORIES.includes(req.body.category)
+      ? req.body.category : 'Other';
+    const file = {
+      id: uuidv4(),
+      category,
+      originalName: req.file.originalname,
+      storedName: req.file.filename,
+      size: req.file.size,
+      relatedTo: (req.body.relatedTo || '').trim() || null,
+      url: `/order-management-files/${encodeURIComponent(req.params.id)}/${encodeURIComponent(req.file.filename)}`,
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: req.body.actor || req.get('X-Actor') || 'Unknown'
+    };
+    const updated = orderManagementStore.addFile(req.params.id, file, file.uploadedBy);
+    res.json({ ok: true, order: updated, file });
+  } catch (err) {
+    console.error('Failed to upload order file:', err);
+    res.status(500).json({ error: 'Failed to upload file', detail: String(err.message || err) });
+  }
+});
+
+app.delete('/api/order-management/orders/:id/files/:fileId', (req, res) => {
+  const updated = orderManagementStore.removeFile(req.params.id, req.params.fileId, req.get('X-Actor'));
+  if (!updated) return res.status(404).json({ error: 'Order not found' });
+  res.json({ ok: true, order: updated });
 });
 
 // ---- QA/QC Approval workflow ----
