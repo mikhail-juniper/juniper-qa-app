@@ -2,7 +2,14 @@
    shared design tokens/classes in styles.css (.card, .btn, .btn-primary,
    .btn-secondary, --jc-* color variables). */
 
-.om-root { max-width: 1180px; margin: 0 auto; padding: 24px 20px 80px 20px; }
+.om-root { max-width: 1600px; margin: 0 auto; padding: 24px 28px 80px 28px; }
+
+.app-header { display: flex; align-items: center; justify-content: space-between; }
+.om-menu-toggle {
+  background: none; border: none; cursor: pointer; padding: 8px;
+  display: flex; flex-direction: column; gap: 5px; justify-content: center; align-items: flex-end;
+}
+.om-menu-toggle span { display: block; width: 26px; height: 3px; background: #fff; border-radius: 2px; }
 
 .om-back-link {
   background: none; border: none; color: var(--jc-teal-dark); font-weight: 600; font-size: 13.5px;
@@ -31,9 +38,77 @@
 .om-tile-title { font-weight: 700; font-size: 15px; margin-bottom: 6px; }
 .om-tile-count { font-size: 30px; font-weight: 800; color: var(--jc-teal-dark); line-height: 1; margin-bottom: 8px; }
 .om-tile-desc { font-size: 12.5px; color: var(--jc-muted); }
-.om-tile-clothing { border-left-color: #B9540E; }
-.om-tile-suppliers { border-left-color: #1F6FA5; }
-.om-tile-settlement { border-left-color: #B9770E; }
+/* Right-side slide-out nav menu */
+.om-nav-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 50;
+}
+.om-nav-drawer {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: min(320px, 85vw);
+  background: #fff;
+  z-index: 51;
+  overflow-y: auto;
+  padding: 20px;
+  box-shadow: -8px 0 24px rgba(0,0,0,0.15);
+}
+.om-nav-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+.om-nav-header strong { font-size: 16px; }
+.om-nav-close { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--jc-muted); }
+.om-nav-item {
+  display: block; width: 100%; text-align: left; background: none; border: none;
+  padding: 11px 10px; font-size: 14.5px; color: var(--jc-text); cursor: pointer; border-radius: var(--radius-sm);
+  text-decoration: none;
+}
+.om-nav-item:hover { background: var(--jc-mint-light); }
+.om-nav-item.primary { background: var(--jc-teal); color: #fff; font-weight: 700; margin-bottom: 14px; }
+.om-nav-item.primary:hover { background: var(--jc-teal-dark); }
+.om-nav-group-label {
+  font-size: 11.5px; font-weight: 800; text-transform: uppercase; color: var(--jc-muted);
+  margin: 16px 0 4px 10px; letter-spacing: 0.03em;
+}
+.om-nav-subitem { padding-left: 26px; }
+
+/* Single-tile-per-category with internal sub-tab counts, matching the
+   "Apparel Order Management" mockup rather than three separate boxes. */
+.om-category-tile {
+  background: #fff;
+  border: 1px solid var(--jc-border);
+  border-radius: var(--radius);
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+.om-category-tile-header {
+  border-top: 5px solid var(--jc-teal);
+  padding: 14px 18px;
+  font-weight: 800;
+  font-size: 16px;
+  background: #fafbfa;
+}
+.om-category-tile-subtabs { display: flex; }
+.om-subtab-btn {
+  flex: 1;
+  padding: 14px 18px;
+  cursor: pointer;
+  font-size: 13.5px;
+  font-weight: 600;
+  border-right: 1px solid var(--jc-border);
+  transition: background 0.15s;
+}
+.om-subtab-btn:last-child { border-right: none; }
+.om-subtab-btn:hover { background: var(--jc-mint-light); }
+.om-subtab-count { color: var(--jc-teal-dark); font-weight: 800; margin-left: 4px; }
+
+.om-subtabs-bar { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid var(--jc-border); }
+.om-subtab {
+  padding: 10px 16px; background: none; border: none; border-bottom: 3px solid transparent;
+  font-size: 14px; font-weight: 600; cursor: pointer; color: var(--jc-muted);
+}
+.om-subtab.active { color: var(--jc-teal-dark); border-bottom-color: var(--jc-teal); }
+
+@media (max-width: 640px) {
+  .om-category-tile-subtabs { flex-direction: column; }
+  .om-subtab-btn { border-right: none; border-bottom: 1px solid var(--jc-border); }
+}
 
 /* PO Requests (full-width) + category sections + widget cards, mirroring
    QingFlow's Employee Portal dashboard layout. */
