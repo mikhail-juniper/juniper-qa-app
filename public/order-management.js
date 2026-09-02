@@ -94,6 +94,8 @@ function render() {
   const root = document.getElementById('omRoot');
   if (currentView === 'home') return renderHome(root);
   if (currentView === 'suppliers') return renderSuppliersShell(root);
+  if (currentView === 'products') return renderProductsShell(root);
+  if (currentView === 'components') return renderComponentsShell(root);
   if (currentView === 'settlement') return renderSettlementShell(root);
   return renderCategoryShell(root);
 }
@@ -148,12 +150,12 @@ async function renderHome(root) {
   };
 
   root.innerHTML = `
-    <div class="om-po-requests">
-      <div class="om-widget-header" style="border-color:var(--jc-teal);">
+    <div class="om-category-tile" style="margin-bottom:24px;">
+      <div class="om-category-tile-header" style="border-color:var(--jc-teal);">
         <span>PO Requests</span>
-        <span class="om-widget-count">${counts.newRequests || 0}</span>
+        <span class="om-subtab-count" style="font-size:15px;">${counts.newRequests || 0}</span>
       </div>
-      <div id="omPoRequestsHost">
+      <div style="padding:14px 18px;" id="omPoRequestsHost">
         ${newRequests.length ? `
           <table class="om-table" style="min-width:0;">
             <thead><tr><th>PO Number</th><th>Product line</th><th>Buyer</th><th>Supplier</th><th>Desired entry</th></tr></thead>
@@ -307,6 +309,106 @@ function renderSuppliersTable(suppliers) {
         `).join('')}
       </tbody>
     </table>
+  `;
+}
+
+// ---- Products / Components catalog views ("Product Information") ----
+// Both are derived live from existing order data (like Suppliers already
+// is), so anything entered on a new PO shows up here automatically -
+// there's nothing separate to keep in sync.
+
+async function renderProductsShell(root) {
+  root.innerHTML = `${backToHubHtml()}<h2 class="om-view-title">Products</h2><div id="omProductsHost"></div>`;
+  bindBackToHub();
+  const host = document.getElementById('omProductsHost');
+  host.innerHTML = `<div class="om-empty">Loading...</div>`;
+  try {
+    const [clothing, toys, other] = await Promise.all([
+      api('/api/order-management/products?productLine=clothing'),
+      api('/api/order-management/products?productLine=toys'),
+      api('/api/order-management/products?productLine=other')
+    ]);
+    host.innerHTML = [
+      productsCategoryBlock('clothing', clothing.products || []),
+      productsCategoryBlock('toys', toys.products || []),
+      productsCategoryBlock('other', other.products || [])
+    ].join('');
+    host.querySelectorAll('tbody tr[data-po]').forEach((tr) => {
+      tr.addEventListener('click', () => openDetailPanel(tr.dataset.po));
+    });
+  } catch (e) { showToast(e.message, true); }
+}
+
+function productsCategoryBlock(productLine, products) {
+  const meta = CATEGORY_META[productLine];
+  return `
+    <div class="om-category-tile" style="margin-bottom:20px;">
+      <div class="om-category-tile-header" style="border-color:${meta.color};"><span>${meta.label} Products (${products.length})</span></div>
+      ${products.length ? `
+        <table class="om-table">
+          <thead><tr><th>Name</th><th>SKU</th><th>Model #</th><th>Factory price</th><th>Sales unit price</th><th># POs</th></tr></thead>
+          <tbody>
+            ${products.map((p) => `
+              <tr data-po="${escapeHtml(p.examplePoId)}">
+                <td><strong>${escapeHtml(p.name)}</strong></td>
+                <td>${escapeHtml(p.sku || '—')}</td>
+                <td>${escapeHtml(p.modelNumber || '—')}</td>
+                <td>${fmtMoney(p.factoryPrice)}</td>
+                <td>${fmtMoney(p.salesUnitPrice)}</td>
+                <td>${p.poCount}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      ` : `<div class="om-empty">No ${meta.label.toLowerCase()} products recorded yet.</div>`}
+    </div>
+  `;
+}
+
+async function renderComponentsShell(root) {
+  root.innerHTML = `${backToHubHtml()}<h2 class="om-view-title">Components</h2><div id="omComponentsHost"></div>`;
+  bindBackToHub();
+  const host = document.getElementById('omComponentsHost');
+  host.innerHTML = `<div class="om-empty">Loading...</div>`;
+  try {
+    const [clothing, toys, other] = await Promise.all([
+      api('/api/order-management/components?productLine=clothing'),
+      api('/api/order-management/components?productLine=toys'),
+      api('/api/order-management/components?productLine=other')
+    ]);
+    host.innerHTML = [
+      componentsCategoryBlock('clothing', clothing.components || []),
+      componentsCategoryBlock('toys', toys.components || []),
+      componentsCategoryBlock('other', other.components || [])
+    ].join('');
+    host.querySelectorAll('tbody tr[data-po]').forEach((tr) => {
+      tr.addEventListener('click', () => openDetailPanel(tr.dataset.po));
+    });
+  } catch (e) { showToast(e.message, true); }
+}
+
+function componentsCategoryBlock(productLine, components) {
+  const meta = CATEGORY_META[productLine];
+  return `
+    <div class="om-category-tile" style="margin-bottom:20px;">
+      <div class="om-category-tile-header" style="border-color:${meta.color};"><span>${meta.label} Components (${components.length})</span></div>
+      ${components.length ? `
+        <table class="om-table">
+          <thead><tr><th>Part name</th><th>Material</th><th>Supplier</th><th>Unit price</th><th># uses</th></tr></thead>
+          <tbody>
+            ${components.map((c) => `
+              <tr data-po="${escapeHtml(c.examplePoId)}">
+                <td><strong>${escapeHtml(c.partName)}</strong></td>
+                <td>${escapeHtml(c.material || '—')}</td>
+                <td>${escapeHtml(c.supplierName || '—')}</td>
+                <td>${fmtMoney(c.unitPrice)}</td>
+                <td>${c.useCount}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      ` : `<div class="om-empty">No ${meta.label.toLowerCase()} components recorded yet.</div>`}
+    </div>
   `;
 }
 
@@ -675,159 +777,117 @@ async function openDetailPanel(id) {
         <div style="color:var(--jc-muted);font-size:13px;">${escapeHtml(order.mainComponent && order.mainComponent.name || '')}</div>
       </div>
       <div style="display:flex;gap:10px;align-items:center;">
-        <button class="btn btn-secondary" id="omEditOrder" style="width:auto;padding:7px 14px;font-size:13px;">Edit order</button>
         <button class="om-panel-close" id="omClosePanel">&times;</button>
       </div>
     </div>
 
+    <div style="position:sticky;top:56px;z-index:5;background:#fff;padding:8px 0;margin-bottom:4px;display:flex;justify-content:flex-end;">
+      <button class="btn btn-primary" id="omSaveOrder" style="width:auto;padding:9px 20px;">Save changes</button>
+    </div>
+
     <div class="om-section-title">Status</div>
-    <div class="om-status-stepper" id="omStatusStepper">
-      ${STATUSES.map((s) => `<button class="om-status-step ${s === order.status ? 'current' : ''}" data-status="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join('')}
+    <div class="om-tracker" id="omStatusStepper">
+      ${STATUSES.map((s, i) => {
+        const currentIdx = STATUSES.indexOf(order.status);
+        const state = i < currentIdx ? 'done' : i === currentIdx ? 'current' : 'future';
+        return `
+        <div class="om-tracker-step om-tracker-${state}" data-status="${escapeHtml(s)}">
+          <div class="om-tracker-line"></div>
+          <div class="om-tracker-dot">${state === 'done' ? '&#10003;' : i + 1}</div>
+          <div class="om-tracker-label">${escapeHtml(s)}</div>
+        </div>
+      `;
+      }).join('')}
     </div>
 
     <div class="om-section-title">Order details</div>
-    <div class="om-detail-grid">
-    <div class="om-detail-row"><span class="om-label">Buyer</span><span class="om-value">${escapeHtml(order.buyer || '—')}</span></div>
-    <div class="om-detail-row"><span class="om-label">Order placement date</span><span class="om-value">${fmtDate(order.orderPlacementDate)}</span></div>
-    <div class="om-detail-row"><span class="om-label">Desired entry date</span><span class="om-value">${fmtDate(order.desiredEntryDate)}</span></div>
-    <div class="om-detail-row"><span class="om-label">Manufacturer delivery date</span><span class="om-value">${fmtDate(order.manufacturerDeliveryDate)}</span></div>
+    <div class="om-field-grid">
+      <div><label>Buyer</label><input id="fBuyer" type="text" value="${val(order.buyer)}" /></div>
+      <div><label>Order placement date</label><input id="fOrderDate" type="date" value="${val(order.orderPlacementDate)}" /></div>
+      <div><label>Desired entry date</label><input id="fDesiredEntry" type="date" value="${val(order.desiredEntryDate)}" /></div>
+      <div><label>Manufacturer delivery date</label><input id="fManufDelivery" type="date" value="${val(order.manufacturerDeliveryDate)}" /></div>
     </div>
 
     <div class="om-section-title">Supplier</div>
-    <div class="om-detail-grid">
-    <div class="om-detail-row"><span class="om-label">Name</span><span class="om-value">${escapeHtml(order.supplier.name || '—')}</span></div>
-    <div class="om-detail-row"><span class="om-label">Contact</span><span class="om-value">${escapeHtml(order.supplier.contact || '—')}</span></div>
-    <div class="om-detail-row"><span class="om-label">Code</span><span class="om-value">${escapeHtml(order.supplier.code || '—')}</span></div>
+    <div class="om-field-grid">
+      <div><label>Name</label><input id="fSupplierName" type="text" value="${val(order.supplier.name)}" /></div>
+      <div><label>Contact</label><input id="fSupplierContact" type="text" value="${val(order.supplier.contact)}" /></div>
+      <div><label>Code</label><input id="fSupplierCode" type="text" value="${val(order.supplier.code)}" /></div>
     </div>
 
     <div class="om-section-title">Main component</div>
-    <div class="om-detail-grid">
-    <div class="om-detail-row"><span class="om-label">SKU</span><span class="om-value">${escapeHtml(order.mainComponent.sku || '—')}</span></div>
-    <div class="om-detail-row"><span class="om-label">Model number</span><span class="om-value">${escapeHtml(order.mainComponent.modelNumber || '—')}</span></div>
-    <div class="om-detail-row"><span class="om-label">Factory price</span><span class="om-value">${fmtMoney(order.mainComponent.factoryPrice)}</span></div>
-    <div class="om-detail-row"><span class="om-label">Sales unit price</span><span class="om-value">${fmtMoney(order.mainComponent.salesUnitPrice)}</span></div>
-    <div class="om-detail-row"><span class="om-label">Purchase quantity</span><span class="om-value">${escapeHtml(order.mainComponent.purchaseQuantity ?? '—')}</span></div>
-    <div class="om-detail-row"><span class="om-label">Sales volume</span><span class="om-value">${escapeHtml(order.mainComponent.salesVolume ?? '—')}</span></div>
-    <div class="om-detail-row"><span class="om-label">Total purchase price</span><span class="om-value">${fmtMoney(order.mainComponent.totalPurchasePrice)}</span></div>
-    <div class="om-detail-row"><span class="om-label">Actual / transport weight</span><span class="om-value">${escapeHtml(order.mainComponent.actualWeight ?? '—')} kg / ${escapeHtml(order.mainComponent.transportWeight ?? '—')} kg</span></div>
-    <div class="om-detail-row"><span class="om-label">Dimensions</span><span class="om-value">${escapeHtml(order.mainComponent.dimensions || '—')}</span></div>
-    <div class="om-detail-row"><span class="om-label">Sent to warehouse</span><span class="om-value">${escapeHtml(order.mainComponent.warehouse || '—')}</span></div>
-    ${order.mainComponent.productionPrecautions ? `<div class="om-detail-row"><span class="om-label">Production precautions</span><span class="om-value">${escapeHtml(order.mainComponent.productionPrecautions)}</span></div>` : ''}
+    <div class="om-field-grid">
+      <div><label>Name</label><input id="fMainName" type="text" value="${val(order.mainComponent.name)}" /></div>
+      <div><label>SKU</label><input id="fMainSku" type="text" value="${val(order.mainComponent.sku)}" /></div>
+      <div><label>Model number</label><input id="fModelNumber" type="text" value="${val(order.mainComponent.modelNumber)}" /></div>
+      <div><label>Dimensions (L*W*H cm)</label><input id="fDimensions" type="text" value="${val(order.mainComponent.dimensions)}" /></div>
+      <div><label>Factory price</label><input id="fFactoryPrice" type="number" step="0.01" value="${val(order.mainComponent.factoryPrice)}" /></div>
+      <div><label>Sales unit price</label><input id="fSalesUnitPrice" type="number" step="0.01" value="${val(order.mainComponent.salesUnitPrice)}" /></div>
+      <div><label>Purchase quantity</label><input id="fPurchaseQty" type="number" value="${val(order.mainComponent.purchaseQuantity)}" /></div>
+      <div><label>Sales volume</label><input id="fSalesVolume" type="number" value="${val(order.mainComponent.salesVolume)}" /></div>
+      <div><label>Total purchase price</label><input id="fTotalPurchasePrice" type="number" step="0.01" value="${val(order.mainComponent.totalPurchasePrice)}" /></div>
+      <div><label>Actual weight (kg)</label><input id="fActualWeight" type="number" step="0.01" value="${val(order.mainComponent.actualWeight)}" /></div>
+      <div><label>Transport weight (kg)</label><input id="fTransportWeight" type="number" step="0.01" value="${val(order.mainComponent.transportWeight)}" /></div>
+      <div><label>Sent to warehouse</label><input id="fWarehouse" type="text" value="${val(order.mainComponent.warehouse)}" /></div>
+    </div>
+    <div class="om-field-grid" style="margin-top:10px;">
+      <div style="grid-column:1/-1;"><label>Production precautions</label><input id="fProductionPrecautions" type="text" value="${val(order.mainComponent.productionPrecautions)}" /></div>
     </div>
 
-    ${order.productLine === 'clothing' ? `
+    <div id="fClothingOnly" style="${order.productLine === 'clothing' ? '' : 'display:none;'}">
       <div class="om-section-title">Fabric</div>
-      <div class="om-detail-grid">
-      <div class="om-detail-row"><span class="om-label">Fabric information</span><span class="om-value">${escapeHtml(order.mainComponent.fabricInfo || '—')}</span></div>
-      <div class="om-detail-row"><span class="om-label">Component / composition</span><span class="om-value">${escapeHtml(order.mainComponent.component || '—')}</span></div>
-      <div class="om-detail-row"><span class="om-label">Wash label</span><span class="om-value">${escapeHtml(order.mainComponent.washLabel || '—')}</span></div>
+      <div class="om-field-grid">
+        <div><label>Fabric information</label><input id="fFabricInfo" type="text" value="${val(order.mainComponent.fabricInfo)}" /></div>
+        <div><label>Component / composition</label><input id="fComponent" type="text" value="${val(order.mainComponent.component)}" /></div>
+        <div><label>Wash label</label><input id="fWashLabel" type="text" value="${val(order.mainComponent.washLabel)}" /></div>
       </div>
-      ${order.mainComponent.sizeDistribution && order.mainComponent.sizeDistribution.length ? `
-        <div class="om-section-title">Size distribution</div>
-        <table class="om-table" style="min-width:0;">
-          <thead><tr><th>SKU</th><th>Size</th><th>Qty</th></tr></thead>
-          <tbody>
-            ${order.mainComponent.sizeDistribution.map((s) => `<tr><td>${escapeHtml(s.sku || '—')}</td><td>${escapeHtml(s.size || '—')}</td><td>${escapeHtml(s.quantity ?? '—')}</td></tr>`).join('')}
-          </tbody>
-        </table>
-      ` : ''}
-    ` : ''}
+      <div class="om-section-title">Size distribution</div>
+      <div id="omSizeRows"></div>
+      <button type="button" class="btn btn-secondary" id="omAddSizeRow" style="width:auto;padding:8px 14px;margin-top:6px;">+ Add size row</button>
+    </div>
 
-    <div class="om-section-title" style="display:flex;justify-content:space-between;align-items:center;">
-      <span>Accessories / parts (${order.accessories ? order.accessories.length : 0})</span>
-      <button class="btn btn-secondary" id="omEditAccessories" style="width:auto;padding:5px 12px;font-size:12px;">Edit</button>
-    </div>
-    <div id="omAccessoriesView">
-      ${order.accessories && order.accessories.length ? order.accessories.map((a) => `
-        <div class="om-accessory-row">
-          <strong>${escapeHtml(a.partName || 'Unnamed part')}</strong><br/>
-          Qty: ${escapeHtml(a.quantity ?? '—')} &middot; Unit price: ${fmtMoney(a.unitPrice)} &middot; Total: ${fmtMoney(a.totalPrice)}<br/>
-          ${a.specifications ? `Specifications: ${escapeHtml(a.specifications)}<br/>` : ''}
-          ${a.dimensions ? `Dimensions: ${escapeHtml(a.dimensions)}<br/>` : ''}
-          ${a.material ? `Material: ${escapeHtml(a.material)}<br/>` : ''}
-          ${a.expectedDeliveryDate ? `Expected delivery: ${fmtDate(a.expectedDeliveryDate)}<br/>` : ''}
-          Supplier: ${escapeHtml(a.supplierName || '—')}${a.supplierContact ? ' · ' + escapeHtml(a.supplierContact) : ''}
-          ${a.deliveryAddress ? `<br/>Delivery: ${escapeHtml(a.deliveryAddress)}` : ''}
-          ${a.waybillNumber ? `<br/>Waybill: ${escapeHtml(a.waybillNumber)}${a.shipmentQuantity ? ' (qty ' + escapeHtml(a.shipmentQuantity) + ')' : ''}` : ''}
-          ${a.refundOrderNumber ? `<br/>Refund order: ${escapeHtml(a.refundOrderNumber)}` : ''}
-          ${a.remark ? `<br/><em>${escapeHtml(a.remark)}</em>` : ''}
-        </div>
-      `).join('') : '<div class="om-cl-meta">No accessories/parts recorded yet.</div>'}
-    </div>
-    <div id="omAccessoriesEdit" style="display:none;">
-      <div id="omEditAccessoryRows"></div>
-      <button type="button" class="btn btn-secondary" id="omAddEditAccessoryRow" style="width:auto;padding:8px 14px;margin:6px 0;">+ Add accessory / part</button>
-      <div style="display:flex;gap:10px;margin-top:8px;">
-        <button class="btn btn-secondary" id="omCancelAccessoryEdit" style="width:auto;padding:8px 14px;">Cancel</button>
-        <button class="btn btn-primary" id="omSaveAccessoryEdit" style="width:auto;padding:8px 14px;">Save accessories</button>
-      </div>
-    </div>
+    <div class="om-section-title">Accessories / parts</div>
+    <div id="omAccessoryRows"></div>
+    <button type="button" class="btn btn-secondary" id="omAddAccessoryRow" style="width:auto;padding:8px 14px;margin-top:6px;">+ Add accessory / part</button>
 
     <div class="om-section-title" style="display:flex;justify-content:space-between;align-items:center;">
       <span>Fulfillment &amp; tracking</span>
-      <button class="btn btn-secondary" id="omEditFulfillment" style="width:auto;padding:5px 12px;font-size:12px;">Edit</button>
+      <button class="btn btn-primary" id="omSaveFulfillmentEdit" style="width:auto;padding:6px 14px;font-size:12.5px;">Save fulfillment</button>
     </div>
-    <div id="omFulfillmentView">
-      <div class="om-detail-grid">
-      <div class="om-detail-row"><span class="om-label">Packing list number</span><span class="om-value">${escapeHtml(order.fulfillment.packingListNumber || '—')}</span></div>
-      <div class="om-detail-row"><span class="om-label">Waybill number</span><span class="om-value">${escapeHtml(order.fulfillment.waybillNumber || '—')}</span></div>
-      <div class="om-detail-row"><span class="om-label">Warehouse entry date</span><span class="om-value">${fmtDate(order.fulfillment.warehouseEntryDate)}</span></div>
-      <div class="om-detail-row"><span class="om-label">Warehouse overdue?</span><span class="om-value">${escapeHtml(order.fulfillment.warehouseOverdue || '—')}</span></div>
-      <div class="om-detail-row"><span class="om-label">Quantity received</span><span class="om-value">${escapeHtml(order.fulfillment.quantityReceived ?? '—')}</span></div>
-      <div class="om-detail-row"><span class="om-label">All accessories received?</span><span class="om-value">${escapeHtml(order.fulfillment.allAccessoriesReceived || '—')}</span></div>
-      <div class="om-detail-row"><span class="om-label">Return tracking number</span><span class="om-value">${escapeHtml(order.fulfillment.returnTrackingNumber || '—')}</span></div>
-      ${order.fulfillment.exceptionHandlingResults ? `<div class="om-detail-row"><span class="om-label">Exception handling</span><span class="om-value">${escapeHtml(order.fulfillment.exceptionHandlingResults)}</span></div>` : ''}
+    <div class="om-field-grid">
+      <div><label>Packing list number</label><input id="fFulfillPacking" type="text" value="${val(order.fulfillment.packingListNumber)}" /></div>
+      <div><label>Waybill number</label><input id="fFulfillWaybill" type="text" value="${val(order.fulfillment.waybillNumber)}" /></div>
+      <div><label>Warehouse entry date</label><input id="fFulfillEntryDate" type="date" value="${val(order.fulfillment.warehouseEntryDate)}" /></div>
+      <div><label>Warehouse overdue?</label>
+        <select id="fFulfillOverdue">
+          <option value="" ${!order.fulfillment.warehouseOverdue ? 'selected' : ''}>—</option>
+          <option value="On time" ${order.fulfillment.warehouseOverdue === 'On time' ? 'selected' : ''}>On time</option>
+          <option value="Overdue" ${order.fulfillment.warehouseOverdue === 'Overdue' ? 'selected' : ''}>Overdue</option>
+        </select>
       </div>
-      ${order.fulfillment.replacementSizes && order.fulfillment.replacementSizes.length ? `
-        <div style="margin-top:10px;font-size:12px;font-weight:700;color:var(--jc-muted);">Replacement sizes</div>
-        <table class="om-table" style="min-width:0;">
-          <thead><tr><th>SKU</th><th>Size</th><th>Replacement qty</th></tr></thead>
-          <tbody>
-            ${order.fulfillment.replacementSizes.map((r) => `<tr><td>${escapeHtml(r.sku || '—')}</td><td>${escapeHtml(r.size || '—')}</td><td>${escapeHtml(r.quantity ?? '—')}</td></tr>`).join('')}
-          </tbody>
-        </table>
-      ` : ''}
+      <div><label>Quantity received</label><input id="fFulfillQtyReceived" type="number" value="${val(order.fulfillment.quantityReceived)}" /></div>
+      <div><label>All accessories received?</label>
+        <select id="fFulfillAllReceived">
+          <option value="" ${!order.fulfillment.allAccessoriesReceived ? 'selected' : ''}>—</option>
+          <option value="Yes, complete" ${order.fulfillment.allAccessoriesReceived === 'Yes, complete' ? 'selected' : ''}>Yes, complete</option>
+          <option value="Incomplete parts, cannot be shipped" ${order.fulfillment.allAccessoriesReceived === 'Incomplete parts, cannot be shipped' ? 'selected' : ''}>Incomplete parts, cannot be shipped</option>
+        </select>
+      </div>
+      <div><label>Return tracking number</label><input id="fFulfillReturnTracking" type="text" value="${val(order.fulfillment.returnTrackingNumber)}" /></div>
+      <div style="grid-column:1/-1;"><label>Exception handling results</label><input id="fFulfillException" type="text" value="${val(order.fulfillment.exceptionHandlingResults)}" /></div>
     </div>
-    <div id="omFulfillmentEdit" style="display:none;">
-      <div class="om-field-grid">
-        <div><label>Packing list number</label><input id="fFulfillPacking" type="text" value="${escapeHtml(order.fulfillment.packingListNumber || '')}" /></div>
-        <div><label>Waybill number</label><input id="fFulfillWaybill" type="text" value="${escapeHtml(order.fulfillment.waybillNumber || '')}" /></div>
-        <div><label>Warehouse entry date</label><input id="fFulfillEntryDate" type="date" value="${escapeHtml(order.fulfillment.warehouseEntryDate || '')}" /></div>
-        <div><label>Warehouse overdue?</label>
-          <select id="fFulfillOverdue">
-            <option value="" ${!order.fulfillment.warehouseOverdue ? 'selected' : ''}>—</option>
-            <option value="On time" ${order.fulfillment.warehouseOverdue === 'On time' ? 'selected' : ''}>On time</option>
-            <option value="Overdue" ${order.fulfillment.warehouseOverdue === 'Overdue' ? 'selected' : ''}>Overdue</option>
-          </select>
-        </div>
-        <div><label>Quantity received</label><input id="fFulfillQtyReceived" type="number" value="${escapeHtml(order.fulfillment.quantityReceived ?? '')}" /></div>
-        <div><label>All accessories received?</label>
-          <select id="fFulfillAllReceived">
-            <option value="" ${!order.fulfillment.allAccessoriesReceived ? 'selected' : ''}>—</option>
-            <option value="Yes, complete" ${order.fulfillment.allAccessoriesReceived === 'Yes, complete' ? 'selected' : ''}>Yes, complete</option>
-            <option value="Incomplete parts, cannot be shipped" ${order.fulfillment.allAccessoriesReceived === 'Incomplete parts, cannot be shipped' ? 'selected' : ''}>Incomplete parts, cannot be shipped</option>
-          </select>
-        </div>
-        <div><label>Return tracking number</label><input id="fFulfillReturnTracking" type="text" value="${escapeHtml(order.fulfillment.returnTrackingNumber || '')}" /></div>
-        <div style="grid-column:1/-1;"><label>Exception handling results</label><input id="fFulfillException" type="text" value="${escapeHtml(order.fulfillment.exceptionHandlingResults || '')}" /></div>
-      </div>
-      <div style="margin-top:14px;font-size:12px;font-weight:700;color:var(--jc-muted);text-transform:uppercase;">Replacement sizes</div>
-      <div id="omReplacementRows"></div>
-      <button type="button" class="btn btn-secondary" id="omAddReplacementRow" style="width:auto;padding:8px 14px;margin-top:6px;">+ Add replacement size row</button>
-      <div style="display:flex;gap:10px;margin-top:14px;">
-        <button class="btn btn-secondary" id="omCancelFulfillmentEdit" style="width:auto;padding:8px 14px;">Cancel</button>
-        <button class="btn btn-primary" id="omSaveFulfillmentEdit" style="width:auto;padding:8px 14px;">Save fulfillment</button>
-      </div>
-    </div>
+    <div style="margin-top:14px;font-size:12px;font-weight:700;color:var(--jc-muted);text-transform:uppercase;">Replacement sizes</div>
+    <div id="omReplacementRows"></div>
+    <button type="button" class="btn btn-secondary" id="omAddReplacementRow" style="width:auto;padding:8px 14px;margin-top:6px;">+ Add replacement size row</button>
 
     <div class="om-section-title">Costs</div>
-    <div class="om-detail-grid">
-    <div class="om-detail-row"><span class="om-label">Assembly fee</span><span class="om-value">${fmtMoney(order.costs.assemblyFee)}</span></div>
-    <div class="om-detail-row"><span class="om-label">Labor costs</span><span class="om-value">${fmtMoney(order.costs.laborCosts)}</span></div>
-    <div class="om-detail-row"><span class="om-label">Transportation fees</span><span class="om-value">${fmtMoney(order.costs.transportationFees)}</span></div>
-    <div class="om-detail-row"><span class="om-label">Other expenses</span><span class="om-value">${fmtMoney(order.costs.otherExpenses)}</span></div>
-    <div class="om-detail-row"><span class="om-label"><strong>Total owed</strong></span><span class="om-value">${fmtMoney(computeOrderTotal(order))}</span></div>
+    <div class="om-field-grid">
+      <div><label>Assembly fee</label><input id="fAssemblyFee" type="number" step="0.01" value="${val(order.costs.assemblyFee)}" /></div>
+      <div><label>Labor costs</label><input id="fLaborCosts" type="number" step="0.01" value="${val(order.costs.laborCosts)}" /></div>
+      <div><label>Transportation fees</label><input id="fTransportationFees" type="number" step="0.01" value="${val(order.costs.transportationFees)}" /></div>
+      <div><label>Other expenses</label><input id="fOtherExpenses" type="number" step="0.01" value="${val(order.costs.otherExpenses)}" /></div>
     </div>
+    <div class="om-detail-row" style="margin-top:8px;"><span class="om-label"><strong>Total owed</strong></span><span class="om-value">${fmtMoney(computeOrderTotal(order))}</span></div>
 
     <div class="om-section-title">Settlement</div>
     <div class="om-detail-row"><span class="om-label">Status</span><span class="om-value">${escapeHtml(order.settlement.status)}</span></div>
@@ -875,11 +935,7 @@ async function openDetailPanel(id) {
   bindPanelEscape();
 
   document.getElementById('omClosePanel').addEventListener('click', closePanel);
-  document.getElementById('omEditOrder').addEventListener('click', () => {
-    closePanel();
-    openNewOrderPanel(order);
-  });
-  panel.querySelectorAll('.om-status-step').forEach((btn) => {
+  panel.querySelectorAll('.om-tracker-step').forEach((btn) => {
     btn.addEventListener('click', async () => {
       try {
         await api(`/api/order-management/orders/${encodeURIComponent(order.id)}/status`, {
@@ -935,51 +991,41 @@ async function openDetailPanel(id) {
     } catch (e) { showToast(e.message, true); }
   });
 
-  // ---- Editable accessories/parts ----
-  let editAccessoryRowCount = 0;
-  const editRowsHost = panel.querySelector('#omEditAccessoryRows');
+  // ---- Always-editable size distribution, accessories, and fulfillment ----
+  let editSizeRowCount = 0;
+  const sizeRowsHost = panel.querySelector('#omSizeRows');
+  function addSizeRow(data) {
+    sizeRowsHost.insertAdjacentHTML('beforeend',
+      `<div class="om-repeat-row" data-size-row="${editSizeRowCount}">
+        <input type="text" placeholder="SKU name" class="om-size-sku" value="${val(data && data.sku)}" />
+        <input type="text" placeholder="Size" class="om-size-size" value="${val(data && data.size)}" />
+        <input type="number" placeholder="Qty" class="om-size-qty" value="${val(data && data.quantity)}" />
+        <button type="button" class="om-row-remove" data-remove-size="${editSizeRowCount}">&times;</button>
+      </div>`);
+    const idx = editSizeRowCount;
+    panel.querySelector(`[data-remove-size="${idx}"]`).addEventListener('click', () => {
+      panel.querySelector(`[data-size-row="${idx}"]`).remove();
+    });
+    editSizeRowCount++;
+  }
+  (order.mainComponent.sizeDistribution || []).forEach(addSizeRow);
+  panel.querySelector('#omAddSizeRow').addEventListener('click', () => addSizeRow());
 
-  function addEditRow(data) {
-    editRowsHost.insertAdjacentHTML('beforeend', accessoryRowHtml(editAccessoryRowCount, data));
+  let editAccessoryRowCount = 0;
+  const accessoryRowsHost = panel.querySelector('#omAccessoryRows');
+  function addAccessoryRow(data) {
+    accessoryRowsHost.insertAdjacentHTML('beforeend', accessoryRowHtml(editAccessoryRowCount, data));
     const idx = editAccessoryRowCount;
     panel.querySelector(`[data-remove-accessory="${idx}"]`).addEventListener('click', () => {
       panel.querySelector(`[data-accessory-row="${idx}"]`).remove();
     });
     editAccessoryRowCount++;
   }
+  (order.accessories && order.accessories.length ? order.accessories : [{}]).forEach(addAccessoryRow);
+  panel.querySelector('#omAddAccessoryRow').addEventListener('click', () => addAccessoryRow());
 
-  panel.querySelector('#omEditAccessories').addEventListener('click', () => {
-    editRowsHost.innerHTML = '';
-    editAccessoryRowCount = 0;
-    (order.accessories && order.accessories.length ? order.accessories : [{}]).forEach(addEditRow);
-    panel.querySelector('#omAccessoriesView').style.display = 'none';
-    panel.querySelector('#omAccessoriesEdit').style.display = 'block';
-    panel.querySelector('#omEditAccessories').style.display = 'none';
-  });
-  panel.querySelector('#omAddEditAccessoryRow').addEventListener('click', () => addEditRow());
-  panel.querySelector('#omCancelAccessoryEdit').addEventListener('click', () => {
-    panel.querySelector('#omAccessoriesView').style.display = 'block';
-    panel.querySelector('#omAccessoriesEdit').style.display = 'none';
-    panel.querySelector('#omEditAccessories').style.display = 'inline-block';
-  });
-  panel.querySelector('#omSaveAccessoryEdit').addEventListener('click', async () => {
-    const accessories = collectAccessoryRows(editRowsHost);
-    try {
-      await api(`/api/order-management/orders/${encodeURIComponent(order.id)}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ patch: { accessories }, actor: 'Web user' })
-      });
-      showToast('Accessories updated');
-      closePanel();
-      openDetailPanel(order.id);
-      refreshCurrentView();
-    } catch (e) { showToast(e.message, true); }
-  });
-
-  // ---- Fulfillment & tracking ----
   let replacementRowCount = 0;
   const replacementRowsHost = panel.querySelector('#omReplacementRows');
-
   function addReplacementRow(data) {
     replacementRowsHost.insertAdjacentHTML('beforeend', replacementRowHtml(replacementRowCount, data));
     const idx = replacementRowCount;
@@ -988,24 +1034,68 @@ async function openDetailPanel(id) {
     });
     replacementRowCount++;
   }
-
-  panel.querySelector('#omEditFulfillment').addEventListener('click', () => {
-    replacementRowsHost.innerHTML = '';
-    replacementRowCount = 0;
-    (order.fulfillment.replacementSizes && order.fulfillment.replacementSizes.length
-      ? order.fulfillment.replacementSizes : []
-    ).forEach(addReplacementRow);
-    panel.querySelector('#omFulfillmentView').style.display = 'none';
-    panel.querySelector('#omFulfillmentEdit').style.display = 'block';
-    panel.querySelector('#omEditFulfillment').style.display = 'none';
-  });
+  (order.fulfillment.replacementSizes || []).forEach(addReplacementRow);
   panel.querySelector('#omAddReplacementRow').addEventListener('click', () => addReplacementRow());
-  panel.querySelector('#omCancelFulfillmentEdit').addEventListener('click', () => {
-    panel.querySelector('#omFulfillmentView').style.display = 'block';
-    panel.querySelector('#omFulfillmentEdit').style.display = 'none';
-    panel.querySelector('#omEditFulfillment').style.display = 'inline-block';
+
+  // Master "Save changes": everything except status (its own tracker),
+  // settlement (its own toggle), and fulfillment (its own save button,
+  // since it belongs to a different operational stage than the order spec).
+  document.getElementById('omSaveOrder').addEventListener('click', async () => {
+    const productLine = order.productLine;
+    const patch = {
+      buyer: document.getElementById('fBuyer').value,
+      orderPlacementDate: document.getElementById('fOrderDate').value || null,
+      desiredEntryDate: document.getElementById('fDesiredEntry').value || null,
+      manufacturerDeliveryDate: document.getElementById('fManufDelivery').value || null,
+      supplier: {
+        name: document.getElementById('fSupplierName').value,
+        contact: document.getElementById('fSupplierContact').value,
+        code: document.getElementById('fSupplierCode').value
+      },
+      mainComponent: {
+        name: document.getElementById('fMainName').value,
+        sku: document.getElementById('fMainSku').value,
+        modelNumber: document.getElementById('fModelNumber').value,
+        dimensions: document.getElementById('fDimensions').value,
+        factoryPrice: document.getElementById('fFactoryPrice').value || null,
+        salesUnitPrice: document.getElementById('fSalesUnitPrice').value || null,
+        purchaseQuantity: document.getElementById('fPurchaseQty').value || null,
+        salesVolume: document.getElementById('fSalesVolume').value || null,
+        totalPurchasePrice: document.getElementById('fTotalPurchasePrice').value || null,
+        actualWeight: document.getElementById('fActualWeight').value || null,
+        transportWeight: document.getElementById('fTransportWeight').value || null,
+        warehouse: document.getElementById('fWarehouse').value,
+        productionPrecautions: document.getElementById('fProductionPrecautions').value,
+        fabricInfo: productLine === 'clothing' ? document.getElementById('fFabricInfo').value : '',
+        component: productLine === 'clothing' ? document.getElementById('fComponent').value : '',
+        washLabel: productLine === 'clothing' ? document.getElementById('fWashLabel').value : '',
+        sizeDistribution: productLine === 'clothing' ? Array.from(sizeRowsHost.querySelectorAll('[data-size-row]')).map((row) => ({
+          sku: row.querySelector('.om-size-sku').value,
+          size: row.querySelector('.om-size-size').value,
+          quantity: row.querySelector('.om-size-qty').value || null
+        })).filter((r) => r.sku || r.size || r.quantity) : []
+      },
+      accessories: collectAccessoryRows(accessoryRowsHost),
+      costs: {
+        assemblyFee: document.getElementById('fAssemblyFee').value || 0,
+        laborCosts: document.getElementById('fLaborCosts').value || 0,
+        transportationFees: document.getElementById('fTransportationFees').value || 0,
+        otherExpenses: document.getElementById('fOtherExpenses').value || 0
+      }
+    };
+    try {
+      await api(`/api/order-management/orders/${encodeURIComponent(order.id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ patch, actor: 'Web user' })
+      });
+      showToast('Changes saved');
+      closePanel();
+      openDetailPanel(order.id);
+      refreshCurrentView();
+    } catch (e) { showToast(e.message, true); }
   });
-  panel.querySelector('#omSaveFulfillmentEdit').addEventListener('click', async () => {
+
+  document.getElementById('omSaveFulfillmentEdit').addEventListener('click', async () => {
     const fulfillment = {
       packingListNumber: document.getElementById('fFulfillPacking').value,
       waybillNumber: document.getElementById('fFulfillWaybill').value,
@@ -1376,7 +1466,7 @@ async function submitOrderForm(existingOrder, submitForManufacturing) {
   try {
     const params = new URLSearchParams(location.search);
     const view = params.get('view');
-    if (view === 'suppliers' || view === 'settlement') currentView = view;
+    if (view === 'suppliers' || view === 'settlement' || view === 'products' || view === 'components') currentView = view;
     await Promise.all([loadStatuses(), loadFileCategories()]);
     render();
   } catch (e) {

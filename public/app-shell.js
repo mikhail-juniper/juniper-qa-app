@@ -12,9 +12,17 @@ const APP_NAV = [
     items: [
       { label: 'New Purchase Order', href: 'reporting.html?mode=newPO' },
       { label: 'Order Management', href: 'order-management.html', omView: 'home' },
-      { label: 'Suppliers', href: 'order-management.html?view=suppliers', omView: 'suppliers' },
       { label: 'Finances', href: 'order-management.html?view=settlement', omView: 'settlement' },
       { label: 'QA/QC Reporting', href: 'reporting.html' }
+    ]
+  },
+  {
+    group: 'Product Information',
+    items: [
+      { label: 'Products', href: 'order-management.html?view=products', omView: 'products' },
+      { label: 'Components', href: 'order-management.html?view=components', omView: 'components' },
+      { label: 'Suppliers', href: 'order-management.html?view=suppliers', omView: 'suppliers' },
+      { label: 'Sizing Charts', href: 'sizing-charts.html' }
     ]
   },
   {
@@ -48,11 +56,13 @@ function isActiveNavItem(item) {
 function buildSidebar() {
   const nav = document.createElement('nav');
   nav.className = 'app-sidebar';
-  nav.innerHTML = APP_NAV.map((section) => `
-    <div class="app-sidebar-group">${section.group.toUpperCase()}</div>
-    ${section.items.map((item) => `
-      <a class="app-sidebar-link ${isActiveNavItem(item) ? 'active' : ''}" href="${item.href}">${item.label}</a>
-    `).join('')}
+  nav.innerHTML = APP_NAV.map((section, idx) => `
+    <div class="app-sidebar-section ${idx > 0 ? 'app-sidebar-section-divided' : ''}">
+      <div class="app-sidebar-group">${section.group.toUpperCase()}</div>
+      ${section.items.map((item) => `
+        <a class="app-sidebar-link ${isActiveNavItem(item) ? 'active' : ''}" href="${item.href}">${item.label}</a>
+      `).join('')}
+    </div>
   `).join('');
   return nav;
 }

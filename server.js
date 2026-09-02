@@ -12,6 +12,7 @@ const { getRecommendation } = require('./lib/aqlRecommendation');
 const submissionLog = require('./lib/submissionLog');
 const poStore = require('./lib/poStore');
 const orderManagementStore = require('./lib/orderManagementStore');
+const sizingChartStore = require('./lib/sizingChartStore');
 const approvalStore = require('./lib/approvalStore');
 const approvalPhotoSets = require('./config/approvalPhotoSets.json');
 const asanaClient = require('./lib/asanaClient');
@@ -783,6 +784,40 @@ app.post('/api/order-management/orders/:id/settlement', (req, res) => {
 
 app.get('/api/order-management/suppliers', (req, res) => {
   res.json({ suppliers: orderManagementStore.listSuppliers(req.query.productLine) });
+});
+
+app.get('/api/order-management/products', (req, res) => {
+  res.json({ products: orderManagementStore.listProducts(req.query.productLine) });
+});
+
+app.get('/api/order-management/components', (req, res) => {
+  res.json({ components: orderManagementStore.listComponents(req.query.productLine) });
+});
+
+// ---- Sizing charts ----
+app.get('/api/sizing-charts', (req, res) => {
+  res.json({ charts: sizingChartStore.listCharts() });
+});
+app.get('/api/sizing-charts/:id', (req, res) => {
+  const chart = sizingChartStore.getChart(req.params.id);
+  if (!chart) return res.status(404).json({ error: 'Sizing chart not found' });
+  res.json({ chart });
+});
+app.post('/api/sizing-charts', (req, res) => {
+  const body = req.body || {};
+  if (!body.name) return res.status(400).json({ error: 'name is required' });
+  const chart = sizingChartStore.createChart({ ...body, id: uuidv4() });
+  res.json({ ok: true, chart });
+});
+app.patch('/api/sizing-charts/:id', (req, res) => {
+  const updated = sizingChartStore.updateChart(req.params.id, req.body || {});
+  if (!updated) return res.status(404).json({ error: 'Sizing chart not found' });
+  res.json({ ok: true, chart: updated });
+});
+app.delete('/api/sizing-charts/:id', (req, res) => {
+  const ok = sizingChartStore.deleteChart(req.params.id);
+  if (!ok) return res.status(404).json({ error: 'Sizing chart not found' });
+  res.json({ ok: true });
 });
 
 app.get('/api/order-management/counts', (req, res) => {

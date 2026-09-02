@@ -2,7 +2,7 @@
    shared design tokens/classes in styles.css (.card, .btn, .btn-primary,
    .btn-secondary, --jc-* color variables). */
 
-.om-root { max-width: 1600px; margin: 0 auto; padding: 24px 28px 80px 28px; }
+.om-root { max-width: none; margin: 0; padding: 24px 32px 80px 32px; }
 
 .app-header { display: flex; align-items: center; justify-content: space-between; }
 .om-menu-toggle {
@@ -368,6 +368,49 @@
   font-size: 12px; cursor: pointer; font-weight: 600;
 }
 .om-status-step.current { border-color: var(--jc-teal); background: var(--jc-teal); color: #fff; }
+
+/* Domino's-tracker-style status progress bar. */
+.om-tracker { display: flex; align-items: flex-start; margin-top: 10px; overflow-x: auto; padding-bottom: 6px; }
+.om-tracker-step {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 92px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  text-align: center;
+}
+.om-tracker-line {
+  position: absolute;
+  top: 15px;
+  left: -50%;
+  width: 100%;
+  height: 3px;
+  background: var(--jc-border);
+  z-index: 0;
+}
+.om-tracker-step:first-child .om-tracker-line { display: none; }
+.om-tracker-done .om-tracker-line { background: var(--jc-teal); }
+.om-tracker-current .om-tracker-line { background: var(--jc-border); }
+.om-tracker-dot {
+  position: relative;
+  z-index: 1;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 800;
+  border: 2px solid var(--jc-border);
+  background: #fff;
+  color: var(--jc-muted);
+}
+.om-tracker-done .om-tracker-dot { background: var(--jc-teal); border-color: var(--jc-teal); color: #fff; }
+.om-tracker-current .om-tracker-dot { background: #fff; border-color: var(--jc-teal); color: var(--jc-teal-dark); box-shadow: 0 0 0 4px var(--jc-mint-light); }
+.om-tracker-label {
+  font-size: 11px; font-weight: 600; margin-top: 6px; color: var(--jc-muted); line-height: 1.25; padding: 0 4px;
+}
+.om-tracker-current .om-tracker-label { color: var(--jc-teal-dark); font-weight: 800; }
+.om-tracker-done .om-tracker-label { color: var(--jc-text); }
 
 .om-accessory-row { border: 1px solid var(--jc-border); border-radius: var(--radius-sm); padding: 10px; margin-bottom: 8px; font-size: 13px; }
 
