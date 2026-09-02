@@ -724,6 +724,13 @@ app.post('/api/order-management/orders', (req, res) => {
   try {
     const body = req.body || {};
     if (!body.poNumber) return res.status(400).json({ error: 'poNumber is required' });
+    const existing = orderManagementStore.getOrderByPoNumber(body.poNumber, body.productLine);
+    if (existing) {
+      return res.status(409).json({
+        error: `A ${body.productLine || ''} PO numbered "${body.poNumber}" already exists. Open it from the list to edit instead of creating a duplicate.`,
+        existingId: existing.id
+      });
+    }
     const entry = orderManagementStore.createOrder({ ...body, id: uuidv4() }, body.actor || req.get('X-Actor'));
     res.json({ ok: true, order: entry });
   } catch (err) {
@@ -754,6 +761,14 @@ app.post('/api/order-management/orders/:id/settlement', (req, res) => {
   const updated = orderManagementStore.setSettlement(req.params.id, body.status, body.actor || req.get('X-Actor'));
   if (!updated) return res.status(404).json({ error: 'Order not found' });
   res.json({ ok: true, order: updated });
+});
+
+app.get('/api/order-management/suppliers', (req, res) => {
+  res.json({ suppliers: orderManagementStore.listSuppliers() });
+});
+
+app.get('/api/order-management/counts', (req, res) => {
+  res.json(orderManagementStore.getCounts());
 });
 
 // ---- QA/QC Approval workflow ----

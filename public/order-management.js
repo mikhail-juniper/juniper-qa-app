@@ -4,7 +4,8 @@
  */
 
 let STATUSES = [];
-let currentTab = 'toys'; // 'toys' | 'clothing'
+let currentView = 'home'; // 'home' | 'orders' | 'suppliers' | 'settlement'
+let currentTab = 'toys'; // 'toys' | 'clothing' (only relevant when currentView === 'orders')
 let currentStatusFilter = '';
 let currentSearch = '';
 let currentOrders = [];
@@ -40,6 +41,13 @@ function fmtDate(d) {
   try { return new Date(d).toLocaleDateString(); } catch (e) { return d; }
 }
 
+function refreshCurrentView() {
+  if (currentView === 'orders') return loadOrders();
+  if (currentView === 'suppliers') return renderSuppliersShell(document.getElementById('omRoot'));
+  if (currentView === 'settlement') return renderSettlementShell(document.getElementById('omRoot'));
+  return render();
+}
+
 async function api(path, opts) {
   const res = await fetch(path, {
     headers: { 'Content-Type': 'application/json' },
@@ -68,7 +76,165 @@ async function loadOrders() {
 
 function render() {
   const root = document.getElementById('omRoot');
+  if (currentView === 'home') return renderHome(root);
+  if (currentView === 'suppliers') return renderSuppliersShell(root);
+  if (currentView === 'settlement') return renderSettlementShell(root);
+  return renderOrdersShell(root);
+}
+
+function backToHubHtml() {
+  return `<button class="om-back-link" id="omBackToHub">&larr; Order Management Hub</button>`;
+}
+
+function bindBackToHub() {
+  const btn = document.getElementById('omBackToHub');
+  if (btn) btn.addEventListener('click', () => { currentView = 'home'; render(); });
+}
+
+// ---- Home / tile dashboard ----
+
+async function renderHome(root) {
+  root.innerHTML = `<div class="om-empty">Loading...</div>`;
+  let counts = { toys: 0, clothing: 0, suppliers: 0, settlementPending: 0 };
+  try {
+    counts = await api('/api/order-management/counts');
+  } catch (e) { showToast(e.message, true); }
+
   root.innerHTML = `
+    <div class="om-tile-grid">
+      <div class="om-tile om-tile-toys" data-view="orders" data-tab="toys">
+        <div class="om-tile-title">Toy Purchase Orders</div>
+        <div class="om-tile-count">${counts.toys}</div>
+        <div class="om-tile-desc">Active and completed toy POs, main components, and accessories</div>
+      </div>
+      <div class="om-tile om-tile-clothing" data-view="orders" data-tab="clothing">
+        <div class="om-tile-title">Clothing Purchase Orders</div>
+        <div class="om-tile-count">${counts.clothing}</div>
+        <div class="om-tile-desc">Active and completed clothing POs, sizing, and accessories</div>
+      </div>
+      <div class="om-tile om-tile-suppliers" data-view="suppliers">
+        <div class="om-tile-title">Suppliers</div>
+        <div class="om-tile-count">${counts.suppliers}</div>
+        <div class="om-tile-desc">Every supplier referenced across your Toy and Clothing orders</div>
+      </div>
+      <div class="om-tile om-tile-settlement" data-view="settlement">
+        <div class="om-tile-title">Settlement Statement</div>
+        <div class="om-tile-count">${counts.settlementPending}</div>
+        <div class="om-tile-desc">Orders with a pending settlement, across both product lines</div>
+      </div>
+    </div>
+  `;
+  root.querySelectorAll('.om-tile').forEach((tile) => {
+    tile.addEventListener('click', () => {
+      currentView = tile.dataset.view;
+      if (tile.dataset.tab) currentTab = tile.dataset.tab;
+      render();
+      if (currentView === 'orders') loadOrders();
+    });
+  });
+}
+
+// ---- Suppliers view ----
+
+async function renderSuppliersShell(root) {
+  root.innerHTML = `${backToHubHtml()}<h2 class="om-view-title">Suppliers</h2><div id="omSuppliersHost" class="om-table-wrap"><div class="om-empty">Loading...</div></div>`;
+  bindBackToHub();
+  try {
+    const data = await api('/api/order-management/suppliers');
+    renderSuppliersTable(data.suppliers || []);
+  } catch (e) { showToast(e.message, true); }
+}
+
+function renderSuppliersTable(suppliers) {
+  const host = document.getElementById('omSuppliersHost');
+  if (!host) return;
+  if (!suppliers.length) {
+    host.innerHTML = `<div class="om-empty">No suppliers recorded yet. They'll show up here automatically as POs are created.</div>`;
+    return;
+  }
+  host.innerHTML = `
+    <table class="om-table">
+      <thead><tr><th>Supplier</th><th>Contact</th><th>Code</th><th>Product lines</th><th># Orders</th></tr></thead>
+      <tbody>
+        ${suppliers.map((s) => `
+          <tr>
+            <td><strong>${escapeHtml(s.name)}</strong></td>
+            <td>${escapeHtml(s.contact || '—')}</td>
+            <td>${escapeHtml(s.code || '—')}</td>
+            <td>${s.productLines.map((p) => escapeHtml(p)).join(', ')}</td>
+            <td>${s.orderCount}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+// ---- Settlement view ----
+
+async function renderSettlementShell(root) {
+  root.innerHTML = `${backToHubHtml()}<h2 class="om-view-title">Settlement Statement</h2><div id="omSettlementHost" class="om-table-wrap"><div class="om-empty">Loading...</div></div>`;
+  bindBackToHub();
+  try {
+    const [toys, clothing] = await Promise.all([
+      api('/api/order-management/orders?productLine=toys'),
+      api('/api/order-management/orders?productLine=clothing')
+    ]);
+    renderSettlementTable([...(toys.orders || []), ...(clothing.orders || [])]);
+  } catch (e) { showToast(e.message, true); }
+}
+
+function renderSettlementTable(orders) {
+  const host = document.getElementById('omSettlementHost');
+  if (!host) return;
+  if (!orders.length) {
+    host.innerHTML = `<div class="om-empty">No orders yet.</div>`;
+    return;
+  }
+  host.innerHTML = `
+    <table class="om-table">
+      <thead><tr><th>PO Number</th><th>Product line</th><th>Supplier</th><th>Settlement</th><th>Paid on</th><th>Action</th></tr></thead>
+      <tbody>
+        ${orders.map((o) => `
+          <tr data-id="${escapeHtml(o.id)}">
+            <td><strong>${escapeHtml(o.poNumber)}</strong></td>
+            <td>${o.productLine === 'clothing' ? 'Clothing' : 'Toys'}</td>
+            <td>${escapeHtml(o.supplier && o.supplier.name || '—')}</td>
+            <td>${escapeHtml(o.settlement.status)}</td>
+            <td>${o.settlement.paidDate ? fmtDate(o.settlement.paidDate) : '—'}</td>
+            <td>
+              ${o.settlement.status === 'Paid'
+                ? `<button class="btn btn-secondary om-settle-btn" data-id="${escapeHtml(o.id)}" data-status="Pending" style="width:auto;padding:5px 10px;font-size:12px;">Mark Pending</button>`
+                : `<button class="btn btn-primary om-settle-btn" data-id="${escapeHtml(o.id)}" data-status="Paid" style="width:auto;padding:5px 10px;font-size:12px;">Mark Paid</button>`}
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+  host.querySelectorAll('.om-settle-btn').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try {
+        await api(`/api/order-management/orders/${encodeURIComponent(btn.dataset.id)}/settlement`, {
+          method: 'POST',
+          body: JSON.stringify({ status: btn.dataset.status })
+        });
+        showToast('Settlement updated');
+        renderSettlementShell(document.getElementById('omRoot'));
+      } catch (err) { showToast(err.message, true); }
+    });
+  });
+  host.querySelectorAll('tbody tr').forEach((tr) => {
+    tr.addEventListener('click', () => openDetailPanel(tr.dataset.id));
+  });
+}
+
+// ---- Orders (table + tabs) view, formerly the whole page ----
+
+function renderOrdersShell(root) {
+  root.innerHTML = `
+    ${backToHubHtml()}
     <div class="om-toolbar">
       <div class="om-tabs">
         <button class="om-tab ${currentTab === 'toys' ? 'active' : ''}" data-tab="toys">Toys</button>
@@ -83,6 +249,7 @@ function render() {
     <div class="om-table-wrap"><div id="omTableHost"></div></div>
     <button class="btn btn-primary om-fab" id="omNewBtn" style="width:auto;padding:12px 20px;border-radius:999px;">+ New Purchase Order Request</button>
   `;
+  bindBackToHub();
 
   document.querySelectorAll('.om-tab').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -219,9 +386,12 @@ async function openDetailPanel(id) {
       ` : ''}
     ` : ''}
 
-    ${order.accessories && order.accessories.length ? `
-      <div class="om-section-title">Accessories / parts (${order.accessories.length})</div>
-      ${order.accessories.map((a) => `
+    <div class="om-section-title" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>Accessories / parts (${order.accessories ? order.accessories.length : 0})</span>
+      <button class="btn btn-secondary" id="omEditAccessories" style="width:auto;padding:5px 12px;font-size:12px;">Edit</button>
+    </div>
+    <div id="omAccessoriesView">
+      ${order.accessories && order.accessories.length ? order.accessories.map((a) => `
         <div class="om-accessory-row">
           <strong>${escapeHtml(a.partName || 'Unnamed part')}</strong><br/>
           Qty: ${escapeHtml(a.quantity ?? '—')} &middot; Unit price: ${fmtMoney(a.unitPrice)} &middot; Total: ${fmtMoney(a.totalPrice)}<br/>
@@ -231,8 +401,16 @@ async function openDetailPanel(id) {
           ${a.deliveryAddress ? `<br/>Delivery: ${escapeHtml(a.deliveryAddress)}` : ''}
           ${a.remark ? `<br/><em>${escapeHtml(a.remark)}</em>` : ''}
         </div>
-      `).join('')}
-    ` : ''}
+      `).join('') : '<div class="om-cl-meta">No accessories/parts recorded yet.</div>'}
+    </div>
+    <div id="omAccessoriesEdit" style="display:none;">
+      <div id="omEditAccessoryRows"></div>
+      <button type="button" class="btn btn-secondary" id="omAddEditAccessoryRow" style="width:auto;padding:8px 14px;margin:6px 0;">+ Add accessory / part</button>
+      <div style="display:flex;gap:10px;margin-top:8px;">
+        <button class="btn btn-secondary" id="omCancelAccessoryEdit" style="width:auto;padding:8px 14px;">Cancel</button>
+        <button class="btn btn-primary" id="omSaveAccessoryEdit" style="width:auto;padding:8px 14px;">Save accessories</button>
+      </div>
+    </div>
 
     <div class="om-section-title">Costs</div>
     <div class="om-detail-row"><span class="om-label">Assembly fee</span><span class="om-value">${fmtMoney(order.costs.assemblyFee)}</span></div>
@@ -272,12 +450,53 @@ async function openDetailPanel(id) {
         });
         showToast('Status updated');
         closePanel();
-        loadOrders();
+        refreshCurrentView();
       } catch (e) { showToast(e.message, true); }
     });
   });
   document.getElementById('omMarkPaid').addEventListener('click', () => setSettlement(order.id, 'Paid'));
   document.getElementById('omMarkPending').addEventListener('click', () => setSettlement(order.id, 'Pending'));
+
+  // ---- Editable accessories/parts ----
+  let editAccessoryRowCount = 0;
+  const editRowsHost = panel.querySelector('#omEditAccessoryRows');
+
+  function addEditRow(data) {
+    editRowsHost.insertAdjacentHTML('beforeend', accessoryRowHtml(editAccessoryRowCount, data));
+    const idx = editAccessoryRowCount;
+    panel.querySelector(`[data-remove-accessory="${idx}"]`).addEventListener('click', () => {
+      panel.querySelector(`[data-accessory-row="${idx}"]`).remove();
+    });
+    editAccessoryRowCount++;
+  }
+
+  panel.querySelector('#omEditAccessories').addEventListener('click', () => {
+    editRowsHost.innerHTML = '';
+    editAccessoryRowCount = 0;
+    (order.accessories && order.accessories.length ? order.accessories : [{}]).forEach(addEditRow);
+    panel.querySelector('#omAccessoriesView').style.display = 'none';
+    panel.querySelector('#omAccessoriesEdit').style.display = 'block';
+    panel.querySelector('#omEditAccessories').style.display = 'none';
+  });
+  panel.querySelector('#omAddEditAccessoryRow').addEventListener('click', () => addEditRow());
+  panel.querySelector('#omCancelAccessoryEdit').addEventListener('click', () => {
+    panel.querySelector('#omAccessoriesView').style.display = 'block';
+    panel.querySelector('#omAccessoriesEdit').style.display = 'none';
+    panel.querySelector('#omEditAccessories').style.display = 'inline-block';
+  });
+  panel.querySelector('#omSaveAccessoryEdit').addEventListener('click', async () => {
+    const accessories = collectAccessoryRows(editRowsHost);
+    try {
+      await api(`/api/order-management/orders/${encodeURIComponent(order.id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ patch: { accessories }, actor: 'Web user' })
+      });
+      showToast('Accessories updated');
+      closePanel();
+      openDetailPanel(order.id);
+      refreshCurrentView();
+    } catch (e) { showToast(e.message, true); }
+  });
 }
 
 async function setSettlement(id, status) {
@@ -288,7 +507,7 @@ async function setSettlement(id, status) {
     });
     showToast('Settlement updated');
     closePanel();
-    loadOrders();
+    refreshCurrentView();
   } catch (e) { showToast(e.message, true); }
 }
 
@@ -308,20 +527,21 @@ function sizeRowHtml(idx) {
   `;
 }
 
-function accessoryRowHtml(idx) {
+function accessoryRowHtml(idx, data) {
+  data = data || {};
   return `
     <div class="om-accessory-form-row" data-accessory-row="${idx}">
       <div class="om-field-grid">
-        <div><label>Part name</label><input type="text" class="om-acc-name" /></div>
-        <div><label>Dimensions</label><input type="text" class="om-acc-dims" /></div>
-        <div><label>Material</label><input type="text" class="om-acc-material" /></div>
-        <div><label>Quantity</label><input type="number" class="om-acc-qty" /></div>
-        <div><label>Unit price</label><input type="number" step="0.01" class="om-acc-unit-price" /></div>
-        <div><label>Total price</label><input type="number" step="0.01" class="om-acc-total-price" /></div>
-        <div><label>Accessory supplier</label><input type="text" class="om-acc-supplier" /></div>
-        <div><label>Supplier contact</label><input type="text" class="om-acc-supplier-contact" /></div>
-        <div style="grid-column:1/-1;"><label>Delivery address</label><input type="text" class="om-acc-address" /></div>
-        <div style="grid-column:1/-1;"><label>Remark</label><input type="text" class="om-acc-remark" /></div>
+        <div><label>Part name</label><input type="text" class="om-acc-name" value="${escapeHtml(data.partName || '')}" /></div>
+        <div><label>Dimensions</label><input type="text" class="om-acc-dims" value="${escapeHtml(data.dimensions || '')}" /></div>
+        <div><label>Material</label><input type="text" class="om-acc-material" value="${escapeHtml(data.material || '')}" /></div>
+        <div><label>Quantity</label><input type="number" class="om-acc-qty" value="${escapeHtml(data.quantity ?? '')}" /></div>
+        <div><label>Unit price</label><input type="number" step="0.01" class="om-acc-unit-price" value="${escapeHtml(data.unitPrice ?? '')}" /></div>
+        <div><label>Total price</label><input type="number" step="0.01" class="om-acc-total-price" value="${escapeHtml(data.totalPrice ?? '')}" /></div>
+        <div><label>Accessory supplier</label><input type="text" class="om-acc-supplier" value="${escapeHtml(data.supplierName || '')}" /></div>
+        <div><label>Supplier contact</label><input type="text" class="om-acc-supplier-contact" value="${escapeHtml(data.supplierContact || '')}" /></div>
+        <div style="grid-column:1/-1;"><label>Delivery address</label><input type="text" class="om-acc-address" value="${escapeHtml(data.deliveryAddress || '')}" /></div>
+        <div style="grid-column:1/-1;"><label>Remark</label><input type="text" class="om-acc-remark" value="${escapeHtml(data.remark || '')}" /></div>
       </div>
       <button type="button" class="btn btn-secondary om-row-remove-block" data-remove-accessory="${idx}">Remove this part</button>
     </div>
@@ -452,8 +672,9 @@ function collectSizeRows() {
   })).filter((r) => r.sku || r.size || r.quantity);
 }
 
-function collectAccessoryRows() {
-  return Array.from(document.querySelectorAll('[data-accessory-row]')).map((row) => ({
+function collectAccessoryRows(container) {
+  const scope = container || document;
+  return Array.from(scope.querySelectorAll('[data-accessory-row]')).map((row) => ({
     partName: row.querySelector('.om-acc-name').value,
     dimensions: row.querySelector('.om-acc-dims').value,
     material: row.querySelector('.om-acc-material').value,
@@ -520,7 +741,6 @@ async function submitNewOrder() {
   try {
     await loadStatuses();
     render();
-    await loadOrders();
   } catch (e) {
     showToast(e.message, true);
   }

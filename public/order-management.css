@@ -4,6 +4,41 @@
 
 .om-root { max-width: 1180px; }
 
+.om-back-link {
+  background: none; border: none; color: var(--jc-teal-dark); font-weight: 600; font-size: 13.5px;
+  cursor: pointer; padding: 0; margin-bottom: 14px; display: inline-block;
+}
+.om-back-link:hover { text-decoration: underline; }
+
+.om-view-title { font-size: 20px; font-weight: 700; margin: 0 0 14px 0; }
+
+.om-tile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-top: 4px;
+}
+.om-tile {
+  background: #fff;
+  border: 1px solid var(--jc-border);
+  border-left: 5px solid var(--jc-teal);
+  border-radius: var(--radius);
+  padding: 20px;
+  cursor: pointer;
+  transition: box-shadow 0.15s, transform 0.1s;
+}
+.om-tile:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.08); transform: translateY(-1px); }
+.om-tile-title { font-weight: 700; font-size: 15px; margin-bottom: 6px; }
+.om-tile-count { font-size: 30px; font-weight: 800; color: var(--jc-teal-dark); line-height: 1; margin-bottom: 8px; }
+.om-tile-desc { font-size: 12.5px; color: var(--jc-muted); }
+.om-tile-clothing { border-left-color: #B9540E; }
+.om-tile-suppliers { border-left-color: #1F6FA5; }
+.om-tile-settlement { border-left-color: #B9770E; }
+
+@media (max-width: 640px) {
+  .om-tile-grid { grid-template-columns: 1fr; }
+}
+
 .om-toolbar {
   display: flex;
   flex-wrap: wrap;
