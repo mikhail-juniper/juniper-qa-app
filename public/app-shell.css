@@ -1,0 +1,46 @@
+/* Shared app shell styles - persistent left sidebar, paired with app-shell.js */
+
+.app-body-flex {
+  display: flex;
+  align-items: flex-start;
+  min-height: calc(100vh - 72px);
+}
+
+.app-sidebar {
+  flex: 0 0 220px;
+  width: 220px;
+  background: #ececec;
+  padding: 24px 0;
+  min-height: calc(100vh - 72px);
+  box-sizing: border-box;
+}
+
+.app-sidebar-group {
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--jc-muted, #666);
+  padding: 0 20px;
+  margin: 22px 0 8px 0;
+}
+.app-sidebar-group:first-child { margin-top: 0; }
+
+.app-sidebar-link {
+  display: block;
+  padding: 11px 20px;
+  font-size: 14.5px;
+  color: var(--jc-text, #1a1a1a);
+  text-decoration: none;
+}
+.app-sidebar-link:hover { background: #e0e0e0; }
+.app-sidebar-link.active { background: #d6d6d6; font-weight: 700; }
+
+.app-body-flex > main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+@media (max-width: 860px) {
+  .app-body-flex { flex-direction: column; }
+  .app-sidebar { width: 100%; flex: none; min-height: auto; padding: 12px 0; }
+}

@@ -109,6 +109,12 @@ function bindBackToHub() {
 
 // ---- Home / tile dashboard ----
 
+const homeTileState = {
+  clothing: { subTab: 'orders', search: '' },
+  toys: { subTab: 'orders', search: '' },
+  other: { subTab: 'orders', search: '' }
+};
+
 async function renderHome(root) {
   root.innerHTML = `<div class="om-empty">Loading...</div>`;
   let counts = { toys: 0, clothing: 0, other: 0, suppliers: 0, settlementPending: 0, newRequests: 0 };
@@ -121,16 +127,22 @@ async function renderHome(root) {
 
   const categoryTile = (productLine) => {
     const meta = CATEGORY_META[productLine];
+    const st = homeTileState[productLine];
     return `
       <div class="om-category-tile" data-tab="${productLine}">
         <div class="om-category-tile-header" style="border-color:${meta.color};">
           <span>${meta.label} Order Management</span>
+          <button class="btn btn-secondary om-view-all-btn" data-viewall="${productLine}">View all</button>
         </div>
         <div class="om-category-tile-subtabs">
-          <div class="om-subtab-btn" data-subtab="orders">All Orders <span class="om-subtab-count">${counts[productLine] || 0}</span></div>
-          <div class="om-subtab-btn" data-subtab="components">Main Components <span class="om-subtab-count">${counts[productLine] || 0}</span></div>
-          <div class="om-subtab-btn" data-subtab="accessories">Accessories <span class="om-subtab-count">${counts[productLine + 'Accessories'] || 0}</span></div>
+          <div class="om-subtab-btn ${st.subTab === 'orders' ? 'active' : ''}" data-subtab="orders">All Orders <span class="om-subtab-count">${counts[productLine] || 0}</span></div>
+          <div class="om-subtab-btn ${st.subTab === 'components' ? 'active' : ''}" data-subtab="components">Main Components <span class="om-subtab-count">${counts[productLine] || 0}</span></div>
+          <div class="om-subtab-btn ${st.subTab === 'accessories' ? 'active' : ''}" data-subtab="accessories">Accessories <span class="om-subtab-count">${counts[productLine + 'Accessories'] || 0}</span></div>
         </div>
+        <div class="om-tile-toolbar">
+          <input type="text" class="om-tile-search" data-search-for="${productLine}" placeholder="Search PO number, supplier, SKU..." value="${escapeHtml(st.search)}" />
+        </div>
+        <div class="om-tile-table-scroll" id="omTilePreview-${productLine}"><div class="om-empty">Loading...</div></div>
       </div>
     `;
   };
@@ -167,19 +179,97 @@ async function renderHome(root) {
   `;
 
   root.querySelectorAll('.om-category-tile').forEach((tile) => {
+    const productLine = tile.dataset.tab;
     tile.querySelectorAll('.om-subtab-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
-        currentTab = tile.dataset.tab;
-        currentCategorySubTab = btn.dataset.subtab;
-        currentView = 'category';
-        render();
-        loadOrders();
+        homeTileState[productLine].subTab = btn.dataset.subtab;
+        tile.querySelectorAll('.om-subtab-btn').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        loadTilePreview(productLine);
       });
     });
+    tile.querySelector('.om-tile-search').addEventListener('input', debounce((e) => {
+      homeTileState[productLine].search = e.target.value;
+      loadTilePreview(productLine);
+    }, 300));
+  });
+  root.querySelectorAll('.om-view-all-btn').forEach((btn) => {
+    btn.addEventListener('click', () => openCategoryFullScreen(btn.dataset.viewall));
   });
   root.querySelectorAll('#omPoRequestsHost tbody tr').forEach((tr) => {
     tr.addEventListener('click', () => openDetailPanel(tr.dataset.id));
   });
+
+  ['clothing', 'toys', 'other'].forEach(loadTilePreview);
+}
+
+async function loadTilePreview(productLine) {
+  const host = document.getElementById(`omTilePreview-${productLine}`);
+  if (!host) return;
+  const st = homeTileState[productLine];
+  try {
+    const params = new URLSearchParams({ productLine });
+    if (st.search) params.set('search', st.search);
+    const data = await api(`/api/order-management/orders?${params.toString()}`);
+    const orders = (data.orders || []).slice(0, 8); // preview only - "View all" shows everything
+    if (st.subTab === 'components') renderComponentsTable(host, orders);
+    else if (st.subTab === 'accessories') renderAccessoriesTable(host, flattenAccessories(orders));
+    else renderOrdersTableFull(host, orders, productLine);
+  } catch (e) { showToast(e.message, true); }
+}
+
+// "View all" on a home tile: opens the same category + sub-tab as a
+// full-screen modal (reusing the panel infrastructure from the PO detail
+// view) rather than navigating to a separate page.
+function openCategoryFullScreen(productLine) {
+  const meta = CATEGORY_META[productLine];
+  const st = homeTileState[productLine];
+  const panel = document.createElement('div');
+  panel.className = 'om-panel';
+  panel.innerHTML = `
+   <div class="om-panel-inner">
+    <div class="om-panel-header">
+      <div style="font-size:19px;font-weight:700;">${meta.label} Order Management</div>
+      <button class="om-panel-close" id="omClosePanel">&times;</button>
+    </div>
+    <div class="om-subtabs-bar">
+      <button class="om-subtab ${st.subTab === 'orders' ? 'active' : ''}" data-subtab="orders">All Orders</button>
+      <button class="om-subtab ${st.subTab === 'components' ? 'active' : ''}" data-subtab="components">Main Components</button>
+      <button class="om-subtab ${st.subTab === 'accessories' ? 'active' : ''}" data-subtab="accessories">Accessories</button>
+    </div>
+    <div class="om-toolbar">
+      <input class="om-search" id="omFullSearch" type="text" placeholder="Search PO number, supplier, SKU..." value="${escapeHtml(st.search)}" />
+    </div>
+    <div class="om-table-wrap"><div id="omFullTableHost"><div class="om-empty">Loading...</div></div></div>
+   </div>
+  `;
+  mountPanel(panel);
+  bindPanelEscape();
+  document.getElementById('omClosePanel').addEventListener('click', closePanel);
+
+  async function loadFull() {
+    const host = document.getElementById('omFullTableHost');
+    const params = new URLSearchParams({ productLine });
+    if (st.search) params.set('search', st.search);
+    const data = await api(`/api/order-management/orders?${params.toString()}`);
+    const orders = data.orders || [];
+    if (st.subTab === 'components') renderComponentsTable(host, orders);
+    else if (st.subTab === 'accessories') renderAccessoriesTable(host, flattenAccessories(orders));
+    else renderOrdersTableFull(host, orders, productLine);
+  }
+  panel.querySelectorAll('.om-subtab').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      st.subTab = btn.dataset.subtab;
+      panel.querySelectorAll('.om-subtab').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      loadFull().catch((e) => showToast(e.message, true));
+    });
+  });
+  document.getElementById('omFullSearch').addEventListener('input', debounce((e) => {
+    st.search = e.target.value;
+    loadFull().catch((err) => showToast(err.message, true));
+  }, 300));
+  loadFull().catch((e) => showToast(e.message, true));
 }
 
 // ---- Suppliers view ----
@@ -428,12 +518,13 @@ function flattenAccessories(orders) {
 
 // "All Orders" sub-tab: the full wide table, matching QingFlow's actual
 // column breadth (Images 2-3) rather than a trimmed-down summary.
-function renderOrdersTableFull(host, orders) {
+function renderOrdersTableFull(host, orders, productLine) {
+  productLine = productLine || currentTab;
   if (!orders.length) {
-    host.innerHTML = `<div class="om-empty">No orders yet for ${CATEGORY_META[currentTab] ? CATEGORY_META[currentTab].label : currentTab}.</div>`;
+    host.innerHTML = `<div class="om-empty">No orders yet for ${CATEGORY_META[productLine] ? CATEGORY_META[productLine].label : productLine}.</div>`;
     return;
   }
-  const isClothing = currentTab === 'clothing';
+  const isClothing = productLine === 'clothing';
   host.innerHTML = `
     <table class="om-table">
       <thead>
@@ -542,7 +633,7 @@ function renderComponentsTable(host, orders) {
 // ---- Detail panel ----
 
 function closePanel() {
-  document.querySelectorAll('.om-overlay, .om-panel').forEach((el) => el.remove());
+  document.querySelectorAll('.om-panel-backdrop').forEach((el) => el.remove());
   document.removeEventListener('keydown', handlePanelEscapeKey);
 }
 
@@ -554,44 +645,14 @@ function bindPanelEscape() {
   document.addEventListener('keydown', handlePanelEscapeKey);
 }
 
-// ---- Right-side navigation menu ----
-
-function closeNavMenu() {
-  document.querySelectorAll('.om-nav-overlay, .om-nav-drawer').forEach((el) => el.remove());
-}
-
-function openNavMenu() {
-  const overlay = document.createElement('div');
-  overlay.className = 'om-nav-overlay';
-  overlay.addEventListener('click', closeNavMenu);
-
-  const drawer = document.createElement('div');
-  drawer.className = 'om-nav-drawer';
-  drawer.innerHTML = `
-    <div class="om-nav-header"><strong>Menu</strong><button class="om-nav-close" id="omNavClose">&times;</button></div>
-    <button class="om-nav-item primary" id="omNavNewPO">+ New Purchase Order</button>
-
-    <div class="om-nav-group-label">Order Management</div>
-    <button class="om-nav-item om-nav-subitem" data-nav="home">Order Management</button>
-    <button class="om-nav-item om-nav-subitem" data-nav="suppliers">Suppliers</button>
-    <button class="om-nav-item om-nav-subitem" data-nav="settlement">Finances</button>
-
-    <div class="om-nav-group-label">QA/QC</div>
-    <a class="om-nav-item om-nav-subitem" href="reporting.html">QA/QC Reporting</a>
-    <a class="om-nav-item om-nav-subitem" href="approval.html">Product Development Approval</a>
-  `;
-  document.body.appendChild(overlay);
-  document.body.appendChild(drawer);
-
-  document.getElementById('omNavClose').addEventListener('click', closeNavMenu);
-  document.getElementById('omNavNewPO').addEventListener('click', () => { closeNavMenu(); openNewOrderPanel(); });
-  drawer.querySelectorAll('[data-nav]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      closeNavMenu();
-      currentView = btn.dataset.nav;
-      render();
-    });
+function mountPanel(panel) {
+  const backdrop = document.createElement('div');
+  backdrop.className = 'om-panel-backdrop';
+  backdrop.appendChild(panel);
+  backdrop.addEventListener('click', (e) => {
+    if (e.target === backdrop) closePanel();
   });
+  document.body.appendChild(backdrop);
 }
 
 async function openDetailPanel(id) {
@@ -625,17 +686,22 @@ async function openDetailPanel(id) {
     </div>
 
     <div class="om-section-title">Order details</div>
+    <div class="om-detail-grid">
     <div class="om-detail-row"><span class="om-label">Buyer</span><span class="om-value">${escapeHtml(order.buyer || '—')}</span></div>
     <div class="om-detail-row"><span class="om-label">Order placement date</span><span class="om-value">${fmtDate(order.orderPlacementDate)}</span></div>
     <div class="om-detail-row"><span class="om-label">Desired entry date</span><span class="om-value">${fmtDate(order.desiredEntryDate)}</span></div>
     <div class="om-detail-row"><span class="om-label">Manufacturer delivery date</span><span class="om-value">${fmtDate(order.manufacturerDeliveryDate)}</span></div>
+    </div>
 
     <div class="om-section-title">Supplier</div>
+    <div class="om-detail-grid">
     <div class="om-detail-row"><span class="om-label">Name</span><span class="om-value">${escapeHtml(order.supplier.name || '—')}</span></div>
     <div class="om-detail-row"><span class="om-label">Contact</span><span class="om-value">${escapeHtml(order.supplier.contact || '—')}</span></div>
     <div class="om-detail-row"><span class="om-label">Code</span><span class="om-value">${escapeHtml(order.supplier.code || '—')}</span></div>
+    </div>
 
     <div class="om-section-title">Main component</div>
+    <div class="om-detail-grid">
     <div class="om-detail-row"><span class="om-label">SKU</span><span class="om-value">${escapeHtml(order.mainComponent.sku || '—')}</span></div>
     <div class="om-detail-row"><span class="om-label">Model number</span><span class="om-value">${escapeHtml(order.mainComponent.modelNumber || '—')}</span></div>
     <div class="om-detail-row"><span class="om-label">Factory price</span><span class="om-value">${fmtMoney(order.mainComponent.factoryPrice)}</span></div>
@@ -647,12 +713,15 @@ async function openDetailPanel(id) {
     <div class="om-detail-row"><span class="om-label">Dimensions</span><span class="om-value">${escapeHtml(order.mainComponent.dimensions || '—')}</span></div>
     <div class="om-detail-row"><span class="om-label">Sent to warehouse</span><span class="om-value">${escapeHtml(order.mainComponent.warehouse || '—')}</span></div>
     ${order.mainComponent.productionPrecautions ? `<div class="om-detail-row"><span class="om-label">Production precautions</span><span class="om-value">${escapeHtml(order.mainComponent.productionPrecautions)}</span></div>` : ''}
+    </div>
 
     ${order.productLine === 'clothing' ? `
       <div class="om-section-title">Fabric</div>
+      <div class="om-detail-grid">
       <div class="om-detail-row"><span class="om-label">Fabric information</span><span class="om-value">${escapeHtml(order.mainComponent.fabricInfo || '—')}</span></div>
       <div class="om-detail-row"><span class="om-label">Component / composition</span><span class="om-value">${escapeHtml(order.mainComponent.component || '—')}</span></div>
       <div class="om-detail-row"><span class="om-label">Wash label</span><span class="om-value">${escapeHtml(order.mainComponent.washLabel || '—')}</span></div>
+      </div>
       ${order.mainComponent.sizeDistribution && order.mainComponent.sizeDistribution.length ? `
         <div class="om-section-title">Size distribution</div>
         <table class="om-table" style="min-width:0;">
@@ -699,6 +768,7 @@ async function openDetailPanel(id) {
       <button class="btn btn-secondary" id="omEditFulfillment" style="width:auto;padding:5px 12px;font-size:12px;">Edit</button>
     </div>
     <div id="omFulfillmentView">
+      <div class="om-detail-grid">
       <div class="om-detail-row"><span class="om-label">Packing list number</span><span class="om-value">${escapeHtml(order.fulfillment.packingListNumber || '—')}</span></div>
       <div class="om-detail-row"><span class="om-label">Waybill number</span><span class="om-value">${escapeHtml(order.fulfillment.waybillNumber || '—')}</span></div>
       <div class="om-detail-row"><span class="om-label">Warehouse entry date</span><span class="om-value">${fmtDate(order.fulfillment.warehouseEntryDate)}</span></div>
@@ -707,6 +777,7 @@ async function openDetailPanel(id) {
       <div class="om-detail-row"><span class="om-label">All accessories received?</span><span class="om-value">${escapeHtml(order.fulfillment.allAccessoriesReceived || '—')}</span></div>
       <div class="om-detail-row"><span class="om-label">Return tracking number</span><span class="om-value">${escapeHtml(order.fulfillment.returnTrackingNumber || '—')}</span></div>
       ${order.fulfillment.exceptionHandlingResults ? `<div class="om-detail-row"><span class="om-label">Exception handling</span><span class="om-value">${escapeHtml(order.fulfillment.exceptionHandlingResults)}</span></div>` : ''}
+      </div>
       ${order.fulfillment.replacementSizes && order.fulfillment.replacementSizes.length ? `
         <div style="margin-top:10px;font-size:12px;font-weight:700;color:var(--jc-muted);">Replacement sizes</div>
         <table class="om-table" style="min-width:0;">
@@ -750,11 +821,13 @@ async function openDetailPanel(id) {
     </div>
 
     <div class="om-section-title">Costs</div>
+    <div class="om-detail-grid">
     <div class="om-detail-row"><span class="om-label">Assembly fee</span><span class="om-value">${fmtMoney(order.costs.assemblyFee)}</span></div>
     <div class="om-detail-row"><span class="om-label">Labor costs</span><span class="om-value">${fmtMoney(order.costs.laborCosts)}</span></div>
     <div class="om-detail-row"><span class="om-label">Transportation fees</span><span class="om-value">${fmtMoney(order.costs.transportationFees)}</span></div>
     <div class="om-detail-row"><span class="om-label">Other expenses</span><span class="om-value">${fmtMoney(order.costs.otherExpenses)}</span></div>
     <div class="om-detail-row"><span class="om-label"><strong>Total owed</strong></span><span class="om-value">${fmtMoney(computeOrderTotal(order))}</span></div>
+    </div>
 
     <div class="om-section-title">Settlement</div>
     <div class="om-detail-row"><span class="om-label">Status</span><span class="om-value">${escapeHtml(order.settlement.status)}</span></div>
@@ -798,7 +871,7 @@ async function openDetailPanel(id) {
    </div>
   `;
 
-  document.body.appendChild(panel);
+  mountPanel(panel);
   bindPanelEscape();
 
   document.getElementById('omClosePanel').addEventListener('click', closePanel);
@@ -1132,7 +1205,7 @@ function openNewOrderPanel(existingOrder) {
     </div>
    </div>
   `;
-  document.body.appendChild(panel);
+  mountPanel(panel);
   bindPanelEscape();
 
   document.getElementById('omClosePanel').addEventListener('click', closePanel);
@@ -1301,9 +1374,11 @@ async function submitOrderForm(existingOrder, submitForManufacturing) {
 
 (async function init() {
   try {
+    const params = new URLSearchParams(location.search);
+    const view = params.get('view');
+    if (view === 'suppliers' || view === 'settlement') currentView = view;
     await Promise.all([loadStatuses(), loadFileCategories()]);
     render();
-    document.getElementById('omMenuToggle').addEventListener('click', openNavMenu);
   } catch (e) {
     showToast(e.message, true);
   }

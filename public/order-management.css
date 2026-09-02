@@ -83,7 +83,11 @@
   font-weight: 800;
   font-size: 16px;
   background: #fafbfa;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
+.om-view-all-btn { width: auto !important; padding: 6px 14px !important; font-size: 12.5px !important; font-weight: 600; }
 .om-category-tile-subtabs { display: flex; }
 .om-subtab-btn {
   flex: 1;
@@ -92,11 +96,19 @@
   font-size: 13.5px;
   font-weight: 600;
   border-right: 1px solid var(--jc-border);
+  border-bottom: 3px solid transparent;
   transition: background 0.15s;
 }
 .om-subtab-btn:last-child { border-right: none; }
 .om-subtab-btn:hover { background: var(--jc-mint-light); }
+.om-subtab-btn.active { border-bottom-color: var(--jc-teal); background: var(--jc-mint-light); }
 .om-subtab-count { color: var(--jc-teal-dark); font-weight: 800; margin-left: 4px; }
+
+.om-tile-toolbar { padding: 10px 18px; border-bottom: 1px solid var(--jc-border); }
+.om-tile-search {
+  width: 100%; padding: 8px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--jc-border); font-size: 13px;
+}
+.om-tile-table-scroll { max-height: 340px; overflow-y: auto; }
 
 .om-subtabs-bar { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid var(--jc-border); }
 .om-subtab {
@@ -286,18 +298,32 @@
   z-index: 30;
 }
 
-/* Full-screen detail / new-order panel (matches QingFlow's full-screen
-   record view rather than a side drawer). */
-.om-panel {
+/* Large centered modal card (matches QingFlow's record popup: dimmed
+   backdrop behind a clearly-bounded card, not edge-to-edge full screen -
+   which read as "just another page" rather than a pop-up). */
+.om-panel-backdrop {
   position: fixed; inset: 0;
+  background: rgba(20, 30, 25, 0.45);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.om-panel {
+  position: relative;
   background: #fff;
   z-index: 41;
+  width: min(1300px, 96vw);
+  height: min(900px, 92vh);
+  border-radius: var(--radius);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
   overflow-y: auto;
 }
 .om-panel-inner {
-  max-width: 860px;
+  max-width: 1120px;
   margin: 0 auto;
-  padding: 24px 28px 60px 28px;
+  padding: 20px 32px 60px 32px;
 }
 .om-panel-header {
   display: flex; justify-content: space-between; align-items: flex-start;
@@ -308,6 +334,14 @@
 .om-panel-close {
   background: none; border: none; font-size: 26px; cursor: pointer; color: var(--jc-muted);
   line-height: 1;
+}
+/* Two-column flow for the long stacks of label/value rows (Order details,
+   Supplier, Main component, etc.) so they use the card's width instead of
+   reading as one long single-column list. */
+.om-detail-grid { column-count: 2; column-gap: 32px; }
+.om-detail-grid .om-detail-row { break-inside: avoid; }
+@media (max-width: 760px) {
+  .om-detail-grid { column-count: 1; }
 }
 .om-section-title {
   font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 0.03em;
