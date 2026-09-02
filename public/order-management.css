@@ -140,6 +140,32 @@
 
 .om-settlement-toggle { display: flex; gap: 8px; margin-top: 6px; }
 
+.om-repeat-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 90px 32px;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.om-repeat-row input {
+  padding: 8px 10px; border-radius: var(--radius-sm); border: 1.5px solid var(--jc-border); font-size: 13.5px;
+}
+.om-row-remove {
+  background: #fff; border: 1.5px solid var(--jc-border); border-radius: var(--radius-sm);
+  width: 32px; height: 32px; cursor: pointer; color: var(--jc-muted); font-size: 16px; line-height: 1;
+}
+.om-row-remove:hover { border-color: var(--jc-fail); color: var(--jc-fail); }
+
+.om-accessory-form-row {
+  border: 1px solid var(--jc-border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  margin-bottom: 12px;
+  background: #fafbfa;
+}
+.om-row-remove-block { margin-top: 10px; width: auto !important; padding: 6px 12px !important; font-size: 12.5px; }
+
 @media (max-width: 640px) {
   .om-field-grid { grid-template-columns: 1fr; }
+  .om-repeat-row { grid-template-columns: 1fr 1fr; grid-template-areas: "sku size" "qty remove"; }
 }
