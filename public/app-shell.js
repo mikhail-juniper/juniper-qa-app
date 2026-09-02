@@ -22,6 +22,7 @@ const APP_NAV = [
       { label: 'Products', href: 'order-management.html?view=products', omView: 'products' },
       { label: 'Components', href: 'order-management.html?view=components', omView: 'components' },
       { label: 'Suppliers', href: 'order-management.html?view=suppliers', omView: 'suppliers' },
+      { label: 'Clients', href: 'clients.html' },
       { label: 'Sizing Charts', href: 'sizing-charts.html' }
     ]
   },

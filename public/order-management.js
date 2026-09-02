@@ -276,13 +276,19 @@ function openCategoryFullScreen(productLine) {
 
 // ---- Suppliers view ----
 
-async function renderSuppliersShell(root, productLine) {
-  const title = productLine && CATEGORY_META[productLine] ? `${CATEGORY_META[productLine].label} Suppliers` : 'Suppliers';
-  root.innerHTML = `${backToHubHtml()}<h2 class="om-view-title">${escapeHtml(title)}</h2><div id="omSuppliersHost" class="om-table-wrap"><div class="om-empty">Loading...</div></div>`;
+async function renderSuppliersShell(root) {
+  root.innerHTML = `
+    ${backToHubHtml()}
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <h2 class="om-view-title" style="margin:0;">Suppliers</h2>
+      <button class="btn btn-primary" id="omNewSupplierBtn" style="width:auto;padding:10px 18px;">+ New supplier</button>
+    </div>
+    <div id="omSuppliersHost" class="om-table-wrap"><div class="om-empty">Loading...</div></div>
+  `;
   bindBackToHub();
+  document.getElementById('omNewSupplierBtn').addEventListener('click', () => openSupplierForm(null));
   try {
-    const params = productLine ? `?productLine=${encodeURIComponent(productLine)}` : '';
-    const data = await api(`/api/order-management/suppliers${params}`);
+    const data = await api('/api/suppliers');
     renderSuppliersTable(data.suppliers || []);
   } catch (e) { showToast(e.message, true); }
 }
@@ -291,25 +297,126 @@ function renderSuppliersTable(suppliers) {
   const host = document.getElementById('omSuppliersHost');
   if (!host) return;
   if (!suppliers.length) {
-    host.innerHTML = `<div class="om-empty">No suppliers recorded yet. They'll show up here automatically as POs are created.</div>`;
+    host.innerHTML = `<div class="om-empty">No suppliers recorded yet. Click "New supplier" to add your first one.</div>`;
     return;
   }
   host.innerHTML = `
     <table class="om-table">
-      <thead><tr><th>Supplier</th><th>Contact</th><th>Code</th><th>Product lines</th><th># Orders</th></tr></thead>
+      <thead>
+        <tr>
+          <th>Supplier name</th><th>Company name</th><th>Vendor code</th><th>Product type</th>
+          <th>Contact name</th><th>Phone</th><th>WeChat</th><th>Currency</th>
+        </tr>
+      </thead>
       <tbody>
         ${suppliers.map((s) => `
-          <tr>
+          <tr data-id="${escapeHtml(s.id)}">
             <td><strong>${escapeHtml(s.name)}</strong></td>
-            <td>${escapeHtml(s.contact || '—')}</td>
-            <td>${escapeHtml(s.code || '—')}</td>
-            <td>${s.productLines.map((p) => escapeHtml(CATEGORY_META[p] ? CATEGORY_META[p].label : p)).join(', ')}</td>
-            <td>${s.orderCount}</td>
+            <td>${escapeHtml(s.companyName || '—')}</td>
+            <td>${escapeHtml(s.vendorCode || '—')}</td>
+            <td>${escapeHtml(s.productType || '—')}</td>
+            <td>${escapeHtml(s.contactName || '—')}</td>
+            <td>${escapeHtml(s.phoneNumber || '—')}</td>
+            <td>${escapeHtml(s.wechat || '—')}</td>
+            <td>${escapeHtml(s.currency || '—')}</td>
           </tr>
         `).join('')}
       </tbody>
     </table>
   `;
+  host.querySelectorAll('tbody tr').forEach((tr) => {
+    tr.addEventListener('click', async () => {
+      try {
+        const data = await api(`/api/suppliers/${encodeURIComponent(tr.dataset.id)}`);
+        openSupplierForm(data.supplier);
+      } catch (e) { showToast(e.message, true); }
+    });
+  });
+}
+
+function openSupplierForm(supplier) {
+  const panel = document.createElement('div');
+  panel.className = 'om-panel';
+  panel.innerHTML = `
+   <div class="om-panel-inner">
+    <div class="om-panel-header">
+      <div style="font-size:19px;font-weight:700;">${supplier ? 'Edit supplier' : 'New supplier'}</div>
+      <button class="om-panel-close" id="omSupplierClose">&times;</button>
+    </div>
+    <div class="om-field-grid">
+      <div><label>Supplier name *</label><input id="spName" type="text" value="${val(supplier && supplier.name)}" /></div>
+      <div><label>Company name</label><input id="spCompanyName" type="text" value="${val(supplier && supplier.companyName)}" /></div>
+      <div><label>Vendor code</label><input id="spVendorCode" type="text" value="${val(supplier && supplier.vendorCode)}" /></div>
+      <div><label>Product type</label><input id="spProductType" type="text" placeholder="e.g. Apparel, Bag, Carabiner" value="${val(supplier && supplier.productType)}" /></div>
+      <div><label>Contact name</label><input id="spContactName" type="text" value="${val(supplier && supplier.contactName)}" /></div>
+      <div><label>Phone number</label><input id="spPhoneNumber" type="text" value="${val(supplier && supplier.phoneNumber)}" /></div>
+      <div><label>WeChat</label><input id="spWechat" type="text" value="${val(supplier && supplier.wechat)}" /></div>
+      <div><label>Currency</label>
+        <select id="spCurrency">
+          <option value="RMB" ${!supplier || supplier.currency === 'RMB' ? 'selected' : ''}>RMB</option>
+          <option value="USD" ${supplier && supplier.currency === 'USD' ? 'selected' : ''}>Dollar (USD)</option>
+        </select>
+      </div>
+    </div>
+    <div class="om-field-grid" style="margin-top:10px;">
+      <div style="grid-column:1/-1;"><label>Mailing address</label><input id="spMailingAddress" type="text" value="${val(supplier && supplier.mailingAddress)}" /></div>
+      <div style="grid-column:1/-1;"><label>Shipping address</label><input id="spShippingAddress" type="text" value="${val(supplier && supplier.shippingAddress)}" /></div>
+      <div style="grid-column:1/-1;"><label>Business info</label><input id="spBusinessInfo" type="text" value="${val(supplier && supplier.businessInfo)}" /></div>
+      <div style="grid-column:1/-1;"><label>Notes</label><input id="spNotes" type="text" value="${val(supplier && supplier.notes)}" /></div>
+    </div>
+    <div style="margin-top:22px;display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn btn-secondary" id="spCancel" style="width:auto;padding:10px 18px;">Cancel</button>
+      ${supplier ? `<button class="btn btn-secondary" id="spDelete" style="width:auto;padding:10px 18px;color:var(--jc-fail);">Delete</button>` : ''}
+      <button class="btn btn-primary" id="spSave" style="width:auto;padding:10px 18px;">${supplier ? 'Save changes' : 'Create supplier'}</button>
+    </div>
+   </div>
+  `;
+  mountPanel(panel);
+  bindPanelEscape();
+  document.getElementById('omSupplierClose').addEventListener('click', closePanel);
+  document.getElementById('spCancel').addEventListener('click', closePanel);
+
+  if (supplier) {
+    document.getElementById('spDelete').addEventListener('click', async () => {
+      if (!confirm(`Delete "${supplier.name}"? This can't be undone.`)) return;
+      try {
+        await api(`/api/suppliers/${encodeURIComponent(supplier.id)}`, { method: 'DELETE' });
+        showToast('Supplier deleted');
+        closePanel();
+        refreshCurrentView();
+      } catch (e) { showToast(e.message, true); }
+    });
+  }
+
+  document.getElementById('spSave').addEventListener('click', async () => {
+    const name = document.getElementById('spName').value.trim();
+    if (!name) return showToast('Supplier name is required', true);
+    const payload = {
+      name,
+      companyName: document.getElementById('spCompanyName').value,
+      vendorCode: document.getElementById('spVendorCode').value,
+      productType: document.getElementById('spProductType').value,
+      contactName: document.getElementById('spContactName').value,
+      phoneNumber: document.getElementById('spPhoneNumber').value,
+      wechat: document.getElementById('spWechat').value,
+      currency: document.getElementById('spCurrency').value,
+      mailingAddress: document.getElementById('spMailingAddress').value,
+      shippingAddress: document.getElementById('spShippingAddress').value,
+      businessInfo: document.getElementById('spBusinessInfo').value,
+      notes: document.getElementById('spNotes').value
+    };
+    try {
+      if (supplier) {
+        await api(`/api/suppliers/${encodeURIComponent(supplier.id)}`, { method: 'PATCH', body: JSON.stringify(payload) });
+        showToast('Supplier updated');
+      } else {
+        await api('/api/suppliers', { method: 'POST', body: JSON.stringify(payload) });
+        showToast('Supplier created');
+      }
+      closePanel();
+      refreshCurrentView();
+    } catch (e) { showToast(e.message, true); }
+  });
 }
 
 // ---- Products / Components catalog views ("Product Information") ----

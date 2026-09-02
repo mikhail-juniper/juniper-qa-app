@@ -11,6 +11,7 @@ let draftNewFit = { label_en: '', label_zh: '', group: 'other', points: [], poin
 let draftNewFitKey = '';
 let dirty = false;
 let backupStatus = null;
+let scheduledBackups = [];
 let restoreMode = 'ignore';
 let restoreResult = null;
 let restoreInProgress = false;
@@ -19,8 +20,6 @@ const NEW_FIT_SENTINEL = '__new_fit__';
 const FIT_GROUPS = ['hoodie', 'crewnecks', 't_shirt', 'jacket', 'hat', 'other'];
 
 const LISTS = [
-  { key: 'factoryCodes', labelKey: 'factoryCode', pluralEn: 'Factory Codes', pluralZh: '工厂代码' },
-  { key: 'creators', labelKey: 'creator', pluralEn: 'Creators / Brands', pluralZh: '创作者 / 品牌方' },
   { key: 'qaLeads', labelKey: 'qaLead', pluralEn: 'QA/QC Leads', pluralZh: 'QA/QC 负责人' },
   { key: 'productDevelopmentLeads', labelKey: 'productDevelopmentLead', pluralEn: 'Product Development Leads', pluralZh: '产品开发负责人' }
 ];
@@ -53,14 +52,15 @@ function showToast(msg, isError = false) {
 
 async function loadEverything() {
   try {
-    const [configRes, optionsRes, tiersRes, recRes, costsRes, fitsRes, backupStatusRes] = await Promise.all([
+    const [configRes, optionsRes, tiersRes, recRes, costsRes, fitsRes, backupStatusRes, scheduledBackupsRes] = await Promise.all([
       fetch('/api/config'),
       fetch('/api/options'),
       fetch('/api/creator-tiers'),
       fetch('/api/aql-recommendation'),
       fetch('/api/unit-costs'),
       fetch('/api/fits'),
-      fetch('/api/backup/status')
+      fetch('/api/backup/status'),
+      fetch('/api/backup/scheduled')
     ]);
     const config = await configRes.json();
     I18N = config.i18n || {};
@@ -70,6 +70,7 @@ async function loadEverything() {
     currentUnitCosts = await costsRes.json();
     currentFits = await fitsRes.json();
     backupStatus = await backupStatusRes.json();
+    scheduledBackups = (await scheduledBackupsRes.json()).backups || [];
   } catch (e) {
     console.error(e);
     showToast('Failed to load settings / 加载设置失败', true);
@@ -97,6 +98,21 @@ function renderBackupCard() {
       <div class="section-help">${escapeHtml(bi('backupHelp').en)}<br/>${escapeHtml(bi('backupHelp').zh)}</div>
       ${warning}
       <a href="/api/backup/download" class="btn btn-primary" style="display:inline-block; width:auto; padding:10px 18px; text-decoration:none; margin-top:10px;">${escapeHtml(bi('downloadBackup').en)} / ${escapeHtml(bi('downloadBackup').zh)}</a>
+
+      <div style="margin-top:16px;">
+        <div class="section-title" style="font-size:14px;">Automatic weekly backups</div>
+        <div class="section-help">A backup is saved automatically about once a week - this list is just a safety net alongside the manual download above.</div>
+        ${scheduledBackups.length ? `
+          <div class="settings-list" style="margin-top:8px;">
+            ${scheduledBackups.map((b) => `
+              <div class="settings-item">
+                <span>${escapeHtml(b.filename)} &middot; ${new Date(b.createdAt).toLocaleDateString()} &middot; ${(b.sizeBytes / 1024 / 1024).toFixed(1)} MB</span>
+                <a href="/api/backup/scheduled/${encodeURIComponent(b.filename)}" style="font-weight:600;">Download</a>
+              </div>
+            `).join('')}
+          </div>
+        ` : `<div class="section-help">No automatic backups yet - the first one is created shortly after this app starts.</div>`}
+      </div>
 
       <div style="margin-top:20px; padding-top:16px; border-top:1px solid var(--jc-border);">
         <div class="section-title" style="font-size:15px;">${escapeHtml(bi('restoreBackupTitle', 'Restore from Backup').en)} / ${escapeHtml(bi('restoreBackupTitle', 'Restore from Backup').zh)}</div>
@@ -126,7 +142,6 @@ function render() {
     ${renderBackupCard()}
     ${LISTS.map(renderListCard).join('')}
 
-    ${renderCreatorTiersCard()}
     ${renderAqlTableCard()}
     ${renderUnitCostsCard()}
     ${renderFitsCard()}
@@ -165,45 +180,7 @@ function renderListCard(def) {
   `;
 }
 
-/* ---- Creator Tiers ---- */
-function renderCreatorTiersCard() {
-  const tiers = currentCreatorTiers.tiers || {};
-  const names = Object.keys(tiers).sort((a, b) => a.localeCompare(b));
-  const rows = names.map((name) => `
-    <div class="settings-item" data-creator-row="${escapeHtml(name)}">
-      <span style="flex:1;">${escapeHtml(name)}</span>
-      <select data-creator-tier="${escapeHtml(name)}" style="width:64px; padding:6px; margin-right:8px;">
-        ${[1, 2, 3].map((t) => `<option value="${t}" ${tiers[name] === t ? 'selected' : ''}>${t}</option>`).join('')}
-      </select>
-      <button type="button" class="settings-remove" data-remove-creator="${escapeHtml(name)}">✕</button>
-    </div>
-  `).join('');
-
-  return `
-    <div class="card">
-      <div class="section-title">${escapeHtml(bi('manageCreatorTiers').en)}<span class="zh">${escapeHtml(bi('manageCreatorTiers').zh)}</span></div>
-      <div class="section-help">${escapeHtml(bi('manageCreatorTiersHelp').en)}<br/>${escapeHtml(bi('manageCreatorTiersHelp').zh)}</div>
-      <div class="field" style="margin-top:10px;">
-        <label class="field-label">${escapeHtml(bi('defaultTierLabel').en)}</label>
-        <select id="defaultTierSelect" style="max-width:120px;">
-          ${[1, 2, 3].map((t) => `<option value="${t}" ${currentCreatorTiers.defaultTier === t ? 'selected' : ''}>${t}</option>`).join('')}
-        </select>
-      </div>
-      <div class="settings-list" id="list_creatorTiers" style="max-height:320px; margin-top:10px;">
-        ${rows || `<div class="section-help">No entries yet.</div>`}
-      </div>
-      <div class="field-row" style="margin-top:12px;">
-        <input type="text" id="add_creator_name" placeholder="Creator name..." style="flex:1;" />
-        <select id="add_creator_tier" style="width:64px;">
-          <option value="1">1</option><option value="2" selected>2</option><option value="3">3</option>
-        </select>
-        <button type="button" class="btn btn-secondary" style="flex:0 0 auto;" id="btnAddCreatorTier">
-          ${escapeHtml(bi('addOption').en)} / ${escapeHtml(bi('addOption').zh)}
-        </button>
-      </div>
-    </div>
-  `;
-}
+/* ---- Creator Tiers: moved to the "Clients" page under Product Information ---- */
 
 /* ---- AQL Recommendation Table ---- */
 function renderAqlTableCard() {
@@ -239,7 +216,7 @@ function renderAqlTableCard() {
 
   return `
     <div class="card">
-      <div class="section-title">${escapeHtml(bi('manageAqlTable').en)}<span class="zh">${escapeHtml(bi('manageAqlTable').zh)}</span></div>
+      <div class="section-title">QA/QC Recommendation Table</div>
       <div class="section-help">${escapeHtml(bi('manageAqlTableHelp').en)}<br/>${escapeHtml(bi('manageAqlTableHelp').zh)}</div>
       ${tierBlocks}
     </div>
@@ -271,6 +248,9 @@ function renderUnitCostsCard() {
     <div class="card">
       <div class="section-title">${escapeHtml(bi('manageUnitCosts').en)}<span class="zh">${escapeHtml(bi('manageUnitCosts').zh)}</span></div>
       <div class="section-help">${escapeHtml(bi('manageUnitCostsHelp').en)}<br/>${escapeHtml(bi('manageUnitCostsHelp').zh)}</div>
+      <div class="section-help" style="margin-top:6px; padding:8px 10px; background:var(--jc-mint-light); border-radius:var(--radius-sm); color:var(--jc-teal-dark);">
+        Real per-order factory pricing now lives on each PO in the Order Management Hub (in RMB). This table is kept as a fallback / rough estimate for cases without a matching PO yet - not yet wired to auto-pull from PO data or convert RMB→USD.
+      </div>
       ${catBlocks}
       <div class="field-row" style="margin-top:10px; align-items:center;">
         <span style="flex:1; font-size:13.5px;">Other category (top-level) <span class="zh">其他（顶层类别）</span></span>
@@ -523,40 +503,6 @@ function attachHandlers() {
     }
   });
 
-  // Creator tiers
-  const defaultTierSelect = document.getElementById('defaultTierSelect');
-  if (defaultTierSelect) {
-    defaultTierSelect.addEventListener('change', (e) => {
-      currentCreatorTiers.defaultTier = parseInt(e.target.value, 10);
-      dirty = true;
-    });
-  }
-  document.querySelectorAll('[data-creator-tier]').forEach((el) => {
-    el.addEventListener('change', (e) => {
-      currentCreatorTiers.tiers[el.getAttribute('data-creator-tier')] = parseInt(e.target.value, 10);
-      dirty = true;
-    });
-  });
-  document.querySelectorAll('[data-remove-creator]').forEach((el) => {
-    el.addEventListener('click', () => {
-      delete currentCreatorTiers.tiers[el.getAttribute('data-remove-creator')];
-      dirty = true;
-      render();
-    });
-  });
-  const btnAddCreatorTier = document.getElementById('btnAddCreatorTier');
-  if (btnAddCreatorTier) {
-    btnAddCreatorTier.addEventListener('click', () => {
-      const nameInput = document.getElementById('add_creator_name');
-      const tierInput = document.getElementById('add_creator_tier');
-      const name = (nameInput.value || '').trim();
-      if (!name) return;
-      currentCreatorTiers.tiers[name] = parseInt(tierInput.value, 10);
-      dirty = true;
-      render();
-    });
-  }
-
   // AQL table
   document.querySelectorAll('[data-aql-cell]').forEach((el) => {
     el.addEventListener('change', (e) => {
@@ -672,10 +618,6 @@ async function saveSettings() {
       fetch('/api/options', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ creators: currentOptions.creators, factoryCodes: currentOptions.factoryCodes, qaLeads: currentOptions.qaLeads, productDevelopmentLeads: currentOptions.productDevelopmentLeads })
-      }),
-      fetch('/api/creator-tiers', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tiers: currentCreatorTiers.tiers, defaultTier: currentCreatorTiers.defaultTier })
       }),
       fetch('/api/aql-recommendation', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },

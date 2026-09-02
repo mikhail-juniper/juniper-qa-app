@@ -13,6 +13,7 @@ const submissionLog = require('./lib/submissionLog');
 const poStore = require('./lib/poStore');
 const orderManagementStore = require('./lib/orderManagementStore');
 const sizingChartStore = require('./lib/sizingChartStore');
+const supplierStore = require('./lib/supplierStore');
 const approvalStore = require('./lib/approvalStore');
 const approvalPhotoSets = require('./config/approvalPhotoSets.json');
 const asanaClient = require('./lib/asanaClient');
@@ -820,6 +821,32 @@ app.delete('/api/sizing-charts/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// ---- Suppliers (real master data, per Product Information) ----
+app.get('/api/suppliers', (req, res) => {
+  res.json({ suppliers: supplierStore.listSuppliers() });
+});
+app.get('/api/suppliers/:id', (req, res) => {
+  const supplier = supplierStore.getSupplier(req.params.id);
+  if (!supplier) return res.status(404).json({ error: 'Supplier not found' });
+  res.json({ supplier });
+});
+app.post('/api/suppliers', (req, res) => {
+  const body = req.body || {};
+  if (!body.name) return res.status(400).json({ error: 'name is required' });
+  const supplier = supplierStore.createSupplier({ ...body, id: uuidv4() });
+  res.json({ ok: true, supplier });
+});
+app.patch('/api/suppliers/:id', (req, res) => {
+  const updated = supplierStore.updateSupplier(req.params.id, req.body || {});
+  if (!updated) return res.status(404).json({ error: 'Supplier not found' });
+  res.json({ ok: true, supplier: updated });
+});
+app.delete('/api/suppliers/:id', (req, res) => {
+  const ok = supplierStore.deleteSupplier(req.params.id);
+  if (!ok) return res.status(404).json({ error: 'Supplier not found' });
+  res.json({ ok: true });
+});
+
 app.get('/api/order-management/counts', (req, res) => {
   res.json(orderManagementStore.getCounts());
 });
@@ -1079,6 +1106,97 @@ app.get('/api/consolidated-report/:poNumber', async (req, res) => {
     console.error('Failed to build consolidated report:', err);
     res.status(500).json({ error: 'Failed to build consolidated report', detail: String(err.message || err) });
   }
+});
+
+// ---- One-time migration: Factory Codes -> Suppliers ----
+// Factory Codes used to be a flat editable list in Settings. They now live
+// as bare Supplier records instead (name only, other fields blank - fill
+// them in from the Suppliers page as time allows). Runs on every startup
+// but is idempotent: only creates a supplier for a factory code that isn't
+// already present as a supplier name, so re-running is harmless.
+function migrateFactoryCodesToSuppliers() {
+  try {
+    const options = loadOptions();
+    const factoryCodes = options.factoryCodes || [];
+    if (!factoryCodes.length) return;
+    const existingNames = new Set(supplierStore.listSuppliers().map((s) => s.name.trim().toLowerCase()));
+    let migrated = 0;
+    factoryCodes.forEach((code) => {
+      const trimmed = String(code).trim();
+      if (!trimmed || existingNames.has(trimmed.toLowerCase())) return;
+      supplierStore.createSupplier({ id: uuidv4(), name: trimmed });
+      existingNames.add(trimmed.toLowerCase());
+      migrated += 1;
+    });
+    if (migrated) console.log(`Migrated ${migrated} factory code(s) into Suppliers as bare records.`);
+  } catch (err) {
+    console.error('Factory code -> Supplier migration failed:', err);
+  }
+}
+migrateFactoryCodesToSuppliers();
+
+// ---- Scheduled weekly backup ----
+// Same zip contents as the manual "Download Backup" button, but written to
+// disk automatically so a backup exists even if nobody remembers to click
+// download. Excludes its own folder from the archive so weekly backups
+// don't nest inside each other and balloon in size over time.
+const SCHEDULED_BACKUP_DIR = path.join(submissionLog.DATA_DIR, 'scheduled-backups');
+const BACKUP_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
+const MAX_SCHEDULED_BACKUPS = 8; // ~2 months of weekly snapshots
+
+function listScheduledBackups() {
+  if (!fs.existsSync(SCHEDULED_BACKUP_DIR)) return [];
+  return fs.readdirSync(SCHEDULED_BACKUP_DIR)
+    .filter((f) => f.endsWith('.zip'))
+    .map((f) => {
+      const stat = fs.statSync(path.join(SCHEDULED_BACKUP_DIR, f));
+      return { filename: f, createdAt: stat.mtime.toISOString(), sizeBytes: stat.size };
+    })
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
+function pruneScheduledBackups() {
+  const backups = listScheduledBackups();
+  backups.slice(MAX_SCHEDULED_BACKUPS).forEach((b) => {
+    try { fs.unlinkSync(path.join(SCHEDULED_BACKUP_DIR, b.filename)); } catch (e) { /* best-effort */ }
+  });
+}
+
+async function runScheduledBackupIfDue() {
+  try {
+    const existing = listScheduledBackups();
+    const last = existing[0];
+    if (last && (Date.now() - new Date(last.createdAt).getTime()) < BACKUP_INTERVAL_MS) return;
+    fs.mkdirSync(SCHEDULED_BACKUP_DIR, { recursive: true });
+    const filename = `weekly-backup-${new Date().toISOString().slice(0, 10)}.zip`;
+    const destPath = path.join(SCHEDULED_BACKUP_DIR, filename);
+    const output = fs.createWriteStream(destPath);
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    await new Promise((resolve, reject) => {
+      output.on('close', resolve);
+      archive.on('error', reject);
+      archive.pipe(output);
+      archive.glob('**/*', { cwd: submissionLog.DATA_DIR, ignore: ['scheduled-backups/**'] });
+      archive.finalize();
+    });
+    pruneScheduledBackups();
+    console.log(`Scheduled backup created: ${filename}`);
+  } catch (err) {
+    console.error('Scheduled backup failed:', err);
+  }
+}
+runScheduledBackupIfDue();
+setInterval(runScheduledBackupIfDue, 24 * 60 * 60 * 1000); // check daily, only acts once 7 days have passed
+
+app.get('/api/backup/scheduled', (req, res) => {
+  res.json({ backups: listScheduledBackups() });
+});
+app.get('/api/backup/scheduled/:filename', (req, res) => {
+  const filePath = path.join(SCHEDULED_BACKUP_DIR, req.params.filename);
+  if (!filePath.startsWith(SCHEDULED_BACKUP_DIR) || !fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'Backup not found' });
+  }
+  res.download(filePath);
 });
 
 app.listen(PORT, () => {
