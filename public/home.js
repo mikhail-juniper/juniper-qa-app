@@ -67,6 +67,14 @@ function render() {
         <div class="home-nav-desc">${biBlockHtml('homeReportsDesc', 'Look up and download full reports by SKU')}</div>
       </div>
     </div>
+
+    <div class="home-nav-card" onclick="location.href='order-management.html'">
+      <div class="home-nav-icon">📦</div>
+      <div class="home-nav-text">
+        <div class="home-nav-title">Order Management Hub</div>
+        <div class="home-nav-desc">Track active POs, costs, suppliers, and settlement across Toys and Clothing</div>
+      </div>
+    </div>
   `;
 }
 

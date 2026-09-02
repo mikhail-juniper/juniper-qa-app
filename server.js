@@ -11,6 +11,7 @@ const { computeOverallResult, collectAllDefects } = require('./lib/passFail');
 const { getRecommendation } = require('./lib/aqlRecommendation');
 const submissionLog = require('./lib/submissionLog');
 const poStore = require('./lib/poStore');
+const orderManagementStore = require('./lib/orderManagementStore');
 const approvalStore = require('./lib/approvalStore');
 const approvalPhotoSets = require('./config/approvalPhotoSets.json');
 const asanaClient = require('./lib/asanaClient');
@@ -696,6 +697,63 @@ app.get('/api/purchase-orders', (req, res) => {
 
 app.get('/api/sku-established-fit/:sku', (req, res) => {
   res.json({ fit: poStore.getEstablishedFitForSku(req.params.sku) });
+});
+
+// ---- Order Management Hub ----
+// Rebuild of the QingFlow "Order Management" workspace. See
+// /docs/order-management-workflow-spec.md for the reverse-engineered
+// QingFlow logic this is based on, and the design decisions that diverge
+// from it (parent stays in sync, status is manually advanced).
+
+app.get('/api/order-management/statuses', (req, res) => {
+  res.json({ statuses: orderManagementStore.STATUSES });
+});
+
+app.get('/api/order-management/orders', (req, res) => {
+  const { productLine, status, search } = req.query;
+  res.json({ orders: orderManagementStore.listOrders({ productLine, status, search }) });
+});
+
+app.get('/api/order-management/orders/:id', (req, res) => {
+  const order = orderManagementStore.getOrderById(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  res.json({ order });
+});
+
+app.post('/api/order-management/orders', (req, res) => {
+  try {
+    const body = req.body || {};
+    if (!body.poNumber) return res.status(400).json({ error: 'poNumber is required' });
+    const entry = orderManagementStore.createOrder({ ...body, id: uuidv4() }, body.actor || req.get('X-Actor'));
+    res.json({ ok: true, order: entry });
+  } catch (err) {
+    console.error('Failed to create order:', err);
+    res.status(500).json({ error: 'Failed to create order', detail: String(err.message || err) });
+  }
+});
+
+app.patch('/api/order-management/orders/:id', (req, res) => {
+  const body = req.body || {};
+  const actor = body.actor || req.get('X-Actor');
+  const updated = orderManagementStore.updateOrder(req.params.id, body.patch || {}, actor);
+  if (!updated) return res.status(404).json({ error: 'Order not found' });
+  res.json({ ok: true, order: updated });
+});
+
+app.post('/api/order-management/orders/:id/status', (req, res) => {
+  const body = req.body || {};
+  if (!body.status) return res.status(400).json({ error: 'status is required' });
+  const updated = orderManagementStore.setStatus(req.params.id, body.status, body.actor || req.get('X-Actor'));
+  if (!updated) return res.status(404).json({ error: 'Order not found' });
+  res.json({ ok: true, order: updated });
+});
+
+app.post('/api/order-management/orders/:id/settlement', (req, res) => {
+  const body = req.body || {};
+  if (!body.status) return res.status(400).json({ error: 'status is required' });
+  const updated = orderManagementStore.setSettlement(req.params.id, body.status, body.actor || req.get('X-Actor'));
+  if (!updated) return res.status(404).json({ error: 'Order not found' });
+  res.json({ ok: true, order: updated });
 });
 
 // ---- QA/QC Approval workflow ----
