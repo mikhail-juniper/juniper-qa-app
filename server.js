@@ -795,6 +795,10 @@ app.get('/api/order-management/components', (req, res) => {
   res.json({ components: orderManagementStore.listComponents(req.query.productLine) });
 });
 
+app.get('/api/order-management/field-history', (req, res) => {
+  res.json(orderManagementStore.getFieldHistory());
+});
+
 // ---- Sizing charts ----
 app.get('/api/sizing-charts', (req, res) => {
   res.json({ charts: sizingChartStore.listCharts() });

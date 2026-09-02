@@ -12,8 +12,8 @@ const APP_NAV = [
     items: [
       { label: 'New Purchase Order', href: 'reporting.html?mode=newPO' },
       { label: 'Order Management', href: 'order-management.html', omView: 'home' },
-      { label: 'Finances', href: 'order-management.html?view=settlement', omView: 'settlement' },
-      { label: 'QA/QC Reporting', href: 'reporting.html' }
+      { label: 'QA/QC Reporting', href: 'reporting.html' },
+      { label: 'Finances', href: 'order-management.html?view=settlement', omView: 'settlement' }
     ]
   },
   {

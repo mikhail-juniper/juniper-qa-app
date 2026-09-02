@@ -134,7 +134,7 @@ async function renderHome(root) {
     return `
       <div class="om-category-tile" data-tab="${productLine}">
         <div class="om-category-tile-header" style="border-color:${meta.color};">
-          <span>${meta.label} Order Management</span>
+          <span>${meta.label}</span>
           <button class="btn btn-secondary om-view-all-btn" data-viewall="${productLine}">View all</button>
         </div>
         <div class="om-category-tile-subtabs">
@@ -232,7 +232,7 @@ function openCategoryFullScreen(productLine) {
   panel.innerHTML = `
    <div class="om-panel-inner">
     <div class="om-panel-header">
-      <div style="font-size:19px;font-weight:700;">${meta.label} Order Management</div>
+      <div style="font-size:19px;font-weight:700;">${meta.label}</div>
       <button class="om-panel-close" id="omClosePanel">&times;</button>
     </div>
     <div class="om-subtabs-bar">
@@ -665,7 +665,7 @@ function renderCategoryShell(root) {
   const meta = CATEGORY_META[currentTab];
   root.innerHTML = `
     ${backToHubHtml()}
-    <h2 class="om-view-title">${meta.label} Order Management</h2>
+    <h2 class="om-view-title">${meta.label}</h2>
     <div class="om-subtabs-bar">
       <button class="om-subtab ${currentCategorySubTab === 'orders' ? 'active' : ''}" data-subtab="orders">All Orders</button>
       <button class="om-subtab ${currentCategorySubTab === 'components' ? 'active' : ''}" data-subtab="components">Main Components</button>
@@ -889,9 +889,7 @@ async function openDetailPanel(id) {
       </div>
     </div>
 
-    <div style="position:sticky;top:56px;z-index:5;background:#fff;padding:8px 0;margin-bottom:4px;display:flex;justify-content:flex-end;">
-      <button class="btn btn-primary" id="omSaveOrder" style="flex:none;width:auto;padding:9px 20px;">Save changes</button>
-    </div>
+
 
     <div class="om-section-title">Status</div>
     <div class="om-tracker" id="omStatusStepper">
@@ -908,97 +906,82 @@ async function openDetailPanel(id) {
       }).join('')}
     </div>
 
-    <div class="om-section-title">Order details</div>
+    <div class="om-section-title">Order Details</div>
     <div class="om-field-grid">
+      <div><label>Product Name</label><input id="fMainName" type="text" value="${val(order.mainComponent.name)}" /></div>
+      <div><label>Purchase Order Number</label><input type="text" value="${escapeHtml(order.poNumber)}" disabled /></div>
+      <div><label>SKU</label><input id="fMainSku" type="text" value="${val(order.mainComponent.sku)}" /></div>
+      <div><label>Supplier Name</label><input id="fSupplierName" type="text" list="dlSupplierNames" value="${val(order.supplier.name)}" /></div>
+      <div><label>Supplier Code</label><input id="fSupplierCode" type="text" value="${val(order.supplier.code)}" /></div>
+      <div><label>Order Status</label>
+        <select id="fOrderStatusSelect">
+          ${STATUSES.map((s) => `<option value="${escapeHtml(s)}" ${s === order.status ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('')}
+        </select>
+      </div>
+      <div><label>Photo reference</label><input id="fPhotoReference" type="text" placeholder="Link to style photo" value="${val(order.mainComponent.photoReference)}" /></div>
+      <div><label>Required Warehouse Arrival Date</label><input id="fDesiredEntry" type="date" value="${val(order.desiredEntryDate)}" /></div>
+      <div><label>Required Manufacturer Delivery Date</label><input id="fManufDelivery" type="date" value="${val(order.manufacturerDeliveryDate)}" /></div>
+      <div><label>Order Quantity</label><input id="fPurchaseQty" type="number" value="${val(order.mainComponent.purchaseQuantity)}" /></div>
+      <div><label>Quantity received</label><input id="fFulfillQtyReceived" type="number" value="${val(order.fulfillment.quantityReceived)}" /></div>
       <div><label>Buyer</label><input id="fBuyer" type="text" value="${val(order.buyer)}" /></div>
       <div><label>Order placement date</label><input id="fOrderDate" type="date" value="${val(order.orderPlacementDate)}" /></div>
-      <div><label>Desired entry date</label><input id="fDesiredEntry" type="date" value="${val(order.desiredEntryDate)}" /></div>
-      <div><label>Manufacturer delivery date</label><input id="fManufDelivery" type="date" value="${val(order.manufacturerDeliveryDate)}" /></div>
     </div>
 
-    <div class="om-section-title">Supplier</div>
-    <div class="om-field-grid">
-      <div><label>Name</label><input id="fSupplierName" type="text" value="${val(order.supplier.name)}" /></div>
-      <div><label>Contact</label><input id="fSupplierContact" type="text" value="${val(order.supplier.contact)}" /></div>
-      <div><label>Code</label><input id="fSupplierCode" type="text" value="${val(order.supplier.code)}" /></div>
+    <div id="fClothingOnly" style="${order.productLine === 'clothing' ? '' : 'display:none;'}">
+      <div class="om-section-title">Size Distribution</div>
+      <div id="omSizeRows"></div>
+      <button type="button" class="btn btn-secondary" id="omAddSizeRow" style="flex:none;width:auto;padding:8px 14px;margin-top:6px;">+ Add size row</button>
     </div>
 
-    <div class="om-section-title">Main component</div>
+    <div class="om-section-title">Product Information</div>
     <div class="om-field-grid">
-      <div><label>Name</label><input id="fMainName" type="text" value="${val(order.mainComponent.name)}" /></div>
-      <div><label>SKU</label><input id="fMainSku" type="text" value="${val(order.mainComponent.sku)}" /></div>
+      <div><label>Fabric Code</label><input id="fFabricInfo" type="text" list="dlFabricCodes" value="${val(order.mainComponent.fabricInfo)}" /></div>
+      <div><label>Fabric Type</label><input id="fComponent" type="text" list="dlFabricTypes" placeholder="e.g. 100% Cotton" value="${val(order.mainComponent.component)}" /></div>
+      <div><label>Washing Label</label><input id="fWashLabel" type="text" list="dlWashLabels" value="${val(order.mainComponent.washLabel)}" /></div>
+      <div><label>Manufacturing Drawing</label><input id="fManufacturingDrawing" type="text" list="dlManufacturingDrawings" value="${val(order.mainComponent.manufacturingDrawing)}" /></div>
+      <div><label>Product Pricing</label><input type="text" value="${fmtMoney(computeOrderTotal(order))}" disabled /></div>
+    </div>
+    <datalist id="dlSupplierNames"></datalist>
+    <datalist id="dlFabricCodes"></datalist>
+    <datalist id="dlFabricTypes"></datalist>
+    <datalist id="dlWashLabels"></datalist>
+    <datalist id="dlManufacturingDrawings"></datalist>
+
+    <div class="om-section-title">Main Component Specs</div>
+    <div class="om-field-grid">
       <div><label>Model number</label><input id="fModelNumber" type="text" value="${val(order.mainComponent.modelNumber)}" /></div>
       <div><label>Dimensions (L*W*H cm)</label><input id="fDimensions" type="text" value="${val(order.mainComponent.dimensions)}" /></div>
       <div><label>Factory price</label><input id="fFactoryPrice" type="number" step="0.01" value="${val(order.mainComponent.factoryPrice)}" /></div>
       <div><label>Sales unit price</label><input id="fSalesUnitPrice" type="number" step="0.01" value="${val(order.mainComponent.salesUnitPrice)}" /></div>
-      <div><label>Purchase quantity</label><input id="fPurchaseQty" type="number" value="${val(order.mainComponent.purchaseQuantity)}" /></div>
       <div><label>Sales volume</label><input id="fSalesVolume" type="number" value="${val(order.mainComponent.salesVolume)}" /></div>
       <div><label>Total purchase price</label><input id="fTotalPurchasePrice" type="number" step="0.01" value="${val(order.mainComponent.totalPurchasePrice)}" /></div>
       <div><label>Actual weight (kg)</label><input id="fActualWeight" type="number" step="0.01" value="${val(order.mainComponent.actualWeight)}" /></div>
       <div><label>Transport weight (kg)</label><input id="fTransportWeight" type="number" step="0.01" value="${val(order.mainComponent.transportWeight)}" /></div>
-      <div><label>Sent to warehouse</label><input id="fWarehouse" type="text" value="${val(order.mainComponent.warehouse)}" /></div>
     </div>
     <div class="om-field-grid" style="margin-top:10px;">
       <div style="grid-column:1/-1;"><label>Production precautions</label><input id="fProductionPrecautions" type="text" value="${val(order.mainComponent.productionPrecautions)}" /></div>
     </div>
 
-    <div id="fClothingOnly" style="${order.productLine === 'clothing' ? '' : 'display:none;'}">
-      <div class="om-section-title">Fabric</div>
-      <div class="om-field-grid">
-        <div><label>Fabric information</label><input id="fFabricInfo" type="text" value="${val(order.mainComponent.fabricInfo)}" /></div>
-        <div><label>Component / composition</label><input id="fComponent" type="text" value="${val(order.mainComponent.component)}" /></div>
-        <div><label>Wash label</label><input id="fWashLabel" type="text" value="${val(order.mainComponent.washLabel)}" /></div>
-      </div>
-      <div class="om-section-title">Size distribution</div>
-      <div id="omSizeRows"></div>
-      <button type="button" class="btn btn-secondary" id="omAddSizeRow" style="flex:none;width:auto;padding:8px 14px;margin-top:6px;">+ Add size row</button>
-    </div>
-
-    <div class="om-section-title">Accessories / parts</div>
+    <div class="om-section-title">Component Breakdown</div>
     <div id="omAccessoryRows"></div>
     <button type="button" class="btn btn-secondary" id="omAddAccessoryRow" style="flex:none;width:auto;padding:8px 14px;margin-top:6px;">+ Add accessory / part</button>
 
-    <div class="om-section-title" style="display:flex;justify-content:space-between;align-items:center;">
-      <span>Fulfillment &amp; tracking</span>
-      <button class="btn btn-primary" id="omSaveFulfillmentEdit" style="flex:none;width:auto;padding:6px 14px;font-size:12.5px;">Save fulfillment</button>
-    </div>
+    <div class="om-section-title">Warehousing Breakdown</div>
     <div class="om-field-grid">
-      <div><label>Packing list number</label><input id="fFulfillPacking" type="text" value="${val(order.fulfillment.packingListNumber)}" /></div>
-      <div><label>Waybill number</label><input id="fFulfillWaybill" type="text" value="${val(order.fulfillment.waybillNumber)}" /></div>
-      <div><label>Warehouse entry date</label><input id="fFulfillEntryDate" type="date" value="${val(order.fulfillment.warehouseEntryDate)}" /></div>
-      <div><label>Warehouse overdue?</label>
-        <select id="fFulfillOverdue">
-          <option value="" ${!order.fulfillment.warehouseOverdue ? 'selected' : ''}>—</option>
-          <option value="On time" ${order.fulfillment.warehouseOverdue === 'On time' ? 'selected' : ''}>On time</option>
-          <option value="Overdue" ${order.fulfillment.warehouseOverdue === 'Overdue' ? 'selected' : ''}>Overdue</option>
-        </select>
-      </div>
-      <div><label>Quantity received</label><input id="fFulfillQtyReceived" type="number" value="${val(order.fulfillment.quantityReceived)}" /></div>
-      <div><label>All accessories received?</label>
-        <select id="fFulfillAllReceived">
-          <option value="" ${!order.fulfillment.allAccessoriesReceived ? 'selected' : ''}>—</option>
-          <option value="Yes, complete" ${order.fulfillment.allAccessoriesReceived === 'Yes, complete' ? 'selected' : ''}>Yes, complete</option>
-          <option value="Incomplete parts, cannot be shipped" ${order.fulfillment.allAccessoriesReceived === 'Incomplete parts, cannot be shipped' ? 'selected' : ''}>Incomplete parts, cannot be shipped</option>
-        </select>
-      </div>
-      <div><label>Return tracking number</label><input id="fFulfillReturnTracking" type="text" value="${val(order.fulfillment.returnTrackingNumber)}" /></div>
-      <div style="grid-column:1/-1;"><label>Exception handling results</label><input id="fFulfillException" type="text" value="${val(order.fulfillment.exceptionHandlingResults)}" /></div>
+      <div><label>Warehouse Address</label><input id="fWarehouse" type="text" value="${val(order.mainComponent.warehouse)}" /></div>
+      <div><label>Shipping cost</label><input id="fTransportationFees" type="number" step="0.01" value="${val(order.costs.transportationFees)}" /></div>
+      <div><label>Packing List Number</label><input id="fFulfillPacking" type="text" value="${val(order.fulfillment.packingListNumber)}" /></div>
+      <div><label>Waybill Number</label><input id="fFulfillWaybill" type="text" value="${val(order.fulfillment.waybillNumber)}" /></div>
     </div>
-    <div style="margin-top:14px;font-size:12px;font-weight:700;color:var(--jc-muted);text-transform:uppercase;">Replacement sizes</div>
-    <div id="omReplacementRows"></div>
-    <button type="button" class="btn btn-secondary" id="omAddReplacementRow" style="flex:none;width:auto;padding:8px 14px;margin-top:6px;">+ Add replacement size row</button>
 
-    <div class="om-section-title">Costs</div>
+    <div class="om-section-title">Payment</div>
     <div class="om-field-grid">
       <div><label>Assembly fee</label><input id="fAssemblyFee" type="number" step="0.01" value="${val(order.costs.assemblyFee)}" /></div>
       <div><label>Labor costs</label><input id="fLaborCosts" type="number" step="0.01" value="${val(order.costs.laborCosts)}" /></div>
-      <div><label>Transportation fees</label><input id="fTransportationFees" type="number" step="0.01" value="${val(order.costs.transportationFees)}" /></div>
       <div><label>Other expenses</label><input id="fOtherExpenses" type="number" step="0.01" value="${val(order.costs.otherExpenses)}" /></div>
+      <div><label>Total PO cost</label><input type="text" value="${fmtMoney(computeOrderTotal(order))}" disabled /></div>
     </div>
-    <div class="om-detail-row" style="margin-top:8px;"><span class="om-label"><strong>Total owed</strong></span><span class="om-value">${fmtMoney(computeOrderTotal(order))}</span></div>
-
-    <div class="om-section-title">Settlement</div>
-    <div class="om-detail-row"><span class="om-label">Status</span><span class="om-value">${escapeHtml(order.settlement.status)}</span></div>
+    <div class="om-detail-row" style="margin-top:8px;"><span class="om-label">Payment Status</span><span class="om-value">${escapeHtml(order.settlement.status)}</span></div>
     ${order.settlement.paidDate ? `<div class="om-detail-row"><span class="om-label">Paid on</span><span class="om-value">${fmtDate(order.settlement.paidDate)}</span></div>` : ''}
     <div class="om-settlement-toggle">
       <button class="btn btn-secondary" id="omMarkPending" style="flex:none;width:auto;padding:8px 14px;">Mark Pending</button>
@@ -1036,6 +1019,10 @@ async function openDetailPanel(id) {
         </li>
       `).join('') || '<li class="om-cl-meta">No changes logged yet.</li>'}
     </ul>
+
+    <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--jc-border);display:flex;justify-content:flex-end;">
+      <button class="btn btn-primary" id="omSaveOrder" style="flex:none;width:auto;padding:10px 24px;">Save changes</button>
+    </div>
    </div>
   `;
 
@@ -1099,15 +1086,16 @@ async function openDetailPanel(id) {
     } catch (e) { showToast(e.message, true); }
   });
 
-  // ---- Always-editable size distribution, accessories, and fulfillment ----
+  // ---- Always-editable size distribution, accessories ----
   let editSizeRowCount = 0;
   const sizeRowsHost = panel.querySelector('#omSizeRows');
   function addSizeRow(data) {
     sizeRowsHost.insertAdjacentHTML('beforeend',
       `<div class="om-repeat-row" data-size-row="${editSizeRowCount}">
-        <input type="text" placeholder="SKU name" class="om-size-sku" value="${val(data && data.sku)}" />
+        <input type="text" placeholder="SKU" class="om-size-sku" value="${val(data && data.sku)}" />
         <input type="text" placeholder="Size" class="om-size-size" value="${val(data && data.size)}" />
-        <input type="number" placeholder="Qty" class="om-size-qty" value="${val(data && data.quantity)}" />
+        <input type="number" placeholder="Order Qty" class="om-size-qty" value="${val(data && data.quantity)}" />
+        <input type="number" placeholder="Qty Received" class="om-size-qty-received" value="${val(data && data.quantityReceived)}" />
         <button type="button" class="om-row-remove" data-remove-size="${editSizeRowCount}">&times;</button>
       </div>`);
     const idx = editSizeRowCount;
@@ -1132,22 +1120,52 @@ async function openDetailPanel(id) {
   (order.accessories && order.accessories.length ? order.accessories : [{}]).forEach(addAccessoryRow);
   panel.querySelector('#omAddAccessoryRow').addEventListener('click', () => addAccessoryRow());
 
-  let replacementRowCount = 0;
-  const replacementRowsHost = panel.querySelector('#omReplacementRows');
-  function addReplacementRow(data) {
-    replacementRowsHost.insertAdjacentHTML('beforeend', replacementRowHtml(replacementRowCount, data));
-    const idx = replacementRowCount;
-    panel.querySelector(`[data-remove-replacement="${idx}"]`).addEventListener('click', () => {
-      panel.querySelector(`[data-replacement-row="${idx}"]`).remove();
-    });
-    replacementRowCount++;
-  }
-  (order.fulfillment.replacementSizes || []).forEach(addReplacementRow);
-  panel.querySelector('#omAddReplacementRow').addEventListener('click', () => addReplacementRow());
+  // ---- Order Status dropdown - saves immediately, same as clicking the tracker ----
+  document.getElementById('fOrderStatusSelect').addEventListener('change', async (e) => {
+    try {
+      await api(`/api/order-management/orders/${encodeURIComponent(order.id)}/status`, {
+        method: 'POST',
+        body: JSON.stringify({ status: e.target.value })
+      });
+      showToast('Status updated');
+      closePanel();
+      openDetailPanel(order.id);
+      refreshCurrentView();
+    } catch (err) { showToast(err.message, true); }
+  });
 
-  // Master "Save changes": everything except status (its own tracker),
-  // settlement (its own toggle), and fulfillment (its own save button,
-  // since it belongs to a different operational stage than the order spec).
+  // ---- Reusable "dropdown with ability to add new" fields: populate
+  // datalists from real Supplier records (for name -> code autofill) and
+  // from values already used on other orders, so anything typed in becomes
+  // a future suggestion without needing a separate managed list. ----
+  (async () => {
+    try {
+      const [suppliersData, historyData] = await Promise.all([
+        api('/api/suppliers'),
+        api('/api/order-management/field-history')
+      ]);
+      const suppliers = suppliersData.suppliers || [];
+      const fillList = (id, values) => {
+        const dl = document.getElementById(id);
+        if (dl) dl.innerHTML = values.map((v) => `<option value="${escapeHtml(v)}"></option>`).join('');
+      };
+      fillList('dlSupplierNames', suppliers.map((s) => s.name));
+      fillList('dlFabricCodes', historyData.fabricCodes || []);
+      fillList('dlFabricTypes', historyData.fabricTypes || []);
+      fillList('dlWashLabels', historyData.washLabels || []);
+      fillList('dlManufacturingDrawings', historyData.manufacturingDrawings || []);
+
+      const supplierNameInput = document.getElementById('fSupplierName');
+      const supplierCodeInput = document.getElementById('fSupplierCode');
+      supplierNameInput.addEventListener('change', () => {
+        const match = suppliers.find((s) => s.name.trim().toLowerCase() === supplierNameInput.value.trim().toLowerCase());
+        if (match && match.vendorCode) supplierCodeInput.value = match.vendorCode;
+      });
+    } catch (e) { /* datalists are a convenience - fine to skip silently if this fails */ }
+  })();
+
+  // Master "Save changes": everything on the page except status (saves
+  // immediately above) and payment status (its own Mark Paid/Pending toggle).
   document.getElementById('omSaveOrder').addEventListener('click', async () => {
     const productLine = order.productLine;
     const patch = {
@@ -1157,7 +1175,7 @@ async function openDetailPanel(id) {
       manufacturerDeliveryDate: document.getElementById('fManufDelivery').value || null,
       supplier: {
         name: document.getElementById('fSupplierName').value,
-        contact: document.getElementById('fSupplierContact').value,
+        contact: order.supplier.contact,
         code: document.getElementById('fSupplierCode').value
       },
       mainComponent: {
@@ -1174,16 +1192,24 @@ async function openDetailPanel(id) {
         transportWeight: document.getElementById('fTransportWeight').value || null,
         warehouse: document.getElementById('fWarehouse').value,
         productionPrecautions: document.getElementById('fProductionPrecautions').value,
-        fabricInfo: productLine === 'clothing' ? document.getElementById('fFabricInfo').value : '',
-        component: productLine === 'clothing' ? document.getElementById('fComponent').value : '',
-        washLabel: productLine === 'clothing' ? document.getElementById('fWashLabel').value : '',
+        photoReference: document.getElementById('fPhotoReference').value,
+        manufacturingDrawing: document.getElementById('fManufacturingDrawing').value,
+        fabricInfo: document.getElementById('fFabricInfo').value,
+        component: document.getElementById('fComponent').value,
+        washLabel: document.getElementById('fWashLabel').value,
         sizeDistribution: productLine === 'clothing' ? Array.from(sizeRowsHost.querySelectorAll('[data-size-row]')).map((row) => ({
           sku: row.querySelector('.om-size-sku').value,
           size: row.querySelector('.om-size-size').value,
-          quantity: row.querySelector('.om-size-qty').value || null
-        })).filter((r) => r.sku || r.size || r.quantity) : []
+          quantity: row.querySelector('.om-size-qty').value || null,
+          quantityReceived: row.querySelector('.om-size-qty-received').value || null
+        })).filter((r) => r.sku || r.size || r.quantity || r.quantityReceived) : []
       },
       accessories: collectAccessoryRows(accessoryRowsHost),
+      fulfillment: {
+        packingListNumber: document.getElementById('fFulfillPacking').value,
+        waybillNumber: document.getElementById('fFulfillWaybill').value,
+        quantityReceived: document.getElementById('fFulfillQtyReceived').value || null
+      },
       costs: {
         assemblyFee: document.getElementById('fAssemblyFee').value || 0,
         laborCosts: document.getElementById('fLaborCosts').value || 0,
@@ -1197,30 +1223,6 @@ async function openDetailPanel(id) {
         body: JSON.stringify({ patch, actor: 'Web user' })
       });
       showToast('Changes saved');
-      closePanel();
-      openDetailPanel(order.id);
-      refreshCurrentView();
-    } catch (e) { showToast(e.message, true); }
-  });
-
-  document.getElementById('omSaveFulfillmentEdit').addEventListener('click', async () => {
-    const fulfillment = {
-      packingListNumber: document.getElementById('fFulfillPacking').value,
-      waybillNumber: document.getElementById('fFulfillWaybill').value,
-      warehouseEntryDate: document.getElementById('fFulfillEntryDate').value || null,
-      warehouseOverdue: document.getElementById('fFulfillOverdue').value,
-      quantityReceived: document.getElementById('fFulfillQtyReceived').value || null,
-      allAccessoriesReceived: document.getElementById('fFulfillAllReceived').value,
-      returnTrackingNumber: document.getElementById('fFulfillReturnTracking').value,
-      exceptionHandlingResults: document.getElementById('fFulfillException').value,
-      replacementSizes: collectReplacementRows(replacementRowsHost)
-    };
-    try {
-      await api(`/api/order-management/orders/${encodeURIComponent(order.id)}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ patch: { fulfillment }, actor: 'Web user' })
-      });
-      showToast('Fulfillment updated');
       closePanel();
       openDetailPanel(order.id);
       refreshCurrentView();
