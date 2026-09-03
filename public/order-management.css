@@ -259,6 +259,7 @@
 
 .om-table-wrap {
   overflow-x: auto;
+  overflow-y: visible;
   border: 1px solid var(--jc-border);
   border-radius: var(--radius);
   background: #fff;
@@ -278,6 +279,7 @@
    overlapping it, so it sticks flush to the top of that panel instead. */
 .om-table thead th { position: sticky; top: 72px; background: #fff; z-index: 2; box-shadow: 0 1px 0 var(--jc-border); }
 .om-panel .om-table thead th { top: 0; }
+.om-tile-table-scroll .om-table thead th { top: 0; }
 .om-table tr:last-child td { border-bottom: none; }
 .om-table tbody tr { cursor: pointer; }
 .om-table tbody tr:hover { background: var(--jc-mint-light); }
@@ -420,7 +422,7 @@
 .om-status-step.current { border-color: var(--jc-teal); background: var(--jc-teal); color: #fff; }
 
 /* Domino's-tracker-style status progress bar. */
-.om-tracker { display: flex; align-items: flex-start; margin-top: 10px; overflow-x: auto; padding-bottom: 6px; }
+.om-tracker { display: flex; align-items: flex-start; margin-top: 10px; overflow-x: auto; overflow-y: visible; padding-bottom: 6px; }
 .om-tracker-step {
   position: relative;
   flex: 1 1 0;

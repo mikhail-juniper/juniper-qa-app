@@ -10,7 +10,10 @@ const { buildPdf } = require('./lib/pdfBuilder');
 const { computeOverallResult, collectAllDefects } = require('./lib/passFail');
 const { getRecommendation } = require('./lib/aqlRecommendation');
 const submissionLog = require('./lib/submissionLog');
-const poStore = require('./lib/poStore');
+// poStore.js is retired - orderManagementStore is now the single source of
+// truth for PO data; QA/QC reporting reads/writes through the toQaShape()
+// translation instead. Left in place on disk (unused) rather than deleted,
+// in case any historical purchaseOrders.json data needs a one-time import.
 const orderManagementStore = require('./lib/orderManagementStore');
 const sizingChartStore = require('./lib/sizingChartStore');
 const supplierStore = require('./lib/supplierStore');
@@ -530,7 +533,7 @@ app.post('/api/submit', upload.any(), async (req, res) => {
     submissionLog.appendSubmission({
       id: submissionId,
       poNumber: payload.poNumber || null,
-      sku: payload.sku || (poStore.getPoByNumber(payload.poNumber) || {}).sku || null,
+      sku: payload.sku || (orderManagementStore.getOrderByPoNumber(payload.poNumber) || { mainComponent: {} }).mainComponent.sku || null,
       category: payload.category || null,
       subcategory: payload.subcategory || null,
       creator: payload.creator || null,
@@ -652,7 +655,7 @@ app.post('/api/purchase-orders', (req, res) => {
     if (!body.poNumber || !body.sku) {
       return res.status(400).json({ error: 'poNumber and sku are required' });
     }
-    if (poStore.getPoByNumber(body.poNumber)) {
+    if (orderManagementStore.getOrderByPoNumber(body.poNumber)) {
       return res.status(409).json({ error: 'A PO with this number already exists' });
     }
     addNewOptionIfMissing('productDevelopmentLeads', body.productDevelopmentLead);
@@ -661,27 +664,37 @@ app.post('/api/purchase-orders', (req, res) => {
 
     // If this SKU already has an established apparel fit from a prior PO,
     // carry it forward automatically.
-    const established = body.category === 'apparel' ? poStore.getEstablishedFitForSku(body.sku) : null;
+    const established = body.category === 'apparel' ? orderManagementStore.getEstablishedFitForSku(body.sku) : null;
 
-    const entry = poStore.createPo({
+    // category (apparel/plush/bags/accessories/other) is QA/QC's finer
+    // classification - map it onto Order Management's coarser productLine
+    // (clothing/toys/other) just for tile grouping; category/subcategory
+    // themselves are kept as their own fields, not discarded.
+    const productLine = body.category === 'apparel' ? 'clothing' : body.category === 'plush' ? 'toys' : 'other';
+
+    const order = orderManagementStore.createOrder({
       id,
       poNumber: body.poNumber,
-      sku: body.sku,
+      productLine,
+      status: 'New Request',
+      orderPlacementDate: body.orderDate || null,
+      mainComponent: {
+        sku: body.sku,
+        name: body.productTitle || '',
+        purchaseQuantity: body.orderQuantity ? parseInt(body.orderQuantity, 10) : null
+      },
       category: body.category || null,
       subcategory: body.subcategory || null,
-      orderDate: body.orderDate || null,
-      creator: body.creator || null,
-      orderQuantity: body.orderQuantity ? parseInt(body.orderQuantity, 10) : null,
-      productTitle: body.productTitle || null,
-      productDevelopmentLead: body.productDevelopmentLead || null,
+      creator: body.creator || '',
+      productDevelopmentLead: body.productDevelopmentLead || '',
       sizesIncluded: sortSizesCanonically(Array.isArray(body.sizesIncluded) ? body.sizesIncluded : []),
       fitKey: established ? established.fitKey : null,
       fitSizes: established ? established.sizes : [],
       asanaTaskLink: body.asanaTaskLink || null,
       asanaTaskGid: extractAsanaTaskGid(body.asanaTaskLink),
-      productRisk: body.productRisk || null,
-      createdAt: new Date().toISOString()
-    });
+      productRisk: body.productRisk || null
+    }, 'Web user');
+    const entry = orderManagementStore.toQaShape(order);
     res.json({ ok: true, po: entry, approvalUrl: `/approval.html?po=${encodeURIComponent(id)}` });
 
     // Best-effort Asana sync: drop this PO's approval page link directly
@@ -701,24 +714,24 @@ app.post('/api/purchase-orders', (req, res) => {
 });
 
 app.get('/api/purchase-orders/:id', (req, res) => {
-  const po = poStore.getPoById(req.params.id);
+  const po = orderManagementStore.toQaShape(orderManagementStore.getOrderById(req.params.id));
   if (!po) return res.status(404).json({ error: 'Purchase order not found' });
   res.json({ po });
 });
 
 app.get('/api/purchase-orders', (req, res) => {
   if (req.query.poNumber) {
-    const po = poStore.getPoByNumber(req.query.poNumber);
+    const po = orderManagementStore.toQaShape(orderManagementStore.getOrderByPoNumber(req.query.poNumber));
     return res.json({ pos: po ? [po] : [] });
   }
   if (req.query.sku) {
-    return res.json({ pos: poStore.getPosBySku(req.query.sku) });
+    return res.json({ pos: orderManagementStore.getOrdersBySku(req.query.sku).map(orderManagementStore.toQaShape) });
   }
   res.status(400).json({ error: 'poNumber or sku query param is required' });
 });
 
 app.get('/api/sku-established-fit/:sku', (req, res) => {
-  res.json({ fit: poStore.getEstablishedFitForSku(req.params.sku) });
+  res.json({ fit: orderManagementStore.getEstablishedFitForSku(req.params.sku) });
 });
 
 // ---- Order Management Hub ----
@@ -738,6 +751,14 @@ app.get('/api/order-management/accessory-statuses', (req, res) => {
 app.get('/api/order-management/orders', (req, res) => {
   const { productLine, status, search } = req.query;
   res.json({ orders: orderManagementStore.listOrders({ productLine, status, search }) });
+});
+
+// Placed before the generic :id route below, since Express would otherwise
+// match "by-po-number" itself as an :id value first.
+app.get('/api/order-management/orders/by-po-number/:poNumber', (req, res) => {
+  const order = orderManagementStore.getOrderByPoNumber(req.params.poNumber);
+  if (!order) return res.status(404).json({ error: 'No PO found with that number' });
+  res.json({ order });
 });
 
 app.get('/api/order-management/orders/:id', (req, res) => {
@@ -970,7 +991,7 @@ function saveApprovalPhotos(files, prefix) {
 
 app.get('/api/approval/:poNumber', (req, res) => {
   try {
-    const po = poStore.getPoByNumber(req.params.poNumber);
+    const po = orderManagementStore.toQaShape(orderManagementStore.getOrderByPoNumber(req.params.poNumber));
     if (!po) return res.status(404).json({ error: 'Purchase order not found - has it been created via New Purchase Order?' });
 
     const photoSet = resolvePhotoSet(po.category, po.subcategory);
@@ -989,7 +1010,7 @@ app.post('/api/approval/:poNumber/:stage', upload.any(), (req, res) => {
   try {
     const stageKey = STAGE_KEY_MAP[req.params.stage];
     if (!stageKey) return res.status(400).json({ error: 'Unknown approval stage' });
-    const po = poStore.getPoByNumber(req.params.poNumber);
+    const po = orderManagementStore.toQaShape(orderManagementStore.getOrderByPoNumber(req.params.poNumber));
     if (!po) return res.status(404).json({ error: 'Purchase order not found' });
 
     const data = JSON.parse((req.body && req.body.data) || '{}');
@@ -1017,7 +1038,7 @@ app.post('/api/approval/:poNumber/:stage', upload.any(), (req, res) => {
 
     // If this Sample Approval established an apparel sizing standard, write it
     // back onto the PO record so future POs of the same SKU can find and copy
-    // it forward automatically (see poStore.getEstablishedFitForSku). Records
+    // it forward automatically (see orderManagementStore.getEstablishedFitForSku). Records
     // only the sizes actually submitted here, not the fit's entire generic
     // range - a Sample covering 3 sizes shouldn't make a future PO of the
     // same SKU default to all 12 of the fit's possible sizes.
@@ -1025,7 +1046,7 @@ app.post('/api/approval/:poNumber/:stage', upload.any(), (req, res) => {
       const fitDef = fits.fits[data.sizing.fit];
       if (fitDef) {
         const submittedSizes = (data.sizing.sizeRows || []).map((r) => r.size).filter(Boolean);
-        poStore.updatePo(po.id, { fitKey: data.sizing.fit, fitSizes: submittedSizes });
+        orderManagementStore.updateOrder(po.id, { fitKey: data.sizing.fit, fitSizes: submittedSizes }, 'System', 'Established apparel fit');
       }
     }
 
@@ -1058,7 +1079,7 @@ app.post('/api/approval/:poNumber/:stage/skip', (req, res) => {
     if (req.params.stage !== 'preProduction') {
       return res.status(400).json({ error: 'Only the Pre-Production stage can be skipped' });
     }
-    const po = poStore.getPoByNumber(req.params.poNumber);
+    const po = orderManagementStore.toQaShape(orderManagementStore.getOrderByPoNumber(req.params.poNumber));
     if (!po) return res.status(404).json({ error: 'Purchase order not found' });
     const entry = approvalStore.skipStage(po.poNumber, 'preProductionApproval');
     res.json({ ok: true, approval: entry });
@@ -1107,7 +1128,7 @@ app.post('/api/approval/:poNumber/:stage/comment', upload.any(), (req, res) => {
     // Comments, Minor Issue, Major/Critical) moves this stage's field to
     // match. Free-text replies with no status attached don't touch Asana.
     if (approvalStatus) {
-      const po = poStore.getPoByNumber(req.params.poNumber);
+      const po = orderManagementStore.toQaShape(orderManagementStore.getOrderByPoNumber(req.params.poNumber));
       if (po && po.asanaTaskGid) {
         const fieldMap = loadAsanaFieldMap();
         const stageMap = fieldMap[req.params.stage];
@@ -1146,7 +1167,7 @@ const { buildConsolidatedReport } = require('./lib/consolidatedReportBuilder');
 
 app.get('/api/reports/by-sku/:sku', (req, res) => {
   try {
-    res.json({ pos: poStore.getPosBySku(req.params.sku) });
+    res.json({ pos: orderManagementStore.getOrdersBySku(req.params.sku).map(orderManagementStore.toQaShape) });
   } catch (err) {
     console.error('Failed to look up POs by SKU:', err);
     res.status(500).json({ error: 'Failed to look up POs by SKU', detail: String(err.message || err) });
@@ -1155,7 +1176,7 @@ app.get('/api/reports/by-sku/:sku', (req, res) => {
 
 app.get('/api/consolidated-report/:poNumber', async (req, res) => {
   try {
-    const po = poStore.getPoByNumber(req.params.poNumber);
+    const po = orderManagementStore.toQaShape(orderManagementStore.getOrderByPoNumber(req.params.poNumber));
     if (!po) return res.status(404).json({ error: 'Purchase order not found' });
     const approval = approvalStore.getByPoNumber(po.poNumber);
     const reportingHistory = submissionLog.findPriorReportsByPoNumber(po.poNumber);

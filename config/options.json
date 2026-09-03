@@ -218,7 +218,8 @@
     "UG VR",
     "Vampair",
     "VanilBean",
-    "Yeeps"
+    "Yeeps",
+    "TestCreator"
   ],
   "pointCheckRates": [
     "10%",
@@ -268,7 +269,8 @@
     "202503XJPRI",
     "202504LKDAS",
     "202504SBBLA",
-    "202502LTCUT1"
+    "202502LTCUT1",
+    "F1"
   ],
   "qaLeads": [
     "Chloe",

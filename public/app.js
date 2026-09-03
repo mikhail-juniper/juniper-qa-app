@@ -2820,7 +2820,23 @@ function resetApp() {
 (async function init() {
   await loadConfig();
   const params = new URLSearchParams(location.search);
-  if (params.get('mode') === 'newPO') appMode = 'newPO';
+  if (params.get('mode') === 'newPO') {
+    appMode = 'newPO';
+  } else if ((params.get('mode') === 'pre_production' || params.get('mode') === 'production') && params.get('po')) {
+    // Deep link from an Order Management PO's QA/QC section - skip the
+    // chooser and the manual PO-number entry, go straight into the report
+    // wizard with this PO already looked up, reusing the same lookup path
+    // typing a PO number and hitting Next would take.
+    state.qaType = params.get('mode');
+    appMode = 'wizard';
+    goTo(0);
+    render();
+    const poInput = document.getElementById('poLookupInput');
+    if (poInput) {
+      poInput.value = params.get('po');
+      await submitPoLookup();
+    }
+  }
   updateProgressForMode();
   render();
 })();

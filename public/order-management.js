@@ -1136,6 +1136,10 @@ async function openDetailPanel(id, scope) {
 
     <div class="om-panel-card">
     <div class="om-section-title">Order Details</div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap;">
+      <input type="text" id="omCopyFromPoInput" placeholder="Copy from previous PO number..." style="flex:1 1 220px;padding:8px 10px;border-radius:var(--radius-sm);border:1.5px solid var(--jc-border);font-size:13px;" />
+      <button type="button" class="btn btn-secondary" id="omCopyFromPoBtn" style="flex:none;width:auto;padding:8px 14px;">Copy details</button>
+    </div>
     <div class="om-field-grid">
       <div><label>Product Name</label><input id="fMainName" type="text" value="${val(order.mainComponent.name)}" /></div>
       <div><label>Purchase Order Number</label><input type="text" value="${escapeHtml(order.poNumber)}" disabled /></div>
@@ -1145,6 +1149,14 @@ async function openDetailPanel(id, scope) {
       <div><label>Order Status</label>
         <select id="fOrderStatusSelect">
           ${STATUSES.map((s) => `<option value="${escapeHtml(s)}" ${s === order.status ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('')}
+        </select>
+      </div>
+      <div><label>Product Complexity/Risk</label>
+        <select id="fProductRisk">
+          <option value="" ${!order.productRisk ? 'selected' : ''}>—</option>
+          <option value="high" ${order.productRisk === 'high' ? 'selected' : ''}>High</option>
+          <option value="medium" ${order.productRisk === 'medium' ? 'selected' : ''}>Medium</option>
+          <option value="low" ${order.productRisk === 'low' ? 'selected' : ''}>Low</option>
         </select>
       </div>
       <div>
@@ -1162,6 +1174,16 @@ async function openDetailPanel(id, scope) {
       <div><label>Quantity received</label><input id="fFulfillQtyReceived" type="number" value="${val(order.fulfillment.quantityReceived)}" /></div>
       <div><label>Buyer</label><input id="fBuyer" type="text" value="${val(order.buyer)}" /></div>
       <div><label>Order placement date</label><input id="fOrderDate" type="date" value="${val(order.orderPlacementDate)}" /></div>
+    </div>
+    </div>
+
+    <div class="om-panel-card">
+    <div class="om-section-title">QA/QC</div>
+    <div class="section-help" style="margin-bottom:12px;">Jump straight into a report for this PO - each link already knows the PO number, or use QA/QC Reporting in the sidebar to pick a different one.</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <a class="btn btn-secondary" style="flex:none;width:auto;padding:9px 16px;text-decoration:none;" href="/approval.html?po=${encodeURIComponent(order.id)}" target="_blank" rel="noopener">Product Development Approval</a>
+      <a class="btn btn-secondary" style="flex:none;width:auto;padding:9px 16px;text-decoration:none;" href="/reporting.html?mode=pre_production&po=${encodeURIComponent(order.poNumber)}" target="_blank" rel="noopener">Pre-Production Sample Report</a>
+      <a class="btn btn-secondary" style="flex:none;width:auto;padding:9px 16px;text-decoration:none;" href="/reporting.html?mode=production&po=${encodeURIComponent(order.poNumber)}" target="_blank" rel="noopener">Bulk Sampling Report</a>
     </div>
     </div>
 
@@ -1462,6 +1484,56 @@ async function openDetailPanel(id, scope) {
   (order.accessories && order.accessories.length ? order.accessories : [{}]).forEach(addAccessoryRow);
   panel.querySelector('#omAddAccessoryRow').addEventListener('click', () => addAccessoryRow());
 
+  // ---- Copy from previous PO: pulls product identity info forward (not
+  // order-specific things like quantities, dates, or status) so PO2 doesn't
+  // start from a blank form when it's really the same product as PO1. ----
+  document.getElementById('omCopyFromPoBtn').addEventListener('click', async () => {
+    const sourcePoNumber = document.getElementById('omCopyFromPoInput').value.trim();
+    if (!sourcePoNumber) return showToast('Enter a PO number to copy from', true);
+    if (sourcePoNumber.toLowerCase() === order.poNumber.toLowerCase()) {
+      return showToast("That's this same PO", true);
+    }
+    try {
+      const data = await api(`/api/order-management/orders/by-po-number/${encodeURIComponent(sourcePoNumber)}`);
+      const src = data.order;
+
+      document.getElementById('fMainSku').value = src.mainComponent.sku || '';
+      document.getElementById('fSupplierName').value = src.supplier.name || '';
+      document.getElementById('fSupplierCode').value = src.supplier.code || '';
+      document.getElementById('fProductRisk').value = src.productRisk || '';
+      document.getElementById('fFabricInfo').value = src.mainComponent.fabricInfo || '';
+      document.getElementById('fComponent').value = src.mainComponent.component || '';
+      document.getElementById('fWashLabel').value = src.mainComponent.washLabel || '';
+      document.getElementById('fManufacturingDrawing').value = src.mainComponent.manufacturingDrawing || '';
+      document.getElementById('fModelNumber').value = src.mainComponent.modelNumber || '';
+      document.getElementById('fDimensions').value = src.mainComponent.dimensions || '';
+      document.getElementById('fFactoryPrice').value = src.mainComponent.factoryPrice || '';
+      document.getElementById('fSalesUnitPrice').value = src.mainComponent.salesUnitPrice || '';
+      document.getElementById('fWarehouse').value = src.mainComponent.warehouse || '';
+
+      // Size distribution: carry the SKU/size structure forward, not the
+      // quantities or receipt status - those are specific to this order.
+      sizeRowsHost.innerHTML = '';
+      editSizeRowCount = 0;
+      (src.mainComponent.sizeDistribution && src.mainComponent.sizeDistribution.length
+        ? src.mainComponent.sizeDistribution.map((r) => ({ sku: r.sku, size: r.size }))
+        : [{}]
+      ).forEach(addSizeRow);
+
+      // Accessories/components: carry the whole part list forward as a
+      // starting point (supplier, pricing, etc.) - each row keeps its own
+      // "Add"/"Remove" so it's easy to adjust from here.
+      accessoryRowsHost.innerHTML = '';
+      editAccessoryRowCount = 0;
+      (src.accessories && src.accessories.length
+        ? src.accessories.map((a) => ({ ...a, id: undefined, imageUrl: '', designDocUrl: '' }))
+        : [{}]
+      ).forEach(addAccessoryRow);
+
+      showToast(`Copied details from ${src.poNumber}`);
+    } catch (e) { showToast(e.message, true); }
+  });
+
   // ---- Order Status dropdown - saves immediately, same as clicking the tracker ----
   document.getElementById('fOrderStatusSelect').addEventListener('change', async (e) => {
     try {
@@ -1515,6 +1587,7 @@ async function openDetailPanel(id, scope) {
       orderPlacementDate: document.getElementById('fOrderDate').value || null,
       desiredEntryDate: document.getElementById('fDesiredEntry').value || null,
       manufacturerDeliveryDate: document.getElementById('fManufDelivery').value || null,
+      productRisk: document.getElementById('fProductRisk').value || null,
       supplier: {
         name: document.getElementById('fSupplierName').value,
         contact: order.supplier.contact,
