@@ -92,4 +92,17 @@ function buildSidebar() {
   appRoot.insertBefore(flexWrap, main);
   flexWrap.appendChild(buildSidebar());
   flexWrap.appendChild(main);
+
+  // Sticky table headers (order-management.css) and the sidebar itself
+  // need to know exactly how tall the sticky app header actually is, not
+  // an assumed constant - it varies by content/viewport (safe-area insets,
+  // text wrapping, etc.), and being wrong by even a few pixels makes a
+  // sticky table header overlap the app header instead of sitting cleanly
+  // below it. Re-measured on resize since it can change (e.g. rotation).
+  function syncHeaderHeightVar() {
+    document.documentElement.style.setProperty('--app-header-height', `${header.offsetHeight}px`);
+  }
+  syncHeaderHeightVar();
+  window.addEventListener('resize', syncHeaderHeightVar);
+  if (window.ResizeObserver) new ResizeObserver(syncHeaderHeightVar).observe(header);
 })();

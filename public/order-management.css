@@ -277,7 +277,7 @@
    just below the fixed app header (72px tall). Inside a popup (.om-panel),
    the panel itself is the scrolling container and has no such header
    overlapping it, so it sticks flush to the top of that panel instead. */
-.om-table thead th { position: sticky; top: 72px; background: #fff; z-index: 2; box-shadow: 0 1px 0 var(--jc-border); }
+.om-table thead th { position: sticky; top: var(--app-header-height); background: #fff; z-index: 2; box-shadow: 0 1px 0 var(--jc-border); }
 .om-panel .om-table thead th { top: 0; }
 .om-tile-table-scroll .om-table thead th { top: 0; }
 .om-table tr:last-child td { border-bottom: none; }

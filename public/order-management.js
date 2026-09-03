@@ -1270,7 +1270,7 @@ async function openDetailPanel(id, scope) {
       <div><label>Fabric Code</label><input id="fFabricInfo" type="text" value="${val(order.mainComponent.fabricInfo)}" /></div>
       <div><label>Fabric Type</label><input id="fComponent" type="text" placeholder="e.g. 100% Cotton" value="${val(order.mainComponent.component)}" /></div>
       <div><label>Unit Price (¥)</label><input id="fFactoryPrice" type="number" step="0.01" value="${val(order.mainComponent.factoryPrice)}" /></div>
-      <div><label>Product Pricing (total)</label><input type="text" value="${fmtMoney(computeOrderTotal(order))}" disabled /></div>
+      <div><label>Product Pricing (total)</label><input id="fProductPricingTotal" type="text" value="${fmtMoney(computeOrderTotal(order))}" disabled /></div>
     </div>
     </div>
 
@@ -1307,9 +1307,9 @@ async function openDetailPanel(id, scope) {
       <div><label>Additional Assembly Fee (¥)</label><input id="fAssemblyFee" type="number" step="0.01" value="${val(order.costs.assemblyFee)}" /></div>
       <div><label>Additional Labor Fee (¥)</label><input id="fLaborCosts" type="number" step="0.01" value="${val(order.costs.laborCosts)}" /></div>
       <div><label>Other Expenses (¥)</label><input id="fOtherExpenses" type="number" step="0.01" value="${val(order.costs.otherExpenses)}" /></div>
-      <div><label>Manufacturing Cost (¥)</label><input type="text" value="${fmtMoney((order.accessories || []).reduce((sum, a) => sum + (Number(a.totalPrice) || 0), 0))}" disabled title="Sum of all sub-component prices" /></div>
-      <div><label>Total PO Cost (¥)</label><input type="text" value="${fmtMoney(computeOrderTotal(order))}" disabled /></div>
-      <div><label>Total Price per Unit (¥)</label><input type="text" value="${order.mainComponent.purchaseQuantity ? fmtMoney(computeOrderTotal(order) / order.mainComponent.purchaseQuantity) : '—'}" disabled title="Total PO cost divided by units manufactured" /></div>
+      <div><label>Manufacturing Cost (¥)</label><input id="fManufacturingCostTotal" type="text" value="${fmtMoney((order.accessories || []).reduce((sum, a) => sum + (Number(a.totalPrice) || 0), 0))}" disabled title="Sum of all sub-component prices" /></div>
+      <div><label>Total PO Cost (¥)</label><input id="fTotalPoCost" type="text" value="${fmtMoney(computeOrderTotal(order))}" disabled /></div>
+      <div><label>Total Price per Unit (¥)</label><input id="fTotalPricePerUnit" type="text" value="${order.mainComponent.purchaseQuantity ? fmtMoney(computeOrderTotal(order) / order.mainComponent.purchaseQuantity) : '—'}" disabled title="Total PO cost divided by units manufactured" /></div>
     </div>
     <div class="om-detail-row" style="margin-top:8px;"><span class="om-label">Payment Status</span><span class="om-value">${escapeHtml(order.settlement.status)}</span></div>
     ${order.settlement.paidDate ? `<div class="om-detail-row"><span class="om-label">Paid on</span><span class="om-value">${fmtDate(order.settlement.paidDate)}</span></div>` : ''}
@@ -1468,7 +1468,7 @@ async function openDetailPanel(id, scope) {
     accessoryRowsHost.insertAdjacentHTML('beforeend', accessoryRowHtml(editAccessoryRowCount, data, order.mainComponent.warehouse));
     const idx = editAccessoryRowCount;
     const row = panel.querySelector(`[data-accessory-row="${idx}"]`);
-    panel.querySelector(`[data-remove-accessory="${idx}"]`).addEventListener('click', () => { row.remove(); });
+    panel.querySelector(`[data-remove-accessory="${idx}"]`).addEventListener('click', () => { row.remove(); recalcTotals(); });
     wireAccessoryRowUploads(row);
     editAccessoryRowCount++;
   }
@@ -1476,6 +1476,40 @@ async function openDetailPanel(id, scope) {
   panel.querySelector('#omAddAccessoryRow').addEventListener('click', () => addAccessoryRow());
   document.getElementById('fWarehouse').addEventListener('input', (e) => {
     accessoryRowsHost.querySelectorAll('.om-acc-address-cell').forEach((cell) => { cell.textContent = e.target.value || '—'; });
+  });
+
+  // ---- Live cost recalculation: the Manufacturing Cost / Total PO Cost /
+  // Total Price per Unit / Product Pricing fields are computed displays,
+  // not editable - they need to be recomputed as the user types into any
+  // of the fields that feed them, not just after a save-and-reload. ----
+  function recalcTotals() {
+    const factoryPrice = Number(document.getElementById('fFactoryPrice').value) || 0;
+    const purchaseQty = Number(document.getElementById('fPurchaseQty').value) || 0;
+    const mainTotal = factoryPrice * purchaseQty;
+    const accessoriesTotal = Array.from(accessoryRowsHost.querySelectorAll('[data-accessory-row]')).reduce((sum, row) => {
+      const qty = Number(row.querySelector('.om-acc-qty').value) || 0;
+      const unitPrice = Number(row.querySelector('.om-acc-unit-price').value) || 0;
+      return sum + qty * unitPrice;
+    }, 0);
+    const fees = (Number(document.getElementById('fAssemblyFee').value) || 0) +
+      (Number(document.getElementById('fLaborCosts').value) || 0) +
+      (Number(document.getElementById('fTransportationFees').value) || 0) +
+      (Number(document.getElementById('fOtherExpenses').value) || 0);
+    const total = Math.round((mainTotal + accessoriesTotal + fees) * 100) / 100;
+
+    document.getElementById('fProductPricingTotal').value = fmtMoney(total);
+    document.getElementById('fManufacturingCostTotal').value = fmtMoney(accessoriesTotal);
+    document.getElementById('fTotalPoCost').value = fmtMoney(total);
+    document.getElementById('fTotalPricePerUnit').value = purchaseQty ? fmtMoney(total / purchaseQty) : '—';
+  }
+  ['fFactoryPrice', 'fPurchaseQty', 'fAssemblyFee', 'fLaborCosts', 'fTransportationFees', 'fOtherExpenses'].forEach((id) => {
+    document.getElementById(id).addEventListener('input', recalcTotals);
+  });
+  // Delegate accessory-row qty/price inputs since rows are added/removed
+  // dynamically - a listener on the table body catches all of them, current
+  // and future, without needing to re-wire on every add/remove.
+  accessoryRowsHost.addEventListener('input', (e) => {
+    if (e.target.classList.contains('om-acc-qty') || e.target.classList.contains('om-acc-unit-price')) recalcTotals();
   });
 
   // ---- Copy from previous PO: auto-detects a match on SKU as you type it,
