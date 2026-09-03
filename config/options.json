@@ -270,12 +270,14 @@
     "202504LKDAS",
     "202504SBBLA",
     "202502LTCUT1",
-    "F1"
+    "F1",
+    "FC-CHANGED"
   ],
   "qaLeads": [
     "Chloe",
     "Jinelle",
-    "Luna"
+    "Luna",
+    "New Specialist Name"
   ],
   "productDevelopmentLeads": [
     "Ben",

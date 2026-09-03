@@ -102,6 +102,7 @@ function render() {
   if (currentView === 'suppliers') return renderSuppliersShell(root);
   if (currentView === 'products') return renderProductsShell(root);
   if (currentView === 'components') return renderComponentsShell(root);
+  if (currentView === 'fabric-library') return renderFabricLibraryShell(root);
   if (currentView === 'settlement') return renderSettlementShell(root);
   return renderCategoryShell(root);
 }
@@ -162,12 +163,12 @@ async function renderHome(root) {
         <span>PO Requests</span>
         <span class="om-subtab-count" style="font-size:15px;">${counts.newRequests || 0}</span>
       </div>
-      <div style="padding:14px 18px;" id="omPoRequestsHost">
+      <div style="padding:14px 18px 20px 18px;" id="omPoRequestsHost">
         ${newRequests.length ? `
           <table class="om-table" style="min-width:0;">
             <thead><tr><th>PO Number</th><th>Product line</th><th>Buyer</th><th>Supplier</th><th>Desired entry</th></tr></thead>
             <tbody>
-              ${newRequests.map((o) => `
+              ${newRequests.slice(0, 10).map((o) => `
                 <tr data-id="${escapeHtml(o.id)}">
                   <td><strong>${escapeHtml(o.poNumber)}</strong></td>
                   <td>${escapeHtml(CATEGORY_META[o.productLine] ? CATEGORY_META[o.productLine].label : o.productLine)}</td>
@@ -178,6 +179,7 @@ async function renderHome(root) {
               `).join('')}
             </tbody>
           </table>
+          ${newRequests.length > 10 ? `<div class="section-help" style="margin-top:10px;">Showing 10 of ${newRequests.length} - the rest are in the category tiles below, filtered to New Request.</div>` : ''}
         ` : '<div class="om-empty">No new PO requests right now.</div>'}
       </div>
     </div>
@@ -220,7 +222,7 @@ async function loadTilePreview(productLine) {
     const params = new URLSearchParams({ productLine });
     if (st.search) params.set('search', st.search);
     const data = await api(`/api/order-management/orders?${params.toString()}`);
-    const orders = (data.orders || []).slice(0, 8); // preview only - "View all" shows everything
+    const orders = (data.orders || []).slice(0, 10); // preview only - "View all" shows everything
     if (st.subTab === 'components') renderComponentsTable(host, orders);
     else if (st.subTab === 'accessories') renderAccessoriesTable(host, flattenAccessories(orders));
     else renderOrdersTableFull(host, orders, productLine);
@@ -634,6 +636,7 @@ async function openProductProfile(id) {
       </div>
     </div>
 
+    <div class="om-panel-card">
     <div class="om-section-title">Product details</div>
     <div class="om-detail-grid">
       <div class="om-detail-row"><span class="om-label">Name</span><span class="om-value">${escapeHtml(product.name || '—')}</span></div>
@@ -649,15 +652,19 @@ async function openProductProfile(id) {
         <div class="om-detail-row"><span class="om-label">Washing Tag</span><span class="om-value">${escapeHtml(product.washingTag || '—')}</span></div>
       ` : ''}
     </div>
+    </div>
 
-    <div class="om-section-title" style="margin-top:20px;">Supplier</div>
+    <div class="om-panel-card">
+    <div class="om-section-title">Supplier</div>
     <div class="om-detail-grid">
       <div class="om-detail-row"><span class="om-label">Name</span><span class="om-value">${escapeHtml(product.supplierName || '—')}</span></div>
       <div class="om-detail-row"><span class="om-label">Code</span><span class="om-value">${escapeHtml(product.supplierCode || '—')}</span></div>
       <div class="om-detail-row"><span class="om-label">Contact</span><span class="om-value">${escapeHtml(product.supplierContact || '—')}</span></div>
     </div>
+    </div>
 
-    <div class="om-section-title" style="margin-top:20px;">Historical POs</div>
+    <div class="om-panel-card">
+    <div class="om-section-title">Historical POs</div>
     ${history.length ? `
       <div class="om-table-wrap">
         <table class="om-table" style="min-width:0;">
@@ -674,6 +681,7 @@ async function openProductProfile(id) {
         </table>
       </div>
     ` : `<div class="om-empty">No POs recorded yet for this product.</div>`}
+    </div>
    </div>
   `;
 
@@ -882,6 +890,7 @@ async function openComponentProfile(id) {
       </div>
     </div>
 
+    <div class="om-panel-card">
     <div class="om-section-title">Component details</div>
     <div class="om-detail-grid">
       <div class="om-detail-row"><span class="om-label">Part name</span><span class="om-value">${escapeHtml(component.partName || '—')}</span></div>
@@ -889,13 +898,17 @@ async function openComponentProfile(id) {
       <div class="om-detail-row"><span class="om-label">Unit Price</span><span class="om-value">${fmtMoney(component.unitPrice)}</span></div>
       <div class="om-detail-row"><span class="om-label">Product Category</span><span class="om-value">${escapeHtml(meta.label || component.productLine || '—')}</span></div>
     </div>
+    </div>
 
-    <div class="om-section-title" style="margin-top:20px;">Supplier</div>
+    <div class="om-panel-card">
+    <div class="om-section-title">Supplier</div>
     <div class="om-detail-grid">
       <div class="om-detail-row"><span class="om-label">Name</span><span class="om-value">${escapeHtml(component.supplierName || '—')}</span></div>
     </div>
+    </div>
 
-    <div class="om-section-title" style="margin-top:20px;">Historical POs</div>
+    <div class="om-panel-card">
+    <div class="om-section-title">Historical POs</div>
     ${history.length ? `
       <div class="om-table-wrap">
         <table class="om-table" style="min-width:0;">
@@ -911,6 +924,7 @@ async function openComponentProfile(id) {
         </table>
       </div>
     ` : `<div class="om-empty">No POs recorded yet for this component.</div>`}
+    </div>
    </div>
   `;
 
@@ -1003,6 +1017,165 @@ function openComponentForm(component) {
         await api('/api/catalog/components', { method: 'POST', body: JSON.stringify(payload) });
         showToast('Component created');
       }
+      closePanel();
+      refreshCurrentView();
+    } catch (e) { showToast(e.message, true); }
+  });
+}
+
+// ---- Fabric Library: Fabric Codes + Fabric Types, each a simple full
+// table (no productLine grouping - fabric isn't specific to one category
+// the way Products/Components are). Same auto-sync idea: anything entered
+// as a Fabric Code/Type on a PO or a catalog Product shows up here too. ----
+async function renderFabricLibraryShell(root) {
+  root.innerHTML = `
+    ${backToHubHtml()}
+    <h2 class="om-view-title">Fabric Library</h2>
+    <div class="om-category-tile" style="margin-bottom:20px;">
+      <div class="om-category-tile-header" style="border-color:var(--jc-teal);">
+        <span>Fabric Codes</span>
+        <button class="btn btn-primary om-view-all-btn" id="omNewFabricCodeBtn">+ Add fabric code</button>
+      </div>
+      <div id="omFabricCodesHost"><div class="om-empty">Loading...</div></div>
+    </div>
+    <div class="om-category-tile" style="margin-bottom:20px;">
+      <div class="om-category-tile-header" style="border-color:var(--jc-teal);">
+        <span>Fabric Types</span>
+        <button class="btn btn-primary om-view-all-btn" id="omNewFabricTypeBtn">+ Add fabric type</button>
+      </div>
+      <div id="omFabricTypesHost"><div class="om-empty">Loading...</div></div>
+    </div>
+  `;
+  bindBackToHub();
+  document.getElementById('omNewFabricCodeBtn').addEventListener('click', () => openFabricEntryForm('code', null));
+  document.getElementById('omNewFabricTypeBtn').addEventListener('click', () => openFabricEntryForm('type', null));
+
+  try {
+    const [codesData, typesData] = await Promise.all([
+      api('/api/fabric-library/codes'),
+      api('/api/fabric-library/types')
+    ]);
+    renderFabricTable('omFabricCodesHost', 'code', codesData.codes || [], true);
+    renderFabricTable('omFabricTypesHost', 'type', typesData.types || [], false);
+  } catch (e) { showToast(e.message, true); }
+}
+
+function renderFabricTable(hostId, kind, entries, withSwatch) {
+  const host = document.getElementById(hostId);
+  if (!host) return;
+  if (!entries.length) {
+    host.innerHTML = `<div class="om-empty">No fabric ${kind === 'code' ? 'codes' : 'types'} recorded yet.</div>`;
+    return;
+  }
+  host.innerHTML = `
+    <div class="om-table-wrap">
+      <table class="om-table">
+        <thead><tr>${withSwatch ? '<th>Swatch</th>' : ''}<th>${kind === 'code' ? 'Fabric Code' : 'Fabric Type'}</th><th>Notes</th></tr></thead>
+        <tbody>
+          ${entries.map((e) => `
+            <tr data-id="${escapeHtml(e.id)}">
+              ${withSwatch ? `<td>${e.swatchUrl ? `<img class="om-table-thumb" src="${escapeHtml(e.swatchUrl)}" alt="" />` : '—'}</td>` : ''}
+              <td><strong>${escapeHtml(e.value)}</strong></td>
+              <td>${escapeHtml(e.notes || '—')}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+  host.querySelectorAll('tbody tr[data-id]').forEach((tr) => {
+    tr.addEventListener('click', () => {
+      const entry = entries.find((e) => e.id === tr.dataset.id);
+      openFabricEntryForm(kind, entry);
+    });
+  });
+}
+
+function openFabricEntryForm(kind, entry) {
+  const isCode = kind === 'code';
+  const panel = document.createElement('div');
+  panel.className = 'om-panel';
+  panel.innerHTML = `
+   <div class="om-panel-inner">
+    <div class="om-panel-header">
+      <div style="font-size:19px;font-weight:700;">${entry ? 'Edit' : 'New'} fabric ${isCode ? 'code' : 'type'}</div>
+      <button class="om-panel-close" id="fabClose">&times;</button>
+    </div>
+    <div class="om-field-grid">
+      <div style="grid-column:1/-1;"><label>${isCode ? 'Fabric Code' : 'Fabric Type'} *</label><input id="fabValue" type="text" value="${val(entry && entry.value)}" /></div>
+      ${isCode ? `
+        <div style="grid-column:1/-1;">
+          <label>Swatch</label>
+          <div style="display:flex;align-items:center;gap:10px;">
+            ${entry && entry.swatchUrl
+              ? `<img id="fabSwatchPreview" class="om-upload-preview" src="${escapeHtml(entry.swatchUrl)}" alt="" title="Click to view larger" />`
+              : `<div id="fabSwatchPreview" class="om-upload-preview-empty"></div>`}
+            <input type="hidden" id="fabSwatchUrl" value="${val(entry && entry.swatchUrl)}" />
+            <input type="file" id="fabSwatchFile" accept="image/*" style="display:none;" />
+            <button type="button" class="om-table-upload-btn" id="fabSwatchUploadBtn">Upload</button>
+          </div>
+        </div>
+      ` : ''}
+      <div style="grid-column:1/-1;"><label>Notes</label><input id="fabNotes" type="text" value="${val(entry && entry.notes)}" /></div>
+    </div>
+    <div style="margin-top:22px;display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn btn-secondary" id="fabCancel" style="flex:none;width:auto;padding:10px 18px;">Cancel</button>
+      ${entry ? `<button class="btn btn-secondary" id="fabDelete" style="flex:none;width:auto;padding:10px 18px;color:var(--jc-fail);">Delete</button>` : ''}
+      <button class="btn btn-primary" id="fabSave" style="flex:none;width:auto;padding:10px 18px;">${entry ? 'Save changes' : 'Create'}</button>
+    </div>
+   </div>
+  `;
+  mountPanel(panel);
+  bindPanelEscape();
+  document.getElementById('fabClose').addEventListener('click', closePanel);
+  document.getElementById('fabCancel').addEventListener('click', closePanel);
+
+  if (isCode) {
+    const uploadBtn = document.getElementById('fabSwatchUploadBtn');
+    const fileInput = document.getElementById('fabSwatchFile');
+    uploadBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const formData = new FormData();
+      formData.append('file', file);
+      try {
+        const res = await fetch('/api/fabric-library/upload', { method: 'POST', body: formData });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.error || 'Upload failed');
+        document.getElementById('fabSwatchUrl').value = body.file.url;
+        const old = document.getElementById('fabSwatchPreview');
+        const fresh = document.createElement('img');
+        fresh.id = 'fabSwatchPreview';
+        fresh.className = 'om-upload-preview';
+        fresh.src = body.file.url;
+        old.parentNode.replaceChild(fresh, old);
+        showToast('Swatch uploaded');
+      } catch (err) { showToast(err.message, true); }
+    });
+  }
+
+  if (entry) {
+    document.getElementById('fabDelete').addEventListener('click', async () => {
+      if (!confirm(`Delete "${entry.value}"? This can't be undone.`)) return;
+      try {
+        await api(`/api/fabric-library/${isCode ? 'codes' : 'types'}/${encodeURIComponent(entry.id)}`, { method: 'DELETE' });
+        showToast('Deleted');
+        closePanel();
+        refreshCurrentView();
+      } catch (e) { showToast(e.message, true); }
+    });
+  }
+
+  document.getElementById('fabSave').addEventListener('click', async () => {
+    const value = document.getElementById('fabValue').value.trim();
+    if (!value) return showToast(`${isCode ? 'Fabric code' : 'Fabric type'} is required`, true);
+    const payload = { value, notes: document.getElementById('fabNotes').value };
+    if (isCode) payload.swatchUrl = document.getElementById('fabSwatchUrl').value;
+    try {
+      const path = `/api/fabric-library/${isCode ? 'codes' : 'types'}${entry ? '/' + encodeURIComponent(entry.id) : ''}`;
+      await api(path, { method: entry ? 'PATCH' : 'POST', body: JSON.stringify(payload) });
+      showToast(entry ? 'Updated' : 'Created');
       closePanel();
       refreshCurrentView();
     } catch (e) { showToast(e.message, true); }
@@ -1394,7 +1567,7 @@ function attachTypeahead(inputId, getOptions) {
   function renderMenu() {
     const q = input.value.trim().toLowerCase();
     const options = (getOptions() || []).filter(Boolean);
-    const filtered = (q ? options.filter((o) => o.toLowerCase().startsWith(q)) : options).slice(0, 20);
+    const filtered = (q ? options.filter((o) => o.toLowerCase().startsWith(q)) : options).slice(0, 200);
     if (!filtered.length) { menu.classList.remove('open'); return; }
     menu.innerHTML = filtered.map((o) => `<div class="om-typeahead-option">${escapeHtml(o)}</div>`).join('');
     menu.classList.add('open');
@@ -1439,6 +1612,7 @@ async function openDetailPanel(id, scope) {
       </div>
       <div style="display:flex;gap:10px;align-items:center;">
         ${scope !== 'full' ? `<button class="btn btn-secondary" id="omViewFullPo" style="flex:none;width:auto;padding:7px 14px;font-size:13px;">View full PO</button>` : ''}
+        <button class="btn btn-primary" id="omSaveOrder" style="flex:none;width:auto;padding:8px 18px;">Save changes</button>
         <button class="om-panel-close" id="omClosePanel">&times;</button>
       </div>
     </div>
@@ -1498,21 +1672,28 @@ async function openDetailPanel(id, scope) {
       </div>
       <div><label>Required Warehouse Arrival Date</label><input id="fDesiredEntry" type="date" value="${val(order.desiredEntryDate)}" /></div>
       <div><label>Required Manufacturer Delivery Date</label><input id="fManufDelivery" type="date" value="${val(order.manufacturerDeliveryDate)}" /></div>
+      <div><label>Fulfillment Request Date</label><input id="fFulfillmentRequestDate" type="date" value="${val(order.fulfillmentRequestDate)}" /></div>
       <div><label>Order Quantity</label><input id="fPurchaseQty" type="number" value="${val(order.mainComponent.purchaseQuantity)}" /></div>
       <div><label>Quantity received</label><input id="fFulfillQtyReceived" type="number" value="${val(order.fulfillment.quantityReceived)}" /></div>
       <div><label>Order Management Specialist</label>
         <select id="fBuyer" data-current="${escapeHtml(order.buyer || '')}">
           <option value="${escapeHtml(order.buyer || '')}">${escapeHtml(order.buyer || '— Select —')}</option>
         </select>
+        <input type="text" id="fBuyerOther" placeholder="Enter new specialist name" style="margin-top:8px;display:none;" />
       </div>
-      <div><label>Order placement date</label><input id="fOrderDate" type="date" value="${val(order.orderPlacementDate)}" /></div>
+      <div>
+        <label>Order placement date</label>
+        <input id="fOrderDate" type="date" value="${val(order.orderPlacementDate)}" ${order.orderPlacementDate ? 'disabled title="Set once when the order was placed - not editable afterward"' : ''} />
+      </div>
     </div>
     </div>
 
     <div class="om-panel-card">
     <div class="om-section-title">Product Development Approval</div>
-    <div class="section-help" style="margin-bottom:12px;">Where PD leads and QA/QC add in the golden sample, pre-production, and bulk approval details for this PO.</div>
-    <a class="btn btn-secondary" style="flex:none;width:auto;padding:9px 16px;text-decoration:none;" href="/approval.html?po=${encodeURIComponent(order.id)}" target="_blank" rel="noopener">Open Product Development Approval</a>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button type="button" class="btn btn-secondary om-copy-link-btn" style="flex:none;width:auto;padding:9px 16px;" data-copy-url="${escapeHtml(`${location.origin}/approval.html?po=${order.id}`)}">Share Link</button>
+      <a class="btn btn-primary" style="flex:none;width:auto;padding:9px 16px;text-decoration:none;" href="/approval.html?po=${encodeURIComponent(order.id)}" target="_blank" rel="noopener">Open Link</a>
+    </div>
     </div>
 
     <div class="om-panel-card">
@@ -1535,11 +1716,13 @@ async function openDetailPanel(id, scope) {
 
     <div class="om-panel-card">
     <div class="om-section-title">Product Documentation</div>
-    <div class="om-field-grid">
+    <div class="om-field-grid om-field-grid-row">
       ${uploadFieldHtml('fManufacturingDrawing', 'Manufacturing Drawing', order.mainComponent.manufacturingDrawing, true)}
       ${uploadFieldHtml('fWashingTagUrl', 'Washing Tag', order.mainComponent.washingTagUrl, true)}
       ${uploadFieldHtml('fPackagingUrl', 'Packaging', order.mainComponent.packagingUrl, true)}
       ${order.productLine !== 'clothing' ? uploadFieldHtml('fDimensionsUrl', 'Product Dimensions', order.mainComponent.dimensionsUrl, true) : ''}
+    </div>
+    <div class="om-field-grid om-field-grid-row" style="margin-top:10px;">
       <div><label>Weight (g)</label><input id="fWeightGrams" type="number" step="1" value="${val(order.mainComponent.weightGrams)}" /></div>
       <div><label>Shipping Weight (g)</label><input id="fShippingWeightGrams" type="number" step="1" value="${val(order.mainComponent.shippingWeightGrams)}" /></div>
       <div><label>Volume Weight (g)</label><input id="fVolumeWeightGrams" type="number" step="1" value="${val(order.mainComponent.volumeWeightGrams)}" /></div>
@@ -1559,15 +1742,27 @@ async function openDetailPanel(id, scope) {
           <button type="button" class="btn btn-secondary" id="fDimensionsAddPoint" style="flex:none;width:auto;padding:7px 14px;font-size:13px;">+ Add measurement point</button>
         </div>
       </div>
-    ` : ''}
+    ` : `
+      <div style="margin-top:18px;">
+        <label style="margin:0;">Product Dimensions</label>
+        <div class="om-field-grid om-field-grid-row" style="margin-top:8px;">
+          <div><label>Length (cm)</label><input id="fDimensionsLength" type="number" step="0.1" value="${val(order.mainComponent.dimensionsLength)}" /></div>
+          <div><label>Width (cm)</label><input id="fDimensionsWidth" type="number" step="0.1" value="${val(order.mainComponent.dimensionsWidth)}" /></div>
+          <div><label>Height (cm)</label><input id="fDimensionsHeight" type="number" step="0.1" value="${val(order.mainComponent.dimensionsHeight)}" /></div>
+        </div>
+      </div>
+    `}
     </div>
 
     <div class="om-panel-card">
     <div class="om-section-title">Main Component Specifications</div>
     <div class="om-field-grid">
-      <div><label>Fabric Code</label><input id="fFabricInfo" type="text" value="${val(order.mainComponent.fabricInfo)}" /></div>
-      <div><label>Fabric Type</label><input id="fComponent" type="text" placeholder="e.g. 100% Cotton" value="${val(order.mainComponent.component)}" /></div>
+      ${order.productLine === 'clothing' ? `
+        <div><label>Fabric Code</label><input id="fFabricInfo" type="text" value="${val(order.mainComponent.fabricInfo)}" /></div>
+        <div><label>Fabric Type</label><input id="fComponent" type="text" placeholder="e.g. 100% Cotton" value="${val(order.mainComponent.component)}" /></div>
+      ` : ''}
       <div><label>Unit Price (¥)</label><input id="fFactoryPrice" type="number" step="0.01" value="${val(order.mainComponent.factoryPrice)}" /></div>
+      <div><label>Supplier Address</label><input id="fSupplierAddress" type="text" value="${val(order.supplier.address)}" placeholder="Auto-fills from Supplier Name above" /></div>
     </div>
     </div>
 
@@ -1615,11 +1810,16 @@ async function openDetailPanel(id, scope) {
 
     <div class="om-section-title" style="margin-top:20px;">Paid Status by Component</div>
     <table class="om-table" style="min-width:0;">
-      <thead><tr><th>Component</th><th>Amount (¥)</th><th>Paid</th></tr></thead>
+      <thead><tr><th>Component</th><th>Amount (¥)</th><th>Status</th></tr></thead>
       <tbody id="omPaymentLineItems"></tbody>
     </table>
     <div class="om-detail-row" style="margin-top:10px;"><span class="om-label"><strong>Overall Payment Status</strong></span><span class="om-value" id="omOverallPaymentStatus">${escapeHtml(order.settlement.status)}</span></div>
     ${order.settlement.paidDate ? `<div class="om-detail-row"><span class="om-label">Paid in full on</span><span class="om-value">${fmtDate(order.settlement.paidDate)}</span></div>` : ''}
+    <div style="margin-top:14px;">
+      <button type="button" class="btn btn-primary" id="omCompletePoBtn" style="flex:none;width:auto;padding:9px 18px;" ${(order.status === STATUSES[STATUSES.length - 1] && order.settlement.status === 'Paid') ? '' : 'disabled title="Available once the order has reached its final status and every component is marked Paid"'}>
+        ${order.poCompletedAt ? `PO Completed ${fmtDate(order.poCompletedAt)}` : 'Complete PO'}
+      </button>
+    </div>
     </div>
 
     <div class="om-panel-card">
@@ -1632,10 +1832,6 @@ async function openDetailPanel(id, scope) {
         </li>
       `).join('') || '<li class="om-cl-meta">No changes logged yet.</li>'}
     </ul>
-    </div>
-
-    <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--jc-border);display:flex;justify-content:flex-end;">
-      <button class="btn btn-primary" id="omSaveOrder" style="flex:none;width:auto;padding:10px 24px;">Save changes</button>
     </div>
    </div>
   `;
@@ -1782,8 +1978,12 @@ async function openDetailPanel(id, scope) {
     });
   }
 
+  function currentSupplierAddress() {
+    const el = document.getElementById('fSupplierAddress');
+    return el ? el.value : '';
+  }
   function addAccessoryRow(data) {
-    accessoryRowsHost.insertAdjacentHTML('beforeend', accessoryRowHtml(editAccessoryRowCount, data, order.mainComponent.warehouse));
+    accessoryRowsHost.insertAdjacentHTML('beforeend', accessoryRowHtml(editAccessoryRowCount, data, currentSupplierAddress()));
     const idx = editAccessoryRowCount;
     const row = panel.querySelector(`[data-accessory-row="${idx}"]`);
     panel.querySelector(`[data-remove-accessory="${idx}"]`).addEventListener('click', () => { row.remove(); recalcTotals(); });
@@ -1797,9 +1997,15 @@ async function openDetailPanel(id, scope) {
   }
   (order.accessories && order.accessories.length ? order.accessories : [{}]).forEach(addAccessoryRow);
   panel.querySelector('#omAddAccessoryRow').addEventListener('click', () => { addAccessoryRow(); recalcTotals(); });
-  document.getElementById('fWarehouse').addEventListener('change', (e) => {
-    accessoryRowsHost.querySelectorAll('.om-acc-address-cell').forEach((cell) => { cell.textContent = e.target.value || '—'; });
-  });
+  // Component Delivery Address defaults from the main component's own
+  // Supplier Address (below), not the warehouse - it updates live as that
+  // field changes, same pattern the old warehouse-tied version used.
+  const supplierAddressInput = document.getElementById('fSupplierAddress');
+  if (supplierAddressInput) {
+    supplierAddressInput.addEventListener('input', (e) => {
+      accessoryRowsHost.querySelectorAll('.om-acc-address-cell').forEach((cell) => { cell.textContent = e.target.value || '—'; });
+    });
+  }
 
   // ---- Live cost recalculation: the Manufacturing Cost / Total PO Cost /
   // Total Price per Unit / Product Pricing fields are computed displays,
@@ -1869,16 +2075,26 @@ async function openDetailPanel(id, scope) {
     const items = buildPaymentLineItems();
     const tbody = document.getElementById('omPaymentLineItems');
     if (!tbody) return;
-    tbody.innerHTML = items.map((item) => `
+    tbody.innerHTML = items.map((item) => {
+      const paid = !!paymentLineItemsState[item.key];
+      return `
       <tr>
         <td>${escapeHtml(item.label)}</td>
         <td>${fmtMoney(item.amount)}</td>
-        <td><input type="checkbox" data-payment-key="${escapeHtml(item.key)}" ${paymentLineItemsState[item.key] ? 'checked' : ''} /></td>
+        <td>
+          <select data-payment-key="${escapeHtml(item.key)}" class="om-paid-select" data-paid="${paid ? 'paid' : 'pending'}">
+            <option value="pending" ${!paid ? 'selected' : ''}>Pending</option>
+            <option value="paid" ${paid ? 'selected' : ''}>Paid</option>
+          </select>
+        </td>
       </tr>
-    `).join('');
-    tbody.querySelectorAll('[data-payment-key]').forEach((cb) => {
-      cb.addEventListener('change', async (e) => {
-        paymentLineItemsState[e.target.dataset.paymentKey] = e.target.checked;
+    `;
+    }).join('');
+    tbody.querySelectorAll('[data-payment-key]').forEach((sel) => {
+      sel.addEventListener('change', async (e) => {
+        const isPaid = e.target.value === 'paid';
+        e.target.setAttribute('data-paid', isPaid ? 'paid' : 'pending');
+        paymentLineItemsState[e.target.dataset.paymentKey] = isPaid;
         const allPaid = items.length > 0 && items.every((item) => paymentLineItemsState[item.key]);
         const newStatus = allPaid ? 'Paid' : 'Pending';
         document.getElementById('omOverallPaymentStatus').textContent = newStatus;
@@ -1892,12 +2108,42 @@ async function openDetailPanel(id, scope) {
           });
           order.settlement.status = newStatus;
           order.settlement.componentPayments = paymentLineItemsState;
+          updateCompletePoButtonState();
           refreshCurrentView();
         } catch (err) { showToast(err.message, true); }
       });
     });
   }
   renderPaymentLineItems();
+
+  // ---- Complete PO: a manual confirmation step, available once the
+  // status stepper has reached its last stage AND every component above
+  // is Paid - both need to independently update this button's enabled
+  // state as they change, without a full panel re-render. ----
+  function updateCompletePoButtonState() {
+    const btn = document.getElementById('omCompletePoBtn');
+    if (!btn || order.poCompletedAt) return; // already completed - leave the "PO Completed" label alone
+    const eligible = order.status === STATUSES[STATUSES.length - 1] && order.settlement.status === 'Paid';
+    btn.disabled = !eligible;
+    btn.title = eligible ? '' : 'Available once the order has reached its final status and every component is marked Paid';
+  }
+  const completePoBtn = document.getElementById('omCompletePoBtn');
+  if (completePoBtn) {
+    completePoBtn.addEventListener('click', async () => {
+      if (order.poCompletedAt) return;
+      try {
+        await api(`/api/order-management/orders/${encodeURIComponent(order.id)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ patch: { poCompletedAt: new Date().toISOString() }, actor: 'Web user' })
+        });
+        order.poCompletedAt = new Date().toISOString();
+        completePoBtn.textContent = `PO Completed ${fmtDate(order.poCompletedAt)}`;
+        completePoBtn.disabled = true;
+        showToast('PO marked complete');
+        refreshCurrentView();
+      } catch (err) { showToast(err.message, true); }
+    });
+  }
 
   // ---- Product Dimensions: this PO's own editable sizing table (apparel
   // only). Selecting a standard copies it in as a starting point; every
@@ -1906,6 +2152,10 @@ async function openDetailPanel(id, scope) {
   let dimensionsTableState = order.mainComponent.dimensionsTable
     ? JSON.parse(JSON.stringify(order.mainComponent.dimensionsTable))
     : null;
+  // Canonical size list (Youth XS -> Adult 5XL, same order used everywhere
+  // else sizes are picked) - populated once /api/fits resolves below, and
+  // used to make the Size column a dropdown instead of free text.
+  let universalSizes = [];
 
   function renderDimensionsTable() {
     const wrap = document.getElementById('fDimensionsTableWrap');
@@ -1916,6 +2166,13 @@ async function openDetailPanel(id, scope) {
     }
     const t = dimensionsTableState;
     const sizeNames = Object.keys(t.sizes);
+    // Current value always included even if it's not in the canonical
+    // list (e.g. a standard loaded from fits.json with its own naming),
+    // so picking a standard never "loses" a size the dropdown doesn't know.
+    const sizeOptionsHtml = (current) => {
+      const options = current && !universalSizes.includes(current) ? [current, ...universalSizes] : universalSizes;
+      return options.map((s) => `<option value="${escapeHtml(s)}" ${s === current ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('');
+    };
     wrap.innerHTML = `
       <div class="om-table-wrap">
         <table class="om-table om-table-editable" style="min-width:0;">
@@ -1934,7 +2191,7 @@ async function openDetailPanel(id, scope) {
           <tbody>
             ${sizeNames.map((sizeName) => `
               <tr>
-                <td><input type="text" data-dim-size-rename="${escapeHtml(sizeName)}" value="${escapeHtml(sizeName)}" style="min-width:90px;" /></td>
+                <td><select data-dim-size-rename="${escapeHtml(sizeName)}" style="min-width:110px;">${sizeOptionsHtml(sizeName)}</select></td>
                 ${t.points.map((p) => `
                   <td><input type="text" data-dim-cell="${escapeHtml(sizeName)}|${escapeHtml(p)}" value="${escapeHtml(t.sizes[sizeName][p] ?? '')}" style="min-width:70px;" /></td>
                 `).join('')}
@@ -1957,6 +2214,7 @@ async function openDetailPanel(id, scope) {
         const oldName = el.getAttribute('data-dim-size-rename');
         const newName = e.target.value.trim();
         if (!newName || newName === oldName) return;
+        if (dimensionsTableState.sizes[newName]) return showToast('That size is already in the table', true);
         dimensionsTableState.sizes[newName] = dimensionsTableState.sizes[oldName];
         delete dimensionsTableState.sizes[oldName];
         renderDimensionsTable();
@@ -1984,8 +2242,13 @@ async function openDetailPanel(id, scope) {
     renderDimensionsTable();
     api('/api/fits').then((fitsData) => {
       const fits = (fitsData && fitsData.fits) || {};
+      universalSizes = (fitsData && fitsData.universalSizes) || [];
       dimStandardSelect.innerHTML = `<option value="">Select a standard to load...</option>` +
         Object.keys(fits).sort().map((key) => `<option value="${escapeHtml(key)}">${escapeHtml(fits[key].label_en || key)}</option>`).join('');
+      // Re-render now that universalSizes is populated, so any table
+      // already on the page (loaded from this PO's saved data) gets the
+      // dropdown treatment too, not just tables built after this point.
+      renderDimensionsTable();
       dimStandardSelect.addEventListener('change', (e) => {
         const chosen = fits[e.target.value];
         if (!chosen) return;
@@ -2001,9 +2264,12 @@ async function openDetailPanel(id, scope) {
 
     document.getElementById('fDimensionsAddSize').addEventListener('click', () => {
       if (!dimensionsTableState) dimensionsTableState = { standardKey: null, points: [], pointLabels: {}, sizes: {} };
-      let name = 'New Size', i = 1;
-      while (dimensionsTableState.sizes[name]) { i += 1; name = `New Size ${i}`; }
-      dimensionsTableState.sizes[name] = {};
+      // Pick the first canonical size not already in the table, so the new
+      // row shows up as a real, already-valid size selected in the
+      // dropdown - never a "New Size" placeholder to type over.
+      const nextSize = universalSizes.find((s) => !dimensionsTableState.sizes[s])
+        || `New Size ${Object.keys(dimensionsTableState.sizes).length + 1}`;
+      dimensionsTableState.sizes[nextSize] = {};
       renderDimensionsTable();
     });
     document.getElementById('fDimensionsAddPoint').addEventListener('click', () => {
@@ -2047,11 +2313,15 @@ async function openDetailPanel(id, scope) {
 
       document.getElementById('fSupplierName').value = src.supplier.name || '';
       document.getElementById('fSupplierCode').value = src.supplier.code || '';
+      const supplierAddrEl = document.getElementById('fSupplierAddress');
+      if (supplierAddrEl) supplierAddrEl.value = src.supplier.address || '';
       const riskSelect = document.getElementById('fProductRisk');
       riskSelect.value = src.productRisk || '';
       riskSelect.setAttribute('data-risk', src.productRisk || '');
-      document.getElementById('fFabricInfo').value = src.mainComponent.fabricInfo || '';
-      document.getElementById('fComponent').value = src.mainComponent.component || '';
+      const fabricInfoEl = document.getElementById('fFabricInfo');
+      const componentEl = document.getElementById('fComponent');
+      if (fabricInfoEl) fabricInfoEl.value = src.mainComponent.fabricInfo || '';
+      if (componentEl) componentEl.value = src.mainComponent.component || '';
       document.getElementById('fManufacturingDrawing').value = src.mainComponent.manufacturingDrawing || '';
       document.getElementById('fFactoryPrice').value = src.mainComponent.factoryPrice || '';
       document.getElementById('fWarehouse').value = src.mainComponent.warehouse || '';
@@ -2117,6 +2387,7 @@ async function openDetailPanel(id, scope) {
       document.getElementById('fOrderStatusSelect').value = newStatusValue;
       document.getElementById('fOrderStatusSelect').setAttribute('data-status', newStatusValue);
       renderStatusTracker(newStatusValue);
+      updateCompletePoButtonState();
       showToast('Status updated');
       refreshCurrentView();
     } catch (err) { showToast(err.message, true); }
@@ -2149,19 +2420,36 @@ async function openDetailPanel(id, scope) {
 
       const supplierNameInput = document.getElementById('fSupplierName');
       const supplierCodeInput = document.getElementById('fSupplierCode');
+      const supplierAddrInput = document.getElementById('fSupplierAddress');
       supplierNameInput.addEventListener('change', () => {
         const match = suppliers.find((s) => s.name.trim().toLowerCase() === supplierNameInput.value.trim().toLowerCase());
         if (match && match.vendorCode) supplierCodeInput.value = match.vendorCode;
+        // Auto-fill from the matched supplier record, but only overwrite
+        // if empty - never clobber an address someone already typed/edited
+        // by hand for this specific PO.
+        if (match && supplierAddrInput && !supplierAddrInput.value.trim()) {
+          supplierAddrInput.value = match.shippingAddress || match.mailingAddress || '';
+          supplierAddrInput.dispatchEvent(new Event('input'));
+        }
       });
 
-      // Order Management Specialist - same list as QA/QC team names.
+      // Order Management Specialist - same list as QA/QC team names, with
+      // an "Add other" option (like Creator/PD Lead on the New PO form)
+      // since this is an open-ended list a team maintains, not a fixed set.
       const buyerSelect = document.getElementById('fBuyer');
+      const buyerOtherInput = document.getElementById('fBuyerOther');
       if (buyerSelect) {
         const qaLeads = optionsData.qaLeads || [];
         const current = buyerSelect.dataset.current || '';
         const names = current && !qaLeads.includes(current) ? [current, ...qaLeads] : qaLeads;
         buyerSelect.innerHTML = `<option value="">— Select —</option>` +
+          `<option value="__other__">+ Add new...</option>` +
           names.map((n) => `<option value="${escapeHtml(n)}" ${n === current ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('');
+        buyerSelect.addEventListener('change', (e) => {
+          const isOther = e.target.value === '__other__';
+          buyerOtherInput.style.display = isOther ? '' : 'none';
+          if (isOther) buyerOtherInput.focus();
+        });
       }
 
       // Warehouse Address - real Warehouse records, managed on the
@@ -2188,16 +2476,22 @@ async function openDetailPanel(id, scope) {
   // immediately above) and payment status (its own Mark Paid/Pending toggle).
   document.getElementById('omSaveOrder').addEventListener('click', async () => {
     const productLine = order.productLine;
+    const buyerSelectEl = document.getElementById('fBuyer');
+    const buyerValue = buyerSelectEl.value === '__other__'
+      ? document.getElementById('fBuyerOther').value.trim()
+      : buyerSelectEl.value;
     const patch = {
-      buyer: document.getElementById('fBuyer').value,
+      buyer: buyerValue,
       orderPlacementDate: document.getElementById('fOrderDate').value || null,
       desiredEntryDate: document.getElementById('fDesiredEntry').value || null,
       manufacturerDeliveryDate: document.getElementById('fManufDelivery').value || null,
+      fulfillmentRequestDate: document.getElementById('fFulfillmentRequestDate').value || null,
       productRisk: document.getElementById('fProductRisk').value || null,
       supplier: {
         name: document.getElementById('fSupplierName').value,
         contact: order.supplier.contact,
-        code: document.getElementById('fSupplierCode').value
+        code: document.getElementById('fSupplierCode').value,
+        address: document.getElementById('fSupplierAddress').value
       },
       mainComponent: {
         name: document.getElementById('fMainName').value,
@@ -2211,11 +2505,14 @@ async function openDetailPanel(id, scope) {
         packagingUrl: document.getElementById('fPackagingUrl').value,
         dimensionsUrl: productLine !== 'clothing' ? document.getElementById('fDimensionsUrl').value : '',
         dimensionsTable: productLine === 'clothing' ? dimensionsTableState : null,
+        dimensionsLength: productLine !== 'clothing' ? (document.getElementById('fDimensionsLength').value || null) : null,
+        dimensionsWidth: productLine !== 'clothing' ? (document.getElementById('fDimensionsWidth').value || null) : null,
+        dimensionsHeight: productLine !== 'clothing' ? (document.getElementById('fDimensionsHeight').value || null) : null,
         weightGrams: document.getElementById('fWeightGrams').value || null,
         shippingWeightGrams: document.getElementById('fShippingWeightGrams').value || null,
         volumeWeightGrams: document.getElementById('fVolumeWeightGrams').value || null,
-        fabricInfo: document.getElementById('fFabricInfo').value,
-        component: document.getElementById('fComponent').value,
+        fabricInfo: productLine === 'clothing' ? document.getElementById('fFabricInfo').value : order.mainComponent.fabricInfo,
+        component: productLine === 'clothing' ? document.getElementById('fComponent').value : order.mainComponent.component,
         sizeDistribution: Array.from(sizeRowsHost.querySelectorAll('[data-size-row]')).map((row) => ({
           sku: row.querySelector('.om-size-sku').value,
           size: row.querySelector('.om-size-size').value,
@@ -2354,18 +2651,25 @@ async function setSettlement(id, status) {
 // uploads rather than typed values (Manufacturing Drawing, Washing Tag,
 // Packaging, etc).
 function uploadFieldHtml(fieldId, label, currentUrl, isImage) {
-  const preview = currentUrl
-    ? (isImage
-      ? `<img id="${fieldId}Preview" class="om-table-thumb" style="width:44px;height:44px;cursor:pointer;" src="${escapeHtml(currentUrl)}" alt="" title="Click to view larger" />`
-      : `<a id="${fieldId}Preview" href="${escapeHtml(currentUrl)}" target="_blank" rel="noopener" style="font-size:12px;">View file</a>`)
-    : `<span id="${fieldId}Preview" style="display:none;"></span>`;
+  let preview;
+  if (currentUrl) {
+    preview = isImage
+      ? `<img id="${fieldId}Preview" class="om-upload-preview" src="${escapeHtml(currentUrl)}" alt="" title="Click to view larger" />`
+      : `<a id="${fieldId}Preview" href="${escapeHtml(currentUrl)}" target="_blank" rel="noopener" style="font-size:12px;">View file</a>`;
+  } else if (isImage) {
+    // Reserved, empty slot rather than nothing - keeps the row's height
+    // stable and shows where the thumbnail will land once a file's chosen.
+    preview = `<div id="${fieldId}Preview" class="om-upload-preview-empty"></div>`;
+  } else {
+    preview = `<span id="${fieldId}Preview" style="display:none;"></span>`;
+  }
   return `
     <div>
       <label>${escapeHtml(label)}</label>
       <div style="display:flex;align-items:center;gap:10px;">
         ${preview}
         <input type="hidden" id="${fieldId}" value="${escapeHtml(currentUrl || '')}" />
-        <input type="file" id="${fieldId}File" style="display:none;" />
+        <input type="file" id="${fieldId}File" style="display:none;" ${isImage ? 'accept="image/*"' : ''} />
         <button type="button" class="om-table-upload-btn" id="${fieldId}UploadBtn">Upload</button>
       </div>
     </div>
@@ -2401,8 +2705,7 @@ function wireUploadField(fieldId, orderId, category, isImage) {
       if (isImage) {
         fresh = document.createElement('img');
         fresh.id = `${fieldId}Preview`;
-        fresh.className = 'om-table-thumb';
-        fresh.style.cssText = 'width:44px;height:44px;cursor:pointer;';
+        fresh.className = 'om-upload-preview';
         fresh.src = body.file.url;
         fresh.addEventListener('click', () => openImageLightbox(body.file.url));
       } else {
@@ -2481,7 +2784,7 @@ function collectAccessoryRows(container) {
 (async function init() {
   const params = new URLSearchParams(location.search);
   const view = params.get('view');
-  if (view === 'suppliers' || view === 'settlement' || view === 'products' || view === 'components') currentView = view;
+  if (view === 'suppliers' || view === 'settlement' || view === 'products' || view === 'components' || view === 'fabric-library') currentView = view;
   await Promise.all([loadStatuses(), loadAccessoryStatuses(), loadFileCategories()]);
   render();
 })();

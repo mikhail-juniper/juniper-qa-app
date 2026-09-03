@@ -11,6 +11,7 @@ let appMode = 'chooser';
 const newPoState = {
   category: null, subcategory: null,
   poNumber: '', sku: '', orderDate: todayStr(), creator: '', productTitle: '', orderQuantity: '', productDevelopmentLead: '',
+  fulfillmentRequestDate: '',
   sizesIncluded: [],
   sizesPreFilled: false,
   establishedFit: null, // { fitKey, sizes } - looked up once SKU is entered, if this SKU already has one on file
@@ -771,6 +772,9 @@ function renderNewPoScreen() {
         <div style="flex:1">${dateField2('newPoOrderDate', 'orderDateLabel', newPoState.orderDate, { required: true })}</div>
         <div style="flex:1">${textField2('newPoQuantity', 'poQuantity', newPoState.orderQuantity, { required: true, placeholderKey: 'poQuantityPlaceholder', numeric: true })}</div>
       </div>
+      <div class="field-row">
+        <div style="flex:1">${dateField2('newPoFulfillmentRequestDate', 'fulfillmentRequestDate', newPoState.fulfillmentRequestDate, {})}</div>
+      </div>
       ${newPoSelectFieldWithOther('newPoCreator', 'creator', newPoState.creator, OPTIONS.creators || [], newPoState.creatorOtherMode)}
       ${textField2('newPoProductTitle', 'productTitle', newPoState.productTitle, {})}
       ${newPoSelectFieldWithOther('newPoPdLead', 'productDevelopmentLead', newPoState.productDevelopmentLead, OPTIONS.productDevelopmentLeads || [], newPoState.pdLeadOtherMode)}
@@ -942,6 +946,7 @@ function attachNewPoHandlers() {
   };
   bindText('newPoNumber', 'poNumber');
   bindText('newPoOrderDate', 'orderDate');
+  bindText('newPoFulfillmentRequestDate', 'fulfillmentRequestDate');
   bindText('newPoQuantity', 'orderQuantity');
   bindText('newPoProductTitle', 'productTitle');
   bindText('newPoAsanaLink', 'asanaTaskLink');
@@ -1006,6 +1011,7 @@ async function submitNewPo() {
   if (!newPoState.orderDate) missing.push('Order Date');
   if (!newPoState.orderQuantity) missing.push('Order Quantity');
   if (!newPoState.productDevelopmentLead.trim()) missing.push('Product Development Lead');
+  if (newPoState.category === 'apparel' && !newPoState.sizesIncluded.length) missing.push('At least one size');
   if (missing.length) {
     showToast('Please fill in: ' + missing.join(', '), true);
     return;
@@ -1021,6 +1027,7 @@ async function submitNewPo() {
         poNumber: newPoState.poNumber, sku: newPoState.sku, category: newPoState.category, subcategory: newPoState.subcategory,
         orderDate: newPoState.orderDate, creator: newPoState.creator, productTitle: newPoState.productTitle, orderQuantity: newPoState.orderQuantity,
         productDevelopmentLead: newPoState.productDevelopmentLead,
+        fulfillmentRequestDate: newPoState.fulfillmentRequestDate || null,
         sizesIncluded: newPoState.sizesIncluded.map((x) => x.label).filter(Boolean),
         sizeDistribution: newPoState.sizesIncluded.filter((x) => x.label).map((x) => ({ size: x.label, quantity: x.quantity })),
         asanaTaskLink: newPoState.asanaTaskLink
@@ -1065,7 +1072,7 @@ function renderNewPoSuccess(data) {
   document.getElementById('btnPoStartOver').addEventListener('click', () => {
     Object.assign(newPoState, {
       category: null, subcategory: null, poNumber: '', sku: '', orderDate: todayStr(), creator: '', productTitle: '',
-      orderQuantity: '', productDevelopmentLead: '', sizesIncluded: [], sizesPreFilled: false, establishedFit: null, skuChecked: null, pdLeadOtherMode: false, creatorOtherMode: false, asanaTaskLink: ''
+      orderQuantity: '', productDevelopmentLead: '', fulfillmentRequestDate: '', sizesIncluded: [], sizesPreFilled: false, establishedFit: null, skuChecked: null, pdLeadOtherMode: false, creatorOtherMode: false, asanaTaskLink: ''
     });
     appMode = 'newPO';
     render();

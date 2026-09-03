@@ -22,6 +22,7 @@ const orderManagementStore = require('./lib/orderManagementStore');
 const supplierStore = require('./lib/supplierStore');
 const warehouseStore = require('./lib/warehouseStore');
 const catalogStore = require('./lib/catalogStore');
+const fabricLibraryStore = require('./lib/fabricLibraryStore');
 const approvalStore = require('./lib/approvalStore');
 const approvalPhotoSets = require('./config/approvalPhotoSets.json');
 const asanaClient = require('./lib/asanaClient');
@@ -169,7 +170,11 @@ app.use('/submissions', express.static(submissionLog.PDF_ARCHIVE_DIR));
 app.use('/issue-photos', express.static(submissionLog.PHOTO_ARCHIVE_DIR));
 app.use('/approval-photos', express.static(approvalStore.APPROVAL_PHOTO_DIR));
 app.use('/order-management-files', express.static(orderManagementStore.ORDER_FILES_DIR));
-
+// Fabric Library swatch uploads live here - not tied to any one order, so
+// this constant is declared up here (before first use) rather than beside
+// uploadFabricFile below, which is defined later in the file.
+const FABRIC_LIBRARY_FILES_DIR = path.join(submissionLog.DATA_DIR, 'fabric-library-files');
+app.use('/fabric-library-files', express.static(FABRIC_LIBRARY_FILES_DIR));
 // Order Management file uploads (style pictures, design docs, packing lists)
 // write straight to disk under DATA_DIR/order-management-files/<orderId>/,
 // unlike the QA/QC photo uploads above which buffer in memory first - these
@@ -185,6 +190,21 @@ const uploadOrderFile = multer({
     filename: (req, file, cb) => cb(null, `${uuidv4()}-${file.originalname}`)
   }),
   limits: { fileSize: 25 * 1024 * 1024 } // 25MB per file
+});
+
+// Fabric Library swatch uploads - not tied to any one order, so this gets
+// its own small disk-backed folder rather than reusing uploadOrderFile
+// (which requires a real order id to write under). FABRIC_LIBRARY_FILES_DIR
+// itself is declared earlier, alongside its static-serve route.
+const uploadFabricFile = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      fs.mkdirSync(FABRIC_LIBRARY_FILES_DIR, { recursive: true });
+      cb(null, FABRIC_LIBRARY_FILES_DIR);
+    },
+    filename: (req, file, cb) => cb(null, `${uuidv4()}-${file.originalname}`)
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB - these are just swatch photos
 });
 
 // Serve the fit library + translations + dropdown options + category tree + AQL
@@ -738,6 +758,7 @@ app.post('/api/purchase-orders', (req, res) => {
       productLine,
       status: 'New Request',
       orderPlacementDate: body.orderDate || null,
+      fulfillmentRequestDate: body.fulfillmentRequestDate || null,
       mainComponent: {
         sku: body.sku,
         name: body.productTitle || '',
@@ -860,6 +881,10 @@ app.post('/api/order-management/orders', (req, res) => {
 app.patch('/api/order-management/orders/:id', (req, res) => {
   const body = req.body || {};
   const actor = body.actor || req.get('X-Actor');
+  // Order Management Specialist reuses the qaLeads list; a name typed via
+  // "+ Add new..." should stick around as a future suggestion, same as
+  // Creator/PD Lead already do on the New PO form.
+  if (body.patch && body.patch.buyer) addNewOptionIfMissing('qaLeads', body.patch.buyer);
   const updated = orderManagementStore.updateOrder(req.params.id, body.patch || {}, actor);
   if (!updated) return res.status(404).json({ error: 'Order not found' });
   res.json({ ok: true, order: updated });
@@ -1036,6 +1061,55 @@ app.get('/api/catalog/components/:id/history', (req, res) => {
   res.json({ orders: orders.map(orderManagementStore.toQaShape) });
 });
 
+// ---- Fabric Library (Fabric Codes / Fabric Types) ----
+// Same auto-sync directory pattern as Products/Components: any fabric
+// code/type entered on a PO's Main Component Specifications, or on a
+// catalog Product, gets a record here automatically the first time it's
+// seen. Backfill runs on every list request, same reasoning as catalog.
+app.get('/api/fabric-library/codes', (req, res) => {
+  fabricLibraryStore.backfillFromOrders(orderManagementStore.listOrders({}));
+  fabricLibraryStore.backfillFromProducts(catalogStore.listManualProducts());
+  res.json({ codes: fabricLibraryStore.listFabricCodes() });
+});
+app.post('/api/fabric-library/codes', (req, res) => {
+  const body = req.body || {};
+  if (!body.value) return res.status(400).json({ error: 'value is required' });
+  const code = fabricLibraryStore.createFabricCode({ ...body, id: uuidv4() });
+  res.json({ ok: true, code });
+});
+app.patch('/api/fabric-library/codes/:id', (req, res) => {
+  const updated = fabricLibraryStore.updateFabricCode(req.params.id, req.body || {});
+  if (!updated) return res.status(404).json({ error: 'Fabric code not found' });
+  res.json({ ok: true, code: updated });
+});
+app.delete('/api/fabric-library/codes/:id', (req, res) => {
+  const ok = fabricLibraryStore.deleteFabricCode(req.params.id);
+  if (!ok) return res.status(404).json({ error: 'Fabric code not found' });
+  res.json({ ok: true });
+});
+
+app.get('/api/fabric-library/types', (req, res) => {
+  fabricLibraryStore.backfillFromOrders(orderManagementStore.listOrders({}));
+  fabricLibraryStore.backfillFromProducts(catalogStore.listManualProducts());
+  res.json({ types: fabricLibraryStore.listFabricTypes() });
+});
+app.post('/api/fabric-library/types', (req, res) => {
+  const body = req.body || {};
+  if (!body.value) return res.status(400).json({ error: 'value is required' });
+  const type = fabricLibraryStore.createFabricType({ ...body, id: uuidv4() });
+  res.json({ ok: true, type });
+});
+app.patch('/api/fabric-library/types/:id', (req, res) => {
+  const updated = fabricLibraryStore.updateFabricType(req.params.id, req.body || {});
+  if (!updated) return res.status(404).json({ error: 'Fabric type not found' });
+  res.json({ ok: true, type: updated });
+});
+app.delete('/api/fabric-library/types/:id', (req, res) => {
+  const ok = fabricLibraryStore.deleteFabricType(req.params.id);
+  if (!ok) return res.status(404).json({ error: 'Fabric type not found' });
+  res.json({ ok: true });
+});
+
 app.get('/api/order-management/counts', (req, res) => {
   res.json(orderManagementStore.getCounts());
 });
@@ -1075,8 +1149,18 @@ app.post('/api/order-management/orders/:id/files', uploadOrderFile.single('file'
   }
 });
 
-app.delete('/api/order-management/orders/:id/files/:fileId', (req, res) => {
-  const updated = orderManagementStore.removeFile(req.params.id, req.params.fileId, req.get('X-Actor'));
+// Fabric Library swatch upload - standalone, not attached to an order.
+app.post('/api/fabric-library/upload', uploadFabricFile.single('file'), (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    res.json({ ok: true, file: { url: `/fabric-library-files/${encodeURIComponent(req.file.filename)}` } });
+  } catch (err) {
+    console.error('Failed to upload fabric swatch:', err);
+    res.status(500).json({ error: 'Failed to upload file', detail: String(err.message || err) });
+  }
+});
+
+app.delete('/api/order-management/orders/:id/files/:fileId', (req, res) => {  const updated = orderManagementStore.removeFile(req.params.id, req.params.fileId, req.get('X-Actor'));
   if (!updated) return res.status(404).json({ error: 'Order not found' });
   res.json({ ok: true, order: updated });
 });
@@ -1153,6 +1237,19 @@ app.post('/api/approval/:poNumber/:stage', upload.any(), (req, res) => {
       if (fitDef) {
         const submittedSizes = (data.sizing.sizeRows || []).map((r) => r.size).filter(Boolean);
         orderManagementStore.updateOrder(po.id, { fitKey: data.sizing.fit, fitSizes: submittedSizes }, 'System', 'Established apparel fit');
+      }
+    }
+
+    // Keep the Order Management record in sync the other direction too: if
+    // the Sample stage was submitted with a risk or factory code different
+    // from what's on the PO (e.g. QA adjusted it during approval), write it
+    // back so the two sections never show conflicting values.
+    if (req.params.stage === 'sample') {
+      const syncPatch = {};
+      if (data.productRisk && data.productRisk !== po.productRisk) syncPatch.productRisk = data.productRisk;
+      if (data.factoryCode && data.factoryCode !== po.factoryCode) syncPatch.supplier = { code: data.factoryCode };
+      if (Object.keys(syncPatch).length) {
+        orderManagementStore.updateOrder(po.id, syncPatch, 'System', 'Synced from Sample Approval');
       }
     }
 

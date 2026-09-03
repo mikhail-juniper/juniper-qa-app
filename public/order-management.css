@@ -125,7 +125,11 @@
 .om-tile-search {
   width: 100%; padding: 8px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--jc-border); font-size: 13px;
 }
-.om-tile-table-scroll { max-height: 340px; overflow-y: auto; }
+/* Bounded preview area on the home tiles: tall enough that the full
+   10-PO preview fits without internal scrolling in the common case, with
+   breathing room under the last row so the tile doesn't end flush against
+   its final PO. */
+.om-tile-table-scroll { max-height: 480px; overflow-y: auto; padding-bottom: 18px; }
 
 .om-subtabs-bar { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid var(--jc-border); }
 .om-subtab {
@@ -358,20 +362,28 @@
 .om-typeahead-empty { padding: 8px 12px; font-size: 12.5px; color: var(--jc-muted); }
 
 /* Color-coded status / risk pills, used as <select> backgrounds so the
-   selected state itself carries the color, not just a separate badge. */
-select.om-status-select[data-status="New Request"] { background: #eef1f4; color: #445056; border-color: #d3d9de; }
-select.om-status-select[data-status="Order Placed"] { background: #e6f0fd; color: #1955a8; border-color: #aecdf5; }
-select.om-status-select[data-status="PP Quality Inspection"] { background: #f3e8fd; color: #6b21a8; border-color: #d9b8f5; }
-select.om-status-select[data-status="In Production"] { background: #fff1e0; color: #a35a00; border-color: #f5cd94; }
-select.om-status-select[data-status="Bulk Quality Inspection"] { background: #f3e8fd; color: #6b21a8; border-color: #d9b8f5; }
-select.om-status-select[data-status="In Transportation"] { background: #e6f0fd; color: #1955a8; border-color: #aecdf5; }
-select.om-status-select[data-status="Delivered"] { background: #e0f7f3; color: #0f7d6c; border-color: #9fe3d6; }
-select.om-status-select[data-status="Completed"] { background: #e9f9ee; color: #17794a; border-color: #a9e3bf; }
+   selected state itself carries the color, not just a separate badge.
+   IMPORTANT: background-color, not the background shorthand - shorthand
+   resets background-image too, which silently wiped out the dropdown
+   chevron these selects should inherit from the base `select` rule in
+   styles.css, making them look like static colored labels rather than
+   actual dropdowns. */
+select.om-status-select[data-status="New Request"] { background-color: #eef1f4; color: #445056; border-color: #d3d9de; }
+select.om-status-select[data-status="Order Placed"] { background-color: #e6f0fd; color: #1955a8; border-color: #aecdf5; }
+select.om-status-select[data-status="PP Quality Inspection"] { background-color: #f3e8fd; color: #6b21a8; border-color: #d9b8f5; }
+select.om-status-select[data-status="In Production"] { background-color: #fff1e0; color: #a35a00; border-color: #f5cd94; }
+select.om-status-select[data-status="Bulk Quality Inspection"] { background-color: #f3e8fd; color: #6b21a8; border-color: #d9b8f5; }
+select.om-status-select[data-status="In Transportation"] { background-color: #e6f0fd; color: #1955a8; border-color: #aecdf5; }
+select.om-status-select[data-status="Delivered"] { background-color: #e0f7f3; color: #0f7d6c; border-color: #9fe3d6; }
+select.om-status-select[data-status="Completed"] { background-color: #e9f9ee; color: #17794a; border-color: #a9e3bf; }
 
-select.om-risk-select[data-risk="high"] { background: #fde8e8; color: #b42318; border-color: #f5b5ac; }
-select.om-risk-select[data-risk="medium"] { background: #fff6e5; color: #9a6700; border-color: #f3d38a; }
-select.om-risk-select[data-risk="low"] { background: #e9f9ee; color: #17794a; border-color: #a9e3bf; }
-select.om-risk-select[data-risk=""] { background: #fff; color: var(--jc-text); }
+select.om-risk-select[data-risk="high"] { background-color: #fde8e8; color: #b42318; border-color: #f5b5ac; }
+select.om-risk-select[data-risk="medium"] { background-color: #fff6e5; color: #9a6700; border-color: #f3d38a; }
+select.om-risk-select[data-risk="low"] { background-color: #e9f9ee; color: #17794a; border-color: #a9e3bf; }
+select.om-risk-select[data-risk=""] { background-color: #fff; color: var(--jc-text); }
+
+select.om-paid-select[data-paid="pending"] { background-color: #fff6e5; color: #9a6700; border-color: #f3d38a; }
+select.om-paid-select[data-paid="paid"] { background-color: #e9f9ee; color: #17794a; border-color: #a9e3bf; }
 
 .om-pill {
   display: inline-block;
@@ -461,6 +473,18 @@ select.om-risk-select[data-risk=""] { background: #fff; color: var(--jc-text); }
 .om-field-grid {
   display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px;
 }
+/* Opt-in variant for a handful of fields that should share one row
+   (Product Documentation's upload trio, its weight trio) instead of
+   wrapping at the default 2-up grid. Falls back to wrapping gracefully
+   on narrow screens via the existing mobile override below. */
+.om-field-grid-row { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+.om-upload-preview { width: 44px; height: 44px; cursor: pointer; flex: none; }
+/* Reserved, empty preview slot shown before a file's chosen, so the row's
+   height/alignment doesn't jump once one is uploaded. */
+.om-upload-preview-empty {
+  width: 44px; height: 44px; flex: none; border-radius: 6px;
+  border: 1.5px dashed var(--jc-border); background: #fafbfa;
+}
 .om-field-grid label {
   font-size: 12px; color: var(--jc-muted); font-weight: 600; display: block; margin-bottom: 3px;
 }
@@ -468,6 +492,11 @@ select.om-risk-select[data-risk=""] { background: #fff; color: var(--jc-text); }
   width: 100%; padding: 8px 10px; border-radius: var(--radius-sm); border: 1.5px solid var(--jc-border); font-size: 14px;
   font-family: inherit;
 }
+/* The shorthand `padding` above resets padding-right to 10px on selects
+   too, squeezing the space styles.css reserves for the dropdown chevron
+   (right 12px, 18px wide) right up against the border - give it room
+   back so the arrow has clear space regardless of option text length. */
+.om-field-grid select { padding-right: 32px; }
 .om-detail-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13.5px; border-bottom: 1px dashed var(--jc-border); }
 .om-detail-row:last-child { border-bottom: none; }
 .om-detail-row .om-label { color: var(--jc-muted); }

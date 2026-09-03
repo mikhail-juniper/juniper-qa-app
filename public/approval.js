@@ -379,6 +379,54 @@ async function loadApprovalForPo(poNumber) {
   approvalState.priorSampleApproval = data.priorSampleApproval;
   approvalState.reportingHistory = data.reportingHistory;
   approvalState.stage = determineCurrentStage(data.approval);
+
+  // Pre-fill the Sample-stage setup from what the Order Management
+  // specialist already entered on the PO (risk, factory code, sizing) -
+  // the OM setup is now where that information gets entered first, so PD
+  // approval starts from it instead of blank defaults, and a risk change
+  // made in Order Management shows up here too. Only while the sample
+  // stage hasn't been submitted yet: after submission, the submitted
+  // record is the source of truth for what was actually approved.
+  if (!data.approval.sampleApproval.submitted && data.po) {
+    approvalState.productRisk = data.po.productRisk || 'medium';
+    if (data.po.factoryCode) approvalState.factoryCode = data.po.factoryCode;
+
+    const dt = data.po.dimensionsTable;
+    if (data.po.category === 'apparel' && dt && dt.sizes && Object.keys(dt.sizes).length) {
+      const knownFits = (CONFIG.fits && CONFIG.fits.fits) || {};
+      if (dt.standardKey && knownFits[dt.standardKey]) {
+        // The PO's sizing was built from a known standard - load that fit
+        // with the PO's own (possibly adjusted) measurements, not the
+        // generic template values.
+        approvalState.fit = dt.standardKey;
+        approvalState.sizeRows = Object.keys(dt.sizes).map((size) => {
+          const measured = {};
+          Object.entries(dt.sizes[size] || {}).forEach(([point, v]) => {
+            if (v !== '' && v !== null && v !== undefined) measured[point] = String(v);
+          });
+          return { size, measured };
+        });
+        approvalState._fitForRows = dt.standardKey;
+      } else {
+        // Fully custom sizing (no known standard behind it) - map into the
+        // free-form custom size chart instead.
+        approvalState.fit = OTHER_FIT_VALUE;
+        approvalState.customSizeRows = Object.keys(dt.sizes).map((size) => ({
+          sizeName: size,
+          measurements: Object.entries(dt.sizes[size] || {})
+            .filter(([, v]) => v !== '' && v !== null && v !== undefined)
+            .map(([point, v]) => `${(dt.pointLabels && dt.pointLabels[point] && dt.pointLabels[point].en) || point}: ${v}`)
+            .join(', ')
+        }));
+      }
+    } else if (data.po.category !== 'apparel') {
+      // Non-apparel: plain L/W/H from the PO's Product Documentation.
+      // OM's "Length" maps to approval's "Depth" - same third axis.
+      if (data.po.dimensionsHeight != null) approvalState.dimensions.height = String(data.po.dimensionsHeight);
+      if (data.po.dimensionsWidth != null) approvalState.dimensions.width = String(data.po.dimensionsWidth);
+      if (data.po.dimensionsLength != null) approvalState.dimensions.depth = String(data.po.dimensionsLength);
+    }
+  }
   return true;
 }
 

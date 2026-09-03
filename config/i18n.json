@@ -1702,5 +1702,9 @@
   "categoryOther": {
     "en": "Other",
     "zh": "其他"
+  },
+  "fulfillmentRequestDate": {
+    "en": "Fulfillment Request Date",
+    "zh": "履约要求日期"
   }
 }
