@@ -3,6 +3,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const archiver = require('archiver');
 
@@ -74,9 +75,10 @@ function addNewOptionIfMissing(listKey, value) {
  *  in on the New Purchase Order form. */
 function sortSizesCanonically(sizes) {
   const canonical = (fits && fits.universalSizes) || [];
+  const keyOf = (item) => (typeof item === 'string' ? item : item.size);
   return [...(sizes || [])].sort((a, b) => {
-    const ia = canonical.indexOf(a);
-    const ib = canonical.indexOf(b);
+    const ia = canonical.indexOf(keyOf(a));
+    const ib = canonical.indexOf(keyOf(b));
     if (ia === -1 && ib === -1) return 0;
     if (ia === -1) return 1;
     if (ib === -1) return -1;
@@ -107,6 +109,57 @@ const uploadBackup = multer({
 });
 
 app.use(express.json({ limit: '5mb' }));
+
+// ---- Simple site-wide password gate ----
+// Not meant to be robust security - just enough to keep this off of casual
+///accidental access (crawlers, stray links, etc.) so the Asana integration
+// and everything else isn't sitting wide open. A stateless cookie check,
+// no session store, no user accounts.
+const SITE_PASSWORD = process.env.SITE_PASSWORD || 'JuniperTO';
+const AUTH_COOKIE_NAME = 'juniper_auth';
+const AUTH_TOKEN = crypto.createHash('sha256').update(`${SITE_PASSWORD}::juniper-site-gate`).digest('hex');
+
+function parseCookies(req) {
+  const header = req.headers.cookie;
+  const out = {};
+  if (!header) return out;
+  header.split(';').forEach((pair) => {
+    const idx = pair.indexOf('=');
+    if (idx === -1) return;
+    out[pair.slice(0, idx).trim()] = decodeURIComponent(pair.slice(idx + 1).trim());
+  });
+  return out;
+}
+
+// Paths that must stay reachable without being logged in yet, so the login
+// page itself can load and submit.
+const AUTH_ALLOWLIST = new Set(['/login.html', '/api/login', '/favicon.ico']);
+
+app.post('/api/login', (req, res) => {
+  const { password } = req.body || {};
+  if (password !== SITE_PASSWORD) {
+    return res.status(401).json({ error: 'Incorrect password' });
+  }
+  res.cookie(AUTH_COOKIE_NAME, AUTH_TOKEN, {
+    httpOnly: true,
+    sameSite: 'lax',
+    maxAge: 90 * 24 * 60 * 60 * 1000 // 90 days
+  });
+  res.json({ ok: true });
+});
+
+app.use((req, res, next) => {
+  if (AUTH_ALLOWLIST.has(req.path)) return next();
+  const cookies = parseCookies(req);
+  if (cookies[AUTH_COOKIE_NAME] === AUTH_TOKEN) return next();
+  // API/asset requests get a plain 401 rather than a redirect, so fetch()
+  // calls fail cleanly instead of receiving an HTML login page as "data".
+  if (req.path.startsWith('/api/') || req.headers.accept && !req.headers.accept.includes('text/html')) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  return res.redirect(`/login.html?next=${encodeURIComponent(req.originalUrl)}`);
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 // Serve generated PDFs so they can be viewed/downloaded - backed by the
 // persistent DATA_DIR (see lib/submissionLog.js) so these survive restarts
@@ -687,7 +740,13 @@ app.post('/api/purchase-orders', (req, res) => {
       mainComponent: {
         sku: body.sku,
         name: body.productTitle || '',
-        purchaseQuantity: body.orderQuantity ? parseInt(body.orderQuantity, 10) : null
+        purchaseQuantity: body.orderQuantity ? parseInt(body.orderQuantity, 10) : null,
+        // Full size/variant distribution from the New PO setup step, if any
+        // was entered - each row shares the PO's one SKU, matching how
+        // Order Management already models size variants of one product.
+        sizeDistribution: Array.isArray(body.sizeDistribution)
+          ? body.sizeDistribution.filter((r) => r && r.size).map((r) => ({ sku: body.sku, size: r.size, quantity: r.quantity != null ? r.quantity : null }))
+          : []
       },
       category: body.category || null,
       subcategory: body.subcategory || null,

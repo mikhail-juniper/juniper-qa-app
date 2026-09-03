@@ -793,15 +793,25 @@ function renderAccessoriesTable(host, rows) {
 
 // ---- Settlement view ----
 
+// Manufacturing Cost is a PER-UNIT figure: mirrors
+// lib/orderManagementStore.js's computeManufacturingCostPerUnit exactly -
+// keep both in sync if this formula ever changes.
+function computeManufacturingCostPerUnit(order) {
+  const mc = order.mainComponent || {};
+  const mainUnitCost = Number(mc.factoryPrice) || 0;
+  const subComponentUnitCosts = (order.accessories || []).reduce((sum, a) => sum + (Number(a.unitPrice) || 0), 0);
+  return Math.round((mainUnitCost + subComponentUnitCosts) * 10000) / 10000;
+}
+
 function computeOrderTotal(order) {
   const mc = order.mainComponent || {};
-  const mainTotal = Number(mc.totalPurchasePrice) ||
-    (Number(mc.factoryPrice) || 0) * (Number(mc.purchaseQuantity) || Number(mc.salesVolume) || 0);
-  const accessoriesTotal = (order.accessories || []).reduce((sum, a) => sum + (Number(a.totalPrice) || 0), 0);
+  const orderQuantity = Number(mc.purchaseQuantity) || 0;
+  const manufacturingCostPerUnit = computeManufacturingCostPerUnit(order);
+  const subComponentShippingTotal = (order.accessories || []).reduce((sum, a) => sum + (Number(a.shippingCost) || 0), 0);
   const costs = order.costs || {};
-  const feesTotal = (Number(costs.assemblyFee) || 0) + (Number(costs.laborCosts) || 0) +
-    (Number(costs.transportationFees) || 0) + (Number(costs.otherExpenses) || 0);
-  return Math.round((mainTotal + accessoriesTotal + feesTotal) * 100) / 100;
+  const flatFeesTotal = (Number(costs.assemblyFee) || 0) + (Number(costs.laborCosts) || 0) +
+    (Number(costs.transportationFees) || 0) + (Number(costs.otherExpenses) || 0) + subComponentShippingTotal;
+  return Math.round((manufacturingCostPerUnit * orderQuantity + flatFeesTotal) * 100) / 100;
 }
 
 async function renderSettlementShell(root) {
@@ -1145,9 +1155,12 @@ async function openDetailPanel(id, scope) {
   scope = scope || 'full';
   let order;
   let supplierNamesShared = []; // populated once the async supplier fetch below resolves; typeahead callbacks read it lazily so timing doesn't matter
+  let suppliersShared = []; // full supplier records (for Supplier Contact autofill), same lazy-population deal
+  let paymentLineItemsState = {};
   try {
     const data = await api(`/api/order-management/orders/${encodeURIComponent(id)}`);
     order = data.order;
+    paymentLineItemsState = { ...(order.settlement.componentPayments || {}) };
   } catch (e) {
     return showToast(e.message, true);
   }
@@ -1236,22 +1249,27 @@ async function openDetailPanel(id, scope) {
     </div>
 
     <div class="om-panel-card">
-    <div class="om-section-title">QA/QC</div>
-    <div class="section-help" style="margin-bottom:12px;">Jump straight into a report for this PO - each link already knows the PO number, or use QA/QC Reporting in the sidebar to pick a different one.</div>
+    <div class="om-section-title">Product Development Approval</div>
+    <div class="section-help" style="margin-bottom:12px;">Where PD leads and QA/QC add in the golden sample, pre-production, and bulk approval details for this PO.</div>
+    <a class="btn btn-secondary" style="flex:none;width:auto;padding:9px 16px;text-decoration:none;" href="/approval.html?po=${encodeURIComponent(order.id)}" target="_blank" rel="noopener">Open Product Development Approval</a>
+    </div>
+
+    <div class="om-panel-card">
+    <div class="om-section-title">QA/QC Reporting</div>
+    <div class="section-help" style="margin-bottom:12px;">Share either link with a factory or QA contact - it already knows this PO, so they can jump straight into the report.</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;">
-      <a class="btn btn-secondary" style="flex:none;width:auto;padding:9px 16px;text-decoration:none;" href="/approval.html?po=${encodeURIComponent(order.id)}" target="_blank" rel="noopener">Product Development Approval</a>
-      <a class="btn btn-secondary" style="flex:none;width:auto;padding:9px 16px;text-decoration:none;" href="/reporting.html?mode=pre_production&po=${encodeURIComponent(order.poNumber)}" target="_blank" rel="noopener">Share Pre-Production Report Link</a>
-      <a class="btn btn-secondary" style="flex:none;width:auto;padding:9px 16px;text-decoration:none;" href="/reporting.html?mode=production&po=${encodeURIComponent(order.poNumber)}" target="_blank" rel="noopener">Share Bulk Sampling Report Link</a>
+      <button type="button" class="btn btn-secondary om-copy-link-btn" style="flex:none;width:auto;padding:9px 16px;" data-copy-url="${escapeHtml(`${location.origin}/reporting.html?mode=pre_production&po=${order.poNumber}`)}">Copy Pre-Production Report Link</button>
+      <button type="button" class="btn btn-secondary om-copy-link-btn" style="flex:none;width:auto;padding:9px 16px;" data-copy-url="${escapeHtml(`${location.origin}/reporting.html?mode=production&po=${order.poNumber}`)}">Copy Bulk Sampling Report Link</button>
     </div>
     </div>
 
-    <div id="fClothingOnly" class="om-panel-card" style="${order.productLine === 'clothing' ? '' : 'display:none;'}">
-      <div class="om-section-title">Size Distribution</div>
+    <div id="fClothingOnly" class="om-panel-card">
+      <div class="om-section-title">${order.productLine === 'clothing' ? 'Size Distribution' : 'Variant Distribution'}</div>
       <table class="om-table om-table-editable" style="min-width:0;">
-        <thead><tr><th>SKU</th><th>Size</th><th>Order Qty</th><th>Qty Received</th><th></th></tr></thead>
+        <thead><tr><th>SKU</th><th>${order.productLine === 'clothing' ? 'Size' : 'Variant'}</th><th>Order Qty</th><th>Qty Received</th><th></th></tr></thead>
         <tbody id="omSizeRows"></tbody>
       </table>
-      <button type="button" class="btn btn-secondary" id="omAddSizeRow" style="flex:none;width:auto;padding:8px 14px;margin-top:6px;">+ Add size row</button>
+      <button type="button" class="btn btn-secondary" id="omAddSizeRow" style="flex:none;width:auto;padding:8px 14px;margin-top:6px;">+ Add ${order.productLine === 'clothing' ? 'size row' : 'variant'}</button>
     </div>
 
     <div class="om-panel-card">
@@ -1260,12 +1278,27 @@ async function openDetailPanel(id, scope) {
       ${uploadFieldHtml('fManufacturingDrawing', 'Manufacturing Drawing', order.mainComponent.manufacturingDrawing, true)}
       ${uploadFieldHtml('fWashingTagUrl', 'Washing Tag', order.mainComponent.washingTagUrl, true)}
       ${uploadFieldHtml('fPackagingUrl', 'Packaging', order.mainComponent.packagingUrl, true)}
-      ${order.productLine === 'clothing'
-        ? `<div><label>Product Dimensions</label><div class="section-help" style="margin-top:4px;">Apparel uses the <a href="sizing-charts.html" target="_blank" rel="noopener">Sizing Charts</a> page instead of a file here.</div></div>`
-        : uploadFieldHtml('fDimensionsUrl', 'Product Dimensions', order.mainComponent.dimensionsUrl, true)}
-      ${uploadFieldHtml('fWeightUrl', 'Weight', order.mainComponent.weightUrl, true)}
-      ${uploadFieldHtml('fShippingWeightUrl', 'Shipping Weight', order.mainComponent.shippingWeightUrl, true)}
+      ${order.productLine !== 'clothing' ? uploadFieldHtml('fDimensionsUrl', 'Product Dimensions', order.mainComponent.dimensionsUrl, true) : ''}
+      <div><label>Weight (g)</label><input id="fWeightGrams" type="number" step="1" value="${val(order.mainComponent.weightGrams)}" /></div>
+      <div><label>Shipping Weight (g)</label><input id="fShippingWeightGrams" type="number" step="1" value="${val(order.mainComponent.shippingWeightGrams)}" /></div>
+      <div><label>Volume Weight (g)</label><input id="fVolumeWeightGrams" type="number" step="1" value="${val(order.mainComponent.volumeWeightGrams)}" /></div>
     </div>
+    ${order.productLine === 'clothing' ? `
+      <div style="margin-top:18px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+          <label style="margin:0;">Product Dimensions - sizing source of truth for this PO</label>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <select id="fDimensionsStandardSelect" style="width:auto;"><option value="">Select a standard to load...</option></select>
+          </div>
+        </div>
+        <div class="section-help" style="margin-top:4px;">Loading a standard copies it in as an editable starting point - edits here only affect this PO. This becomes what QA/QC checks against for this specific order.</div>
+        <div id="fDimensionsTableWrap" style="margin-top:10px;"></div>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button type="button" class="btn btn-secondary" id="fDimensionsAddSize" style="flex:none;width:auto;padding:7px 14px;font-size:13px;">+ Add size</button>
+          <button type="button" class="btn btn-secondary" id="fDimensionsAddPoint" style="flex:none;width:auto;padding:7px 14px;font-size:13px;">+ Add measurement point</button>
+        </div>
+      </div>
+    ` : ''}
     </div>
 
     <div class="om-panel-card">
@@ -1274,7 +1307,6 @@ async function openDetailPanel(id, scope) {
       <div><label>Fabric Code</label><input id="fFabricInfo" type="text" value="${val(order.mainComponent.fabricInfo)}" /></div>
       <div><label>Fabric Type</label><input id="fComponent" type="text" placeholder="e.g. 100% Cotton" value="${val(order.mainComponent.component)}" /></div>
       <div><label>Unit Price (¥)</label><input id="fFactoryPrice" type="number" step="0.01" value="${val(order.mainComponent.factoryPrice)}" /></div>
-      <div><label>Product Pricing (total)</label><input id="fProductPricingTotal" type="text" value="${fmtMoney(computeOrderTotal(order))}" disabled /></div>
     </div>
     </div>
 
@@ -1284,8 +1316,8 @@ async function openDetailPanel(id, scope) {
         <table class="om-table om-table-editable">
           <thead>
             <tr>
-              <th>Component Name</th><th>Photo</th><th>Dimensions</th><th>Quantity</th><th>Supplier</th>
-              <th>Price (¥)</th><th>Supplier Contact</th><th>Delivery Date</th><th>Component Delivery Address</th>
+              <th>Component Name</th><th>Photo</th><th>Length</th><th>Width</th><th>Height</th><th>Quantity</th><th>Supplier</th>
+              <th>Price (¥)</th><th>Shipping Cost (¥)</th><th>Supplier Contact</th><th>Delivery Date</th><th>Component Delivery Address</th>
               <th>Manufacturing Drawing</th><th></th>
             </tr>
           </thead>
@@ -1311,16 +1343,18 @@ async function openDetailPanel(id, scope) {
       <div><label>Additional Assembly Fee (¥)</label><input id="fAssemblyFee" type="number" step="0.01" value="${val(order.costs.assemblyFee)}" /></div>
       <div><label>Additional Labor Fee (¥)</label><input id="fLaborCosts" type="number" step="0.01" value="${val(order.costs.laborCosts)}" /></div>
       <div><label>Other Expenses (¥)</label><input id="fOtherExpenses" type="number" step="0.01" value="${val(order.costs.otherExpenses)}" /></div>
-      <div><label>Manufacturing Cost (¥)</label><input id="fManufacturingCostTotal" type="text" value="${fmtMoney((order.accessories || []).reduce((sum, a) => sum + (Number(a.totalPrice) || 0), 0))}" disabled title="Sum of all sub-component prices" /></div>
-      <div><label>Total PO Cost (¥)</label><input id="fTotalPoCost" type="text" value="${fmtMoney(computeOrderTotal(order))}" disabled /></div>
-      <div><label>Total Price per Unit (¥)</label><input id="fTotalPricePerUnit" type="text" value="${order.mainComponent.purchaseQuantity ? fmtMoney(computeOrderTotal(order) / order.mainComponent.purchaseQuantity) : '—'}" disabled title="Total PO cost divided by units manufactured" /></div>
+      <div><label>Manufacturing Cost per unit (¥)</label><input id="fManufacturingCostTotal" type="text" value="${fmtMoney(computeManufacturingCostPerUnit(order))}" disabled title="Main component unit price + sum of sub-component unit prices" /></div>
+      <div><label>Total PO Cost (¥)</label><input id="fTotalPoCost" type="text" value="${fmtMoney(computeOrderTotal(order))}" disabled title="Manufacturing Cost x Order Quantity, plus shipping and additional fees" /></div>
+      <div><label>Total Price per Unit (¥)</label><input id="fTotalPricePerUnit" type="text" value="${order.mainComponent.purchaseQuantity ? fmtMoney(computeOrderTotal(order) / order.mainComponent.purchaseQuantity) : '—'}" disabled title="Total PO cost divided by units ordered" /></div>
     </div>
-    <div class="om-detail-row" style="margin-top:8px;"><span class="om-label">Payment Status</span><span class="om-value">${escapeHtml(order.settlement.status)}</span></div>
-    ${order.settlement.paidDate ? `<div class="om-detail-row"><span class="om-label">Paid on</span><span class="om-value">${fmtDate(order.settlement.paidDate)}</span></div>` : ''}
-    <div class="om-settlement-toggle">
-      <button class="btn btn-secondary" id="omMarkPending" style="flex:none;width:auto;padding:8px 14px;">Mark Pending</button>
-      <button class="btn btn-primary" id="omMarkPaid" style="flex:none;width:auto;padding:8px 14px;">Mark Paid</button>
-    </div>
+
+    <div class="om-section-title" style="margin-top:20px;">Paid Status by Component</div>
+    <table class="om-table" style="min-width:0;">
+      <thead><tr><th>Component</th><th>Amount (¥)</th><th>Paid</th></tr></thead>
+      <tbody id="omPaymentLineItems"></tbody>
+    </table>
+    <div class="om-detail-row" style="margin-top:10px;"><span class="om-label"><strong>Overall Payment Status</strong></span><span class="om-value" id="omOverallPaymentStatus">${escapeHtml(order.settlement.status)}</span></div>
+    ${order.settlement.paidDate ? `<div class="om-detail-row"><span class="om-label">Paid in full on</span><span class="om-value">${fmtDate(order.settlement.paidDate)}</span></div>` : ''}
     </div>
 
     <div class="om-panel-card">
@@ -1347,21 +1381,36 @@ async function openDetailPanel(id, scope) {
   document.getElementById('omClosePanel').addEventListener('click', closePanel);
   const viewFullPoBtn = document.getElementById('omViewFullPo');
   if (viewFullPoBtn) viewFullPoBtn.addEventListener('click', () => { closePanel(); openDetailPanel(order.id, 'full'); });
-  panel.querySelectorAll('.om-tracker-step').forEach((btn) => {
+
+  panel.querySelectorAll('.om-copy-link-btn').forEach((btn) => {
+    const originalLabel = btn.textContent;
     btn.addEventListener('click', async () => {
+      const url = btn.dataset.copyUrl;
       try {
-        await api(`/api/order-management/orders/${encodeURIComponent(order.id)}/status`, {
-          method: 'POST',
-          body: JSON.stringify({ status: btn.dataset.status })
-        });
-        showToast('Status updated');
-        closePanel();
-        refreshCurrentView();
-      } catch (e) { showToast(e.message, true); }
+        await navigator.clipboard.writeText(url);
+      } catch (e) {
+        // Clipboard API can be blocked (e.g. non-HTTPS/no permission) -
+        // fall back to a manual copy so the button still does something useful.
+        const tempInput = document.createElement('textarea');
+        tempInput.value = url;
+        document.body.appendChild(tempInput);
+        tempInput.select();
+        document.execCommand('copy');
+        document.body.removeChild(tempInput);
+      }
+      btn.textContent = 'Link copied';
+      btn.disabled = true;
+      clearTimeout(btn._copyResetTimer);
+      btn._copyResetTimer = setTimeout(() => {
+        btn.textContent = originalLabel;
+        btn.disabled = false;
+      }, 4500);
     });
   });
-  document.getElementById('omMarkPaid').addEventListener('click', () => setSettlement(order.id, 'Paid'));
-  document.getElementById('omMarkPending').addEventListener('click', () => setSettlement(order.id, 'Pending'));
+
+  panel.querySelectorAll('.om-tracker-step').forEach((btn) => {
+    btn.addEventListener('click', () => applyStatusChange(btn.dataset.status));
+  });
 
   document.getElementById('fProductRisk').addEventListener('change', (e) => {
     e.target.setAttribute('data-risk', e.target.value);
@@ -1475,10 +1524,14 @@ async function openDetailPanel(id, scope) {
     panel.querySelector(`[data-remove-accessory="${idx}"]`).addEventListener('click', () => { row.remove(); recalcTotals(); });
     wireAccessoryRowUploads(row);
     attachTypeahead(`accSupplier${idx}`, () => supplierNamesShared);
+    document.getElementById(`accSupplier${idx}`).addEventListener('change', (e) => {
+      const match = suppliersShared.find((s) => s.name.trim().toLowerCase() === e.target.value.trim().toLowerCase());
+      if (match && match.contactName) row.querySelector('.om-acc-supplier-contact').value = match.contactName;
+    });
     editAccessoryRowCount++;
   }
   (order.accessories && order.accessories.length ? order.accessories : [{}]).forEach(addAccessoryRow);
-  panel.querySelector('#omAddAccessoryRow').addEventListener('click', () => addAccessoryRow());
+  panel.querySelector('#omAddAccessoryRow').addEventListener('click', () => { addAccessoryRow(); recalcTotals(); });
   document.getElementById('fWarehouse').addEventListener('input', (e) => {
     accessoryRowsHost.querySelectorAll('.om-acc-address-cell').forEach((cell) => { cell.textContent = e.target.value || '—'; });
   });
@@ -1488,34 +1541,217 @@ async function openDetailPanel(id, scope) {
   // not editable - they need to be recomputed as the user types into any
   // of the fields that feed them, not just after a save-and-reload. ----
   function recalcTotals() {
-    const factoryPrice = Number(document.getElementById('fFactoryPrice').value) || 0;
-    const purchaseQty = Number(document.getElementById('fPurchaseQty').value) || 0;
-    const mainTotal = factoryPrice * purchaseQty;
-    const accessoriesTotal = Array.from(accessoryRowsHost.querySelectorAll('[data-accessory-row]')).reduce((sum, row) => {
-      const qty = Number(row.querySelector('.om-acc-qty').value) || 0;
-      const unitPrice = Number(row.querySelector('.om-acc-unit-price').value) || 0;
-      return sum + qty * unitPrice;
-    }, 0);
-    const fees = (Number(document.getElementById('fAssemblyFee').value) || 0) +
+    const mainUnitCost = Number(document.getElementById('fFactoryPrice').value) || 0;
+    const orderQuantity = Number(document.getElementById('fPurchaseQty').value) || 0;
+
+    let subComponentUnitCostSum = 0;
+    let subComponentShippingTotal = 0;
+    Array.from(accessoryRowsHost.querySelectorAll('[data-accessory-row]')).forEach((row) => {
+      subComponentUnitCostSum += Number(row.querySelector('.om-acc-unit-price').value) || 0;
+      subComponentShippingTotal += Number(row.querySelector('.om-acc-shipping-cost').value) || 0;
+    });
+
+    const manufacturingCostPerUnit = mainUnitCost + subComponentUnitCostSum;
+    const flatFees = (Number(document.getElementById('fAssemblyFee').value) || 0) +
       (Number(document.getElementById('fLaborCosts').value) || 0) +
       (Number(document.getElementById('fTransportationFees').value) || 0) +
-      (Number(document.getElementById('fOtherExpenses').value) || 0);
-    const total = Math.round((mainTotal + accessoriesTotal + fees) * 100) / 100;
+      (Number(document.getElementById('fOtherExpenses').value) || 0) +
+      subComponentShippingTotal;
+    const totalPoCost = Math.round((manufacturingCostPerUnit * orderQuantity + flatFees) * 100) / 100;
 
-    document.getElementById('fProductPricingTotal').value = fmtMoney(total);
-    document.getElementById('fManufacturingCostTotal').value = fmtMoney(accessoriesTotal);
-    document.getElementById('fTotalPoCost').value = fmtMoney(total);
-    document.getElementById('fTotalPricePerUnit').value = purchaseQty ? fmtMoney(total / purchaseQty) : '—';
+    document.getElementById('fManufacturingCostTotal').value = fmtMoney(manufacturingCostPerUnit);
+    document.getElementById('fTotalPoCost').value = fmtMoney(totalPoCost);
+    document.getElementById('fTotalPricePerUnit').value = orderQuantity ? fmtMoney(totalPoCost / orderQuantity) : '—';
+    renderPaymentLineItems();
   }
   ['fFactoryPrice', 'fPurchaseQty', 'fAssemblyFee', 'fLaborCosts', 'fTransportationFees', 'fOtherExpenses'].forEach((id) => {
     document.getElementById(id).addEventListener('input', recalcTotals);
   });
-  // Delegate accessory-row qty/price inputs since rows are added/removed
-  // dynamically - a listener on the table body catches all of them, current
-  // and future, without needing to re-wire on every add/remove.
+  // Delegate accessory-row qty/price/shipping inputs since rows are added/
+  // removed dynamically - a listener on the table body catches all of them,
+  // current and future, without needing to re-wire on every add/remove.
   accessoryRowsHost.addEventListener('input', (e) => {
-    if (e.target.classList.contains('om-acc-qty') || e.target.classList.contains('om-acc-unit-price')) recalcTotals();
+    if (e.target.classList.contains('om-acc-qty') || e.target.classList.contains('om-acc-unit-price') || e.target.classList.contains('om-acc-shipping-cost')) recalcTotals();
   });
+
+  // ---- Paid Status by Component: a checkbox per cost line, saved
+  // immediately (like the old Mark Paid/Pending toggle) rather than
+  // waiting for the master Save, since payment status shouldn't be easy to
+  // lose track of. Overall status is derived (all checked -> Paid). ----
+  function buildPaymentLineItems() {
+    const mainUnitCost = Number(document.getElementById('fFactoryPrice').value) || 0;
+    const orderQuantity = Number(document.getElementById('fPurchaseQty').value) || 0;
+    const items = [
+      { key: 'main', label: 'Main Component', amount: mainUnitCost * orderQuantity }
+    ];
+    Array.from(accessoryRowsHost.querySelectorAll('[data-accessory-row]')).forEach((row) => {
+      const name = row.querySelector('.om-acc-name').value || 'Unnamed component';
+      const unitPrice = Number(row.querySelector('.om-acc-unit-price').value) || 0;
+      const shipping = Number(row.querySelector('.om-acc-shipping-cost').value) || 0;
+      items.push({ key: row.dataset.accessoryId, label: name, amount: unitPrice * orderQuantity + shipping });
+    });
+    items.push({ key: 'warehousing-shipping', label: 'Warehousing Shipping', amount: Number(document.getElementById('fTransportationFees').value) || 0 });
+    items.push({
+      key: 'fees', label: 'Additional Fees (Assembly/Labor/Other)',
+      amount: (Number(document.getElementById('fAssemblyFee').value) || 0) +
+        (Number(document.getElementById('fLaborCosts').value) || 0) +
+        (Number(document.getElementById('fOtherExpenses').value) || 0)
+    });
+    return items;
+  }
+
+  function renderPaymentLineItems() {
+    const items = buildPaymentLineItems();
+    const tbody = document.getElementById('omPaymentLineItems');
+    if (!tbody) return;
+    tbody.innerHTML = items.map((item) => `
+      <tr>
+        <td>${escapeHtml(item.label)}</td>
+        <td>${fmtMoney(item.amount)}</td>
+        <td><input type="checkbox" data-payment-key="${escapeHtml(item.key)}" ${paymentLineItemsState[item.key] ? 'checked' : ''} /></td>
+      </tr>
+    `).join('');
+    tbody.querySelectorAll('[data-payment-key]').forEach((cb) => {
+      cb.addEventListener('change', async (e) => {
+        paymentLineItemsState[e.target.dataset.paymentKey] = e.target.checked;
+        const allPaid = items.length > 0 && items.every((item) => paymentLineItemsState[item.key]);
+        const newStatus = allPaid ? 'Paid' : 'Pending';
+        document.getElementById('omOverallPaymentStatus').textContent = newStatus;
+        try {
+          await api(`/api/order-management/orders/${encodeURIComponent(order.id)}`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              patch: { settlement: { ...order.settlement, componentPayments: paymentLineItemsState, status: newStatus, paidDate: allPaid ? new Date().toISOString() : null } },
+              actor: 'Web user'
+            })
+          });
+          order.settlement.status = newStatus;
+          order.settlement.componentPayments = paymentLineItemsState;
+          refreshCurrentView();
+        } catch (err) { showToast(err.message, true); }
+      });
+    });
+  }
+  renderPaymentLineItems();
+
+  // ---- Product Dimensions: this PO's own editable sizing table (apparel
+  // only). Selecting a standard copies it in as a starting point; every
+  // edit after that only affects this PO, independent of the master
+  // standard - it becomes what QA/QC checks against for this order. ----
+  let dimensionsTableState = order.mainComponent.dimensionsTable
+    ? JSON.parse(JSON.stringify(order.mainComponent.dimensionsTable))
+    : null;
+
+  function renderDimensionsTable() {
+    const wrap = document.getElementById('fDimensionsTableWrap');
+    if (!wrap) return;
+    if (!dimensionsTableState) {
+      wrap.innerHTML = `<div class="om-empty">No sizing table yet - select a standard above, or add sizes/points manually.</div>`;
+      return;
+    }
+    const t = dimensionsTableState;
+    const sizeNames = Object.keys(t.sizes);
+    wrap.innerHTML = `
+      <div class="om-table-wrap">
+        <table class="om-table om-table-editable" style="min-width:0;">
+          <thead>
+            <tr>
+              <th>Size</th>
+              ${t.points.map((p) => `
+                <th>
+                  ${escapeHtml((t.pointLabels[p] && t.pointLabels[p].en) || p)}
+                  <button type="button" class="om-row-remove" data-dim-remove-point="${escapeHtml(p)}" title="Remove point">&times;</button>
+                </th>
+              `).join('')}
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${sizeNames.map((sizeName) => `
+              <tr>
+                <td><input type="text" data-dim-size-rename="${escapeHtml(sizeName)}" value="${escapeHtml(sizeName)}" style="min-width:90px;" /></td>
+                ${t.points.map((p) => `
+                  <td><input type="text" data-dim-cell="${escapeHtml(sizeName)}|${escapeHtml(p)}" value="${escapeHtml(t.sizes[sizeName][p] ?? '')}" style="min-width:70px;" /></td>
+                `).join('')}
+                <td><button type="button" class="om-row-remove" data-dim-remove-size="${escapeHtml(sizeName)}" title="Remove size">&times;</button></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    wrap.querySelectorAll('[data-dim-cell]').forEach((el) => {
+      el.addEventListener('input', (e) => {
+        const [sizeName, p] = el.getAttribute('data-dim-cell').split('|');
+        dimensionsTableState.sizes[sizeName][p] = e.target.value;
+      });
+    });
+    wrap.querySelectorAll('[data-dim-size-rename]').forEach((el) => {
+      el.addEventListener('change', (e) => {
+        const oldName = el.getAttribute('data-dim-size-rename');
+        const newName = e.target.value.trim();
+        if (!newName || newName === oldName) return;
+        dimensionsTableState.sizes[newName] = dimensionsTableState.sizes[oldName];
+        delete dimensionsTableState.sizes[oldName];
+        renderDimensionsTable();
+      });
+    });
+    wrap.querySelectorAll('[data-dim-remove-size]').forEach((el) => {
+      el.addEventListener('click', () => {
+        delete dimensionsTableState.sizes[el.getAttribute('data-dim-remove-size')];
+        renderDimensionsTable();
+      });
+    });
+    wrap.querySelectorAll('[data-dim-remove-point]').forEach((el) => {
+      el.addEventListener('click', () => {
+        const p = el.getAttribute('data-dim-remove-point');
+        dimensionsTableState.points = dimensionsTableState.points.filter((x) => x !== p);
+        delete dimensionsTableState.pointLabels[p];
+        Object.values(dimensionsTableState.sizes).forEach((s) => delete s[p]);
+        renderDimensionsTable();
+      });
+    });
+  }
+
+  const dimStandardSelect = document.getElementById('fDimensionsStandardSelect');
+  if (dimStandardSelect) {
+    renderDimensionsTable();
+    api('/api/fits').then((fitsData) => {
+      const fits = (fitsData && fitsData.fits) || {};
+      dimStandardSelect.innerHTML = `<option value="">Select a standard to load...</option>` +
+        Object.keys(fits).sort().map((key) => `<option value="${escapeHtml(key)}">${escapeHtml(fits[key].label_en || key)}</option>`).join('');
+      dimStandardSelect.addEventListener('change', (e) => {
+        const chosen = fits[e.target.value];
+        if (!chosen) return;
+        dimensionsTableState = {
+          standardKey: e.target.value,
+          points: [...(chosen.points || [])],
+          pointLabels: JSON.parse(JSON.stringify(chosen.pointLabels || {})),
+          sizes: JSON.parse(JSON.stringify(chosen.sizes || {}))
+        };
+        renderDimensionsTable();
+      });
+    }).catch((e) => showToast(e.message, true));
+
+    document.getElementById('fDimensionsAddSize').addEventListener('click', () => {
+      if (!dimensionsTableState) dimensionsTableState = { standardKey: null, points: [], pointLabels: {}, sizes: {} };
+      let name = 'New Size', i = 1;
+      while (dimensionsTableState.sizes[name]) { i += 1; name = `New Size ${i}`; }
+      dimensionsTableState.sizes[name] = {};
+      renderDimensionsTable();
+    });
+    document.getElementById('fDimensionsAddPoint').addEventListener('click', () => {
+      if (!dimensionsTableState) dimensionsTableState = { standardKey: null, points: [], pointLabels: {}, sizes: {} };
+      const label = prompt('New measurement point name (e.g. Length, Sleeve):');
+      if (!label) return;
+      const key = label.toLowerCase().trim().replace(/[^a-z0-9]+/g, '_');
+      if (dimensionsTableState.points.includes(key)) return showToast('That point already exists', true);
+      dimensionsTableState.points.push(key);
+      dimensionsTableState.pointLabels[key] = { en: label, zh: '' };
+      renderDimensionsTable();
+    });
+  }
 
   // ---- Copy from previous PO: auto-detects a match on SKU as you type it,
   // rather than making you know and manually enter a prior PO number.
@@ -1555,6 +1791,14 @@ async function openDetailPanel(id, scope) {
       document.getElementById('fFactoryPrice').value = src.mainComponent.factoryPrice || '';
       document.getElementById('fWarehouse').value = src.mainComponent.warehouse || '';
 
+      // Sizing source of truth: copy the whole dimensions table forward
+      // too, if the source PO has one - this is the "copy over the sizing"
+      // button for PO2+.
+      if (src.mainComponent.dimensionsTable) {
+        dimensionsTableState = JSON.parse(JSON.stringify(src.mainComponent.dimensionsTable));
+        renderDimensionsTable();
+      }
+
       // Size distribution: carry the SKU/size structure forward, not the
       // quantities or receipt status - those are specific to this order.
       sizeRowsHost.innerHTML = '';
@@ -1579,18 +1823,42 @@ async function openDetailPanel(id, scope) {
   });
 
   // ---- Order Status dropdown - saves immediately, same as clicking the tracker ----
-  document.getElementById('fOrderStatusSelect').addEventListener('change', async (e) => {
-    e.target.setAttribute('data-status', e.target.value);
+  function renderStatusTracker(newStatus) {
+    const stepper = document.getElementById('omStatusStepper');
+    if (!stepper) return;
+    const currentIdx = STATUSES.indexOf(newStatus);
+    stepper.innerHTML = STATUSES.map((s, i) => {
+      const state = i < currentIdx ? 'done' : i === currentIdx ? 'current' : 'future';
+      return `
+        <div class="om-tracker-step om-tracker-${state}" data-status="${escapeHtml(s)}">
+          <div class="om-tracker-line"></div>
+          <div class="om-tracker-dot">${state === 'done' ? '&#10003;' : i + 1}</div>
+          <div class="om-tracker-label">${escapeHtml(s)}</div>
+        </div>
+      `;
+    }).join('');
+    stepper.querySelectorAll('.om-tracker-step').forEach((btn) => {
+      btn.addEventListener('click', () => applyStatusChange(btn.dataset.status));
+    });
+  }
+
+  async function applyStatusChange(newStatusValue) {
     try {
       await api(`/api/order-management/orders/${encodeURIComponent(order.id)}/status`, {
         method: 'POST',
-        body: JSON.stringify({ status: e.target.value })
+        body: JSON.stringify({ status: newStatusValue })
       });
+      order.status = newStatusValue;
+      document.getElementById('fOrderStatusSelect').value = newStatusValue;
+      document.getElementById('fOrderStatusSelect').setAttribute('data-status', newStatusValue);
+      renderStatusTracker(newStatusValue);
       showToast('Status updated');
-      closePanel();
-      openDetailPanel(order.id);
       refreshCurrentView();
     } catch (err) { showToast(err.message, true); }
+  }
+
+  document.getElementById('fOrderStatusSelect').addEventListener('change', (e) => {
+    applyStatusChange(e.target.value);
   });
 
   // ---- Reusable "dropdown with ability to add new" fields: populate
@@ -1607,6 +1875,7 @@ async function openDetailPanel(id, scope) {
       const suppliers = suppliersData.suppliers || [];
       const supplierNames = suppliers.map((s) => s.name);
       supplierNamesShared = supplierNames;
+      suppliersShared = suppliers;
 
       attachTypeahead('fSupplierName', () => supplierNames);
       attachTypeahead('fFabricInfo', () => historyData.fabricCodes || []);
@@ -1635,8 +1904,6 @@ async function openDetailPanel(id, scope) {
   wireUploadField('fWashingTagUrl', order.id, 'Other', true);
   wireUploadField('fPackagingUrl', order.id, 'Other', true);
   if (order.productLine !== 'clothing') wireUploadField('fDimensionsUrl', order.id, 'Other', true);
-  wireUploadField('fWeightUrl', order.id, 'Other', true);
-  wireUploadField('fShippingWeightUrl', order.id, 'Other', true);
 
   // Master "Save changes": everything on the page except status (saves
   // immediately above) and payment status (its own Mark Paid/Pending toggle).
@@ -1664,16 +1931,18 @@ async function openDetailPanel(id, scope) {
         washingTagUrl: document.getElementById('fWashingTagUrl').value,
         packagingUrl: document.getElementById('fPackagingUrl').value,
         dimensionsUrl: productLine !== 'clothing' ? document.getElementById('fDimensionsUrl').value : '',
-        weightUrl: document.getElementById('fWeightUrl').value,
-        shippingWeightUrl: document.getElementById('fShippingWeightUrl').value,
+        dimensionsTable: productLine === 'clothing' ? dimensionsTableState : null,
+        weightGrams: document.getElementById('fWeightGrams').value || null,
+        shippingWeightGrams: document.getElementById('fShippingWeightGrams').value || null,
+        volumeWeightGrams: document.getElementById('fVolumeWeightGrams').value || null,
         fabricInfo: document.getElementById('fFabricInfo').value,
         component: document.getElementById('fComponent').value,
-        sizeDistribution: productLine === 'clothing' ? Array.from(sizeRowsHost.querySelectorAll('[data-size-row]')).map((row) => ({
+        sizeDistribution: Array.from(sizeRowsHost.querySelectorAll('[data-size-row]')).map((row) => ({
           sku: row.querySelector('.om-size-sku').value,
           size: row.querySelector('.om-size-size').value,
           quantity: row.querySelector('.om-size-qty').value || null,
           quantityReceived: row.querySelector('.om-size-qty-received').value || null
-        })).filter((r) => r.sku || r.size || r.quantity || r.quantityReceived) : []
+        })).filter((r) => r.sku || r.size || r.quantity || r.quantityReceived)
       },
       accessories: collectAccessoryRows(accessoryRowsHost),
       fulfillment: {
@@ -1963,10 +2232,13 @@ function accessoryRowHtml(idx, data, mainAddress) {
         <input type="file" class="om-acc-image-file" accept="image/*" style="display:none;" />
         <button type="button" class="om-table-upload-btn om-acc-image-upload-btn">Upload</button>
       </td>
-      <td><input type="text" class="om-acc-dims" value="${escapeHtml(data.dimensions || '')}" /></td>
+      <td><input type="number" step="0.01" class="om-acc-length" placeholder="L" value="${escapeHtml(data.dimensionsLength ?? '')}" style="min-width:56px;" /></td>
+      <td><input type="number" step="0.01" class="om-acc-width" placeholder="W" value="${escapeHtml(data.dimensionsWidth ?? '')}" style="min-width:56px;" /></td>
+      <td><input type="number" step="0.01" class="om-acc-height" placeholder="H" value="${escapeHtml(data.dimensionsHeight ?? '')}" style="min-width:56px;" /></td>
       <td><input type="number" class="om-acc-qty" value="${escapeHtml(data.quantity ?? '')}" /></td>
-      <td><input type="text" id="accSupplier${idx}" class="om-acc-supplier" value="${escapeHtml(data.supplierName || '')}" /></td>
+      <td style="min-width:160px;"><input type="text" id="accSupplier${idx}" class="om-acc-supplier" value="${escapeHtml(data.supplierName || '')}" style="width:100%;" /></td>
       <td><input type="number" step="0.01" class="om-acc-unit-price" value="${escapeHtml(data.unitPrice ?? '')}" /></td>
+      <td><input type="number" step="0.01" class="om-acc-shipping-cost" value="${escapeHtml(data.shippingCost ?? '')}" /></td>
       <td><input type="text" class="om-acc-supplier-contact" value="${escapeHtml(data.supplierContact || '')}" /></td>
       <td><input type="date" class="om-acc-expected-delivery" value="${escapeHtml(data.expectedDeliveryDate || '')}" /></td>
       <td class="om-acc-address-cell" style="color:var(--jc-muted);font-size:12.5px;">${escapeHtml(mainAddress || '—')}</td>
@@ -1989,10 +2261,13 @@ function collectAccessoryRows(container) {
   return Array.from(scope.querySelectorAll('[data-accessory-row]')).map((row) => ({
     id: row.dataset.accessoryId || undefined,
     partName: row.querySelector('.om-acc-name').value,
-    dimensions: row.querySelector('.om-acc-dims').value,
+    dimensionsLength: row.querySelector('.om-acc-length').value || null,
+    dimensionsWidth: row.querySelector('.om-acc-width').value || null,
+    dimensionsHeight: row.querySelector('.om-acc-height').value || null,
     quantity: row.querySelector('.om-acc-qty').value || null,
     unitPrice: row.querySelector('.om-acc-unit-price').value || null,
     totalPrice: (row.querySelector('.om-acc-qty').value || 0) * (row.querySelector('.om-acc-unit-price').value || 0) || null,
+    shippingCost: row.querySelector('.om-acc-shipping-cost').value || null,
     expectedDeliveryDate: row.querySelector('.om-acc-expected-delivery').value || null,
     supplierName: row.querySelector('.om-acc-supplier').value,
     supplierContact: row.querySelector('.om-acc-supplier-contact').value,

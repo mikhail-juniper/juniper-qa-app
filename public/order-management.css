@@ -330,7 +330,8 @@
    across browsers. */
 .om-typeahead-wrap { position: relative; }
 .om-typeahead-menu {
-  position: absolute; top: 100%; left: 0; right: 0; margin-top: 2px;
+  position: absolute; top: 100%; left: 0; margin-top: 2px;
+  width: max-content; min-width: 100%; max-width: 320px;
   background: #fff; border: 1.5px solid var(--jc-border); border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.12); max-height: 220px; overflow-y: auto;
   z-index: 30; display: none;

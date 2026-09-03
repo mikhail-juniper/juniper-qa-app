@@ -702,19 +702,36 @@ function attachChooserHandlers() {
 }
 
 function renderNewPoSizesBlock() {
-  if (newPoState.category !== 'apparel') return '';
+  const isApparel = newPoState.category === 'apparel';
+  if (!newPoState.category) return '';
   const universalSizes = (CONFIG.fits && CONFIG.fits.universalSizes) || [];
+  const addedLabels = newPoState.sizesIncluded.map((x) => x.label);
   const preFilledNote = newPoState.sizesPreFilled
-    ? `<div class="section-help" style="color:var(--jc-teal-dark); margin-top:6px;">${escapeHtml(bi('sizesPreFilledNote', 'Pre-filled from a previous order for this SKU - click any size to adjust.').en)}<br/>${escapeHtml(bi('sizesPreFilledNote').zh)}</div>`
+    ? `<div class="section-help" style="color:var(--jc-teal-dark); margin-top:6px;">${escapeHtml(bi('sizesPreFilledNote', 'Pre-filled from a previous order for this SKU - adjust quantities as needed.').en)}<br/>${escapeHtml(bi('sizesPreFilledNote').zh)}</div>`
     : '';
+
+  const rowsHtml = newPoState.sizesIncluded.map((row, i) => `
+    <div class="field-row" style="margin-top:8px; align-items:center;">
+      ${isApparel
+        ? `<span style="flex:1;font-weight:600;">${escapeHtml(row.label)}</span>`
+        : `<input type="text" data-po-variant-label="${i}" placeholder="Variant name" value="${escapeHtml(row.label)}" style="flex:1;" />`}
+      <input type="number" min="0" data-po-variant-qty="${i}" placeholder="Order Quantity" value="${row.quantity === null || row.quantity === undefined ? '' : row.quantity}" style="width:120px;" />
+      <button type="button" class="settings-remove" data-po-variant-remove="${i}">✕</button>
+    </div>
+  `).join('');
+
   return `
     <div class="card">
-      <div class="section-title">${biBlockHtml('sizesInPo', 'Sizes Included in this PO')}</div>
-      <div class="section-help">${escapeHtml(bi('sizesInPoHelp').en)}<br/>${escapeHtml(bi('sizesInPoHelp').zh)}</div>
+      <div class="section-title">${isApparel ? biBlockHtml('sizesInPo', 'Size Distribution') : 'Variant Distribution'}</div>
+      <div class="section-help">${isApparel ? (escapeHtml(bi('sizesInPoHelp').en) + '<br/>' + escapeHtml(bi('sizesInPoHelp').zh)) : 'Optional - break this PO into variants (colorways, styles, etc.) with a quantity each. Skip this if the PO is just one thing.'}</div>
       ${preFilledNote}
-      <div class="segmented" style="flex-wrap:wrap; margin-top:8px;">
-        ${universalSizes.map((s) => `<div class="segmented-option ${newPoState.sizesIncluded.includes(s) ? 'selected' : ''}" data-po-size="${escapeHtml(s)}" style="flex:0 0 auto; min-width:90px;">${escapeHtml(s)}</div>`).join('')}
-      </div>
+      ${isApparel ? `
+        <div class="segmented" style="flex-wrap:wrap; margin-top:8px;">
+          ${universalSizes.map((s) => `<div class="segmented-option ${addedLabels.includes(s) ? 'selected' : ''}" data-po-size-toggle="${escapeHtml(s)}" style="flex:0 0 auto; min-width:90px;">${escapeHtml(s)}</div>`).join('')}
+        </div>
+      ` : ''}
+      ${rowsHtml ? `<div style="margin-top:10px;">${rowsHtml}</div>` : ''}
+      ${!isApparel ? `<button type="button" class="btn btn-secondary" id="btnAddPoVariant" style="margin-top:10px;">+ Add variant</button>` : ''}
     </div>
   `;
 }
@@ -834,9 +851,10 @@ function sizeMatchesCanonical(fitSizeKey, canonicalSize) {
  *  this sort was applied at save time too. */
 function sortSizesCanonically(sizes) {
   const canonical = (CONFIG.fits && CONFIG.fits.universalSizes) || [];
+  const keyOf = (item) => (typeof item === 'string' ? item : item.size);
   return [...(sizes || [])].sort((a, b) => {
-    const ia = canonical.indexOf(a);
-    const ib = canonical.indexOf(b);
+    const ia = canonical.indexOf(keyOf(a));
+    const ib = canonical.indexOf(keyOf(b));
     if (ia === -1 && ib === -1) return 0;
     if (ia === -1) return 1;
     if (ib === -1) return -1;
@@ -845,16 +863,43 @@ function sortSizesCanonically(sizes) {
 }
 
 function attachNewPoSizeHandlers() {
-  document.querySelectorAll('[data-po-size]').forEach((el) => {
+  document.querySelectorAll('[data-po-size-toggle]').forEach((el) => {
     el.addEventListener('click', () => {
-      const s = el.getAttribute('data-po-size');
-      const idx = newPoState.sizesIncluded.indexOf(s);
+      const s = el.getAttribute('data-po-size-toggle');
+      const idx = newPoState.sizesIncluded.findIndex((x) => x.label === s);
       if (idx > -1) newPoState.sizesIncluded.splice(idx, 1);
-      else newPoState.sizesIncluded.push(s);
+      else newPoState.sizesIncluded.push({ label: s, quantity: null });
       newPoState.sizesPreFilled = false;
       render();
     });
   });
+  document.querySelectorAll('[data-po-variant-qty]').forEach((el) => {
+    el.addEventListener('input', (e) => {
+      const i = parseInt(el.getAttribute('data-po-variant-qty'), 10);
+      const n = parseInt(e.target.value, 10);
+      newPoState.sizesIncluded[i].quantity = isNaN(n) ? null : n;
+    });
+  });
+  document.querySelectorAll('[data-po-variant-label]').forEach((el) => {
+    el.addEventListener('input', (e) => {
+      const i = parseInt(el.getAttribute('data-po-variant-label'), 10);
+      newPoState.sizesIncluded[i].label = e.target.value;
+    });
+  });
+  document.querySelectorAll('[data-po-variant-remove]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const i = parseInt(el.getAttribute('data-po-variant-remove'), 10);
+      newPoState.sizesIncluded.splice(i, 1);
+      render();
+    });
+  });
+  const btnAddVariant = document.getElementById('btnAddPoVariant');
+  if (btnAddVariant) {
+    btnAddVariant.addEventListener('click', () => {
+      newPoState.sizesIncluded.push({ label: '', quantity: null });
+      render();
+    });
+  }
 }
 
 async function checkSkuEstablishedFit() {
@@ -868,7 +913,9 @@ async function checkSkuEstablishedFit() {
     // previously-established fit, if nothing's been manually selected yet.
     if (data.fit && !newPoState.sizesIncluded.length) {
       const universalSizes = (CONFIG.fits && CONFIG.fits.universalSizes) || [];
-      newPoState.sizesIncluded = universalSizes.filter((canonical) => (data.fit.sizes || []).some((fitSize) => sizeMatchesCanonical(fitSize, canonical)));
+      newPoState.sizesIncluded = universalSizes
+        .filter((canonical) => (data.fit.sizes || []).some((fitSize) => sizeMatchesCanonical(fitSize, canonical)))
+        .map((label) => ({ label, quantity: null }));
       newPoState.sizesPreFilled = newPoState.sizesIncluded.length > 0;
     }
   } catch (e) {
@@ -973,7 +1020,9 @@ async function submitNewPo() {
       body: JSON.stringify({
         poNumber: newPoState.poNumber, sku: newPoState.sku, category: newPoState.category, subcategory: newPoState.subcategory,
         orderDate: newPoState.orderDate, creator: newPoState.creator, productTitle: newPoState.productTitle, orderQuantity: newPoState.orderQuantity,
-        productDevelopmentLead: newPoState.productDevelopmentLead, sizesIncluded: newPoState.sizesIncluded,
+        productDevelopmentLead: newPoState.productDevelopmentLead,
+        sizesIncluded: newPoState.sizesIncluded.map((x) => x.label).filter(Boolean),
+        sizeDistribution: newPoState.sizesIncluded.filter((x) => x.label).map((x) => ({ size: x.label, quantity: x.quantity })),
         asanaTaskLink: newPoState.asanaTaskLink
       })
     });
