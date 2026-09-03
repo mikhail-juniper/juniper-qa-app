@@ -271,6 +271,13 @@
   white-space: nowrap;
 }
 .om-table th { color: var(--jc-muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; }
+/* Keep column headers visible while scrolling a long table. On a normal
+   page the table scrolls with the whole document, so the header sticks
+   just below the fixed app header (72px tall). Inside a popup (.om-panel),
+   the panel itself is the scrolling container and has no such header
+   overlapping it, so it sticks flush to the top of that panel instead. */
+.om-table thead th { position: sticky; top: 72px; background: #fff; z-index: 2; box-shadow: 0 1px 0 var(--jc-border); }
+.om-panel .om-table thead th { top: 0; }
 .om-table tr:last-child td { border-bottom: none; }
 .om-table tbody tr { cursor: pointer; }
 .om-table tbody tr:hover { background: var(--jc-mint-light); }
@@ -375,8 +382,21 @@
 }
 .om-section-title {
   font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 0.03em;
-  color: var(--jc-muted); margin: 18px 0 8px 0;
+  color: var(--jc-muted); margin: 0 0 12px 0;
 }
+/* Each logical section of the PO detail panel (Order Details, Product
+   Information, Component Breakdown, etc.) gets its own card instead of
+   just a heading, so the panel reads as distinct sections rather than one
+   long continuous form. */
+.om-panel-card {
+  background: #fafbfa;
+  border: 1px solid var(--jc-border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  margin-bottom: 18px;
+}
+.om-panel-card:last-child { margin-bottom: 0; }
+.om-panel-card .om-section-title { margin: 0 0 14px 0; }
 .om-field-grid {
   display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px;
 }

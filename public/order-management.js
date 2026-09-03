@@ -1117,6 +1117,7 @@ async function openDetailPanel(id, scope) {
 
 
 
+    <div class="om-panel-card">
     <div class="om-section-title">Status</div>
     <div class="om-tracker" id="omStatusStepper">
       ${STATUSES.map((s, i) => {
@@ -1131,7 +1132,9 @@ async function openDetailPanel(id, scope) {
       `;
       }).join('')}
     </div>
+    </div>
 
+    <div class="om-panel-card">
     <div class="om-section-title">Order Details</div>
     <div class="om-field-grid">
       <div><label>Product Name</label><input id="fMainName" type="text" value="${val(order.mainComponent.name)}" /></div>
@@ -1160,8 +1163,9 @@ async function openDetailPanel(id, scope) {
       <div><label>Buyer</label><input id="fBuyer" type="text" value="${val(order.buyer)}" /></div>
       <div><label>Order placement date</label><input id="fOrderDate" type="date" value="${val(order.orderPlacementDate)}" /></div>
     </div>
+    </div>
 
-    <div id="fClothingOnly" style="${order.productLine === 'clothing' ? '' : 'display:none;'}">
+    <div id="fClothingOnly" class="om-panel-card" style="${order.productLine === 'clothing' ? '' : 'display:none;'}">
       <div class="om-section-title">Size Distribution</div>
       <table class="om-table om-table-editable" style="min-width:0;">
         <thead><tr><th>SKU</th><th>Size</th><th>Order Qty</th><th>Qty Received</th><th></th></tr></thead>
@@ -1170,6 +1174,7 @@ async function openDetailPanel(id, scope) {
       <button type="button" class="btn btn-secondary" id="omAddSizeRow" style="flex:none;width:auto;padding:8px 14px;margin-top:6px;">+ Add size row</button>
     </div>
 
+    <div class="om-panel-card">
     <div class="om-section-title">Product Information</div>
     <div class="om-field-grid">
       <div><label>Fabric Code</label><input id="fFabricInfo" type="text" list="dlFabricCodes" value="${val(order.mainComponent.fabricInfo)}" /></div>
@@ -1183,7 +1188,9 @@ async function openDetailPanel(id, scope) {
     <datalist id="dlFabricTypes"></datalist>
     <datalist id="dlWashLabels"></datalist>
     <datalist id="dlManufacturingDrawings"></datalist>
+    </div>
 
+    <div class="om-panel-card">
     <div class="om-section-title">Main Component Specs</div>
     <div class="om-field-grid">
       <div><label>Model number</label><input id="fModelNumber" type="text" value="${val(order.mainComponent.modelNumber)}" /></div>
@@ -1198,8 +1205,9 @@ async function openDetailPanel(id, scope) {
     <div class="om-field-grid" style="margin-top:10px;">
       <div style="grid-column:1/-1;"><label>Production precautions</label><input id="fProductionPrecautions" type="text" value="${val(order.mainComponent.productionPrecautions)}" /></div>
     </div>
+    </div>
 
-    <div id="omComponentBreakdownSection" style="${scope === 'main-component' ? 'display:none;' : ''}">
+    <div id="omComponentBreakdownSection" class="om-panel-card" style="${scope === 'main-component' ? 'display:none;' : ''}">
       <div class="om-section-title">Component Breakdown</div>
       <div class="om-table-wrap">
         <table class="om-table om-table-editable">
@@ -1216,6 +1224,7 @@ async function openDetailPanel(id, scope) {
       <button type="button" class="btn btn-secondary" id="omAddAccessoryRow" style="flex:none;width:auto;padding:8px 14px;margin-top:6px;">+ Add accessory / part</button>
     </div>
 
+    <div class="om-panel-card">
     <div class="om-section-title">Warehousing Breakdown</div>
     <div class="om-field-grid">
       <div><label>Warehouse Address</label><input id="fWarehouse" type="text" value="${val(order.mainComponent.warehouse)}" /></div>
@@ -1223,7 +1232,9 @@ async function openDetailPanel(id, scope) {
       <div><label>Packing List Number</label><input id="fFulfillPacking" type="text" value="${val(order.fulfillment.packingListNumber)}" /></div>
       <div><label>Waybill Number</label><input id="fFulfillWaybill" type="text" value="${val(order.fulfillment.waybillNumber)}" /></div>
     </div>
+    </div>
 
+    <div class="om-panel-card">
     <div class="om-section-title">Payment</div>
     <div class="om-field-grid">
       <div><label>Assembly fee</label><input id="fAssemblyFee" type="number" step="0.01" value="${val(order.costs.assemblyFee)}" /></div>
@@ -1237,7 +1248,9 @@ async function openDetailPanel(id, scope) {
       <button class="btn btn-secondary" id="omMarkPending" style="flex:none;width:auto;padding:8px 14px;">Mark Pending</button>
       <button class="btn btn-primary" id="omMarkPaid" style="flex:none;width:auto;padding:8px 14px;">Mark Paid</button>
     </div>
+    </div>
 
+    <div class="om-panel-card">
     <div class="om-section-title">Files</div>
     <div id="omFilesList">
       ${order.files && order.files.length ? order.files.map((f) => `
@@ -1259,7 +1272,9 @@ async function openDetailPanel(id, scope) {
       <input type="file" id="omFileInput" />
       <button class="btn btn-secondary" id="omFileUploadBtn" style="flex:none;width:auto;padding:8px 14px;">Upload</button>
     </div>
+    </div>
 
+    <div class="om-panel-card">
     <div class="om-section-title">Change log</div>
     <ul class="om-changelog">
       ${(order.changeLog || []).map((c) => `
@@ -1269,6 +1284,7 @@ async function openDetailPanel(id, scope) {
         </li>
       `).join('') || '<li class="om-cl-meta">No changes logged yet.</li>'}
     </ul>
+    </div>
 
     <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--jc-border);display:flex;justify-content:flex-end;">
       <button class="btn btn-primary" id="omSaveOrder" style="flex:none;width:auto;padding:10px 24px;">Save changes</button>

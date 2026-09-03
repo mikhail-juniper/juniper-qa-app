@@ -769,7 +769,6 @@ function renderNewPoScreen() {
     <div id="newPoSizesBlock">${renderNewPoSizesBlock()}</div>
 
     <div class="nav-buttons">
-      <button class="btn btn-secondary" id="btnNewPoBack">${biBlockHtml('back', 'Back')}</button>
       <button class="btn btn-primary" id="btnNewPoSubmit">${biBlockHtml('createPo', 'Create Purchase Order')}</button>
     </div>
   `;
@@ -953,9 +952,6 @@ function attachNewPoHandlers() {
   });
 
   attachNewPoSizeHandlers();
-
-  const btnBack = document.getElementById('btnNewPoBack');
-  if (btnBack) btnBack.addEventListener('click', () => { appMode = 'chooser'; render(); });
 
   const btnSubmit = document.getElementById('btnNewPoSubmit');
   if (btnSubmit) btnSubmit.addEventListener('click', submitNewPo);
