@@ -1,7 +1,22 @@
-/* Sizing Charts - standalone master-data page (part of "Product Information").
- * Reuses the .om-panel/.om-panel-backdrop modal styles from order-management.css
- * for the create/edit form, but is otherwise self-contained.
+/* Sizing Charts - the single source of truth for apparel sizing standards
+ * across the whole app. This IS the original QA/QC "Apparel Sizing Charts"
+ * editor (previously in Settings, backed by fits.json) - moved here
+ * verbatim rather than reimplemented, since it's load-bearing for
+ * tolerance checks during actual inspections (Pre-Production/Bulk
+ * reports) and for the "established fit carries forward to the next PO"
+ * behavior. The simpler standalone sizing-chart list that used to live on
+ * this page has been retired in favor of this one real system.
  */
+
+let I18N = {};
+let currentFits = null;
+let selectedFitKey = '';
+let draftNewFit = { label_en: '', label_zh: '', group: 'other', points: [], pointLabels: {}, sizes: {} };
+let draftNewFitKey = '';
+let dirty = false;
+
+const NEW_FIT_SENTINEL = '__new_fit__';
+const FIT_GROUPS = ['hoodie', 'crewnecks', 't_shirt', 'jacket', 'hat', 'other'];
 
 function showToast(msg, isError = false) {
   const t = document.getElementById('toast');
@@ -19,160 +34,303 @@ function escapeHtml(str) {
   }[m]));
 }
 
-async function api(path, opts) {
-  const res = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Request failed (${res.status})`);
-  }
-  return res.json();
+function bi(key, fallback) {
+  const e = I18N[key];
+  if (!e) return { en: fallback || key, zh: '' };
+  return { en: e.zh, zh: e.en };
 }
 
-async function loadCharts() {
+function parseFitValue(str) {
+  const s = String(str).trim();
+  if (!s) return undefined;
+  const rangeMatch = s.match(/^(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)$/);
+  if (rangeMatch) return { min: parseFloat(rangeMatch[1]), max: parseFloat(rangeMatch[2]) };
+  const n = parseFloat(s);
+  return isNaN(n) ? undefined : n;
+}
+function formatFitValue(v) {
+  if (v === undefined || v === null) return '';
+  if (typeof v === 'object') return `${v.min}-${v.max}`;
+  return String(v);
+}
+function slugify(str) {
+  return String(str).toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'new_fit';
+}
+
+function renderFitsCard() {
+  if (!currentFits) return '<div class="om-empty">Loading...</div>';
+  const fitKeys = Object.keys(currentFits.fits).sort();
+  const options = fitKeys.map((k) => {
+    const f = currentFits.fits[k];
+    return `<option value="${escapeHtml(k)}" ${selectedFitKey === k ? 'selected' : ''}>${escapeHtml(f.label_zh)} ${escapeHtml(f.label_en)}</option>`;
+  }).join('');
+
+  let editorHtml = '';
+  if (selectedFitKey === NEW_FIT_SENTINEL) {
+    editorHtml = renderFitEditor(NEW_FIT_SENTINEL, draftNewFit);
+  } else if (selectedFitKey && currentFits.fits[selectedFitKey]) {
+    editorHtml = renderFitEditor(selectedFitKey, currentFits.fits[selectedFitKey]);
+  }
+
+  return `
+    <div class="card">
+      <div class="section-title">${escapeHtml(bi('manageFitsTitle', 'Apparel Sizing Charts').en)}<span class="zh">${escapeHtml(bi('manageFitsTitle').zh)}</span></div>
+      <div class="section-help">${escapeHtml(bi('manageFitsHelp', 'The full chart, saved standards, and tolerance points used across QA/QC reporting and approval.').en)}<br/>${escapeHtml(bi('manageFitsHelp').zh)}</div>
+      <div class="field" style="margin-top:10px;">
+        <label class="field-label">${escapeHtml(bi('selectStandard', 'Select a standard').en)} <span class="zh">${escapeHtml(bi('selectStandard').zh)}</span></label>
+        <select id="fitSelectSetting">
+          <option value="">${escapeHtml(bi('selectPlaceholder', 'Select...').en)}</option>
+          ${options}
+          <option value="${NEW_FIT_SENTINEL}" ${selectedFitKey === NEW_FIT_SENTINEL ? 'selected' : ''}>${escapeHtml(bi('addNewStandard', '+ Add new standard').en)} ${escapeHtml(bi('addNewStandard').zh)}</option>
+        </select>
+      </div>
+      <div id="fitEditorArea">${editorHtml}</div>
+    </div>
+  `;
+}
+
+function renderFitEditor(key, fit) {
+  const points = fit.points || [];
+  const sizes = fit.sizes || {};
+  const sizeNames = Object.keys(sizes);
+
+  const pointHeaderCells = points.map((p) => {
+    const pl = fit.pointLabels[p] || { en: p, zh: '' };
+    return `
+      <th>
+        <input type="text" class="fit-point-label" data-point-label-zh="${escapeHtml(p)}" value="${escapeHtml(pl.zh)}" placeholder="中文" style="width:70px; margin-bottom:3px;" />
+        <input type="text" class="fit-point-label" data-point-label-en="${escapeHtml(p)}" value="${escapeHtml(pl.en)}" placeholder="EN" style="width:70px;" />
+        <button type="button" class="settings-remove" data-remove-point="${escapeHtml(p)}">✕</button>
+      </th>
+    `;
+  }).join('');
+
+  const sizeRowsHtml = sizeNames.map((sizeName) => {
+    const cells = points.map((p) => `
+      <td><input type="text" data-fit-cell="${escapeHtml(sizeName)}|${escapeHtml(p)}" value="${escapeHtml(formatFitValue(sizes[sizeName][p]))}" style="width:70px;" placeholder="24 or 24-26" /></td>
+    `).join('');
+    return `
+      <tr>
+        <td class="size-name">
+          <input type="text" data-size-name-rename="${escapeHtml(sizeName)}" value="${escapeHtml(sizeName)}" style="width:130px;" />
+          <button type="button" class="settings-remove" data-remove-size="${escapeHtml(sizeName)}">✕</button>
+        </td>
+        ${cells}
+      </tr>
+    `;
+  }).join('');
+
+  return `
+    <div style="margin-top:12px; padding-top:12px; border-top:1px dashed var(--jc-border);">
+      <div class="field-row">
+        <div style="flex:1"><label class="field-label">${escapeHtml(bi('fitLabelZh', 'Label (Chinese)').en)}</label><input type="text" id="fitLabelZh" value="${escapeHtml(fit.label_zh)}" /></div>
+        <div style="flex:1"><label class="field-label">${escapeHtml(bi('fitLabelEn', 'Label (English)').en)}</label><input type="text" id="fitLabelEn" value="${escapeHtml(fit.label_en)}" /></div>
+      </div>
+      <div class="field">
+        <label class="field-label">${escapeHtml(bi('fitGroupLabel', 'Group').en)}</label>
+        <select id="fitGroupSelect">
+          ${FIT_GROUPS.map((g) => `<option value="${g}" ${fit.group === g ? 'selected' : ''}>${g}</option>`).join('')}
+        </select>
+      </div>
+      ${key === NEW_FIT_SENTINEL ? `
+        <div class="field">
+          <label class="field-label">${escapeHtml(bi('fitKeyLabel', 'Standard key').en)}</label>
+          <input type="text" id="fitKeyInput" placeholder="${escapeHtml(bi('fitKeyPlaceholder', 'e.g. crewnecks_standard').en)}" />
+        </div>
+      ` : ''}
+
+      <div class="size-table-wrap" style="margin-top:10px;">
+        <table class="size-table">
+          <thead><tr><th></th>${pointHeaderCells}</tr></thead>
+          <tbody>${sizeRowsHtml}</tbody>
+        </table>
+      </div>
+      <div class="field-row" style="margin-top:10px;">
+        <button type="button" class="btn btn-secondary" id="btnAddFitSize" style="flex:1;">${escapeHtml(bi('addSizeRow', '+ Add size row').en)}</button>
+        <button type="button" class="btn btn-secondary" id="btnAddFitPoint" style="flex:1;">${escapeHtml(bi('addMeasurementPoint', '+ Add measurement point').en)}</button>
+      </div>
+      ${key !== NEW_FIT_SENTINEL ? `<button type="button" class="settings-remove" id="btnDeleteFit" style="margin-top:10px;">${escapeHtml(bi('deleteStandard', 'Delete this standard').en)}</button>` : ''}
+    </div>
+  `;
+}
+
+function getEditingFitRef() {
+  if (selectedFitKey === NEW_FIT_SENTINEL) return draftNewFit;
+  return currentFits.fits[selectedFitKey];
+}
+function attachFitEditorHandlers() {
+  const fit = getEditingFitRef();
+  if (!fit) return;
+
+  const labelZh = document.getElementById('fitLabelZh');
+  if (labelZh) labelZh.addEventListener('input', (e) => { fit.label_zh = e.target.value; dirty = true; });
+  const labelEn = document.getElementById('fitLabelEn');
+  if (labelEn) labelEn.addEventListener('input', (e) => { fit.label_en = e.target.value; dirty = true; });
+  const groupSelect = document.getElementById('fitGroupSelect');
+  if (groupSelect) groupSelect.addEventListener('change', (e) => { fit.group = e.target.value; dirty = true; });
+  const keyInput = document.getElementById('fitKeyInput');
+  if (keyInput) keyInput.addEventListener('input', (e) => { draftNewFitKey = e.target.value; dirty = true; });
+
+  document.querySelectorAll('[data-point-label-en]').forEach((el) => {
+    el.addEventListener('input', (e) => {
+      const p = el.getAttribute('data-point-label-en');
+      fit.pointLabels[p] = fit.pointLabels[p] || { en: '', zh: '' };
+      fit.pointLabels[p].en = e.target.value;
+      dirty = true;
+    });
+  });
+  document.querySelectorAll('[data-point-label-zh]').forEach((el) => {
+    el.addEventListener('input', (e) => {
+      const p = el.getAttribute('data-point-label-zh');
+      fit.pointLabels[p] = fit.pointLabels[p] || { en: '', zh: '' };
+      fit.pointLabels[p].zh = e.target.value;
+      dirty = true;
+    });
+  });
+  document.querySelectorAll('[data-remove-point]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const p = el.getAttribute('data-remove-point');
+      fit.points = fit.points.filter((x) => x !== p);
+      delete fit.pointLabels[p];
+      Object.values(fit.sizes).forEach((s) => delete s[p]);
+      dirty = true;
+      render();
+    });
+  });
+  document.querySelectorAll('[data-fit-cell]').forEach((el) => {
+    el.addEventListener('input', (e) => {
+      const [sizeName, p] = el.getAttribute('data-fit-cell').split('|');
+      const val = parseFitValue(e.target.value);
+      if (val === undefined) delete fit.sizes[sizeName][p];
+      else fit.sizes[sizeName][p] = val;
+      dirty = true;
+    });
+  });
+  document.querySelectorAll('[data-size-name-rename]').forEach((el) => {
+    el.addEventListener('change', (e) => {
+      const oldName = el.getAttribute('data-size-name-rename');
+      const newName = e.target.value.trim();
+      if (!newName || newName === oldName) return;
+      fit.sizes[newName] = fit.sizes[oldName];
+      delete fit.sizes[oldName];
+      dirty = true;
+      render();
+    });
+  });
+  document.querySelectorAll('[data-remove-size]').forEach((el) => {
+    el.addEventListener('click', () => {
+      delete fit.sizes[el.getAttribute('data-remove-size')];
+      dirty = true;
+      render();
+    });
+  });
+  const btnAddFitSize = document.getElementById('btnAddFitSize');
+  if (btnAddFitSize) {
+    btnAddFitSize.addEventListener('click', () => {
+      let name = 'New Size', i = 1;
+      while (fit.sizes[name]) { i += 1; name = `New Size ${i}`; }
+      fit.sizes[name] = {};
+      dirty = true;
+      render();
+    });
+  }
+  const btnAddFitPoint = document.getElementById('btnAddFitPoint');
+  if (btnAddFitPoint) {
+    btnAddFitPoint.addEventListener('click', () => {
+      const label = prompt('New measurement point - English label:');
+      if (!label) return;
+      const key = slugify(label);
+      if (fit.points.includes(key)) { showToast('That point already exists / 该测量项已存在', true); return; }
+      fit.points.push(key);
+      fit.pointLabels[key] = { en: label, zh: '' };
+      dirty = true;
+      render();
+    });
+  }
+  const btnDeleteFit = document.getElementById('btnDeleteFit');
+  if (btnDeleteFit) {
+    btnDeleteFit.addEventListener('click', () => {
+      if (!confirm(`Delete "${fit.label_en}"? This applies once you Save.`)) return;
+      delete currentFits.fits[selectedFitKey];
+      selectedFitKey = '';
+      dirty = true;
+      render();
+    });
+  }
+}
+
+function render() {
+  const root = document.getElementById('scRoot');
+  root.innerHTML = `
+    <h2 class="om-view-title">Sizing Charts</h2>
+    ${renderFitsCard()}
+    <div style="margin-top:20px;display:flex;justify-content:flex-end;">
+      <button class="btn btn-primary" id="btnSaveFits" style="flex:none;width:auto;padding:10px 24px;" ${dirty ? '' : 'disabled'}>${dirty ? 'Save changes' : 'Saved'}</button>
+    </div>
+  `;
+
+  const fitSelectSetting = document.getElementById('fitSelectSetting');
+  if (fitSelectSetting) {
+    fitSelectSetting.addEventListener('change', (e) => {
+      selectedFitKey = e.target.value;
+      render();
+    });
+  }
+  attachFitEditorHandlers();
+
+  const btnSave = document.getElementById('btnSaveFits');
+  if (btnSave) btnSave.addEventListener('click', saveFits);
+}
+
+async function saveFits() {
+  const btn = document.getElementById('btnSaveFits');
+  btn.disabled = true;
+  const originalText = btn.innerHTML;
+  btn.innerHTML = `Saving...`;
+  try {
+    // Commit a pending "new standard" draft into currentFits.fits before saving.
+    if (selectedFitKey === NEW_FIT_SENTINEL && draftNewFit.label_en.trim()) {
+      const finalKey = slugify(draftNewFitKey || draftNewFit.label_en);
+      if (currentFits.fits[finalKey]) {
+        showToast('A standard with that key already exists / 已存在相同标识的标准', true);
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        return;
+      }
+      currentFits.fits[finalKey] = draftNewFit;
+      selectedFitKey = finalKey;
+      draftNewFit = { label_en: '', label_zh: '', group: 'other', points: [], pointLabels: {}, sizes: {} };
+      draftNewFitKey = '';
+    }
+
+    const res = await fetch('/api/fits', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fits: currentFits.fits })
+    });
+    if (!res.ok) throw new Error('Save failed');
+    dirty = false;
+    showToast('Sizing charts saved');
+    render();
+  } catch (e) {
+    showToast(e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function loadFits() {
   const root = document.getElementById('scRoot');
   root.innerHTML = `<div class="om-empty">Loading...</div>`;
   try {
-    const data = await api('/api/sizing-charts');
-    renderList(data.charts || []);
+    const [configRes, fitsRes] = await Promise.all([
+      fetch('/api/config'),
+      fetch('/api/fits')
+    ]);
+    const config = await configRes.json();
+    I18N = config.i18n || {};
+    currentFits = await fitsRes.json();
+    render();
   } catch (e) { showToast(e.message, true); }
 }
 
-function renderList(charts) {
-  const root = document.getElementById('scRoot');
-  root.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-      <h2 class="om-view-title" style="margin:0;">Sizing Charts</h2>
-      <button class="btn btn-primary" id="scNewBtn" style="flex:none;width:auto;padding:10px 18px;">+ New sizing chart</button>
-    </div>
-    ${charts.length ? `
-      <div class="om-tile-grid">
-        ${charts.map((c) => `
-          <div class="om-tile" data-id="${escapeHtml(c.id)}">
-            <div class="om-tile-title">${escapeHtml(c.name)}</div>
-            <div class="om-tile-desc">${escapeHtml(c.productLine)} &middot; ${c.sizes.length} size${c.sizes.length === 1 ? '' : 's'}</div>
-          </div>
-        `).join('')}
-      </div>
-    ` : `<div class="om-empty">No sizing charts yet. Click "New sizing chart" to add your first standard.</div>`}
-  `;
-  document.getElementById('scNewBtn').addEventListener('click', () => openChartForm(null));
-  root.querySelectorAll('.om-tile').forEach((tile) => {
-    tile.addEventListener('click', async () => {
-      try {
-        const data = await api(`/api/sizing-charts/${encodeURIComponent(tile.dataset.id)}`);
-        openChartForm(data.chart);
-      } catch (e) { showToast(e.message, true); }
-    });
-  });
-}
-
-let rowCount = 0;
-
-function sizeRowHtml(idx, data) {
-  data = data || {};
-  return `
-    <div class="om-repeat-row" data-size-row="${idx}">
-      <input type="text" placeholder="Size (e.g. Adult M)" class="sc-size" value="${escapeHtml(data.size || '')}" />
-      <input type="text" placeholder="Measurement / notes" class="sc-measurement" value="${escapeHtml(data.measurement || '')}" />
-      <button type="button" class="om-row-remove" data-remove-size="${idx}">&times;</button>
-    </div>
-  `;
-}
-
-function openChartForm(chart) {
-  rowCount = 0;
-  const panel = document.createElement('div');
-  panel.className = 'om-panel';
-  panel.innerHTML = `
-   <div class="om-panel-inner">
-    <div class="om-panel-header">
-      <div style="font-size:19px;font-weight:700;">${chart ? 'Edit sizing chart' : 'New sizing chart'}</div>
-      <button class="om-panel-close" id="scClose">&times;</button>
-    </div>
-    <div class="om-field-grid">
-      <div><label>Chart name</label><input id="scName" type="text" value="${escapeHtml(chart && chart.name)}" placeholder="e.g. Adult Unisex Tee" /></div>
-      <div><label>Product line</label>
-        <select id="scProductLine">
-          <option value="clothing" ${chart && chart.productLine === 'clothing' ? 'selected' : ''}>Apparel</option>
-          <option value="toys" ${!chart || chart.productLine === 'toys' ? 'selected' : ''}>Toys</option>
-          <option value="other" ${chart && chart.productLine === 'other' ? 'selected' : ''}>Other</option>
-        </select>
-      </div>
-    </div>
-    <div class="om-field-grid" style="margin-top:10px;">
-      <div style="grid-column:1/-1;"><label>Notes</label><input id="scNotes" type="text" value="${escapeHtml(chart && chart.notes)}" /></div>
-    </div>
-
-    <div class="om-section-title">Sizes</div>
-    <div id="scRows"></div>
-    <button type="button" class="btn btn-secondary" id="scAddRow" style="flex:none;width:auto;padding:8px 14px;margin-top:6px;">+ Add size</button>
-
-    <div style="margin-top:22px;display:flex;gap:10px;flex-wrap:wrap;">
-      <button class="btn btn-secondary" id="scCancel" style="flex:none;width:auto;padding:10px 18px;">Cancel</button>
-      ${chart ? `<button class="btn btn-secondary" id="scDelete" style="flex:none;width:auto;padding:10px 18px;color:var(--jc-fail);">Delete</button>` : ''}
-      <button class="btn btn-primary" id="scSave" style="flex:none;width:auto;padding:10px 18px;">${chart ? 'Save changes' : 'Create chart'}</button>
-    </div>
-   </div>
-  `;
-  const backdrop = document.createElement('div');
-  backdrop.className = 'om-panel-backdrop';
-  backdrop.appendChild(panel);
-  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) closePanel(); });
-  document.body.appendChild(backdrop);
-
-  function closePanel() { backdrop.remove(); }
-  document.getElementById('scClose').addEventListener('click', closePanel);
-  document.getElementById('scCancel').addEventListener('click', closePanel);
-
-  const rowsHost = document.getElementById('scRows');
-  function addRow(data) {
-    rowsHost.insertAdjacentHTML('beforeend', sizeRowHtml(rowCount, data));
-    const idx = rowCount;
-    panel.querySelector(`[data-remove-size="${idx}"]`).addEventListener('click', () => {
-      panel.querySelector(`[data-size-row="${idx}"]`).remove();
-    });
-    rowCount++;
-  }
-  document.getElementById('scAddRow').addEventListener('click', () => addRow());
-  if (chart && chart.sizes.length) chart.sizes.forEach(addRow);
-  else addRow();
-
-  if (chart) {
-    document.getElementById('scDelete').addEventListener('click', async () => {
-      if (!confirm(`Delete "${chart.name}"? This can't be undone.`)) return;
-      try {
-        await api(`/api/sizing-charts/${encodeURIComponent(chart.id)}`, { method: 'DELETE' });
-        showToast('Sizing chart deleted');
-        closePanel();
-        loadCharts();
-      } catch (e) { showToast(e.message, true); }
-    });
-  }
-
-  document.getElementById('scSave').addEventListener('click', async () => {
-    const name = document.getElementById('scName').value.trim();
-    if (!name) return showToast('Chart name is required', true);
-    const payload = {
-      name,
-      productLine: document.getElementById('scProductLine').value,
-      notes: document.getElementById('scNotes').value,
-      sizes: Array.from(rowsHost.querySelectorAll('[data-size-row]')).map((row) => ({
-        size: row.querySelector('.sc-size').value,
-        measurement: row.querySelector('.sc-measurement').value
-      })).filter((s) => s.size || s.measurement)
-    };
-    try {
-      if (chart) {
-        await api(`/api/sizing-charts/${encodeURIComponent(chart.id)}`, { method: 'PATCH', body: JSON.stringify(payload) });
-        showToast('Sizing chart updated');
-      } else {
-        await api('/api/sizing-charts', { method: 'POST', body: JSON.stringify(payload) });
-        showToast('Sizing chart created');
-      }
-      closePanel();
-      loadCharts();
-    } catch (e) { showToast(e.message, true); }
-  });
-}
-
-loadCharts();
+loadFits();

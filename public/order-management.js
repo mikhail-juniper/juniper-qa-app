@@ -464,7 +464,7 @@ async function renderProductsShell(root) {
       productsCategoryBlock('other', other.products || [], manual.filter((p) => p.productLine === 'other'))
     ].join('');
     host.querySelectorAll('tbody tr[data-po]').forEach((tr) => {
-      tr.addEventListener('click', () => openDetailPanel(tr.dataset.po));
+      tr.addEventListener('click', () => openProductDetailView(tr.dataset.po));
     });
     host.querySelectorAll('tbody tr[data-manual-id]').forEach((tr) => {
       tr.addEventListener('click', async () => {
@@ -617,7 +617,10 @@ async function renderComponentsShell(root) {
       componentsCategoryBlock('other', other.components || [], manual.filter((c) => c.productLine === 'other'))
     ].join('');
     host.querySelectorAll('tbody tr[data-po]').forEach((tr) => {
-      tr.addEventListener('click', () => openDetailPanel(tr.dataset.po));
+      tr.addEventListener('click', () => {
+        if (tr.dataset.accessoryId) openAccessoryDetailPanel(tr.dataset.po, tr.dataset.accessoryId);
+        else openDetailPanel(tr.dataset.po);
+      });
     });
     host.querySelectorAll('tbody tr[data-manual-id]').forEach((tr) => {
       tr.addEventListener('click', async () => {
@@ -650,7 +653,7 @@ function componentsCategoryBlock(productLine, components, manualComponents) {
               </tr>
             `).join('')}
             ${components.map((c) => `
-              <tr data-po="${escapeHtml(c.examplePoId)}">
+              <tr data-po="${escapeHtml(c.examplePoId)}" data-accessory-id="${escapeHtml(c.exampleAccessoryId || '')}">
                 <td><strong>${escapeHtml(c.partName)}</strong></td>
                 <td>${escapeHtml(c.material || '—')}</td>
                 <td>${escapeHtml(c.supplierName || '—')}</td>
@@ -1141,6 +1144,7 @@ function attachTypeahead(inputId, getOptions) {
 async function openDetailPanel(id, scope) {
   scope = scope || 'full';
   let order;
+  let supplierNamesShared = []; // populated once the async supplier fetch below resolves; typeahead callbacks read it lazily so timing doesn't matter
   try {
     const data = await api(`/api/order-management/orders/${encodeURIComponent(id)}`);
     order = data.order;
@@ -1470,6 +1474,7 @@ async function openDetailPanel(id, scope) {
     const row = panel.querySelector(`[data-accessory-row="${idx}"]`);
     panel.querySelector(`[data-remove-accessory="${idx}"]`).addEventListener('click', () => { row.remove(); recalcTotals(); });
     wireAccessoryRowUploads(row);
+    attachTypeahead(`accSupplier${idx}`, () => supplierNamesShared);
     editAccessoryRowCount++;
   }
   (order.accessories && order.accessories.length ? order.accessories : [{}]).forEach(addAccessoryRow);
@@ -1601,6 +1606,7 @@ async function openDetailPanel(id, scope) {
       ]);
       const suppliers = suppliersData.suppliers || [];
       const supplierNames = suppliers.map((s) => s.name);
+      supplierNamesShared = supplierNames;
 
       attachTypeahead('fSupplierName', () => supplierNames);
       attachTypeahead('fFabricInfo', () => historyData.fabricCodes || []);
@@ -1782,6 +1788,85 @@ async function openAccessoryDetailPanel(orderId, accessoryId) {
   });
 }
 
+// Lightweight, mostly read-only product view - reachable from the Products
+// page, shows only what a product actually is (photo, SKU, pricing,
+// fabric/sizing, supplier chain) instead of the full PO's order-management
+// fields (dates, status, warehousing, payment) that don't describe the
+// product itself.
+async function openProductDetailView(orderId) {
+  let order;
+  try {
+    const data = await api(`/api/order-management/orders/${encodeURIComponent(orderId)}`);
+    order = data.order;
+  } catch (e) {
+    return showToast(e.message, true);
+  }
+  const mc = order.mainComponent;
+  const isApparel = order.productLine === 'clothing';
+
+  const panel = document.createElement('div');
+  panel.className = 'om-panel';
+  panel.innerHTML = `
+   <div class="om-panel-inner">
+    <div class="om-panel-header">
+      <div>
+        <div style="font-size:19px;font-weight:700;">${escapeHtml(mc.name || 'Unnamed product')}</div>
+        <div style="color:var(--jc-muted);font-size:13px;">SKU: ${escapeHtml(mc.sku || '—')}</div>
+        <div style="margin-top:4px;font-size:12px;font-weight:700;color:var(--jc-teal-dark);text-transform:uppercase;">Product view</div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <button class="btn btn-secondary" id="omViewFullPoFromProduct" style="flex:none;width:auto;padding:7px 14px;font-size:13px;">View full PO</button>
+        <button class="om-panel-close" id="omClosePanel">&times;</button>
+      </div>
+    </div>
+
+    ${mc.photoReference ? `<img id="omProductPhoto" src="${escapeHtml(mc.photoReference)}" alt="" style="width:140px;height:140px;object-fit:cover;border-radius:10px;border:1px solid var(--jc-border);cursor:pointer;margin-bottom:16px;" title="Click to view larger" />` : ''}
+
+    <div class="om-detail-grid">
+      <div class="om-detail-row"><span class="om-label">Name</span><span class="om-value">${escapeHtml(mc.name || '—')}</span></div>
+      <div class="om-detail-row"><span class="om-label">Main SKU</span><span class="om-value">${escapeHtml(mc.sku || '—')}</span></div>
+      <div class="om-detail-row"><span class="om-label">Unit Price</span><span class="om-value">${fmtMoney(mc.factoryPrice)}</span></div>
+      <div class="om-detail-row"><span class="om-label">Fabric Code</span><span class="om-value">${escapeHtml(mc.fabricInfo || '—')}</span></div>
+      <div class="om-detail-row"><span class="om-label">Fabric Type</span><span class="om-value">${escapeHtml(mc.component || '—')}</span></div>
+      ${isApparel
+        ? `<div class="om-detail-row"><span class="om-label">Sizing chart</span><span class="om-value"><a href="sizing-charts.html" target="_blank" rel="noopener">View Sizing Charts →</a></span></div>`
+        : `
+          <div class="om-detail-row"><span class="om-label">Dimensions</span><span class="om-value">${mc.dimensionsUrl ? `<a href="${escapeHtml(mc.dimensionsUrl)}" target="_blank" rel="noopener">View file</a>` : '—'}</span></div>
+          <div class="om-detail-row"><span class="om-label">Weight</span><span class="om-value">${mc.weightUrl ? `<a href="${escapeHtml(mc.weightUrl)}" target="_blank" rel="noopener">View file</a>` : '—'}</span></div>
+        `}
+      <div class="om-detail-row"><span class="om-label">Washing Tag</span><span class="om-value">${mc.washingTagUrl ? `<a href="${escapeHtml(mc.washingTagUrl)}" target="_blank" rel="noopener">View file</a>` : '—'}</span></div>
+    </div>
+
+    <div class="om-section-title" style="margin-top:20px;">Main Supplier</div>
+    <div class="om-detail-grid">
+      <div class="om-detail-row"><span class="om-label">Name</span><span class="om-value">${escapeHtml(order.supplier.name || '—')}</span></div>
+      <div class="om-detail-row"><span class="om-label">Code</span><span class="om-value">${escapeHtml(order.supplier.code || '—')}</span></div>
+      <div class="om-detail-row"><span class="om-label">Contact</span><span class="om-value">${escapeHtml(order.supplier.contact || '—')}</span></div>
+    </div>
+
+    <div class="om-section-title" style="margin-top:20px;">Accessory Supplier Breakdown</div>
+    ${order.accessories && order.accessories.length ? `
+      <table class="om-table" style="min-width:0;">
+        <thead><tr><th>Part</th><th>Supplier</th></tr></thead>
+        <tbody>
+          ${order.accessories.map((a) => `<tr><td>${escapeHtml(a.partName || '—')}</td><td>${escapeHtml(a.supplierName || '—')}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    ` : `<div class="om-empty">No accessories on this PO.</div>`}
+   </div>
+  `;
+
+  mountPanel(panel);
+  bindPanelEscape();
+  document.getElementById('omClosePanel').addEventListener('click', closePanel);
+  document.getElementById('omViewFullPoFromProduct').addEventListener('click', () => {
+    closePanel();
+    openDetailPanel(order.id, 'full');
+  });
+  const photo = document.getElementById('omProductPhoto');
+  if (photo) photo.addEventListener('click', () => openImageLightbox(photo.src));
+}
+
 async function setSettlement(id, status) {
   try {
     await api(`/api/order-management/orders/${encodeURIComponent(id)}/settlement`, {
@@ -1792,42 +1877,6 @@ async function setSettlement(id, status) {
     closePanel();
     refreshCurrentView();
   } catch (e) { showToast(e.message, true); }
-}
-
-// ---- New order panel ----
-
-let sizeRowCount = 0;
-let accessoryRowCount = 0;
-
-function sizeRowHtml(idx) {
-  return `
-    <div class="om-repeat-row" data-size-row="${idx}">
-      <input type="text" placeholder="SKU name" class="om-size-sku" />
-      <input type="text" placeholder="Size (e.g. Adult M)" class="om-size-size" />
-      <input type="number" placeholder="Qty" class="om-size-qty" />
-      <button type="button" class="om-row-remove" data-remove-size="${idx}">&times;</button>
-    </div>
-  `;
-}
-
-function replacementRowHtml(idx, data) {
-  data = data || {};
-  return `
-    <div class="om-repeat-row" data-replacement-row="${idx}">
-      <input type="text" placeholder="SKU name" class="om-repl-sku" value="${escapeHtml(data.sku || '')}" />
-      <input type="text" placeholder="Size (e.g. Adult M)" class="om-repl-size" value="${escapeHtml(data.size || '')}" />
-      <input type="number" placeholder="Replacement qty" class="om-repl-qty" value="${escapeHtml(data.quantity ?? '')}" />
-      <button type="button" class="om-row-remove" data-remove-replacement="${idx}">&times;</button>
-    </div>
-  `;
-}
-
-function collectReplacementRows(container) {
-  return Array.from(container.querySelectorAll('[data-replacement-row]')).map((row) => ({
-    sku: row.querySelector('.om-repl-sku').value,
-    size: row.querySelector('.om-repl-size').value,
-    quantity: row.querySelector('.om-repl-qty').value || null
-  })).filter((r) => r.sku || r.size || r.quantity);
 }
 
 // Generic upload-type field: label + (thumbnail or file link) + Upload
@@ -1916,7 +1965,7 @@ function accessoryRowHtml(idx, data, mainAddress) {
       </td>
       <td><input type="text" class="om-acc-dims" value="${escapeHtml(data.dimensions || '')}" /></td>
       <td><input type="number" class="om-acc-qty" value="${escapeHtml(data.quantity ?? '')}" /></td>
-      <td><input type="text" class="om-acc-supplier" list="dlSupplierNames" value="${escapeHtml(data.supplierName || '')}" /></td>
+      <td><input type="text" id="accSupplier${idx}" class="om-acc-supplier" value="${escapeHtml(data.supplierName || '')}" /></td>
       <td><input type="number" step="0.01" class="om-acc-unit-price" value="${escapeHtml(data.unitPrice ?? '')}" /></td>
       <td><input type="text" class="om-acc-supplier-contact" value="${escapeHtml(data.supplierContact || '')}" /></td>
       <td><input type="date" class="om-acc-expected-delivery" value="${escapeHtml(data.expectedDeliveryDate || '')}" /></td>
@@ -1934,174 +1983,6 @@ function accessoryRowHtml(idx, data, mainAddress) {
 
 function val(v) { return v === null || v === undefined ? '' : escapeHtml(v); }
 
-function openNewOrderPanel(existingOrder) {
-  sizeRowCount = 0;
-  accessoryRowCount = 0;
-  const o = existingOrder || null;
-  const mc = (o && o.mainComponent) || {};
-  const sup = (o && o.supplier) || {};
-  const isEdit = !!o;
-
-  const panel = document.createElement('div');
-  panel.className = 'om-panel';
-  panel.innerHTML = `
-   <div class="om-panel-inner">
-    <div class="om-panel-header">
-      <div style="font-size:19px;font-weight:700;">${isEdit ? `Edit Purchase Order — ${escapeHtml(o.poNumber)}` : 'New Purchase Order Request'}</div>
-      <button class="om-panel-close" id="omClosePanel">&times;</button>
-    </div>
-
-    <div class="om-section-title">Order</div>
-    <div class="om-field-grid">
-      <div><label>Product line</label>
-        <select id="fProductLine" ${isEdit ? 'disabled' : ''}>
-          <option value="clothing" ${(o ? o.productLine : currentTab) === 'clothing' ? 'selected' : ''}>Apparel</option>
-          <option value="toys" ${(o ? o.productLine : currentTab) === 'toys' ? 'selected' : ''}>Toys</option>
-          <option value="other" ${(o ? o.productLine : currentTab) === 'other' ? 'selected' : ''}>Other</option>
-        </select>
-      </div>
-      <div><label>PO number *</label><input id="fPoNumber" type="text" placeholder="e.g. JCRP01TSH1-PO1" value="${val(o && o.poNumber)}" ${isEdit ? 'disabled' : ''} /></div>
-      <div><label>Buyer / Orderer</label><input id="fBuyer" type="text" value="${val(o && o.buyer)}" /></div>
-      <div><label>Order date</label><input id="fOrderDate" type="date" value="${val(o && o.orderPlacementDate)}" /></div>
-      <div><label>Desired entry date</label><input id="fDesiredEntry" type="date" value="${val(o && o.desiredEntryDate)}" /></div>
-      <div><label>Manufacturer delivery date</label><input id="fManufDelivery" type="date" value="${val(o && o.manufacturerDeliveryDate)}" /></div>
-    </div>
-
-    <div class="om-section-title">Supplier</div>
-    <div class="om-field-grid">
-      <div><label>Supplier name</label><input id="fSupplierName" type="text" value="${val(sup.name)}" /></div>
-      <div><label>Supplier contact</label><input id="fSupplierContact" type="text" value="${val(sup.contact)}" /></div>
-      <div><label>Supplier code</label><input id="fSupplierCode" type="text" value="${val(sup.code)}" /></div>
-    </div>
-
-    <div class="om-section-title">Main component</div>
-    <div class="om-field-grid">
-      <div><label>Main component name</label><input id="fMainName" type="text" value="${val(mc.name)}" /></div>
-      <div><label>Main SKU</label><input id="fMainSku" type="text" value="${val(mc.sku)}" /></div>
-      <div><label>Model number</label><input id="fModelNumber" type="text" value="${val(mc.modelNumber)}" /></div>
-      <div><label>Dimensions (L*W*H cm)</label><input id="fDimensions" type="text" value="${val(mc.dimensions)}" /></div>
-      <div><label>Factory price</label><input id="fFactoryPrice" type="number" step="0.01" value="${val(mc.factoryPrice)}" /></div>
-      <div><label>Sales unit price</label><input id="fSalesUnitPrice" type="number" step="0.01" value="${val(mc.salesUnitPrice)}" /></div>
-      <div><label>Purchase quantity</label><input id="fPurchaseQty" type="number" value="${val(mc.purchaseQuantity)}" /></div>
-      <div><label>Sales volume</label><input id="fSalesVolume" type="number" value="${val(mc.salesVolume)}" /></div>
-      <div><label>Total purchase price</label><input id="fTotalPurchasePrice" type="number" step="0.01" value="${val(mc.totalPurchasePrice)}" /></div>
-      <div><label>Actual weight (kg)</label><input id="fActualWeight" type="number" step="0.01" value="${val(mc.actualWeight)}" /></div>
-      <div><label>Transport weight (kg)</label><input id="fTransportWeight" type="number" step="0.01" value="${val(mc.transportWeight)}" /></div>
-      <div><label>Sent to warehouse</label><input id="fWarehouse" type="text" value="${val(mc.warehouse)}" /></div>
-    </div>
-    <div class="om-field-grid" style="margin-top:10px;">
-      <div style="grid-column:1/-1;"><label>Production precautions</label><input id="fProductionPrecautions" type="text" value="${val(mc.productionPrecautions)}" /></div>
-    </div>
-
-    <div id="fClothingOnly" style="display:none;">
-      <div class="om-section-title">Fabric (clothing only)</div>
-      <div class="om-field-grid">
-        <div><label>Fabric information</label><input id="fFabricInfo" type="text" value="${val(mc.fabricInfo)}" /></div>
-        <div><label>Component / composition</label><input id="fComponent" type="text" value="${val(mc.component)}" /></div>
-        <div><label>Wash label</label><input id="fWashLabel" type="text" value="${val(mc.washLabel)}" /></div>
-      </div>
-
-      <div class="om-section-title">Size distribution</div>
-      <div id="omSizeRows"></div>
-      <button type="button" class="btn btn-secondary" id="omAddSizeRow" style="flex:none;width:auto;padding:8px 14px;margin-top:6px;">+ Add size row</button>
-    </div>
-
-    <div class="om-section-title">Accessories / parts</div>
-    <div id="omAccessoryRows"></div>
-    <button type="button" class="btn btn-secondary" id="omAddAccessoryRow" style="flex:none;width:auto;padding:8px 14px;margin-top:6px;">+ Add accessory / part</button>
-
-    <div class="om-section-title">Costs</div>
-    <div class="om-field-grid">
-      <div><label>Assembly fee</label><input id="fAssemblyFee" type="number" step="0.01" value="${val(o && o.costs && o.costs.assemblyFee)}" /></div>
-      <div><label>Labor costs</label><input id="fLaborCosts" type="number" step="0.01" value="${val(o && o.costs && o.costs.laborCosts)}" /></div>
-      <div><label>Transportation fees</label><input id="fTransportationFees" type="number" step="0.01" value="${val(o && o.costs && o.costs.transportationFees)}" /></div>
-      <div><label>Other expenses</label><input id="fOtherExpenses" type="number" step="0.01" value="${val(o && o.costs && o.costs.otherExpenses)}" /></div>
-    </div>
-
-    <div style="margin-top:22px;display:flex;gap:10px;flex-wrap:wrap;">
-      <button class="btn btn-secondary" id="omCancelNew" style="flex:none;width:auto;padding:10px 18px;">Cancel</button>
-      ${isEdit ? `
-        <button class="btn btn-secondary" id="omSaveDraft" style="flex:none;width:auto;padding:10px 18px;">Save &amp; complete later</button>
-        ${o.status === 'New Request' ? `<button class="btn btn-primary" id="omSubmitManufacturing" style="flex:none;width:auto;padding:10px 18px;">Submit for manufacturing</button>` : ''}
-      ` : `
-        <button class="btn btn-primary" id="omSubmitNew" style="flex:none;width:auto;padding:10px 18px;">Create request</button>
-      `}
-    </div>
-   </div>
-  `;
-  mountPanel(panel);
-  bindPanelEscape();
-
-  document.getElementById('omClosePanel').addEventListener('click', closePanel);
-  document.getElementById('omCancelNew').addEventListener('click', closePanel);
-  if (isEdit) {
-    document.getElementById('omSaveDraft').addEventListener('click', () => submitOrderForm(o, false));
-    const submitBtn = document.getElementById('omSubmitManufacturing');
-    if (submitBtn) submitBtn.addEventListener('click', () => submitOrderForm(o, true));
-  } else {
-    document.getElementById('omSubmitNew').addEventListener('click', () => submitOrderForm(null, false));
-  }
-
-  const productLineSelect = document.getElementById('fProductLine');
-  const toggleClothing = () => {
-    document.getElementById('fClothingOnly').style.display = productLineSelect.value === 'clothing' ? 'block' : 'none';
-  };
-  productLineSelect.addEventListener('change', toggleClothing);
-  toggleClothing();
-
-  document.getElementById('omAddSizeRow').addEventListener('click', () => {
-    document.getElementById('omSizeRows').insertAdjacentHTML('beforeend', sizeRowHtml(sizeRowCount));
-    bindRemove(`[data-remove-size="${sizeRowCount}"]`, `[data-size-row="${sizeRowCount}"]`);
-    sizeRowCount++;
-  });
-  document.getElementById('omAddAccessoryRow').addEventListener('click', () => {
-    document.getElementById('omAccessoryRows').insertAdjacentHTML('beforeend', accessoryRowHtml(accessoryRowCount));
-    bindRemove(`[data-remove-accessory="${accessoryRowCount}"]`, `[data-accessory-row="${accessoryRowCount}"]`);
-    accessoryRowCount++;
-  });
-
-  // Pre-fill existing rows when editing; otherwise start with one blank
-  // accessory row so the form doesn't look empty/broken.
-  if (isEdit && mc.sizeDistribution && mc.sizeDistribution.length) {
-    mc.sizeDistribution.forEach((row) => {
-      document.getElementById('omSizeRows').insertAdjacentHTML('beforeend',
-        `<div class="om-repeat-row" data-size-row="${sizeRowCount}">
-          <input type="text" placeholder="SKU name" class="om-size-sku" value="${val(row.sku)}" />
-          <input type="text" placeholder="Size" class="om-size-size" value="${val(row.size)}" />
-          <input type="number" placeholder="Qty" class="om-size-qty" value="${val(row.quantity)}" />
-          <button type="button" class="om-row-remove" data-remove-size="${sizeRowCount}">&times;</button>
-        </div>`);
-      bindRemove(`[data-remove-size="${sizeRowCount}"]`, `[data-size-row="${sizeRowCount}"]`);
-      sizeRowCount++;
-    });
-  }
-  if (isEdit && o.accessories && o.accessories.length) {
-    o.accessories.forEach((a) => {
-      document.getElementById('omAccessoryRows').insertAdjacentHTML('beforeend', accessoryRowHtml(accessoryRowCount, a));
-      bindRemove(`[data-remove-accessory="${accessoryRowCount}"]`, `[data-accessory-row="${accessoryRowCount}"]`);
-      accessoryRowCount++;
-    });
-  } else {
-    document.getElementById('omAddAccessoryRow').click();
-  }
-}
-
-function bindRemove(btnSelector, rowSelector) {
-  const btn = document.querySelector(btnSelector);
-  if (!btn) return;
-  btn.addEventListener('click', () => {
-    const row = document.querySelector(rowSelector);
-    if (row) row.remove();
-  });
-}
-
-function collectSizeRows() {
-  return Array.from(document.querySelectorAll('[data-size-row]')).map((row) => ({
-    sku: row.querySelector('.om-size-sku').value,
-    size: row.querySelector('.om-size-size').value,
-    quantity: row.querySelector('.om-size-qty').value || null
-  })).filter((r) => r.sku || r.size || r.quantity);
-}
 
 function collectAccessoryRows(container) {
   const scope = container || document;
@@ -2121,86 +2002,3 @@ function collectAccessoryRows(container) {
   })).filter((a) => a.partName || a.supplierName);
 }
 
-async function submitOrderForm(existingOrder, submitForManufacturing) {
-  const productLine = document.getElementById('fProductLine').value;
-  const fields = {
-    buyer: document.getElementById('fBuyer').value,
-    orderPlacementDate: document.getElementById('fOrderDate').value || null,
-    desiredEntryDate: document.getElementById('fDesiredEntry').value || null,
-    manufacturerDeliveryDate: document.getElementById('fManufDelivery').value || null,
-    supplier: {
-      name: document.getElementById('fSupplierName').value,
-      contact: document.getElementById('fSupplierContact').value,
-      code: document.getElementById('fSupplierCode').value
-    },
-    mainComponent: {
-      name: document.getElementById('fMainName').value,
-      sku: document.getElementById('fMainSku').value,
-      modelNumber: document.getElementById('fModelNumber').value,
-      dimensions: document.getElementById('fDimensions').value,
-      factoryPrice: document.getElementById('fFactoryPrice').value || null,
-      salesUnitPrice: document.getElementById('fSalesUnitPrice').value || null,
-      purchaseQuantity: document.getElementById('fPurchaseQty').value || null,
-      salesVolume: document.getElementById('fSalesVolume').value || null,
-      totalPurchasePrice: document.getElementById('fTotalPurchasePrice').value || null,
-      actualWeight: document.getElementById('fActualWeight').value || null,
-      transportWeight: document.getElementById('fTransportWeight').value || null,
-      warehouse: document.getElementById('fWarehouse').value,
-      productionPrecautions: document.getElementById('fProductionPrecautions').value,
-      fabricInfo: productLine === 'clothing' ? document.getElementById('fFabricInfo').value : '',
-      component: productLine === 'clothing' ? document.getElementById('fComponent').value : '',
-      washLabel: productLine === 'clothing' ? document.getElementById('fWashLabel').value : '',
-      sizeDistribution: productLine === 'clothing' ? collectSizeRows() : []
-    },
-    accessories: collectAccessoryRows(),
-    costs: {
-      assemblyFee: document.getElementById('fAssemblyFee').value || 0,
-      laborCosts: document.getElementById('fLaborCosts').value || 0,
-      transportationFees: document.getElementById('fTransportationFees').value || 0,
-      otherExpenses: document.getElementById('fOtherExpenses').value || 0
-    }
-  };
-
-  try {
-    if (existingOrder) {
-      await api(`/api/order-management/orders/${encodeURIComponent(existingOrder.id)}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ patch: fields, actor: 'Web user' })
-      });
-      if (submitForManufacturing) {
-        await api(`/api/order-management/orders/${encodeURIComponent(existingOrder.id)}/status`, {
-          method: 'POST',
-          body: JSON.stringify({ status: 'Order Placed' })
-        });
-      }
-      showToast(submitForManufacturing ? 'Submitted for manufacturing' : 'Saved — you can finish this later');
-      closePanel();
-      openDetailPanel(existingOrder.id);
-      refreshCurrentView();
-    } else {
-      const poNumber = document.getElementById('fPoNumber').value.trim();
-      if (!poNumber) return showToast('PO number is required', true);
-      const payload = { poNumber, productLine, status: 'New Request', ...fields };
-      await api('/api/order-management/orders', { method: 'POST', body: JSON.stringify(payload) });
-      showToast('Purchase order request created');
-      closePanel();
-      currentTab = productLine;
-      currentView = 'category';
-      currentCategorySubTab = 'orders';
-      render();
-      loadOrders();
-    }
-  } catch (e) { showToast(e.message, true); }
-}
-
-(async function init() {
-  try {
-    const params = new URLSearchParams(location.search);
-    const view = params.get('view');
-    if (view === 'suppliers' || view === 'settlement' || view === 'products' || view === 'components') currentView = view;
-    await Promise.all([loadStatuses(), loadAccessoryStatuses(), loadFileCategories()]);
-    render();
-  } catch (e) {
-    showToast(e.message, true);
-  }
-})();

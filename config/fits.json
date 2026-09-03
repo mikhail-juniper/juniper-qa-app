@@ -1,2225 +1,2225 @@
 {
-  "_readme": "Real approved measurements imported from Juniper - Size Charts.xlsx (Crewnecks, T-Shirt, Hoodie, Jacket, Hat tabs). Values are in inches. Jacket width and Hat circumference are stored as {min,max} ranges (as approved) rather than single points, since that's how they're specified. Edit sizes/points directly here if measurements change - no code changes needed.",
-  "fits": {
-    "crewnecks_standard": {
-      "label_en": "Crewneck - Standard",
-      "label_zh": "\u536b\u8863 - \u6807\u51c6\u6b3e",
-      "group": "crewnecks",
-      "points": [
-        "length",
-        "width",
-        "sleeve"
-      ],
-      "pointLabels": {
-        "length": {
-          "en": "Length",
-          "zh": "\u8863\u957f"
+    "_readme": "Real approved measurements imported from Juniper - Size Charts.xlsx (Crewnecks, T-Shirt, Hoodie, Jacket, Hat tabs). Values are in inches. Jacket width and Hat circumference are stored as {min,max} ranges (as approved) rather than single points, since that's how they're specified. Edit sizes/points directly here if measurements change - no code changes needed.",
+    "fits": {
+        "crewnecks_standard": {
+            "label_en": "Crewneck - Standard",
+            "label_zh": "卫衣 - 标准款",
+            "group": "crewnecks",
+            "points": [
+                "length",
+                "width",
+                "sleeve"
+            ],
+            "pointLabels": {
+                "length": {
+                    "en": "Length",
+                    "zh": "衣长"
+                },
+                "width": {
+                    "en": "Width",
+                    "zh": "胸宽"
+                },
+                "sleeve": {
+                    "en": "Sleeve",
+                    "zh": "袖长"
+                }
+            },
+            "sizes": {
+                "Youth XS (4/5 yrs)": {
+                    "length": 50.8,
+                    "width": 41.1,
+                    "sleeve": 60.5
+                },
+                "Youth S (6/7 yrs)": {
+                    "length": 54.1,
+                    "width": 43.7,
+                    "sleeve": 68.1
+                },
+                "Youth M (8/9 yrs)": {
+                    "length": 57.9,
+                    "width": 46.2,
+                    "sleeve": 71.4
+                },
+                "Youth L (10/11 yrs)": {
+                    "length": 61.7,
+                    "width": 48.8,
+                    "sleeve": 77.7
+                },
+                "Youth XL (12/13 yrs)": {
+                    "length": 65.5,
+                    "width": 51.3,
+                    "sleeve": 84.8
+                },
+                "Adult XS": {
+                    "length": 64.3,
+                    "width": 46.2,
+                    "sleeve": 82.3
+                },
+                "Adult S": {
+                    "length": 66.8,
+                    "width": 51.3,
+                    "sleeve": 84.8
+                },
+                "Adult M": {
+                    "length": 69.3,
+                    "width": 56.6,
+                    "sleeve": 87.4
+                },
+                "Adult L": {
+                    "length": 71.9,
+                    "width": 61.7,
+                    "sleeve": 89.9
+                },
+                "Adult XL": {
+                    "length": 74.7,
+                    "width": 66.8,
+                    "sleeve": 92.5
+                },
+                "Adult 2XL": {
+                    "length": 77.2,
+                    "width": 71.9,
+                    "sleeve": 95.2
+                },
+                "Adult 3XL": {
+                    "length": 79.8,
+                    "width": 77,
+                    "sleeve": 97.5
+                }
+            }
         },
-        "width": {
-          "en": "Width",
-          "zh": "\u80f8\u5bbd"
+        "crewnecks_drop_shoulder": {
+            "label_en": "Crewneck - Drop Shoulder",
+            "label_zh": "卫衣 - 落肩款",
+            "group": "crewnecks",
+            "points": [
+                "length",
+                "width",
+                "sleeve"
+            ],
+            "pointLabels": {
+                "length": {
+                    "en": "Length",
+                    "zh": "衣长"
+                },
+                "width": {
+                    "en": "Width",
+                    "zh": "胸宽"
+                },
+                "sleeve": {
+                    "en": "Sleeve",
+                    "zh": "袖长"
+                }
+            },
+            "sizes": {
+                "Youth XS (4/5 yrs)": {
+                    "length": 50.8,
+                    "width": 41.1,
+                    "sleeve": 60.5
+                },
+                "Youth S (6/7 yrs)": {
+                    "length": 54.1,
+                    "width": 43.7,
+                    "sleeve": 68.1
+                },
+                "Youth M (8/9 yrs)": {
+                    "length": 57.9,
+                    "width": 46.2,
+                    "sleeve": 71.4
+                },
+                "Youth L (10/11 yrs)": {
+                    "length": 61.7,
+                    "width": 48.8,
+                    "sleeve": 77.7
+                },
+                "Youth XL (12/13 yrs)": {
+                    "length": 65.5,
+                    "width": 51.3,
+                    "sleeve": 84.8
+                },
+                "Adult XS": {
+                    "length": 64.3,
+                    "width": 46.2,
+                    "sleeve": 82.3
+                },
+                "Adult S": {
+                    "length": 66.8,
+                    "width": 51.3,
+                    "sleeve": 84.8
+                },
+                "Adult M": {
+                    "length": 69.3,
+                    "width": 56.6,
+                    "sleeve": 87.4
+                },
+                "Adult L": {
+                    "length": 71.9,
+                    "width": 61.7,
+                    "sleeve": 89.9
+                },
+                "Adult XL": {
+                    "length": 74.7,
+                    "width": 66.8,
+                    "sleeve": 92.5
+                },
+                "Adult 2XL": {
+                    "length": 77.2,
+                    "width": 71.9,
+                    "sleeve": 95.2
+                },
+                "Adult 3XL": {
+                    "length": 79.8,
+                    "width": 77,
+                    "sleeve": 97.5
+                }
+            }
         },
-        "sleeve": {
-          "en": "Sleeve",
-          "zh": "\u8896\u957f"
+        "crewnecks_raglan_sleeves": {
+            "label_en": "Crewneck - Raglan Sleeves",
+            "label_zh": "卫衣 - 插肩袖款",
+            "group": "crewnecks",
+            "points": [
+                "length",
+                "width",
+                "sleeve"
+            ],
+            "pointLabels": {
+                "length": {
+                    "en": "Length",
+                    "zh": "衣长"
+                },
+                "width": {
+                    "en": "Width",
+                    "zh": "胸宽"
+                },
+                "sleeve": {
+                    "en": "Sleeve",
+                    "zh": "袖长"
+                }
+            },
+            "sizes": {
+                "Youth XS (4/5 yrs)": {
+                    "length": 50.8,
+                    "width": 41.1,
+                    "sleeve": 60.5
+                },
+                "Youth S (6/7 yrs)": {
+                    "length": 54.1,
+                    "width": 43.7,
+                    "sleeve": 68.1
+                },
+                "Youth M (8/9 yrs)": {
+                    "length": 57.9,
+                    "width": 46.2,
+                    "sleeve": 71.4
+                },
+                "Youth L (10/11 yrs)": {
+                    "length": 61.7,
+                    "width": 48.8,
+                    "sleeve": 77.7
+                },
+                "Youth XL (12/13 yrs)": {
+                    "length": 65.5,
+                    "width": 51.3,
+                    "sleeve": 84.8
+                },
+                "Adult XS": {
+                    "length": 64.3,
+                    "width": 46.2,
+                    "sleeve": 82.3
+                },
+                "Adult S": {
+                    "length": 66.8,
+                    "width": 51.3,
+                    "sleeve": 84.8
+                },
+                "Adult M": {
+                    "length": 69.3,
+                    "width": 56.6,
+                    "sleeve": 87.4
+                },
+                "Adult L": {
+                    "length": 71.9,
+                    "width": 61.7,
+                    "sleeve": 89.9
+                },
+                "Adult XL": {
+                    "length": 74.7,
+                    "width": 66.8,
+                    "sleeve": 92.5
+                },
+                "Adult 2XL": {
+                    "length": 77.2,
+                    "width": 71.9,
+                    "sleeve": 95.2
+                },
+                "Adult 3XL": {
+                    "length": 79.8,
+                    "width": 77,
+                    "sleeve": 97.5
+                }
+            }
+        },
+        "crewnecks_oversized": {
+            "label_en": "Crewneck - Oversized",
+            "label_zh": "卫衣 - 宽松款",
+            "group": "crewnecks",
+            "points": [
+                "length",
+                "width",
+                "sleeve"
+            ],
+            "pointLabels": {
+                "length": {
+                    "en": "Length",
+                    "zh": "衣长"
+                },
+                "width": {
+                    "en": "Width",
+                    "zh": "胸宽"
+                },
+                "sleeve": {
+                    "en": "Sleeve",
+                    "zh": "袖长"
+                }
+            },
+            "sizes": {
+                "Youth XS (4/5 yrs)": {
+                    "length": 63.8,
+                    "width": 43.9,
+                    "sleeve": 52.8
+                },
+                "Youth S (6/7 yrs)": {
+                    "length": 66.3,
+                    "width": 46,
+                    "sleeve": 60.5
+                },
+                "Youth M (8/9 yrs)": {
+                    "length": 67.8,
+                    "width": 48,
+                    "sleeve": 68.1
+                },
+                "Youth L (10/11 yrs)": {
+                    "length": 70.4,
+                    "width": 50,
+                    "sleeve": 75.7
+                },
+                "Youth XL (12/13 yrs)": {
+                    "length": 72.9,
+                    "width": 52.1,
+                    "sleeve": 83.6
+                },
+                "Adult XS": {
+                    "length": 72.9,
+                    "width": 54.1,
+                    "sleeve": 82
+                },
+                "Adult S": {
+                    "length": 75.4,
+                    "width": 59.2,
+                    "sleeve": 84.8
+                },
+                "Adult M": {
+                    "length": 78,
+                    "width": 64.3,
+                    "sleeve": 87.4
+                },
+                "Adult L": {
+                    "length": 79.5,
+                    "width": 69.3,
+                    "sleeve": 89.9
+                },
+                "Adult XL": {
+                    "length": 81.8,
+                    "width": 74.4,
+                    "sleeve": 92.5
+                },
+                "Adult 2XL": {
+                    "length": 84.1,
+                    "width": 79.5,
+                    "sleeve": 95.2
+                },
+                "Adult 3XL": {
+                    "length": 86.4,
+                    "width": 84.6,
+                    "sleeve": 97.5
+                }
+            }
+        },
+        "t_shirt_standard": {
+            "label_en": "T-Shirt - Standard",
+            "label_zh": "T恤 - 标准款",
+            "group": "t_shirt",
+            "points": [
+                "length",
+                "width"
+            ],
+            "pointLabels": {
+                "length": {
+                    "en": "Length",
+                    "zh": "衣长"
+                },
+                "width": {
+                    "en": "Width",
+                    "zh": "胸宽"
+                }
+            },
+            "sizes": {
+                "Youth XS": {
+                    "length": 45.7,
+                    "width": 35.6
+                },
+                "Youth S": {
+                    "length": 52.1,
+                    "width": 40.6
+                },
+                "Youth M": {
+                    "length": 55.9,
+                    "width": 43.2
+                },
+                "Youth L": {
+                    "length": 59.7,
+                    "width": 45.7
+                },
+                "Youth XL": {
+                    "length": 63.5,
+                    "width": 48.3
+                },
+                "Adult XS": {
+                    "length": 68.6,
+                    "width": 40.6
+                },
+                "Adult S": {
+                    "length": 71.1,
+                    "width": 45.7
+                },
+                "Adult M": {
+                    "length": 73.7,
+                    "width": 49.5
+                },
+                "Adult L": {
+                    "length": 76.2,
+                    "width": 55.9
+                },
+                "Adult XL": {
+                    "length": 78.7,
+                    "width": 61
+                },
+                "Adult 2XL": {
+                    "length": 81.3,
+                    "width": 66
+                },
+                "Adult 3XL": {
+                    "length": 83.8,
+                    "width": 71.1
+                },
+                "Adult 4XL": {
+                    "length": 86.4,
+                    "width": 76.2
+                },
+                "Adult 5XL": {
+                    "length": 88.9,
+                    "width": 81.3
+                }
+            }
+        },
+        "t_shirt_longsleeve": {
+            "label_en": "T-Shirt - Longsleeve",
+            "label_zh": "T恤 - 长袖款",
+            "group": "t_shirt",
+            "points": [
+                "length",
+                "width",
+                "sleeve"
+            ],
+            "pointLabels": {
+                "length": {
+                    "en": "Length",
+                    "zh": "衣长"
+                },
+                "width": {
+                    "en": "Width",
+                    "zh": "胸宽"
+                },
+                "sleeve": {
+                    "en": "Sleeve",
+                    "zh": "袖长"
+                }
+            },
+            "sizes": {
+                "Youth XS": {
+                    "length": 45.7,
+                    "width": 35.6,
+                    "sleeve": 52.1
+                },
+                "Youth S": {
+                    "length": 52.1,
+                    "width": 40.6,
+                    "sleeve": 58.4
+                },
+                "Youth M": {
+                    "length": 55.9,
+                    "width": 43.2,
+                    "sleeve": 62.2
+                },
+                "Youth L": {
+                    "length": 59.7,
+                    "width": 45.7,
+                    "sleeve": 67.3
+                },
+                "Youth XL": {
+                    "length": 63.5,
+                    "width": 48.3,
+                    "sleeve": 73.7
+                },
+                "Adult XS": {
+                    "length": 68.6,
+                    "width": 40.6,
+                    "sleeve": 81.3
+                },
+                "Adult S": {
+                    "length": 71.1,
+                    "width": 45.7,
+                    "sleeve": 83.8
+                },
+                "Adult M": {
+                    "length": 73.7,
+                    "width": 49.5,
+                    "sleeve": 86.4
+                },
+                "Adult L": {
+                    "length": 76.2,
+                    "width": 55.9,
+                    "sleeve": 88.9
+                },
+                "Adult XL": {
+                    "length": 78.7,
+                    "width": 61,
+                    "sleeve": 91.4
+                },
+                "Adult 2XL": {
+                    "length": 81.3,
+                    "width": 66,
+                    "sleeve": 94
+                },
+                "Adult 3XL": {
+                    "length": 83.8,
+                    "width": 71.1,
+                    "sleeve": 96.5
+                },
+                "Adult 4XL": {
+                    "length": 86.4,
+                    "width": 76.2,
+                    "sleeve": 0
+                },
+                "Adult 5XL": {
+                    "length": 88.9,
+                    "width": 81.3,
+                    "sleeve": 0
+                }
+            }
+        },
+        "t_shirt_oversized": {
+            "label_en": "T-Shirt - Oversized",
+            "label_zh": "T恤 - 宽松款",
+            "group": "t_shirt",
+            "points": [
+                "length",
+                "width"
+            ],
+            "pointLabels": {
+                "length": {
+                    "en": "Length",
+                    "zh": "衣长"
+                },
+                "width": {
+                    "en": "Width",
+                    "zh": "胸宽"
+                }
+            },
+            "sizes": {
+                "Youth XS": {
+                    "length": 47,
+                    "width": 35.6
+                },
+                "Youth S": {
+                    "length": 52.1,
+                    "width": 38.1
+                },
+                "Youth M": {
+                    "length": 55.9,
+                    "width": 41.9
+                },
+                "Youth L": {
+                    "length": 59.7,
+                    "width": 44.5
+                },
+                "Youth XL": {
+                    "length": 63.5,
+                    "width": 48.3
+                },
+                "Adult XS": {
+                    "length": 72.4,
+                    "width": 54.6
+                },
+                "Adult S": {
+                    "length": 73.7,
+                    "width": 57.1
+                },
+                "Adult M": {
+                    "length": 76.2,
+                    "width": 59.7
+                },
+                "Adult L": {
+                    "length": 77.5,
+                    "width": 63.5
+                },
+                "Adult XL": {
+                    "length": 80,
+                    "width": 68.6
+                },
+                "Adult 2XL": {
+                    "length": 82.5,
+                    "width": 71.1
+                },
+                "Adult 3XL": {
+                    "length": 83.8,
+                    "width": 73.7
+                }
+            }
+        },
+        "t_shirt_streetwear_tee": {
+            "label_en": "T-Shirt - Streetwear Tee",
+            "label_zh": "T恤 - 街头款",
+            "group": "t_shirt",
+            "points": [
+                "length",
+                "width"
+            ],
+            "pointLabels": {
+                "length": {
+                    "en": "Length",
+                    "zh": "衣长"
+                },
+                "width": {
+                    "en": "Width",
+                    "zh": "胸宽"
+                }
+            },
+            "sizes": {
+                "Youth XS": {
+                    "length": 55.9,
+                    "width": 47
+                },
+                "Youth S": {
+                    "length": 59.7,
+                    "width": 48.3
+                },
+                "Youth M": {
+                    "length": 63.5,
+                    "width": 50.8
+                },
+                "Youth L": {
+                    "length": 66,
+                    "width": 52.1
+                },
+                "Youth XL": {
+                    "length": 69.8,
+                    "width": 54.6
+                },
+                "Adult XS": {
+                    "length": 69.8,
+                    "width": 52.1
+                },
+                "Adult S": {
+                    "length": 72.4,
+                    "width": 54.6
+                },
+                "Adult M": {
+                    "length": 73.7,
+                    "width": 55.9
+                },
+                "Adult L": {
+                    "length": 74.9,
+                    "width": 58.4
+                },
+                "Adult XL": {
+                    "length": 77.5,
+                    "width": 61
+                },
+                "Adult 2XL": {
+                    "length": 80,
+                    "width": 63.5
+                },
+                "Adult 3XL": {
+                    "length": 81.3,
+                    "width": 67.3
+                }
+            }
+        },
+        "t_shirt_cropped_tee": {
+            "label_en": "T-Shirt - Cropped Tee",
+            "label_zh": "T恤 - 短款",
+            "group": "t_shirt",
+            "points": [
+                "length",
+                "width"
+            ],
+            "pointLabels": {
+                "length": {
+                    "en": "Length",
+                    "zh": "衣长"
+                },
+                "width": {
+                    "en": "Width",
+                    "zh": "胸宽"
+                }
+            },
+            "sizes": {
+                "Youth XS": {
+                    "length": 33,
+                    "width": 33
+                },
+                "Youth S": {
+                    "length": 35.6,
+                    "width": 35.6
+                },
+                "Youth M": {
+                    "length": 38.1,
+                    "width": 38.1
+                },
+                "Youth L": {
+                    "length": 43.2,
+                    "width": 40.6
+                },
+                "Youth XL": {
+                    "length": 45.7,
+                    "width": 43.2
+                },
+                "Adult XS": {
+                    "length": 47,
+                    "width": 40.6
+                },
+                "Adult S": {
+                    "length": 48.3,
+                    "width": 45.7
+                },
+                "Adult M": {
+                    "length": 50.8,
+                    "width": 50.8
+                },
+                "Adult L": {
+                    "length": 53.3,
+                    "width": 55.9
+                },
+                "Adult XL": {
+                    "length": 55.9,
+                    "width": 61
+                },
+                "Adult 2XL": {
+                    "length": 58.4,
+                    "width": 66
+                },
+                "Adult 3XL": {
+                    "length": 61,
+                    "width": 71.1
+                }
+            }
+        },
+        "t_shirt_women_s_e_sports": {
+            "label_en": "T-Shirt - Women's E-Sports",
+            "label_zh": "T恤 - 女款电竞",
+            "group": "t_shirt",
+            "points": [
+                "length",
+                "width"
+            ],
+            "pointLabels": {
+                "length": {
+                    "en": "Length",
+                    "zh": "衣长"
+                },
+                "width": {
+                    "en": "Width",
+                    "zh": "胸宽"
+                }
+            },
+            "sizes": {
+                "Youth XS": {
+                    "length": 35.6,
+                    "width": 44.5
+                },
+                "Youth S": {
+                    "length": 38.1,
+                    "width": 48.3
+                },
+                "Youth M": {
+                    "length": 40.6,
+                    "width": 52.1
+                },
+                "Youth L": {
+                    "length": 41.9,
+                    "width": 55.9
+                },
+                "Youth XL": {
+                    "length": 43.2,
+                    "width": 59.7
+                },
+                "Adult XS": {
+                    "length": 45.7,
+                    "width": 61
+                },
+                "Adult S": {
+                    "length": 49.5,
+                    "width": 63.5
+                },
+                "Adult M": {
+                    "length": 52.1,
+                    "width": 64.8
+                },
+                "Adult L": {
+                    "length": 54.6,
+                    "width": 67.3
+                },
+                "Adult XL": {
+                    "length": 58.4,
+                    "width": 68.6
+                },
+                "Adult 2XL": {
+                    "length": 61,
+                    "width": 71.1
+                },
+                "Adult 3XL": {
+                    "length": 63.5,
+                    "width": 72.4
+                }
+            }
+        },
+        "t_shirt_collared_shirt": {
+            "label_en": "T-Shirt - Collared Shirt",
+            "label_zh": "T恤 - polo领款",
+            "group": "t_shirt",
+            "points": [
+                "length",
+                "width",
+                "sleeve"
+            ],
+            "pointLabels": {
+                "length": {
+                    "en": "Length",
+                    "zh": "衣长"
+                },
+                "width": {
+                    "en": "Width",
+                    "zh": "胸宽"
+                },
+                "sleeve": {
+                    "en": "Sleeve",
+                    "zh": "袖长"
+                }
+            },
+            "sizes": {
+                "Youth XS": {
+                    "length": 44.5,
+                    "width": 33,
+                    "sleeve": 53.3
+                },
+                "Youth S": {
+                    "length": 48.3,
+                    "width": 35.6,
+                    "sleeve": 59.7
+                },
+                "Youth M": {
+                    "length": 50.8,
+                    "width": 38.1,
+                    "sleeve": 67.3
+                },
+                "Youth L": {
+                    "length": 54.6,
+                    "width": 40.6,
+                    "sleeve": 73.7
+                },
+                "Youth XL": {
+                    "length": 58.4,
+                    "width": 43.2,
+                    "sleeve": 81.3
+                },
+                "Adult XS": {
+                    "length": 68.6,
+                    "width": 40.6,
+                    "sleeve": 81.3
+                },
+                "Adult S": {
+                    "length": 71.1,
+                    "width": 45.7,
+                    "sleeve": 83.8
+                },
+                "Adult M": {
+                    "length": 73.7,
+                    "width": 49.5,
+                    "sleeve": 86.4
+                },
+                "Adult L": {
+                    "length": 76.2,
+                    "width": 55.9,
+                    "sleeve": 88.9
+                },
+                "Adult XL": {
+                    "length": 78.7,
+                    "width": 61,
+                    "sleeve": 91.4
+                },
+                "Adult 2XL": {
+                    "length": 81.3,
+                    "width": 66,
+                    "sleeve": 94
+                },
+                "Adult 3XL": {
+                    "length": 83.8,
+                    "width": 71.1,
+                    "sleeve": 96.5
+                }
+            }
+        },
+        "t_shirt_golf_tee": {
+            "label_en": "T-Shirt - Golf Tee",
+            "label_zh": "T恤 - 高尔夫款",
+            "group": "t_shirt",
+            "points": [
+                "length",
+                "width"
+            ],
+            "pointLabels": {
+                "length": {
+                    "en": "Length",
+                    "zh": "衣长"
+                },
+                "width": {
+                    "en": "Width",
+                    "zh": "胸宽"
+                }
+            },
+            "sizes": {
+                "Youth XS": {
+                    "length": 39.4,
+                    "width": 30.5
+                },
+                "Youth S": {
+                    "length": 41.9,
+                    "width": 34.3
+                },
+                "Youth M": {
+                    "length": 44.5,
+                    "width": 35.6
+                },
+                "Youth L": {
+                    "length": 48.3,
+                    "width": 39.4
+                },
+                "Youth XL": {
+                    "length": 52.1,
+                    "width": 40.6
+                },
+                "Adult XS": {
+                    "length": 61,
+                    "width": 44.5
+                },
+                "Adult S": {
+                    "length": 64.8,
+                    "width": 47
+                },
+                "Adult M": {
+                    "length": 69.8,
+                    "width": 49.5
+                },
+                "Adult L": {
+                    "length": 69.8,
+                    "width": 50.8
+                },
+                "Adult XL": {
+                    "length": 72.4,
+                    "width": 54.6
+                },
+                "Adult 2XL": {
+                    "length": 77.5,
+                    "width": 58.4
+                },
+                "Adult 3XL": {
+                    "length": 80,
+                    "width": 61
+                }
+            }
+        },
+        "t_shirt_standard_tank_top": {
+            "label_en": "T-Shirt - Standard Tank Top",
+            "label_zh": "T恤 - 标准背心款",
+            "group": "t_shirt",
+            "points": [
+                "length",
+                "width",
+                "armholeDepth"
+            ],
+            "pointLabels": {
+                "length": {
+                    "en": "Length",
+                    "zh": "衣长"
+                },
+                "width": {
+                    "en": "Width",
+                    "zh": "胸宽"
+                },
+                "armholeDepth": {
+                    "en": "Armhole Depth",
+                    "zh": "袖窿深"
+                }
+            },
+            "sizes": {
+                "Youth XS": {
+                    "length": 44.5,
+                    "width": 19.1,
+                    "armholeDepth": 19.1
+                },
+                "Youth S": {
+                    "length": 48.3,
+                    "width": 20.3,
+                    "armholeDepth": 20.3
+                },
+                "Youth M": {
+                    "length": 50.8,
+                    "width": 21.6,
+                    "armholeDepth": 21.6
+                },
+                "Youth L": {
+                    "length": 54.6,
+                    "width": 21.6,
+                    "armholeDepth": 21.6
+                },
+                "Youth XL": {
+                    "length": 58.4,
+                    "width": 22.9,
+                    "armholeDepth": 22.9
+                },
+                "Adult XS": {
+                    "length": 68.6,
+                    "width": 24.1,
+                    "armholeDepth": 24.1
+                },
+                "Adult S": {
+                    "length": 71.1,
+                    "width": 25.4,
+                    "armholeDepth": 25.4
+                },
+                "Adult M": {
+                    "length": 73.7,
+                    "width": 27.9,
+                    "armholeDepth": 27.9
+                },
+                "Adult L": {
+                    "length": 76.2,
+                    "width": 30.5,
+                    "armholeDepth": 30.5
+                },
+                "Adult XL": {
+                    "length": 78.7,
+                    "width": 33,
+                    "armholeDepth": 33
+                },
+                "Adult 2XL": {
+                    "length": 81.3,
+                    "width": 34.3,
+                    "armholeDepth": 34.3
+                },
+                "Adult 3XL": {
+                    "length": 83.8,
+                    "width": 36.8,
+                    "armholeDepth": 36.8
+                }
+            }
+        },
+        "hoodie_standard": {
+            "label_en": "Hoodie - Standard",
+            "label_zh": "连帽卫衣 - 标准款",
+            "group": "hoodie",
+            "points": [
+                "length",
+                "width",
+                "sleeve"
+            ],
+            "pointLabels": {
+                "length": {
+                    "en": "Length",
+                    "zh": "衣长"
+                },
+                "width": {
+                    "en": "Width",
+                    "zh": "胸宽"
+                },
+                "sleeve": {
+                    "en": "Sleeve",
+                    "zh": "袖长"
+                }
+            },
+            "sizes": {
+                "Youth XS (4/5 yrs)": {
+                    "length": 50.1,
+                    "width": 40.6,
+                    "sleeve": 59.7
+                },
+                "Youth S (6/7 yrs)": {
+                    "length": 53.5,
+                    "width": 43.2,
+                    "sleeve": 67.3
+                },
+                "Youth M (8/9 yrs)": {
+                    "length": 57.2,
+                    "width": 45.7,
+                    "sleeve": 70.5
+                },
+                "Youth L (10/11 yrs)": {
+                    "length": 61,
+                    "width": 48.3,
+                    "sleeve": 76.8
+                },
+                "Youth XL (12/13 yrs)": {
+                    "length": 64.8,
+                    "width": 50.8,
+                    "sleeve": 83.8
+                },
+                "Adult XS": {
+                    "length": 63.4,
+                    "width": 45.7,
+                    "sleeve": 81.2
+                },
+                "Adult S": {
+                    "length": 66,
+                    "width": 50.8,
+                    "sleeve": 83.8
+                },
+                "Adult M": {
+                    "length": 68.6,
+                    "width": 55.9,
+                    "sleeve": 86.4
+                },
+                "Adult L": {
+                    "length": 71.1,
+                    "width": 61,
+                    "sleeve": 88.9
+                },
+                "Adult XL": {
+                    "length": 73.7,
+                    "width": 66,
+                    "sleeve": 91.4
+                },
+                "Adult 2XL": {
+                    "length": 76.2,
+                    "width": 71.1,
+                    "sleeve": 94
+                },
+                "Adult 3XL": {
+                    "length": 78.7,
+                    "width": 76.1,
+                    "sleeve": 96.5
+                }
+            }
+        },
+        "hoodie_drop_shoulder": {
+            "label_en": "Hoodie - Drop Shoulder",
+            "label_zh": "连帽卫衣 - 落肩款",
+            "group": "hoodie",
+            "points": [
+                "length",
+                "width",
+                "sleeve"
+            ],
+            "pointLabels": {
+                "length": {
+                    "en": "Length",
+                    "zh": "衣长"
+                },
+                "width": {
+                    "en": "Width",
+                    "zh": "胸宽"
+                },
+                "sleeve": {
+                    "en": "Sleeve",
+                    "zh": "袖长"
+                }
+            },
+            "sizes": {
+                "Youth XS (4/5 yrs)": {
+                    "length": 50.1,
+                    "width": 40.6,
+                    "sleeve": 59.7
+                },
+                "Youth S (6/7 yrs)": {
+                    "length": 53.5,
+                    "width": 43.2,
+                    "sleeve": 67.3
+                },
+                "Youth M (8/9 yrs)": {
+                    "length": 57.2,
+                    "width": 45.7,
+                    "sleeve": 70.5
+                },
+                "Youth L (10/11 yrs)": {
+                    "length": 61,
+                    "width": 48.3,
+                    "sleeve": 76.8
+                },
+                "Youth XL (12/13 yrs)": {
+                    "length": 64.8,
+                    "width": 50.8,
+                    "sleeve": 83.8
+                },
+                "Adult XS": {
+                    "length": 63.4,
+                    "width": 45.7,
+                    "sleeve": 81.2
+                },
+                "Adult S": {
+                    "length": 66,
+                    "width": 50.8,
+                    "sleeve": 83.8
+                },
+                "Adult M": {
+                    "length": 68.6,
+                    "width": 55.9,
+                    "sleeve": 86.4
+                },
+                "Adult L": {
+                    "length": 71.1,
+                    "width": 61,
+                    "sleeve": 88.9
+                },
+                "Adult XL": {
+                    "length": 73.7,
+                    "width": 66,
+                    "sleeve": 91.4
+                },
+                "Adult 2XL": {
+                    "length": 76.2,
+                    "width": 71.1,
+                    "sleeve": 94
+                },
+                "Adult 3XL": {
+                    "length": 78.7,
+                    "width": 76.1,
+                    "sleeve": 96.5
+                }
+            }
+        },
+        "hoodie_raglan_sleeve": {
+            "label_en": "Hoodie - Raglan Sleeve",
+            "label_zh": "连帽卫衣 - 插肩袖款",
+            "group": "hoodie",
+            "points": [
+                "length",
+                "width",
+                "sleeve"
+            ],
+            "pointLabels": {
+                "length": {
+                    "en": "Length",
+                    "zh": "衣长"
+                },
+                "width": {
+                    "en": "Width",
+                    "zh": "胸宽"
+                },
+                "sleeve": {
+                    "en": "Sleeve",
+                    "zh": "袖长"
+                }
+            },
+            "sizes": {
+                "Youth XS (4/5 yrs)": {
+                    "length": 50.1,
+                    "width": 40.6,
+                    "sleeve": 59.7
+                },
+                "Youth S (6/7 yrs)": {
+                    "length": 53.5,
+                    "width": 43.2,
+                    "sleeve": 67.3
+                },
+                "Youth M (8/9 yrs)": {
+                    "length": 57.2,
+                    "width": 45.7,
+                    "sleeve": 70.5
+                },
+                "Youth L (10/11 yrs)": {
+                    "length": 61,
+                    "width": 48.3,
+                    "sleeve": 76.8
+                },
+                "Youth XL (12/13 yrs)": {
+                    "length": 64.8,
+                    "width": 50.8,
+                    "sleeve": 83.8
+                },
+                "Adult XS": {
+                    "length": 63.4,
+                    "width": 45.7,
+                    "sleeve": 81.2
+                },
+                "Adult S": {
+                    "length": 66,
+                    "width": 50.8,
+                    "sleeve": 83.8
+                },
+                "Adult M": {
+                    "length": 68.6,
+                    "width": 55.9,
+                    "sleeve": 86.4
+                },
+                "Adult L": {
+                    "length": 71.1,
+                    "width": 61,
+                    "sleeve": 88.9
+                },
+                "Adult XL": {
+                    "length": 73.7,
+                    "width": 66,
+                    "sleeve": 91.4
+                },
+                "Adult 2XL": {
+                    "length": 76.2,
+                    "width": 71.1,
+                    "sleeve": 94
+                },
+                "Adult 3XL": {
+                    "length": 78.7,
+                    "width": 76.1,
+                    "sleeve": 96.5
+                }
+            }
+        },
+        "hoodie_hidden_pockets_2": {
+            "label_en": "Hoodie - Hidden Pockets (2)",
+            "label_zh": "连帽卫衣 - 暗袋款",
+            "group": "hoodie",
+            "points": [
+                "length",
+                "width",
+                "sleeve"
+            ],
+            "pointLabels": {
+                "length": {
+                    "en": "Length",
+                    "zh": "衣长"
+                },
+                "width": {
+                    "en": "Width",
+                    "zh": "胸宽"
+                },
+                "sleeve": {
+                    "en": "Sleeve",
+                    "zh": "袖长"
+                }
+            },
+            "sizes": {
+                "Youth XS (4/5 yrs)": {
+                    "length": 50.1,
+                    "width": 40.6,
+                    "sleeve": 59.7
+                },
+                "Youth S (6/7 yrs)": {
+                    "length": 53.5,
+                    "width": 43.2,
+                    "sleeve": 67.3
+                },
+                "Youth M (8/9 yrs)": {
+                    "length": 57.2,
+                    "width": 45.7,
+                    "sleeve": 70.5
+                },
+                "Youth L (10/11 yrs)": {
+                    "length": 61,
+                    "width": 48.3,
+                    "sleeve": 76.8
+                },
+                "Youth XL (12/13 yrs)": {
+                    "length": 64.8,
+                    "width": 50.8,
+                    "sleeve": 83.8
+                },
+                "Adult XS": {
+                    "length": 63.4,
+                    "width": 45.7,
+                    "sleeve": 81.2
+                },
+                "Adult S": {
+                    "length": 66,
+                    "width": 50.8,
+                    "sleeve": 83.8
+                },
+                "Adult M": {
+                    "length": 68.6,
+                    "width": 55.9,
+                    "sleeve": 86.4
+                },
+                "Adult L": {
+                    "length": 71.1,
+                    "width": 61,
+                    "sleeve": 88.9
+                },
+                "Adult XL": {
+                    "length": 73.7,
+                    "width": 66,
+                    "sleeve": 91.4
+                },
+                "Adult 2XL": {
+                    "length": 76.2,
+                    "width": 71.1,
+                    "sleeve": 94
+                },
+                "Adult 3XL": {
+                    "length": 78.7,
+                    "width": 76.1,
+                    "sleeve": 96.5
+                }
+            }
+        },
+        "hoodie_no_pocket_standard": {
+            "label_en": "Hoodie - No Pocket Standard",
+            "label_zh": "连帽卫衣 - 无口袋标准款",
+            "group": "hoodie",
+            "points": [
+                "length",
+                "width",
+                "sleeve"
+            ],
+            "pointLabels": {
+                "length": {
+                    "en": "Length",
+                    "zh": "衣长"
+                },
+                "width": {
+                    "en": "Width",
+                    "zh": "胸宽"
+                },
+                "sleeve": {
+                    "en": "Sleeve",
+                    "zh": "袖长"
+                }
+            },
+            "sizes": {
+                "Youth XS (4/5 yrs)": {
+                    "length": 50.1,
+                    "width": 40.6,
+                    "sleeve": 59.7
+                },
+                "Youth S (6/7 yrs)": {
+                    "length": 53.5,
+                    "width": 43.2,
+                    "sleeve": 67.3
+                },
+                "Youth M (8/9 yrs)": {
+                    "length": 57.2,
+                    "width": 45.7,
+                    "sleeve": 70.5
+                },
+                "Youth L (10/11 yrs)": {
+                    "length": 61,
+                    "width": 48.3,
+                    "sleeve": 76.8
+                },
+                "Youth XL (12/13 yrs)": {
+                    "length": 64.8,
+                    "width": 50.8,
+                    "sleeve": 83.8
+                },
+                "Adult XS": {
+                    "length": 63.4,
+                    "width": 45.7,
+                    "sleeve": 81.2
+                },
+                "Adult S": {
+                    "length": 66,
+                    "width": 50.8,
+                    "sleeve": 83.8
+                },
+                "Adult M": {
+                    "length": 68.6,
+                    "width": 55.9,
+                    "sleeve": 86.4
+                },
+                "Adult L": {
+                    "length": 71.1,
+                    "width": 61,
+                    "sleeve": 88.9
+                },
+                "Adult XL": {
+                    "length": 73.7,
+                    "width": 66,
+                    "sleeve": 91.4
+                },
+                "Adult 2XL": {
+                    "length": 76.2,
+                    "width": 71.1,
+                    "sleeve": 94
+                },
+                "Adult 3XL": {
+                    "length": 78.7,
+                    "width": 76.1,
+                    "sleeve": 96.5
+                }
+            }
+        },
+        "hoodie_oversized": {
+            "label_en": "Hoodie - Oversized",
+            "label_zh": "连帽卫衣 - 宽松款",
+            "group": "hoodie",
+            "points": [
+                "length",
+                "width",
+                "sleeve"
+            ],
+            "pointLabels": {
+                "length": {
+                    "en": "Length",
+                    "zh": "衣长"
+                },
+                "width": {
+                    "en": "Width",
+                    "zh": "胸宽"
+                },
+                "sleeve": {
+                    "en": "Sleeve",
+                    "zh": "袖长"
+                }
+            },
+            "sizes": {
+                "Youth XS": {
+                    "length": 61.5,
+                    "width": 43.5,
+                    "sleeve": 54.5
+                },
+                "Youth S": {
+                    "length": 63,
+                    "width": 45.5,
+                    "sleeve": 62.2
+                },
+                "Youth M": {
+                    "length": 65.5,
+                    "width": 47.5,
+                    "sleeve": 69.8
+                },
+                "Youth L": {
+                    "length": 67,
+                    "width": 49.5,
+                    "sleeve": 77.4
+                },
+                "Youth XL": {
+                    "length": 69.5,
+                    "width": 51.5,
+                    "sleeve": 83.7
+                },
+                "Adult XS": {
+                    "length": 72,
+                    "width": 53.5,
+                    "sleeve": 85.1
+                },
+                "Adult S": {
+                    "length": 74.5,
+                    "width": 58.5,
+                    "sleeve": 86.3
+                },
+                "Adult M": {
+                    "length": 77,
+                    "width": 63.5,
+                    "sleeve": 88.9
+                },
+                "Adult L": {
+                    "length": 78.5,
+                    "width": 68.5,
+                    "sleeve": 91.4
+                },
+                "Adult XL": {
+                    "length": 80.7,
+                    "width": 73.5,
+                    "sleeve": 93.9
+                },
+                "Adult 2XL": {
+                    "length": 83,
+                    "width": 78.5,
+                    "sleeve": 96.5
+                },
+                "Adult 3XL": {
+                    "length": 85.5,
+                    "width": 83.5,
+                    "sleeve": 99
+                }
+            }
+        },
+        "hoodie_split_sleeves": {
+            "label_en": "Hoodie - Split Sleeves",
+            "label_zh": "连帽卫衣 - 拼接袖款",
+            "group": "hoodie",
+            "points": [
+                "length",
+                "width",
+                "sleeve"
+            ],
+            "pointLabels": {
+                "length": {
+                    "en": "Length",
+                    "zh": "衣长"
+                },
+                "width": {
+                    "en": "Width",
+                    "zh": "胸宽"
+                },
+                "sleeve": {
+                    "en": "Sleeve",
+                    "zh": "袖长"
+                }
+            },
+            "sizes": {
+                "Youth XS (4/5 yrs)": {
+                    "length": 50.1,
+                    "width": 40.6,
+                    "sleeve": 59.7
+                },
+                "Youth S (6/7 yrs)": {
+                    "length": 53.5,
+                    "width": 43.2,
+                    "sleeve": 67.3
+                },
+                "Youth M (8/9 yrs)": {
+                    "length": 57.2,
+                    "width": 45.7,
+                    "sleeve": 70.5
+                },
+                "Youth L (10/11 yrs)": {
+                    "length": 61,
+                    "width": 48.3,
+                    "sleeve": 76.8
+                },
+                "Youth XL (12/13 yrs)": {
+                    "length": 64.8,
+                    "width": 50.8,
+                    "sleeve": 83.8
+                },
+                "Adult XS": {
+                    "length": 63.4,
+                    "width": 45.7,
+                    "sleeve": 81.2
+                },
+                "Adult S": {
+                    "length": 66,
+                    "width": 50.8,
+                    "sleeve": 83.8
+                },
+                "Adult M": {
+                    "length": 68.6,
+                    "width": 55.9,
+                    "sleeve": 86.4
+                },
+                "Adult L": {
+                    "length": 71.1,
+                    "width": 61,
+                    "sleeve": 88.9
+                },
+                "Adult XL": {
+                    "length": 73.7,
+                    "width": 66,
+                    "sleeve": 91.4
+                },
+                "Adult 2XL": {
+                    "length": 76.2,
+                    "width": 71.1,
+                    "sleeve": 94
+                },
+                "Adult 3XL": {
+                    "length": 78.7,
+                    "width": 76.1,
+                    "sleeve": 96.5
+                }
+            }
+        },
+        "varsity_jacket": {
+            "label_en": "Varsity Jacket",
+            "label_zh": "棒球夹克",
+            "group": "jacket",
+            "points": [
+                "length",
+                "width",
+                "sleeve"
+            ],
+            "pointLabels": {
+                "length": {
+                    "en": "Length",
+                    "zh": "衣长"
+                },
+                "width": {
+                    "en": "Width",
+                    "zh": "胸宽"
+                },
+                "sleeve": {
+                    "en": "Sleeve",
+                    "zh": "袖长"
+                }
+            },
+            "sizes": {
+                "Youth XS": {
+                    "length": 50.8,
+                    "width": {
+                        "min": 82.5,
+                        "max": 86.4
+                    },
+                    "sleeve": 56.1
+                },
+                "Youth S": {
+                    "length": 52.1,
+                    "width": {
+                        "min": 87.6,
+                        "max": 91.4
+                    },
+                    "sleeve": 58.4
+                },
+                "Youth M": {
+                    "length": 55.9,
+                    "width": {
+                        "min": 92.7,
+                        "max": 96.5
+                    },
+                    "sleeve": 64.8
+                },
+                "Youth L": {
+                    "length": 59.7,
+                    "width": {
+                        "min": 97.8,
+                        "max": 101.6
+                    },
+                    "sleeve": 72.1
+                },
+                "Youth XL": {
+                    "length": 63.5,
+                    "width": {
+                        "min": 105.4,
+                        "max": 109.2
+                    },
+                    "sleeve": 75.7
+                },
+                "Adult XS": {
+                    "length": 63.8,
+                    "width": {
+                        "min": 110.5,
+                        "max": 113
+                    },
+                    "sleeve": 86.6
+                },
+                "Adult S": {
+                    "length": 66,
+                    "width": {
+                        "min": 114.3,
+                        "max": 118.1
+                    },
+                    "sleeve": 87.6
+                },
+                "Adult M": {
+                    "length": 68.6,
+                    "width": {
+                        "min": 119.4,
+                        "max": 123.2
+                    },
+                    "sleeve": 88.9
+                },
+                "Adult L": {
+                    "length": 71.1,
+                    "width": {
+                        "min": 124.5,
+                        "max": 128.3
+                    },
+                    "sleeve": 90.2
+                },
+                "Adult XL": {
+                    "length": 73.7,
+                    "width": {
+                        "min": 129.5,
+                        "max": 133.3
+                    },
+                    "sleeve": 91.4
+                },
+                "Adult 2XL": {
+                    "length": 76.2,
+                    "width": {
+                        "min": 134.6,
+                        "max": 138.4
+                    },
+                    "sleeve": 92.7
+                },
+                "Adult 3XL": {
+                    "length": 78.7,
+                    "width": {
+                        "min": 139.7,
+                        "max": 144.8
+                    },
+                    "sleeve": 94
+                }
+            }
+        },
+        "bomber_jacket": {
+            "label_en": "Bomber Jacket",
+            "label_zh": "飞行员夹克",
+            "group": "jacket",
+            "points": [
+                "length",
+                "width",
+                "sleeve"
+            ],
+            "pointLabels": {
+                "length": {
+                    "en": "Length",
+                    "zh": "衣长"
+                },
+                "width": {
+                    "en": "Width",
+                    "zh": "胸宽"
+                },
+                "sleeve": {
+                    "en": "Sleeve",
+                    "zh": "袖长"
+                }
+            },
+            "sizes": {
+                "Youth XS": {
+                    "length": 50.8,
+                    "width": {
+                        "min": 82.5,
+                        "max": 86.4
+                    },
+                    "sleeve": 56.1
+                },
+                "Youth S": {
+                    "length": 52.1,
+                    "width": {
+                        "min": 87.6,
+                        "max": 91.4
+                    },
+                    "sleeve": 58.4
+                },
+                "Youth M": {
+                    "length": 55.9,
+                    "width": {
+                        "min": 92.7,
+                        "max": 96.5
+                    },
+                    "sleeve": 64.8
+                },
+                "Youth L": {
+                    "length": 59.7,
+                    "width": {
+                        "min": 97.8,
+                        "max": 101.6
+                    },
+                    "sleeve": 72.1
+                },
+                "Youth XL": {
+                    "length": 63.5,
+                    "width": {
+                        "min": 105.4,
+                        "max": 109.2
+                    },
+                    "sleeve": 75.7
+                },
+                "Adult XS": {
+                    "length": 63.8,
+                    "width": {
+                        "min": 110.5,
+                        "max": 113
+                    },
+                    "sleeve": 86.6
+                },
+                "Adult S": {
+                    "length": 66,
+                    "width": {
+                        "min": 114.3,
+                        "max": 118.1
+                    },
+                    "sleeve": 87.6
+                },
+                "Adult M": {
+                    "length": 68.6,
+                    "width": {
+                        "min": 119.4,
+                        "max": 123.2
+                    },
+                    "sleeve": 88.9
+                },
+                "Adult L": {
+                    "length": 71.1,
+                    "width": {
+                        "min": 124.5,
+                        "max": 128.3
+                    },
+                    "sleeve": 90.2
+                },
+                "Adult XL": {
+                    "length": 73.7,
+                    "width": {
+                        "min": 129.5,
+                        "max": 133.3
+                    },
+                    "sleeve": 91.4
+                },
+                "Adult 2XL": {
+                    "length": 76.2,
+                    "width": {
+                        "min": 134.6,
+                        "max": 138.4
+                    },
+                    "sleeve": 92.7
+                },
+                "Adult 3XL": {
+                    "length": 78.7,
+                    "width": {
+                        "min": 139.7,
+                        "max": 144.8
+                    },
+                    "sleeve": 94
+                }
+            }
+        },
+        "fleece_jacket": {
+            "label_en": "Fleece Jacket",
+            "label_zh": "抓绒夹克",
+            "group": "jacket",
+            "points": [
+                "length",
+                "width",
+                "sleeve"
+            ],
+            "pointLabels": {
+                "length": {
+                    "en": "Length",
+                    "zh": "衣长"
+                },
+                "width": {
+                    "en": "Width",
+                    "zh": "胸宽"
+                },
+                "sleeve": {
+                    "en": "Sleeve",
+                    "zh": "袖长"
+                }
+            },
+            "sizes": {
+                "Youth XS": {
+                    "length": 50.8,
+                    "width": {
+                        "min": 82.5,
+                        "max": 86.4
+                    },
+                    "sleeve": 56.1
+                },
+                "Youth S": {
+                    "length": 52.1,
+                    "width": {
+                        "min": 87.6,
+                        "max": 91.4
+                    },
+                    "sleeve": 58.4
+                },
+                "Youth M": {
+                    "length": 55.9,
+                    "width": {
+                        "min": 92.7,
+                        "max": 96.5
+                    },
+                    "sleeve": 64.8
+                },
+                "Youth L": {
+                    "length": 59.7,
+                    "width": {
+                        "min": 97.8,
+                        "max": 101.6
+                    },
+                    "sleeve": 72.1
+                },
+                "Youth XL": {
+                    "length": 63.5,
+                    "width": {
+                        "min": 105.4,
+                        "max": 109.2
+                    },
+                    "sleeve": 75.7
+                },
+                "Adult XS": {
+                    "length": 63.8,
+                    "width": {
+                        "min": 110.5,
+                        "max": 113
+                    },
+                    "sleeve": 86.6
+                },
+                "Adult S": {
+                    "length": 66,
+                    "width": {
+                        "min": 114.3,
+                        "max": 118.1
+                    },
+                    "sleeve": 87.6
+                },
+                "Adult M": {
+                    "length": 68.6,
+                    "width": {
+                        "min": 119.4,
+                        "max": 123.2
+                    },
+                    "sleeve": 88.9
+                },
+                "Adult L": {
+                    "length": 71.1,
+                    "width": {
+                        "min": 124.5,
+                        "max": 128.3
+                    },
+                    "sleeve": 90.2
+                },
+                "Adult XL": {
+                    "length": 73.7,
+                    "width": {
+                        "min": 129.5,
+                        "max": 133.3
+                    },
+                    "sleeve": 91.4
+                },
+                "Adult 2XL": {
+                    "length": 76.2,
+                    "width": {
+                        "min": 134.6,
+                        "max": 138.4
+                    },
+                    "sleeve": 92.7
+                },
+                "Adult 3XL": {
+                    "length": 78.7,
+                    "width": {
+                        "min": 139.7,
+                        "max": 144.8
+                    },
+                    "sleeve": 94
+                }
+            }
+        },
+        "panelled_fleece_jacket": {
+            "label_en": "Panelled Fleece Jacket",
+            "label_zh": "拼接抓绒夹克",
+            "group": "jacket",
+            "points": [
+                "length",
+                "width",
+                "sleeve"
+            ],
+            "pointLabels": {
+                "length": {
+                    "en": "Length",
+                    "zh": "衣长"
+                },
+                "width": {
+                    "en": "Width",
+                    "zh": "胸宽"
+                },
+                "sleeve": {
+                    "en": "Sleeve",
+                    "zh": "袖长"
+                }
+            },
+            "sizes": {
+                "Youth XS": {
+                    "length": 50.8,
+                    "width": {
+                        "min": 82.5,
+                        "max": 86.4
+                    },
+                    "sleeve": 56.1
+                },
+                "Youth S": {
+                    "length": 52.1,
+                    "width": {
+                        "min": 87.6,
+                        "max": 91.4
+                    },
+                    "sleeve": 58.4
+                },
+                "Youth M": {
+                    "length": 55.9,
+                    "width": {
+                        "min": 92.7,
+                        "max": 96.5
+                    },
+                    "sleeve": 64.8
+                },
+                "Youth L": {
+                    "length": 59.7,
+                    "width": {
+                        "min": 97.8,
+                        "max": 101.6
+                    },
+                    "sleeve": 72.1
+                },
+                "Youth XL": {
+                    "length": 63.5,
+                    "width": {
+                        "min": 105.4,
+                        "max": 109.2
+                    },
+                    "sleeve": 75.7
+                },
+                "Adult XS": {
+                    "length": 63.8,
+                    "width": {
+                        "min": 110.5,
+                        "max": 113
+                    },
+                    "sleeve": 86.6
+                },
+                "Adult S": {
+                    "length": 66,
+                    "width": {
+                        "min": 114.3,
+                        "max": 118.1
+                    },
+                    "sleeve": 87.6
+                },
+                "Adult M": {
+                    "length": 68.6,
+                    "width": {
+                        "min": 119.4,
+                        "max": 123.2
+                    },
+                    "sleeve": 88.9
+                },
+                "Adult L": {
+                    "length": 71.1,
+                    "width": {
+                        "min": 124.5,
+                        "max": 128.3
+                    },
+                    "sleeve": 90.2
+                },
+                "Adult XL": {
+                    "length": 73.7,
+                    "width": {
+                        "min": 129.5,
+                        "max": 133.3
+                    },
+                    "sleeve": 91.4
+                },
+                "Adult 2XL": {
+                    "length": 76.2,
+                    "width": {
+                        "min": 134.6,
+                        "max": 138.4
+                    },
+                    "sleeve": 92.7
+                },
+                "Adult 3XL": {
+                    "length": 78.7,
+                    "width": {
+                        "min": 139.7,
+                        "max": 144.8
+                    },
+                    "sleeve": 94
+                }
+            }
+        },
+        "sherpa_jacket_youth": {
+            "label_en": "Sherpa Jacket Youth",
+            "label_zh": "儿童羊羔绒夹克",
+            "group": "jacket",
+            "points": [
+                "length",
+                "width",
+                "sleeve"
+            ],
+            "pointLabels": {
+                "length": {
+                    "en": "Length",
+                    "zh": "衣长"
+                },
+                "width": {
+                    "en": "Width",
+                    "zh": "胸宽"
+                },
+                "sleeve": {
+                    "en": "Sleeve",
+                    "zh": "袖长"
+                }
+            },
+            "sizes": {
+                "Youth XS": {
+                    "length": 43.2,
+                    "width": 38.1,
+                    "sleeve": 58.4
+                },
+                "Youth S": {
+                    "length": 48.3,
+                    "width": 43.2,
+                    "sleeve": 63.5
+                },
+                "Youth M": {
+                    "length": 53.3,
+                    "width": 48.3,
+                    "sleeve": 68.6
+                },
+                "Youth L": {
+                    "length": 58.4,
+                    "width": 53.3,
+                    "sleeve": 73.7
+                },
+                "Youth XL": {
+                    "length": 63.5,
+                    "width": 58.4,
+                    "sleeve": 78.7
+                }
+            }
+        },
+        "hat_standard": {
+            "label_en": "Hat - Standard",
+            "label_zh": "帽子 - 标准款",
+            "group": "hat",
+            "points": [
+                "circumference"
+            ],
+            "pointLabels": {
+                "circumference": {
+                    "en": "Circumference",
+                    "zh": "围度"
+                }
+            },
+            "sizes": {
+                "Youth (6-12 yrs)": {
+                    "circumference": {
+                        "min": 53.3,
+                        "max": 55.9
+                    }
+                },
+                "Adult": {
+                    "circumference": {
+                        "min": 55.9,
+                        "max": 61
+                    }
+                }
+            }
         }
-      },
-      "sizes": {
-        "Youth XS (4/5 yrs)": {
-          "length": 50.8,
-          "width": 41.1,
-          "sleeve": 60.5
-        },
-        "Youth S (6/7 yrs)": {
-          "length": 54.1,
-          "width": 43.7,
-          "sleeve": 68.1
-        },
-        "Youth M (8/9 yrs)": {
-          "length": 57.9,
-          "width": 46.2,
-          "sleeve": 71.4
-        },
-        "Youth L (10/11 yrs)": {
-          "length": 61.7,
-          "width": 48.8,
-          "sleeve": 77.7
-        },
-        "Youth XL (12/13 yrs)": {
-          "length": 65.5,
-          "width": 51.3,
-          "sleeve": 84.8
-        },
-        "Adult XS": {
-          "length": 64.3,
-          "width": 46.2,
-          "sleeve": 82.3
-        },
-        "Adult S": {
-          "length": 66.8,
-          "width": 51.3,
-          "sleeve": 84.8
-        },
-        "Adult M": {
-          "length": 69.3,
-          "width": 56.6,
-          "sleeve": 87.4
-        },
-        "Adult L": {
-          "length": 71.9,
-          "width": 61.7,
-          "sleeve": 89.9
-        },
-        "Adult XL": {
-          "length": 74.7,
-          "width": 66.8,
-          "sleeve": 92.5
-        },
-        "Adult 2XL": {
-          "length": 77.2,
-          "width": 71.9,
-          "sleeve": 95.2
-        },
-        "Adult 3XL": {
-          "length": 79.8,
-          "width": 77.0,
-          "sleeve": 97.5
-        }
-      }
     },
-    "crewnecks_drop_shoulder": {
-      "label_en": "Crewneck - Drop Shoulder",
-      "label_zh": "\u536b\u8863 - \u843d\u80a9\u6b3e",
-      "group": "crewnecks",
-      "points": [
-        "length",
-        "width",
-        "sleeve"
-      ],
-      "pointLabels": {
-        "length": {
-          "en": "Length",
-          "zh": "\u8863\u957f"
-        },
-        "width": {
-          "en": "Width",
-          "zh": "\u80f8\u5bbd"
-        },
-        "sleeve": {
-          "en": "Sleeve",
-          "zh": "\u8896\u957f"
-        }
-      },
-      "sizes": {
-        "Youth XS (4/5 yrs)": {
-          "length": 50.8,
-          "width": 41.1,
-          "sleeve": 60.5
-        },
-        "Youth S (6/7 yrs)": {
-          "length": 54.1,
-          "width": 43.7,
-          "sleeve": 68.1
-        },
-        "Youth M (8/9 yrs)": {
-          "length": 57.9,
-          "width": 46.2,
-          "sleeve": 71.4
-        },
-        "Youth L (10/11 yrs)": {
-          "length": 61.7,
-          "width": 48.8,
-          "sleeve": 77.7
-        },
-        "Youth XL (12/13 yrs)": {
-          "length": 65.5,
-          "width": 51.3,
-          "sleeve": 84.8
-        },
-        "Adult XS": {
-          "length": 64.3,
-          "width": 46.2,
-          "sleeve": 82.3
-        },
-        "Adult S": {
-          "length": 66.8,
-          "width": 51.3,
-          "sleeve": 84.8
-        },
-        "Adult M": {
-          "length": 69.3,
-          "width": 56.6,
-          "sleeve": 87.4
-        },
-        "Adult L": {
-          "length": 71.9,
-          "width": 61.7,
-          "sleeve": 89.9
-        },
-        "Adult XL": {
-          "length": 74.7,
-          "width": 66.8,
-          "sleeve": 92.5
-        },
-        "Adult 2XL": {
-          "length": 77.2,
-          "width": 71.9,
-          "sleeve": 95.2
-        },
-        "Adult 3XL": {
-          "length": 79.8,
-          "width": 77.0,
-          "sleeve": 97.5
-        }
-      }
-    },
-    "crewnecks_raglan_sleeves": {
-      "label_en": "Crewneck - Raglan Sleeves",
-      "label_zh": "\u536b\u8863 - \u63d2\u80a9\u8896\u6b3e",
-      "group": "crewnecks",
-      "points": [
-        "length",
-        "width",
-        "sleeve"
-      ],
-      "pointLabels": {
-        "length": {
-          "en": "Length",
-          "zh": "\u8863\u957f"
-        },
-        "width": {
-          "en": "Width",
-          "zh": "\u80f8\u5bbd"
-        },
-        "sleeve": {
-          "en": "Sleeve",
-          "zh": "\u8896\u957f"
-        }
-      },
-      "sizes": {
-        "Youth XS (4/5 yrs)": {
-          "length": 50.8,
-          "width": 41.1,
-          "sleeve": 60.5
-        },
-        "Youth S (6/7 yrs)": {
-          "length": 54.1,
-          "width": 43.7,
-          "sleeve": 68.1
-        },
-        "Youth M (8/9 yrs)": {
-          "length": 57.9,
-          "width": 46.2,
-          "sleeve": 71.4
-        },
-        "Youth L (10/11 yrs)": {
-          "length": 61.7,
-          "width": 48.8,
-          "sleeve": 77.7
-        },
-        "Youth XL (12/13 yrs)": {
-          "length": 65.5,
-          "width": 51.3,
-          "sleeve": 84.8
-        },
-        "Adult XS": {
-          "length": 64.3,
-          "width": 46.2,
-          "sleeve": 82.3
-        },
-        "Adult S": {
-          "length": 66.8,
-          "width": 51.3,
-          "sleeve": 84.8
-        },
-        "Adult M": {
-          "length": 69.3,
-          "width": 56.6,
-          "sleeve": 87.4
-        },
-        "Adult L": {
-          "length": 71.9,
-          "width": 61.7,
-          "sleeve": 89.9
-        },
-        "Adult XL": {
-          "length": 74.7,
-          "width": 66.8,
-          "sleeve": 92.5
-        },
-        "Adult 2XL": {
-          "length": 77.2,
-          "width": 71.9,
-          "sleeve": 95.2
-        },
-        "Adult 3XL": {
-          "length": 79.8,
-          "width": 77.0,
-          "sleeve": 97.5
-        }
-      }
-    },
-    "crewnecks_oversized": {
-      "label_en": "Crewneck - Oversized",
-      "label_zh": "\u536b\u8863 - \u5bbd\u677e\u6b3e",
-      "group": "crewnecks",
-      "points": [
-        "length",
-        "width",
-        "sleeve"
-      ],
-      "pointLabels": {
-        "length": {
-          "en": "Length",
-          "zh": "\u8863\u957f"
-        },
-        "width": {
-          "en": "Width",
-          "zh": "\u80f8\u5bbd"
-        },
-        "sleeve": {
-          "en": "Sleeve",
-          "zh": "\u8896\u957f"
-        }
-      },
-      "sizes": {
-        "Youth XS (4/5 yrs)": {
-          "length": 63.8,
-          "width": 43.9,
-          "sleeve": 52.8
-        },
-        "Youth S (6/7 yrs)": {
-          "length": 66.3,
-          "width": 46.0,
-          "sleeve": 60.5
-        },
-        "Youth M (8/9 yrs)": {
-          "length": 67.8,
-          "width": 48.0,
-          "sleeve": 68.1
-        },
-        "Youth L (10/11 yrs)": {
-          "length": 70.4,
-          "width": 50.0,
-          "sleeve": 75.7
-        },
-        "Youth XL (12/13 yrs)": {
-          "length": 72.9,
-          "width": 52.1,
-          "sleeve": 83.6
-        },
-        "Adult XS": {
-          "length": 72.9,
-          "width": 54.1,
-          "sleeve": 82.0
-        },
-        "Adult S": {
-          "length": 75.4,
-          "width": 59.2,
-          "sleeve": 84.8
-        },
-        "Adult M": {
-          "length": 78.0,
-          "width": 64.3,
-          "sleeve": 87.4
-        },
-        "Adult L": {
-          "length": 79.5,
-          "width": 69.3,
-          "sleeve": 89.9
-        },
-        "Adult XL": {
-          "length": 81.8,
-          "width": 74.4,
-          "sleeve": 92.5
-        },
-        "Adult 2XL": {
-          "length": 84.1,
-          "width": 79.5,
-          "sleeve": 95.2
-        },
-        "Adult 3XL": {
-          "length": 86.4,
-          "width": 84.6,
-          "sleeve": 97.5
-        }
-      }
-    },
-    "t_shirt_standard": {
-      "label_en": "T-Shirt - Standard",
-      "label_zh": "T\u6064 - \u6807\u51c6\u6b3e",
-      "group": "t_shirt",
-      "points": [
-        "length",
-        "width"
-      ],
-      "pointLabels": {
-        "length": {
-          "en": "Length",
-          "zh": "\u8863\u957f"
-        },
-        "width": {
-          "en": "Width",
-          "zh": "\u80f8\u5bbd"
-        }
-      },
-      "sizes": {
-        "Youth XS": {
-          "length": 45.7,
-          "width": 35.6
-        },
-        "Youth S": {
-          "length": 52.1,
-          "width": 40.6
-        },
-        "Youth M": {
-          "length": 55.9,
-          "width": 43.2
-        },
-        "Youth L": {
-          "length": 59.7,
-          "width": 45.7
-        },
-        "Youth XL": {
-          "length": 63.5,
-          "width": 48.3
-        },
-        "Adult XS": {
-          "length": 68.6,
-          "width": 40.6
-        },
-        "Adult S": {
-          "length": 71.1,
-          "width": 45.7
-        },
-        "Adult M": {
-          "length": 73.7,
-          "width": 49.5
-        },
-        "Adult L": {
-          "length": 76.2,
-          "width": 55.9
-        },
-        "Adult XL": {
-          "length": 78.7,
-          "width": 61.0
-        },
-        "Adult 2XL": {
-          "length": 81.3,
-          "width": 66.0
-        },
-        "Adult 3XL": {
-          "length": 83.8,
-          "width": 71.1
-        },
-        "Adult 4XL": {
-          "length": 86.4,
-          "width": 76.2
-        },
-        "Adult 5XL": {
-          "length": 88.9,
-          "width": 81.3
-        }
-      }
-    },
-    "t_shirt_longsleeve": {
-      "label_en": "T-Shirt - Longsleeve",
-      "label_zh": "T\u6064 - \u957f\u8896\u6b3e",
-      "group": "t_shirt",
-      "points": [
-        "length",
-        "width",
-        "sleeve"
-      ],
-      "pointLabels": {
-        "length": {
-          "en": "Length",
-          "zh": "\u8863\u957f"
-        },
-        "width": {
-          "en": "Width",
-          "zh": "\u80f8\u5bbd"
-        },
-        "sleeve": {
-          "en": "Sleeve",
-          "zh": "\u8896\u957f"
-        }
-      },
-      "sizes": {
-        "Youth XS": {
-          "length": 45.7,
-          "width": 35.6,
-          "sleeve": 52.1
-        },
-        "Youth S": {
-          "length": 52.1,
-          "width": 40.6,
-          "sleeve": 58.4
-        },
-        "Youth M": {
-          "length": 55.9,
-          "width": 43.2,
-          "sleeve": 62.2
-        },
-        "Youth L": {
-          "length": 59.7,
-          "width": 45.7,
-          "sleeve": 67.3
-        },
-        "Youth XL": {
-          "length": 63.5,
-          "width": 48.3,
-          "sleeve": 73.7
-        },
-        "Adult XS": {
-          "length": 68.6,
-          "width": 40.6,
-          "sleeve": 81.3
-        },
-        "Adult S": {
-          "length": 71.1,
-          "width": 45.7,
-          "sleeve": 83.8
-        },
-        "Adult M": {
-          "length": 73.7,
-          "width": 49.5,
-          "sleeve": 86.4
-        },
-        "Adult L": {
-          "length": 76.2,
-          "width": 55.9,
-          "sleeve": 88.9
-        },
-        "Adult XL": {
-          "length": 78.7,
-          "width": 61.0,
-          "sleeve": 91.4
-        },
-        "Adult 2XL": {
-          "length": 81.3,
-          "width": 66.0,
-          "sleeve": 94.0
-        },
-        "Adult 3XL": {
-          "length": 83.8,
-          "width": 71.1,
-          "sleeve": 96.5
-        },
-        "Adult 4XL": {
-          "length": 86.4,
-          "width": 76.2,
-          "sleeve": 0.0
-        },
-        "Adult 5XL": {
-          "length": 88.9,
-          "width": 81.3,
-          "sleeve": 0.0
-        }
-      }
-    },
-    "t_shirt_oversized": {
-      "label_en": "T-Shirt - Oversized",
-      "label_zh": "T\u6064 - \u5bbd\u677e\u6b3e",
-      "group": "t_shirt",
-      "points": [
-        "length",
-        "width"
-      ],
-      "pointLabels": {
-        "length": {
-          "en": "Length",
-          "zh": "\u8863\u957f"
-        },
-        "width": {
-          "en": "Width",
-          "zh": "\u80f8\u5bbd"
-        }
-      },
-      "sizes": {
-        "Youth XS": {
-          "length": 47.0,
-          "width": 35.6
-        },
-        "Youth S": {
-          "length": 52.1,
-          "width": 38.1
-        },
-        "Youth M": {
-          "length": 55.9,
-          "width": 41.9
-        },
-        "Youth L": {
-          "length": 59.7,
-          "width": 44.5
-        },
-        "Youth XL": {
-          "length": 63.5,
-          "width": 48.3
-        },
-        "Adult XS": {
-          "length": 72.4,
-          "width": 54.6
-        },
-        "Adult S": {
-          "length": 73.7,
-          "width": 57.1
-        },
-        "Adult M": {
-          "length": 76.2,
-          "width": 59.7
-        },
-        "Adult L": {
-          "length": 77.5,
-          "width": 63.5
-        },
-        "Adult XL": {
-          "length": 80.0,
-          "width": 68.6
-        },
-        "Adult 2XL": {
-          "length": 82.5,
-          "width": 71.1
-        },
-        "Adult 3XL": {
-          "length": 83.8,
-          "width": 73.7
-        }
-      }
-    },
-    "t_shirt_streetwear_tee": {
-      "label_en": "T-Shirt - Streetwear Tee",
-      "label_zh": "T\u6064 - \u8857\u5934\u6b3e",
-      "group": "t_shirt",
-      "points": [
-        "length",
-        "width"
-      ],
-      "pointLabels": {
-        "length": {
-          "en": "Length",
-          "zh": "\u8863\u957f"
-        },
-        "width": {
-          "en": "Width",
-          "zh": "\u80f8\u5bbd"
-        }
-      },
-      "sizes": {
-        "Youth XS": {
-          "length": 55.9,
-          "width": 47.0
-        },
-        "Youth S": {
-          "length": 59.7,
-          "width": 48.3
-        },
-        "Youth M": {
-          "length": 63.5,
-          "width": 50.8
-        },
-        "Youth L": {
-          "length": 66.0,
-          "width": 52.1
-        },
-        "Youth XL": {
-          "length": 69.8,
-          "width": 54.6
-        },
-        "Adult XS": {
-          "length": 69.8,
-          "width": 52.1
-        },
-        "Adult S": {
-          "length": 72.4,
-          "width": 54.6
-        },
-        "Adult M": {
-          "length": 73.7,
-          "width": 55.9
-        },
-        "Adult L": {
-          "length": 74.9,
-          "width": 58.4
-        },
-        "Adult XL": {
-          "length": 77.5,
-          "width": 61.0
-        },
-        "Adult 2XL": {
-          "length": 80.0,
-          "width": 63.5
-        },
-        "Adult 3XL": {
-          "length": 81.3,
-          "width": 67.3
-        }
-      }
-    },
-    "t_shirt_cropped_tee": {
-      "label_en": "T-Shirt - Cropped Tee",
-      "label_zh": "T\u6064 - \u77ed\u6b3e",
-      "group": "t_shirt",
-      "points": [
-        "length",
-        "width"
-      ],
-      "pointLabels": {
-        "length": {
-          "en": "Length",
-          "zh": "\u8863\u957f"
-        },
-        "width": {
-          "en": "Width",
-          "zh": "\u80f8\u5bbd"
-        }
-      },
-      "sizes": {
-        "Youth XS": {
-          "length": 33.0,
-          "width": 33.0
-        },
-        "Youth S": {
-          "length": 35.6,
-          "width": 35.6
-        },
-        "Youth M": {
-          "length": 38.1,
-          "width": 38.1
-        },
-        "Youth L": {
-          "length": 43.2,
-          "width": 40.6
-        },
-        "Youth XL": {
-          "length": 45.7,
-          "width": 43.2
-        },
-        "Adult XS": {
-          "length": 47.0,
-          "width": 40.6
-        },
-        "Adult S": {
-          "length": 48.3,
-          "width": 45.7
-        },
-        "Adult M": {
-          "length": 50.8,
-          "width": 50.8
-        },
-        "Adult L": {
-          "length": 53.3,
-          "width": 55.9
-        },
-        "Adult XL": {
-          "length": 55.9,
-          "width": 61.0
-        },
-        "Adult 2XL": {
-          "length": 58.4,
-          "width": 66.0
-        },
-        "Adult 3XL": {
-          "length": 61.0,
-          "width": 71.1
-        }
-      }
-    },
-    "t_shirt_women_s_e_sports": {
-      "label_en": "T-Shirt - Women's E-Sports",
-      "label_zh": "T\u6064 - \u5973\u6b3e\u7535\u7ade",
-      "group": "t_shirt",
-      "points": [
-        "length",
-        "width"
-      ],
-      "pointLabels": {
-        "length": {
-          "en": "Length",
-          "zh": "\u8863\u957f"
-        },
-        "width": {
-          "en": "Width",
-          "zh": "\u80f8\u5bbd"
-        }
-      },
-      "sizes": {
-        "Youth XS": {
-          "length": 35.6,
-          "width": 44.5
-        },
-        "Youth S": {
-          "length": 38.1,
-          "width": 48.3
-        },
-        "Youth M": {
-          "length": 40.6,
-          "width": 52.1
-        },
-        "Youth L": {
-          "length": 41.9,
-          "width": 55.9
-        },
-        "Youth XL": {
-          "length": 43.2,
-          "width": 59.7
-        },
-        "Adult XS": {
-          "length": 45.7,
-          "width": 61.0
-        },
-        "Adult S": {
-          "length": 49.5,
-          "width": 63.5
-        },
-        "Adult M": {
-          "length": 52.1,
-          "width": 64.8
-        },
-        "Adult L": {
-          "length": 54.6,
-          "width": 67.3
-        },
-        "Adult XL": {
-          "length": 58.4,
-          "width": 68.6
-        },
-        "Adult 2XL": {
-          "length": 61.0,
-          "width": 71.1
-        },
-        "Adult 3XL": {
-          "length": 63.5,
-          "width": 72.4
-        }
-      }
-    },
-    "t_shirt_collared_shirt": {
-      "label_en": "T-Shirt - Collared Shirt",
-      "label_zh": "T\u6064 - polo\u9886\u6b3e",
-      "group": "t_shirt",
-      "points": [
-        "length",
-        "width",
-        "sleeve"
-      ],
-      "pointLabels": {
-        "length": {
-          "en": "Length",
-          "zh": "\u8863\u957f"
-        },
-        "width": {
-          "en": "Width",
-          "zh": "\u80f8\u5bbd"
-        },
-        "sleeve": {
-          "en": "Sleeve",
-          "zh": "\u8896\u957f"
-        }
-      },
-      "sizes": {
-        "Youth XS": {
-          "length": 44.5,
-          "width": 33.0,
-          "sleeve": 53.3
-        },
-        "Youth S": {
-          "length": 48.3,
-          "width": 35.6,
-          "sleeve": 59.7
-        },
-        "Youth M": {
-          "length": 50.8,
-          "width": 38.1,
-          "sleeve": 67.3
-        },
-        "Youth L": {
-          "length": 54.6,
-          "width": 40.6,
-          "sleeve": 73.7
-        },
-        "Youth XL": {
-          "length": 58.4,
-          "width": 43.2,
-          "sleeve": 81.3
-        },
-        "Adult XS": {
-          "length": 68.6,
-          "width": 40.6,
-          "sleeve": 81.3
-        },
-        "Adult S": {
-          "length": 71.1,
-          "width": 45.7,
-          "sleeve": 83.8
-        },
-        "Adult M": {
-          "length": 73.7,
-          "width": 49.5,
-          "sleeve": 86.4
-        },
-        "Adult L": {
-          "length": 76.2,
-          "width": 55.9,
-          "sleeve": 88.9
-        },
-        "Adult XL": {
-          "length": 78.7,
-          "width": 61.0,
-          "sleeve": 91.4
-        },
-        "Adult 2XL": {
-          "length": 81.3,
-          "width": 66.0,
-          "sleeve": 94.0
-        },
-        "Adult 3XL": {
-          "length": 83.8,
-          "width": 71.1,
-          "sleeve": 96.5
-        }
-      }
-    },
-    "t_shirt_golf_tee": {
-      "label_en": "T-Shirt - Golf Tee",
-      "label_zh": "T\u6064 - \u9ad8\u5c14\u592b\u6b3e",
-      "group": "t_shirt",
-      "points": [
-        "length",
-        "width"
-      ],
-      "pointLabels": {
-        "length": {
-          "en": "Length",
-          "zh": "\u8863\u957f"
-        },
-        "width": {
-          "en": "Width",
-          "zh": "\u80f8\u5bbd"
-        }
-      },
-      "sizes": {
-        "Youth XS": {
-          "length": 39.4,
-          "width": 30.5
-        },
-        "Youth S": {
-          "length": 41.9,
-          "width": 34.3
-        },
-        "Youth M": {
-          "length": 44.5,
-          "width": 35.6
-        },
-        "Youth L": {
-          "length": 48.3,
-          "width": 39.4
-        },
-        "Youth XL": {
-          "length": 52.1,
-          "width": 40.6
-        },
-        "Adult XS": {
-          "length": 61.0,
-          "width": 44.5
-        },
-        "Adult S": {
-          "length": 64.8,
-          "width": 47.0
-        },
-        "Adult M": {
-          "length": 69.8,
-          "width": 49.5
-        },
-        "Adult L": {
-          "length": 69.8,
-          "width": 50.8
-        },
-        "Adult XL": {
-          "length": 72.4,
-          "width": 54.6
-        },
-        "Adult 2XL": {
-          "length": 77.5,
-          "width": 58.4
-        },
-        "Adult 3XL": {
-          "length": 80.0,
-          "width": 61.0
-        }
-      }
-    },
-    "t_shirt_standard_tank_top": {
-      "label_en": "T-Shirt - Standard Tank Top",
-      "label_zh": "T\u6064 - \u6807\u51c6\u80cc\u5fc3\u6b3e",
-      "group": "t_shirt",
-      "points": [
-        "length",
-        "width",
-        "armholeDepth"
-      ],
-      "pointLabels": {
-        "length": {
-          "en": "Length",
-          "zh": "\u8863\u957f"
-        },
-        "width": {
-          "en": "Width",
-          "zh": "\u80f8\u5bbd"
-        },
-        "armholeDepth": {
-          "en": "Armhole Depth",
-          "zh": "\u8896\u7abf\u6df1"
-        }
-      },
-      "sizes": {
-        "Youth XS": {
-          "length": 44.5,
-          "width": 19.1,
-          "armholeDepth": 19.1
-        },
-        "Youth S": {
-          "length": 48.3,
-          "width": 20.3,
-          "armholeDepth": 20.3
-        },
-        "Youth M": {
-          "length": 50.8,
-          "width": 21.6,
-          "armholeDepth": 21.6
-        },
-        "Youth L": {
-          "length": 54.6,
-          "width": 21.6,
-          "armholeDepth": 21.6
-        },
-        "Youth XL": {
-          "length": 58.4,
-          "width": 22.9,
-          "armholeDepth": 22.9
-        },
-        "Adult XS": {
-          "length": 68.6,
-          "width": 24.1,
-          "armholeDepth": 24.1
-        },
-        "Adult S": {
-          "length": 71.1,
-          "width": 25.4,
-          "armholeDepth": 25.4
-        },
-        "Adult M": {
-          "length": 73.7,
-          "width": 27.9,
-          "armholeDepth": 27.9
-        },
-        "Adult L": {
-          "length": 76.2,
-          "width": 30.5,
-          "armholeDepth": 30.5
-        },
-        "Adult XL": {
-          "length": 78.7,
-          "width": 33.0,
-          "armholeDepth": 33.0
-        },
-        "Adult 2XL": {
-          "length": 81.3,
-          "width": 34.3,
-          "armholeDepth": 34.3
-        },
-        "Adult 3XL": {
-          "length": 83.8,
-          "width": 36.8,
-          "armholeDepth": 36.8
-        }
-      }
-    },
-    "hoodie_standard": {
-      "label_en": "Hoodie - Standard",
-      "label_zh": "\u8fde\u5e3d\u536b\u8863 - \u6807\u51c6\u6b3e",
-      "group": "hoodie",
-      "points": [
-        "length",
-        "width",
-        "sleeve"
-      ],
-      "pointLabels": {
-        "length": {
-          "en": "Length",
-          "zh": "\u8863\u957f"
-        },
-        "width": {
-          "en": "Width",
-          "zh": "\u80f8\u5bbd"
-        },
-        "sleeve": {
-          "en": "Sleeve",
-          "zh": "\u8896\u957f"
-        }
-      },
-      "sizes": {
-        "Youth XS (4/5 yrs)": {
-          "length": 50.1,
-          "width": 40.6,
-          "sleeve": 59.7
-        },
-        "Youth S (6/7 yrs)": {
-          "length": 53.5,
-          "width": 43.2,
-          "sleeve": 67.3
-        },
-        "Youth M (8/9 yrs)": {
-          "length": 57.2,
-          "width": 45.7,
-          "sleeve": 70.5
-        },
-        "Youth L (10/11 yrs)": {
-          "length": 61.0,
-          "width": 48.3,
-          "sleeve": 76.8
-        },
-        "Youth XL (12/13 yrs)": {
-          "length": 64.8,
-          "width": 50.8,
-          "sleeve": 83.8
-        },
-        "Adult XS": {
-          "length": 63.4,
-          "width": 45.7,
-          "sleeve": 81.2
-        },
-        "Adult S": {
-          "length": 66.0,
-          "width": 50.8,
-          "sleeve": 83.8
-        },
-        "Adult M": {
-          "length": 68.6,
-          "width": 55.9,
-          "sleeve": 86.4
-        },
-        "Adult L": {
-          "length": 71.1,
-          "width": 61.0,
-          "sleeve": 88.9
-        },
-        "Adult XL": {
-          "length": 73.7,
-          "width": 66.0,
-          "sleeve": 91.4
-        },
-        "Adult 2XL": {
-          "length": 76.2,
-          "width": 71.1,
-          "sleeve": 94.0
-        },
-        "Adult 3XL": {
-          "length": 78.7,
-          "width": 76.1,
-          "sleeve": 96.5
-        }
-      }
-    },
-    "hoodie_drop_shoulder": {
-      "label_en": "Hoodie - Drop Shoulder",
-      "label_zh": "\u8fde\u5e3d\u536b\u8863 - \u843d\u80a9\u6b3e",
-      "group": "hoodie",
-      "points": [
-        "length",
-        "width",
-        "sleeve"
-      ],
-      "pointLabels": {
-        "length": {
-          "en": "Length",
-          "zh": "\u8863\u957f"
-        },
-        "width": {
-          "en": "Width",
-          "zh": "\u80f8\u5bbd"
-        },
-        "sleeve": {
-          "en": "Sleeve",
-          "zh": "\u8896\u957f"
-        }
-      },
-      "sizes": {
-        "Youth XS (4/5 yrs)": {
-          "length": 50.1,
-          "width": 40.6,
-          "sleeve": 59.7
-        },
-        "Youth S (6/7 yrs)": {
-          "length": 53.5,
-          "width": 43.2,
-          "sleeve": 67.3
-        },
-        "Youth M (8/9 yrs)": {
-          "length": 57.2,
-          "width": 45.7,
-          "sleeve": 70.5
-        },
-        "Youth L (10/11 yrs)": {
-          "length": 61.0,
-          "width": 48.3,
-          "sleeve": 76.8
-        },
-        "Youth XL (12/13 yrs)": {
-          "length": 64.8,
-          "width": 50.8,
-          "sleeve": 83.8
-        },
-        "Adult XS": {
-          "length": 63.4,
-          "width": 45.7,
-          "sleeve": 81.2
-        },
-        "Adult S": {
-          "length": 66.0,
-          "width": 50.8,
-          "sleeve": 83.8
-        },
-        "Adult M": {
-          "length": 68.6,
-          "width": 55.9,
-          "sleeve": 86.4
-        },
-        "Adult L": {
-          "length": 71.1,
-          "width": 61.0,
-          "sleeve": 88.9
-        },
-        "Adult XL": {
-          "length": 73.7,
-          "width": 66.0,
-          "sleeve": 91.4
-        },
-        "Adult 2XL": {
-          "length": 76.2,
-          "width": 71.1,
-          "sleeve": 94.0
-        },
-        "Adult 3XL": {
-          "length": 78.7,
-          "width": 76.1,
-          "sleeve": 96.5
-        }
-      }
-    },
-    "hoodie_raglan_sleeve": {
-      "label_en": "Hoodie - Raglan Sleeve",
-      "label_zh": "\u8fde\u5e3d\u536b\u8863 - \u63d2\u80a9\u8896\u6b3e",
-      "group": "hoodie",
-      "points": [
-        "length",
-        "width",
-        "sleeve"
-      ],
-      "pointLabels": {
-        "length": {
-          "en": "Length",
-          "zh": "\u8863\u957f"
-        },
-        "width": {
-          "en": "Width",
-          "zh": "\u80f8\u5bbd"
-        },
-        "sleeve": {
-          "en": "Sleeve",
-          "zh": "\u8896\u957f"
-        }
-      },
-      "sizes": {
-        "Youth XS (4/5 yrs)": {
-          "length": 50.1,
-          "width": 40.6,
-          "sleeve": 59.7
-        },
-        "Youth S (6/7 yrs)": {
-          "length": 53.5,
-          "width": 43.2,
-          "sleeve": 67.3
-        },
-        "Youth M (8/9 yrs)": {
-          "length": 57.2,
-          "width": 45.7,
-          "sleeve": 70.5
-        },
-        "Youth L (10/11 yrs)": {
-          "length": 61.0,
-          "width": 48.3,
-          "sleeve": 76.8
-        },
-        "Youth XL (12/13 yrs)": {
-          "length": 64.8,
-          "width": 50.8,
-          "sleeve": 83.8
-        },
-        "Adult XS": {
-          "length": 63.4,
-          "width": 45.7,
-          "sleeve": 81.2
-        },
-        "Adult S": {
-          "length": 66.0,
-          "width": 50.8,
-          "sleeve": 83.8
-        },
-        "Adult M": {
-          "length": 68.6,
-          "width": 55.9,
-          "sleeve": 86.4
-        },
-        "Adult L": {
-          "length": 71.1,
-          "width": 61.0,
-          "sleeve": 88.9
-        },
-        "Adult XL": {
-          "length": 73.7,
-          "width": 66.0,
-          "sleeve": 91.4
-        },
-        "Adult 2XL": {
-          "length": 76.2,
-          "width": 71.1,
-          "sleeve": 94.0
-        },
-        "Adult 3XL": {
-          "length": 78.7,
-          "width": 76.1,
-          "sleeve": 96.5
-        }
-      }
-    },
-    "hoodie_hidden_pockets_2": {
-      "label_en": "Hoodie - Hidden Pockets (2)",
-      "label_zh": "\u8fde\u5e3d\u536b\u8863 - \u6697\u888b\u6b3e",
-      "group": "hoodie",
-      "points": [
-        "length",
-        "width",
-        "sleeve"
-      ],
-      "pointLabels": {
-        "length": {
-          "en": "Length",
-          "zh": "\u8863\u957f"
-        },
-        "width": {
-          "en": "Width",
-          "zh": "\u80f8\u5bbd"
-        },
-        "sleeve": {
-          "en": "Sleeve",
-          "zh": "\u8896\u957f"
-        }
-      },
-      "sizes": {
-        "Youth XS (4/5 yrs)": {
-          "length": 50.1,
-          "width": 40.6,
-          "sleeve": 59.7
-        },
-        "Youth S (6/7 yrs)": {
-          "length": 53.5,
-          "width": 43.2,
-          "sleeve": 67.3
-        },
-        "Youth M (8/9 yrs)": {
-          "length": 57.2,
-          "width": 45.7,
-          "sleeve": 70.5
-        },
-        "Youth L (10/11 yrs)": {
-          "length": 61.0,
-          "width": 48.3,
-          "sleeve": 76.8
-        },
-        "Youth XL (12/13 yrs)": {
-          "length": 64.8,
-          "width": 50.8,
-          "sleeve": 83.8
-        },
-        "Adult XS": {
-          "length": 63.4,
-          "width": 45.7,
-          "sleeve": 81.2
-        },
-        "Adult S": {
-          "length": 66.0,
-          "width": 50.8,
-          "sleeve": 83.8
-        },
-        "Adult M": {
-          "length": 68.6,
-          "width": 55.9,
-          "sleeve": 86.4
-        },
-        "Adult L": {
-          "length": 71.1,
-          "width": 61.0,
-          "sleeve": 88.9
-        },
-        "Adult XL": {
-          "length": 73.7,
-          "width": 66.0,
-          "sleeve": 91.4
-        },
-        "Adult 2XL": {
-          "length": 76.2,
-          "width": 71.1,
-          "sleeve": 94.0
-        },
-        "Adult 3XL": {
-          "length": 78.7,
-          "width": 76.1,
-          "sleeve": 96.5
-        }
-      }
-    },
-    "hoodie_no_pocket_standard": {
-      "label_en": "Hoodie - No Pocket Standard",
-      "label_zh": "\u8fde\u5e3d\u536b\u8863 - \u65e0\u53e3\u888b\u6807\u51c6\u6b3e",
-      "group": "hoodie",
-      "points": [
-        "length",
-        "width",
-        "sleeve"
-      ],
-      "pointLabels": {
-        "length": {
-          "en": "Length",
-          "zh": "\u8863\u957f"
-        },
-        "width": {
-          "en": "Width",
-          "zh": "\u80f8\u5bbd"
-        },
-        "sleeve": {
-          "en": "Sleeve",
-          "zh": "\u8896\u957f"
-        }
-      },
-      "sizes": {
-        "Youth XS (4/5 yrs)": {
-          "length": 50.1,
-          "width": 40.6,
-          "sleeve": 59.7
-        },
-        "Youth S (6/7 yrs)": {
-          "length": 53.5,
-          "width": 43.2,
-          "sleeve": 67.3
-        },
-        "Youth M (8/9 yrs)": {
-          "length": 57.2,
-          "width": 45.7,
-          "sleeve": 70.5
-        },
-        "Youth L (10/11 yrs)": {
-          "length": 61.0,
-          "width": 48.3,
-          "sleeve": 76.8
-        },
-        "Youth XL (12/13 yrs)": {
-          "length": 64.8,
-          "width": 50.8,
-          "sleeve": 83.8
-        },
-        "Adult XS": {
-          "length": 63.4,
-          "width": 45.7,
-          "sleeve": 81.2
-        },
-        "Adult S": {
-          "length": 66.0,
-          "width": 50.8,
-          "sleeve": 83.8
-        },
-        "Adult M": {
-          "length": 68.6,
-          "width": 55.9,
-          "sleeve": 86.4
-        },
-        "Adult L": {
-          "length": 71.1,
-          "width": 61.0,
-          "sleeve": 88.9
-        },
-        "Adult XL": {
-          "length": 73.7,
-          "width": 66.0,
-          "sleeve": 91.4
-        },
-        "Adult 2XL": {
-          "length": 76.2,
-          "width": 71.1,
-          "sleeve": 94.0
-        },
-        "Adult 3XL": {
-          "length": 78.7,
-          "width": 76.1,
-          "sleeve": 96.5
-        }
-      }
-    },
-    "hoodie_oversized": {
-      "label_en": "Hoodie - Oversized",
-      "label_zh": "\u8fde\u5e3d\u536b\u8863 - \u5bbd\u677e\u6b3e",
-      "group": "hoodie",
-      "points": [
-        "length",
-        "width",
-        "sleeve"
-      ],
-      "pointLabels": {
-        "length": {
-          "en": "Length",
-          "zh": "\u8863\u957f"
-        },
-        "width": {
-          "en": "Width",
-          "zh": "\u80f8\u5bbd"
-        },
-        "sleeve": {
-          "en": "Sleeve",
-          "zh": "\u8896\u957f"
-        }
-      },
-      "sizes": {
-        "Youth XS": {
-          "length": 61.5,
-          "width": 43.5,
-          "sleeve": 54.5
-        },
-        "Youth S": {
-          "length": 63.0,
-          "width": 45.5,
-          "sleeve": 62.2
-        },
-        "Youth M": {
-          "length": 65.5,
-          "width": 47.5,
-          "sleeve": 69.8
-        },
-        "Youth L": {
-          "length": 67.0,
-          "width": 49.5,
-          "sleeve": 77.4
-        },
-        "Youth XL": {
-          "length": 69.5,
-          "width": 51.5,
-          "sleeve": 83.7
-        },
-        "Adult XS": {
-          "length": 72.0,
-          "width": 53.5,
-          "sleeve": 85.1
-        },
-        "Adult S": {
-          "length": 74.5,
-          "width": 58.5,
-          "sleeve": 86.3
-        },
-        "Adult M": {
-          "length": 77.0,
-          "width": 63.5,
-          "sleeve": 88.9
-        },
-        "Adult L": {
-          "length": 78.5,
-          "width": 68.5,
-          "sleeve": 91.4
-        },
-        "Adult XL": {
-          "length": 80.7,
-          "width": 73.5,
-          "sleeve": 93.9
-        },
-        "Adult 2XL": {
-          "length": 83.0,
-          "width": 78.5,
-          "sleeve": 96.5
-        },
-        "Adult 3XL": {
-          "length": 85.5,
-          "width": 83.5,
-          "sleeve": 99.0
-        }
-      }
-    },
-    "hoodie_split_sleeves": {
-      "label_en": "Hoodie - Split Sleeves",
-      "label_zh": "\u8fde\u5e3d\u536b\u8863 - \u62fc\u63a5\u8896\u6b3e",
-      "group": "hoodie",
-      "points": [
-        "length",
-        "width",
-        "sleeve"
-      ],
-      "pointLabels": {
-        "length": {
-          "en": "Length",
-          "zh": "\u8863\u957f"
-        },
-        "width": {
-          "en": "Width",
-          "zh": "\u80f8\u5bbd"
-        },
-        "sleeve": {
-          "en": "Sleeve",
-          "zh": "\u8896\u957f"
-        }
-      },
-      "sizes": {
-        "Youth XS (4/5 yrs)": {
-          "length": 50.1,
-          "width": 40.6,
-          "sleeve": 59.7
-        },
-        "Youth S (6/7 yrs)": {
-          "length": 53.5,
-          "width": 43.2,
-          "sleeve": 67.3
-        },
-        "Youth M (8/9 yrs)": {
-          "length": 57.2,
-          "width": 45.7,
-          "sleeve": 70.5
-        },
-        "Youth L (10/11 yrs)": {
-          "length": 61.0,
-          "width": 48.3,
-          "sleeve": 76.8
-        },
-        "Youth XL (12/13 yrs)": {
-          "length": 64.8,
-          "width": 50.8,
-          "sleeve": 83.8
-        },
-        "Adult XS": {
-          "length": 63.4,
-          "width": 45.7,
-          "sleeve": 81.2
-        },
-        "Adult S": {
-          "length": 66.0,
-          "width": 50.8,
-          "sleeve": 83.8
-        },
-        "Adult M": {
-          "length": 68.6,
-          "width": 55.9,
-          "sleeve": 86.4
-        },
-        "Adult L": {
-          "length": 71.1,
-          "width": 61.0,
-          "sleeve": 88.9
-        },
-        "Adult XL": {
-          "length": 73.7,
-          "width": 66.0,
-          "sleeve": 91.4
-        },
-        "Adult 2XL": {
-          "length": 76.2,
-          "width": 71.1,
-          "sleeve": 94.0
-        },
-        "Adult 3XL": {
-          "length": 78.7,
-          "width": 76.1,
-          "sleeve": 96.5
-        }
-      }
-    },
-    "varsity_jacket": {
-      "label_en": "Varsity Jacket",
-      "label_zh": "\u68d2\u7403\u5939\u514b",
-      "group": "jacket",
-      "points": [
-        "length",
-        "width",
-        "sleeve"
-      ],
-      "pointLabels": {
-        "length": {
-          "en": "Length",
-          "zh": "\u8863\u957f"
-        },
-        "width": {
-          "en": "Width",
-          "zh": "\u80f8\u5bbd"
-        },
-        "sleeve": {
-          "en": "Sleeve",
-          "zh": "\u8896\u957f"
-        }
-      },
-      "sizes": {
-        "Youth XS": {
-          "length": 50.8,
-          "width": {
-            "min": 82.5,
-            "max": 86.4
-          },
-          "sleeve": 56.1
-        },
-        "Youth S": {
-          "length": 52.1,
-          "width": {
-            "min": 87.6,
-            "max": 91.4
-          },
-          "sleeve": 58.4
-        },
-        "Youth M": {
-          "length": 55.9,
-          "width": {
-            "min": 92.7,
-            "max": 96.5
-          },
-          "sleeve": 64.8
-        },
-        "Youth L": {
-          "length": 59.7,
-          "width": {
-            "min": 97.8,
-            "max": 101.6
-          },
-          "sleeve": 72.1
-        },
-        "Youth XL": {
-          "length": 63.5,
-          "width": {
-            "min": 105.4,
-            "max": 109.2
-          },
-          "sleeve": 75.7
-        },
-        "Adult XS": {
-          "length": 63.8,
-          "width": {
-            "min": 110.5,
-            "max": 113.0
-          },
-          "sleeve": 86.6
-        },
-        "Adult S": {
-          "length": 66.0,
-          "width": {
-            "min": 114.3,
-            "max": 118.1
-          },
-          "sleeve": 87.6
-        },
-        "Adult M": {
-          "length": 68.6,
-          "width": {
-            "min": 119.4,
-            "max": 123.2
-          },
-          "sleeve": 88.9
-        },
-        "Adult L": {
-          "length": 71.1,
-          "width": {
-            "min": 124.5,
-            "max": 128.3
-          },
-          "sleeve": 90.2
-        },
-        "Adult XL": {
-          "length": 73.7,
-          "width": {
-            "min": 129.5,
-            "max": 133.3
-          },
-          "sleeve": 91.4
-        },
-        "Adult 2XL": {
-          "length": 76.2,
-          "width": {
-            "min": 134.6,
-            "max": 138.4
-          },
-          "sleeve": 92.7
-        },
-        "Adult 3XL": {
-          "length": 78.7,
-          "width": {
-            "min": 139.7,
-            "max": 144.8
-          },
-          "sleeve": 94.0
-        }
-      }
-    },
-    "bomber_jacket": {
-      "label_en": "Bomber Jacket",
-      "label_zh": "\u98de\u884c\u5458\u5939\u514b",
-      "group": "jacket",
-      "points": [
-        "length",
-        "width",
-        "sleeve"
-      ],
-      "pointLabels": {
-        "length": {
-          "en": "Length",
-          "zh": "\u8863\u957f"
-        },
-        "width": {
-          "en": "Width",
-          "zh": "\u80f8\u5bbd"
-        },
-        "sleeve": {
-          "en": "Sleeve",
-          "zh": "\u8896\u957f"
-        }
-      },
-      "sizes": {
-        "Youth XS": {
-          "length": 50.8,
-          "width": {
-            "min": 82.5,
-            "max": 86.4
-          },
-          "sleeve": 56.1
-        },
-        "Youth S": {
-          "length": 52.1,
-          "width": {
-            "min": 87.6,
-            "max": 91.4
-          },
-          "sleeve": 58.4
-        },
-        "Youth M": {
-          "length": 55.9,
-          "width": {
-            "min": 92.7,
-            "max": 96.5
-          },
-          "sleeve": 64.8
-        },
-        "Youth L": {
-          "length": 59.7,
-          "width": {
-            "min": 97.8,
-            "max": 101.6
-          },
-          "sleeve": 72.1
-        },
-        "Youth XL": {
-          "length": 63.5,
-          "width": {
-            "min": 105.4,
-            "max": 109.2
-          },
-          "sleeve": 75.7
-        },
-        "Adult XS": {
-          "length": 63.8,
-          "width": {
-            "min": 110.5,
-            "max": 113.0
-          },
-          "sleeve": 86.6
-        },
-        "Adult S": {
-          "length": 66.0,
-          "width": {
-            "min": 114.3,
-            "max": 118.1
-          },
-          "sleeve": 87.6
-        },
-        "Adult M": {
-          "length": 68.6,
-          "width": {
-            "min": 119.4,
-            "max": 123.2
-          },
-          "sleeve": 88.9
-        },
-        "Adult L": {
-          "length": 71.1,
-          "width": {
-            "min": 124.5,
-            "max": 128.3
-          },
-          "sleeve": 90.2
-        },
-        "Adult XL": {
-          "length": 73.7,
-          "width": {
-            "min": 129.5,
-            "max": 133.3
-          },
-          "sleeve": 91.4
-        },
-        "Adult 2XL": {
-          "length": 76.2,
-          "width": {
-            "min": 134.6,
-            "max": 138.4
-          },
-          "sleeve": 92.7
-        },
-        "Adult 3XL": {
-          "length": 78.7,
-          "width": {
-            "min": 139.7,
-            "max": 144.8
-          },
-          "sleeve": 94.0
-        }
-      }
-    },
-    "fleece_jacket": {
-      "label_en": "Fleece Jacket",
-      "label_zh": "\u6293\u7ed2\u5939\u514b",
-      "group": "jacket",
-      "points": [
-        "length",
-        "width",
-        "sleeve"
-      ],
-      "pointLabels": {
-        "length": {
-          "en": "Length",
-          "zh": "\u8863\u957f"
-        },
-        "width": {
-          "en": "Width",
-          "zh": "\u80f8\u5bbd"
-        },
-        "sleeve": {
-          "en": "Sleeve",
-          "zh": "\u8896\u957f"
-        }
-      },
-      "sizes": {
-        "Youth XS": {
-          "length": 50.8,
-          "width": {
-            "min": 82.5,
-            "max": 86.4
-          },
-          "sleeve": 56.1
-        },
-        "Youth S": {
-          "length": 52.1,
-          "width": {
-            "min": 87.6,
-            "max": 91.4
-          },
-          "sleeve": 58.4
-        },
-        "Youth M": {
-          "length": 55.9,
-          "width": {
-            "min": 92.7,
-            "max": 96.5
-          },
-          "sleeve": 64.8
-        },
-        "Youth L": {
-          "length": 59.7,
-          "width": {
-            "min": 97.8,
-            "max": 101.6
-          },
-          "sleeve": 72.1
-        },
-        "Youth XL": {
-          "length": 63.5,
-          "width": {
-            "min": 105.4,
-            "max": 109.2
-          },
-          "sleeve": 75.7
-        },
-        "Adult XS": {
-          "length": 63.8,
-          "width": {
-            "min": 110.5,
-            "max": 113.0
-          },
-          "sleeve": 86.6
-        },
-        "Adult S": {
-          "length": 66.0,
-          "width": {
-            "min": 114.3,
-            "max": 118.1
-          },
-          "sleeve": 87.6
-        },
-        "Adult M": {
-          "length": 68.6,
-          "width": {
-            "min": 119.4,
-            "max": 123.2
-          },
-          "sleeve": 88.9
-        },
-        "Adult L": {
-          "length": 71.1,
-          "width": {
-            "min": 124.5,
-            "max": 128.3
-          },
-          "sleeve": 90.2
-        },
-        "Adult XL": {
-          "length": 73.7,
-          "width": {
-            "min": 129.5,
-            "max": 133.3
-          },
-          "sleeve": 91.4
-        },
-        "Adult 2XL": {
-          "length": 76.2,
-          "width": {
-            "min": 134.6,
-            "max": 138.4
-          },
-          "sleeve": 92.7
-        },
-        "Adult 3XL": {
-          "length": 78.7,
-          "width": {
-            "min": 139.7,
-            "max": 144.8
-          },
-          "sleeve": 94.0
-        }
-      }
-    },
-    "panelled_fleece_jacket": {
-      "label_en": "Panelled Fleece Jacket",
-      "label_zh": "\u62fc\u63a5\u6293\u7ed2\u5939\u514b",
-      "group": "jacket",
-      "points": [
-        "length",
-        "width",
-        "sleeve"
-      ],
-      "pointLabels": {
-        "length": {
-          "en": "Length",
-          "zh": "\u8863\u957f"
-        },
-        "width": {
-          "en": "Width",
-          "zh": "\u80f8\u5bbd"
-        },
-        "sleeve": {
-          "en": "Sleeve",
-          "zh": "\u8896\u957f"
-        }
-      },
-      "sizes": {
-        "Youth XS": {
-          "length": 50.8,
-          "width": {
-            "min": 82.5,
-            "max": 86.4
-          },
-          "sleeve": 56.1
-        },
-        "Youth S": {
-          "length": 52.1,
-          "width": {
-            "min": 87.6,
-            "max": 91.4
-          },
-          "sleeve": 58.4
-        },
-        "Youth M": {
-          "length": 55.9,
-          "width": {
-            "min": 92.7,
-            "max": 96.5
-          },
-          "sleeve": 64.8
-        },
-        "Youth L": {
-          "length": 59.7,
-          "width": {
-            "min": 97.8,
-            "max": 101.6
-          },
-          "sleeve": 72.1
-        },
-        "Youth XL": {
-          "length": 63.5,
-          "width": {
-            "min": 105.4,
-            "max": 109.2
-          },
-          "sleeve": 75.7
-        },
-        "Adult XS": {
-          "length": 63.8,
-          "width": {
-            "min": 110.5,
-            "max": 113.0
-          },
-          "sleeve": 86.6
-        },
-        "Adult S": {
-          "length": 66.0,
-          "width": {
-            "min": 114.3,
-            "max": 118.1
-          },
-          "sleeve": 87.6
-        },
-        "Adult M": {
-          "length": 68.6,
-          "width": {
-            "min": 119.4,
-            "max": 123.2
-          },
-          "sleeve": 88.9
-        },
-        "Adult L": {
-          "length": 71.1,
-          "width": {
-            "min": 124.5,
-            "max": 128.3
-          },
-          "sleeve": 90.2
-        },
-        "Adult XL": {
-          "length": 73.7,
-          "width": {
-            "min": 129.5,
-            "max": 133.3
-          },
-          "sleeve": 91.4
-        },
-        "Adult 2XL": {
-          "length": 76.2,
-          "width": {
-            "min": 134.6,
-            "max": 138.4
-          },
-          "sleeve": 92.7
-        },
-        "Adult 3XL": {
-          "length": 78.7,
-          "width": {
-            "min": 139.7,
-            "max": 144.8
-          },
-          "sleeve": 94.0
-        }
-      }
-    },
-    "sherpa_jacket_youth": {
-      "label_en": "Sherpa Jacket Youth",
-      "label_zh": "\u513f\u7ae5\u7f8a\u7f94\u7ed2\u5939\u514b",
-      "group": "jacket",
-      "points": [
-        "length",
-        "width",
-        "sleeve"
-      ],
-      "pointLabels": {
-        "length": {
-          "en": "Length",
-          "zh": "\u8863\u957f"
-        },
-        "width": {
-          "en": "Width",
-          "zh": "\u80f8\u5bbd"
-        },
-        "sleeve": {
-          "en": "Sleeve",
-          "zh": "\u8896\u957f"
-        }
-      },
-      "sizes": {
-        "Youth XS": {
-          "length": 43.2,
-          "width": 38.1,
-          "sleeve": 58.4
-        },
-        "Youth S": {
-          "length": 48.3,
-          "width": 43.2,
-          "sleeve": 63.5
-        },
-        "Youth M": {
-          "length": 53.3,
-          "width": 48.3,
-          "sleeve": 68.6
-        },
-        "Youth L": {
-          "length": 58.4,
-          "width": 53.3,
-          "sleeve": 73.7
-        },
-        "Youth XL": {
-          "length": 63.5,
-          "width": 58.4,
-          "sleeve": 78.7
-        }
-      }
-    },
-    "hat_standard": {
-      "label_en": "Hat - Standard",
-      "label_zh": "\u5e3d\u5b50 - \u6807\u51c6\u6b3e",
-      "group": "hat",
-      "points": [
-        "circumference"
-      ],
-      "pointLabels": {
-        "circumference": {
-          "en": "Circumference",
-          "zh": "\u56f4\u5ea6"
-        }
-      },
-      "sizes": {
-        "Youth (6-12 yrs)": {
-          "circumference": {
-            "min": 53.3,
-            "max": 55.9
-          }
-        },
-        "Adult": {
-          "circumference": {
-            "min": 55.9,
-            "max": 61.0
-          }
-        }
-      }
-    }
-  },
-  "universalSizes": [
-    "Youth XS",
-    "Youth S",
-    "Youth M",
-    "Youth L",
-    "Youth XL",
-    "Adult XS",
-    "Adult S",
-    "Adult M",
-    "Adult L",
-    "Adult XL",
-    "Adult 2XL",
-    "Adult 3XL",
-    "Adult 4XL",
-    "Adult 5XL"
-  ],
-  "toleranceCm": 1.27
+    "universalSizes": [
+        "Youth XS",
+        "Youth S",
+        "Youth M",
+        "Youth L",
+        "Youth XL",
+        "Adult XS",
+        "Adult S",
+        "Adult M",
+        "Adult L",
+        "Adult XL",
+        "Adult 2XL",
+        "Adult 3XL",
+        "Adult 4XL",
+        "Adult 5XL"
+    ],
+    "toleranceCm": 1.27
 }

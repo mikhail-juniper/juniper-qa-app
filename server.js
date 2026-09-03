@@ -15,7 +15,9 @@ const submissionLog = require('./lib/submissionLog');
 // translation instead. Left in place on disk (unused) rather than deleted,
 // in case any historical purchaseOrders.json data needs a one-time import.
 const orderManagementStore = require('./lib/orderManagementStore');
-const sizingChartStore = require('./lib/sizingChartStore');
+// lib/sizingChartStore.js is retired - left on disk unused rather than
+// deleted, since fits.json (via /api/fits) is now the single source of
+// truth for sizing charts.
 const supplierStore = require('./lib/supplierStore');
 const catalogStore = require('./lib/catalogStore');
 const approvalStore = require('./lib/approvalStore');
@@ -373,6 +375,10 @@ app.post('/api/unit-costs', (req, res) => {
       const n = parseFloat(body.otherCategoryFlat);
       if (!isNaN(n) && n >= 0) current.otherCategoryFlat = n;
     }
+    if (body.rmbToUsdRate !== undefined) {
+      const n = parseFloat(body.rmbToUsdRate);
+      if (!isNaN(n) && n > 0) current.rmbToUsdRate = n;
+    }
     saveJson(UNIT_COSTS_PATH, current);
     res.json({ ok: true, unitCosts: current });
   } catch (err) {
@@ -496,8 +502,8 @@ app.post('/api/submit', upload.any(), async (req, res) => {
       : null;
     const overallResult = computeOverallResult(payload, fits, establishedSizing);
     const recommendation = getRecommendation(
-      { category: payload.category, subcategory: payload.subcategory, poQuantity: payload.poQuantity, creator: payload.creator, risk: payload.productRisk },
-      { unitCosts: loadJson(UNIT_COSTS_PATH), aqlRecConfig: loadJson(AQL_RECOMMENDATION_PATH), creatorTiersConfig: loadJson(CREATOR_TIERS_PATH) }
+      { category: payload.category, subcategory: payload.subcategory, poQuantity: payload.poQuantity, creator: payload.creator, risk: payload.productRisk, sku: payload.sku },
+      { unitCosts: loadJson(UNIT_COSTS_PATH), aqlRecConfig: loadJson(AQL_RECOMMENDATION_PATH), creatorTiersConfig: loadJson(CREATOR_TIERS_PATH), findOrdersBySku: orderManagementStore.getOrdersBySku }
     );
     const pdfBuffer = await buildPdf(payload, filesByField, fits, i18n, overallResult, categories, recommendation, establishedSizing);
 
@@ -831,31 +837,10 @@ app.get('/api/order-management/field-history', (req, res) => {
   res.json(orderManagementStore.getFieldHistory());
 });
 
-// ---- Sizing charts ----
-app.get('/api/sizing-charts', (req, res) => {
-  res.json({ charts: sizingChartStore.listCharts() });
-});
-app.get('/api/sizing-charts/:id', (req, res) => {
-  const chart = sizingChartStore.getChart(req.params.id);
-  if (!chart) return res.status(404).json({ error: 'Sizing chart not found' });
-  res.json({ chart });
-});
-app.post('/api/sizing-charts', (req, res) => {
-  const body = req.body || {};
-  if (!body.name) return res.status(400).json({ error: 'name is required' });
-  const chart = sizingChartStore.createChart({ ...body, id: uuidv4() });
-  res.json({ ok: true, chart });
-});
-app.patch('/api/sizing-charts/:id', (req, res) => {
-  const updated = sizingChartStore.updateChart(req.params.id, req.body || {});
-  if (!updated) return res.status(404).json({ error: 'Sizing chart not found' });
-  res.json({ ok: true, chart: updated });
-});
-app.delete('/api/sizing-charts/:id', (req, res) => {
-  const ok = sizingChartStore.deleteChart(req.params.id);
-  if (!ok) return res.status(404).json({ error: 'Sizing chart not found' });
-  res.json({ ok: true });
-});
+// (The simple sizingChartStore-based /api/sizing-charts routes that used to
+// live here are retired - the real fits.json-backed system, exposed via
+// /api/fits below, is now the single source of truth for sizing charts,
+// shared between QA/QC reporting and Order Management.)
 
 // ---- Suppliers (real master data, per Product Information) ----
 app.get('/api/suppliers', (req, res) => {
