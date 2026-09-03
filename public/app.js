@@ -758,12 +758,6 @@ function renderNewPoScreen() {
       ${textField2('newPoProductTitle', 'productTitle', newPoState.productTitle, {})}
       ${newPoSelectFieldWithOther('newPoPdLead', 'productDevelopmentLead', newPoState.productDevelopmentLead, OPTIONS.productDevelopmentLeads || [], newPoState.pdLeadOtherMode)}
       ${textField2('newPoAsanaLink', 'asanaTaskLink', newPoState.asanaTaskLink, { placeholderKey: 'asanaTaskLinkPlaceholder' })}
-      <div class="field">
-        <label class="field-label">${biBlockHtml('productRisk', 'Product Complexity/Risk')}</label>
-        <div class="segmented">
-          ${['high', 'medium', 'low'].map((r) => `<div class="segmented-option ${newPoState.productRisk === r ? 'selected' : ''}" data-newpo-seg="productRisk" data-val="${r}">${escapeHtml(bi('risk' + r.charAt(0).toUpperCase() + r.slice(1)).en)}<span class="zh">${escapeHtml(bi('risk' + r.charAt(0).toUpperCase() + r.slice(1)).zh)}</span></div>`).join('')}
-        </div>
-      </div>
     </div>
 
     <div id="newPoSizesBlock">${renderNewPoSizesBlock()}</div>
@@ -980,7 +974,7 @@ async function submitNewPo() {
         poNumber: newPoState.poNumber, sku: newPoState.sku, category: newPoState.category, subcategory: newPoState.subcategory,
         orderDate: newPoState.orderDate, creator: newPoState.creator, productTitle: newPoState.productTitle, orderQuantity: newPoState.orderQuantity,
         productDevelopmentLead: newPoState.productDevelopmentLead, sizesIncluded: newPoState.sizesIncluded,
-        asanaTaskLink: newPoState.asanaTaskLink, productRisk: newPoState.productRisk
+        asanaTaskLink: newPoState.asanaTaskLink
       })
     });
     const data = await res.json();

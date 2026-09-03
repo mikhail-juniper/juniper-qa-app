@@ -534,8 +534,8 @@ function openProductForm(product) {
           <option value="other" ${product && product.productLine === 'other' ? 'selected' : ''}>Other</option>
         </select>
       </div>
-      <div><label>Factory price</label><input id="prodFactoryPrice" type="number" step="0.01" value="${val(product && product.factoryPrice)}" /></div>
-      <div><label>Sales unit price</label><input id="prodSalesUnitPrice" type="number" step="0.01" value="${val(product && product.salesUnitPrice)}" /></div>
+      <div><label>Factory price (¥)</label><input id="prodFactoryPrice" type="number" step="0.01" value="${val(product && product.factoryPrice)}" /></div>
+      <div><label>Sales unit price (¥)</label><input id="prodSalesUnitPrice" type="number" step="0.01" value="${val(product && product.salesUnitPrice)}" /></div>
     </div>
     <div class="om-field-grid" style="margin-top:10px;">
       <div style="grid-column:1/-1;"><label>Notes</label><input id="prodNotes" type="text" value="${val(product && product.notes)}" /></div>
@@ -678,7 +678,7 @@ function openComponentForm(component) {
       <div><label>Part name *</label><input id="compPartName" type="text" value="${val(component && component.partName)}" /></div>
       <div><label>Material</label><input id="compMaterial" type="text" value="${val(component && component.material)}" /></div>
       <div><label>Supplier</label><input id="compSupplierName" type="text" list="dlSupplierNames" value="${val(component && component.supplierName)}" /></div>
-      <div><label>Unit price</label><input id="compUnitPrice" type="number" step="0.01" value="${val(component && component.unitPrice)}" /></div>
+      <div><label>Unit price (¥)</label><input id="compUnitPrice" type="number" step="0.01" value="${val(component && component.unitPrice)}" /></div>
       <div><label>Product line</label>
         <select id="compProductLine">
           <option value="clothing" ${!component || component.productLine === 'clothing' ? 'selected' : ''}>Apparel</option>
@@ -1088,6 +1088,56 @@ function mountPanel(panel) {
   document.body.appendChild(backdrop);
 }
 
+// Click any photo thumbnail (main product photo, component photos) to view
+// it larger, without leaving the panel it's on.
+function openImageLightbox(url) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:100;display:flex;align-items:center;justify-content:center;cursor:zoom-out;';
+  overlay.innerHTML = `<img src="${escapeHtml(url)}" alt="" style="max-width:90vw;max-height:90vh;border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,0.5);" />`;
+  overlay.addEventListener('click', () => overlay.remove());
+  document.body.appendChild(overlay);
+}
+
+// Standard dropdown-below-the-field autocomplete, filtered to options that
+// START WITH what's typed (so "Sha" only shows "Shanghai...", not anything
+// containing "sha" anywhere). Replaces native <datalist>, whose popup
+// position and match rules the browser controls, not us.
+function attachTypeahead(inputId, getOptions) {
+  const input = document.getElementById(inputId);
+  if (!input || input.dataset.typeaheadAttached) return;
+  input.dataset.typeaheadAttached = '1';
+  input.removeAttribute('list');
+  input.setAttribute('autocomplete', 'off');
+
+  const wrap = document.createElement('div');
+  wrap.className = 'om-typeahead-wrap';
+  input.parentNode.insertBefore(wrap, input);
+  wrap.appendChild(input);
+  const menu = document.createElement('div');
+  menu.className = 'om-typeahead-menu';
+  wrap.appendChild(menu);
+
+  function renderMenu() {
+    const q = input.value.trim().toLowerCase();
+    const options = (getOptions() || []).filter(Boolean);
+    const filtered = (q ? options.filter((o) => o.toLowerCase().startsWith(q)) : options).slice(0, 20);
+    if (!filtered.length) { menu.classList.remove('open'); return; }
+    menu.innerHTML = filtered.map((o) => `<div class="om-typeahead-option">${escapeHtml(o)}</div>`).join('');
+    menu.classList.add('open');
+    menu.querySelectorAll('.om-typeahead-option').forEach((el) => {
+      el.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        input.value = el.textContent;
+        menu.classList.remove('open');
+        input.dispatchEvent(new Event('change'));
+      });
+    });
+  }
+  input.addEventListener('focus', renderMenu);
+  input.addEventListener('input', renderMenu);
+  input.addEventListener('blur', () => setTimeout(() => menu.classList.remove('open'), 150));
+}
+
 async function openDetailPanel(id, scope) {
   scope = scope || 'full';
   let order;
@@ -1136,9 +1186,9 @@ async function openDetailPanel(id, scope) {
 
     <div class="om-panel-card">
     <div class="om-section-title">Order Details</div>
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap;">
-      <input type="text" id="omCopyFromPoInput" placeholder="Copy from previous PO number..." style="flex:1 1 220px;padding:8px 10px;border-radius:var(--radius-sm);border:1.5px solid var(--jc-border);font-size:13px;" />
-      <button type="button" class="btn btn-secondary" id="omCopyFromPoBtn" style="flex:none;width:auto;padding:8px 14px;">Copy details</button>
+    <div id="omCopyFromPoSuggestion" style="display:none;margin-bottom:14px;padding:10px 14px;background:var(--jc-mint-light);border-radius:var(--radius-sm);align-items:center;gap:10px;flex-wrap:wrap;">
+      <span id="omCopyFromPoText" style="font-size:13px;color:var(--jc-teal-dark);"></span>
+      <button type="button" class="btn btn-primary" id="omCopyFromPoBtn" style="flex:none;width:auto;padding:6px 14px;font-size:12.5px;">Copy details</button>
     </div>
     <div class="om-field-grid">
       <div><label>Product Name</label><input id="fMainName" type="text" value="${val(order.mainComponent.name)}" /></div>
@@ -1147,12 +1197,12 @@ async function openDetailPanel(id, scope) {
       <div><label>Supplier Name</label><input id="fSupplierName" type="text" list="dlSupplierNames" value="${val(order.supplier.name)}" /></div>
       <div><label>Supplier Code</label><input id="fSupplierCode" type="text" value="${val(order.supplier.code)}" /></div>
       <div><label>Order Status</label>
-        <select id="fOrderStatusSelect">
+        <select id="fOrderStatusSelect" class="om-status-select" data-status="${escapeHtml(order.status)}">
           ${STATUSES.map((s) => `<option value="${escapeHtml(s)}" ${s === order.status ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('')}
         </select>
       </div>
       <div><label>Product Complexity/Risk</label>
-        <select id="fProductRisk">
+        <select id="fProductRisk" class="om-risk-select" data-risk="${escapeHtml(order.productRisk || '')}">
           <option value="" ${!order.productRisk ? 'selected' : ''}>—</option>
           <option value="high" ${order.productRisk === 'high' ? 'selected' : ''}>High</option>
           <option value="medium" ${order.productRisk === 'medium' ? 'selected' : ''}>Medium</option>
@@ -1162,7 +1212,7 @@ async function openDetailPanel(id, scope) {
       <div>
         <label>Photo reference</label>
         <div style="display:flex;align-items:center;gap:10px;">
-          ${order.mainComponent.photoReference ? `<img id="fPhotoReferencePreview" class="om-table-thumb" style="width:52px;height:52px;" src="${escapeHtml(order.mainComponent.photoReference)}" alt="" />` : `<img id="fPhotoReferencePreview" class="om-table-thumb" style="width:52px;height:52px;display:none;" alt="" />`}
+          ${order.mainComponent.photoReference ? `<img id="fPhotoReferencePreview" class="om-table-thumb" style="width:52px;height:52px;cursor:pointer;" src="${escapeHtml(order.mainComponent.photoReference)}" alt="" title="Click to view larger" />` : `<img id="fPhotoReferencePreview" class="om-table-thumb" style="width:52px;height:52px;display:none;cursor:pointer;" alt="" title="Click to view larger" />`}
           <input type="hidden" id="fPhotoReference" value="${val(order.mainComponent.photoReference)}" />
           <input type="file" id="fPhotoReferenceFile" accept="image/*" style="display:none;" />
           <button type="button" class="om-table-upload-btn" id="fPhotoReferenceUploadBtn">Upload photo</button>
@@ -1172,7 +1222,11 @@ async function openDetailPanel(id, scope) {
       <div><label>Required Manufacturer Delivery Date</label><input id="fManufDelivery" type="date" value="${val(order.manufacturerDeliveryDate)}" /></div>
       <div><label>Order Quantity</label><input id="fPurchaseQty" type="number" value="${val(order.mainComponent.purchaseQuantity)}" /></div>
       <div><label>Quantity received</label><input id="fFulfillQtyReceived" type="number" value="${val(order.fulfillment.quantityReceived)}" /></div>
-      <div><label>Buyer</label><input id="fBuyer" type="text" value="${val(order.buyer)}" /></div>
+      <div><label>Order Management Specialist</label>
+        <select id="fBuyer" data-current="${escapeHtml(order.buyer || '')}">
+          <option value="${escapeHtml(order.buyer || '')}">${escapeHtml(order.buyer || '— Select —')}</option>
+        </select>
+      </div>
       <div><label>Order placement date</label><input id="fOrderDate" type="date" value="${val(order.orderPlacementDate)}" /></div>
     </div>
     </div>
@@ -1182,8 +1236,8 @@ async function openDetailPanel(id, scope) {
     <div class="section-help" style="margin-bottom:12px;">Jump straight into a report for this PO - each link already knows the PO number, or use QA/QC Reporting in the sidebar to pick a different one.</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;">
       <a class="btn btn-secondary" style="flex:none;width:auto;padding:9px 16px;text-decoration:none;" href="/approval.html?po=${encodeURIComponent(order.id)}" target="_blank" rel="noopener">Product Development Approval</a>
-      <a class="btn btn-secondary" style="flex:none;width:auto;padding:9px 16px;text-decoration:none;" href="/reporting.html?mode=pre_production&po=${encodeURIComponent(order.poNumber)}" target="_blank" rel="noopener">Pre-Production Sample Report</a>
-      <a class="btn btn-secondary" style="flex:none;width:auto;padding:9px 16px;text-decoration:none;" href="/reporting.html?mode=production&po=${encodeURIComponent(order.poNumber)}" target="_blank" rel="noopener">Bulk Sampling Report</a>
+      <a class="btn btn-secondary" style="flex:none;width:auto;padding:9px 16px;text-decoration:none;" href="/reporting.html?mode=pre_production&po=${encodeURIComponent(order.poNumber)}" target="_blank" rel="noopener">Share Pre-Production Report Link</a>
+      <a class="btn btn-secondary" style="flex:none;width:auto;padding:9px 16px;text-decoration:none;" href="/reporting.html?mode=production&po=${encodeURIComponent(order.poNumber)}" target="_blank" rel="noopener">Share Bulk Sampling Report Link</a>
     </div>
     </div>
 
@@ -1197,47 +1251,38 @@ async function openDetailPanel(id, scope) {
     </div>
 
     <div class="om-panel-card">
-    <div class="om-section-title">Product Information</div>
+    <div class="om-section-title">Product Documentation</div>
     <div class="om-field-grid">
-      <div><label>Fabric Code</label><input id="fFabricInfo" type="text" list="dlFabricCodes" value="${val(order.mainComponent.fabricInfo)}" /></div>
-      <div><label>Fabric Type</label><input id="fComponent" type="text" list="dlFabricTypes" placeholder="e.g. 100% Cotton" value="${val(order.mainComponent.component)}" /></div>
-      <div><label>Washing Label</label><input id="fWashLabel" type="text" list="dlWashLabels" value="${val(order.mainComponent.washLabel)}" /></div>
-      <div><label>Manufacturing Drawing</label><input id="fManufacturingDrawing" type="text" list="dlManufacturingDrawings" value="${val(order.mainComponent.manufacturingDrawing)}" /></div>
-      <div><label>Product Pricing</label><input type="text" value="${fmtMoney(computeOrderTotal(order))}" disabled /></div>
+      ${uploadFieldHtml('fManufacturingDrawing', 'Manufacturing Drawing', order.mainComponent.manufacturingDrawing, true)}
+      ${uploadFieldHtml('fWashingTagUrl', 'Washing Tag', order.mainComponent.washingTagUrl, true)}
+      ${uploadFieldHtml('fPackagingUrl', 'Packaging', order.mainComponent.packagingUrl, true)}
+      ${order.productLine === 'clothing'
+        ? `<div><label>Product Dimensions</label><div class="section-help" style="margin-top:4px;">Apparel uses the <a href="sizing-charts.html" target="_blank" rel="noopener">Sizing Charts</a> page instead of a file here.</div></div>`
+        : uploadFieldHtml('fDimensionsUrl', 'Product Dimensions', order.mainComponent.dimensionsUrl, true)}
+      ${uploadFieldHtml('fWeightUrl', 'Weight', order.mainComponent.weightUrl, true)}
+      ${uploadFieldHtml('fShippingWeightUrl', 'Shipping Weight', order.mainComponent.shippingWeightUrl, true)}
     </div>
-    <datalist id="dlSupplierNames"></datalist>
-    <datalist id="dlFabricCodes"></datalist>
-    <datalist id="dlFabricTypes"></datalist>
-    <datalist id="dlWashLabels"></datalist>
-    <datalist id="dlManufacturingDrawings"></datalist>
     </div>
 
     <div class="om-panel-card">
-    <div class="om-section-title">Main Component Specs</div>
+    <div class="om-section-title">Main Component Specifications</div>
     <div class="om-field-grid">
-      <div><label>Model number</label><input id="fModelNumber" type="text" value="${val(order.mainComponent.modelNumber)}" /></div>
-      <div><label>Dimensions (L*W*H cm)</label><input id="fDimensions" type="text" value="${val(order.mainComponent.dimensions)}" /></div>
-      <div><label>Factory price</label><input id="fFactoryPrice" type="number" step="0.01" value="${val(order.mainComponent.factoryPrice)}" /></div>
-      <div><label>Sales unit price</label><input id="fSalesUnitPrice" type="number" step="0.01" value="${val(order.mainComponent.salesUnitPrice)}" /></div>
-      <div><label>Sales volume</label><input id="fSalesVolume" type="number" value="${val(order.mainComponent.salesVolume)}" /></div>
-      <div><label>Total purchase price</label><input id="fTotalPurchasePrice" type="number" step="0.01" value="${val(order.mainComponent.totalPurchasePrice)}" /></div>
-      <div><label>Actual weight (kg)</label><input id="fActualWeight" type="number" step="0.01" value="${val(order.mainComponent.actualWeight)}" /></div>
-      <div><label>Transport weight (kg)</label><input id="fTransportWeight" type="number" step="0.01" value="${val(order.mainComponent.transportWeight)}" /></div>
-    </div>
-    <div class="om-field-grid" style="margin-top:10px;">
-      <div style="grid-column:1/-1;"><label>Production precautions</label><input id="fProductionPrecautions" type="text" value="${val(order.mainComponent.productionPrecautions)}" /></div>
+      <div><label>Fabric Code</label><input id="fFabricInfo" type="text" value="${val(order.mainComponent.fabricInfo)}" /></div>
+      <div><label>Fabric Type</label><input id="fComponent" type="text" placeholder="e.g. 100% Cotton" value="${val(order.mainComponent.component)}" /></div>
+      <div><label>Unit Price (¥)</label><input id="fFactoryPrice" type="number" step="0.01" value="${val(order.mainComponent.factoryPrice)}" /></div>
+      <div><label>Product Pricing (total)</label><input type="text" value="${fmtMoney(computeOrderTotal(order))}" disabled /></div>
     </div>
     </div>
 
     <div id="omComponentBreakdownSection" class="om-panel-card" style="${scope === 'main-component' ? 'display:none;' : ''}">
-      <div class="om-section-title">Component Breakdown</div>
+      <div class="om-section-title">Sub-Component Breakdown</div>
       <div class="om-table-wrap">
         <table class="om-table om-table-editable">
           <thead>
             <tr>
-              <th>Image</th><th>Part Name</th><th>Dimensions</th><th>Purchase Price</th><th># Parts</th>
-              <th>Total Price</th><th>Supplier Name</th><th>Supplier Contact</th><th>Desired Delivery</th>
-              <th>Delivery Address</th><th>Design Document</th><th>Status</th><th>Remark</th><th></th>
+              <th>Component Name</th><th>Photo</th><th>Dimensions</th><th>Quantity</th><th>Supplier</th>
+              <th>Price (¥)</th><th>Supplier Contact</th><th>Delivery Date</th><th>Component Delivery Address</th>
+              <th>Manufacturing Drawing</th><th></th>
             </tr>
           </thead>
           <tbody id="omAccessoryRows"></tbody>
@@ -1250,7 +1295,7 @@ async function openDetailPanel(id, scope) {
     <div class="om-section-title">Warehousing Breakdown</div>
     <div class="om-field-grid">
       <div><label>Warehouse Address</label><input id="fWarehouse" type="text" value="${val(order.mainComponent.warehouse)}" /></div>
-      <div><label>Shipping cost</label><input id="fTransportationFees" type="number" step="0.01" value="${val(order.costs.transportationFees)}" /></div>
+      <div><label>Shipping cost (¥)</label><input id="fTransportationFees" type="number" step="0.01" value="${val(order.costs.transportationFees)}" /></div>
       <div><label>Packing List Number</label><input id="fFulfillPacking" type="text" value="${val(order.fulfillment.packingListNumber)}" /></div>
       <div><label>Waybill Number</label><input id="fFulfillWaybill" type="text" value="${val(order.fulfillment.waybillNumber)}" /></div>
     </div>
@@ -1259,40 +1304,18 @@ async function openDetailPanel(id, scope) {
     <div class="om-panel-card">
     <div class="om-section-title">Payment</div>
     <div class="om-field-grid">
-      <div><label>Assembly fee</label><input id="fAssemblyFee" type="number" step="0.01" value="${val(order.costs.assemblyFee)}" /></div>
-      <div><label>Labor costs</label><input id="fLaborCosts" type="number" step="0.01" value="${val(order.costs.laborCosts)}" /></div>
-      <div><label>Other expenses</label><input id="fOtherExpenses" type="number" step="0.01" value="${val(order.costs.otherExpenses)}" /></div>
-      <div><label>Total PO cost</label><input type="text" value="${fmtMoney(computeOrderTotal(order))}" disabled /></div>
+      <div><label>Additional Assembly Fee (¥)</label><input id="fAssemblyFee" type="number" step="0.01" value="${val(order.costs.assemblyFee)}" /></div>
+      <div><label>Additional Labor Fee (¥)</label><input id="fLaborCosts" type="number" step="0.01" value="${val(order.costs.laborCosts)}" /></div>
+      <div><label>Other Expenses (¥)</label><input id="fOtherExpenses" type="number" step="0.01" value="${val(order.costs.otherExpenses)}" /></div>
+      <div><label>Manufacturing Cost (¥)</label><input type="text" value="${fmtMoney((order.accessories || []).reduce((sum, a) => sum + (Number(a.totalPrice) || 0), 0))}" disabled title="Sum of all sub-component prices" /></div>
+      <div><label>Total PO Cost (¥)</label><input type="text" value="${fmtMoney(computeOrderTotal(order))}" disabled /></div>
+      <div><label>Total Price per Unit (¥)</label><input type="text" value="${order.mainComponent.purchaseQuantity ? fmtMoney(computeOrderTotal(order) / order.mainComponent.purchaseQuantity) : '—'}" disabled title="Total PO cost divided by units manufactured" /></div>
     </div>
     <div class="om-detail-row" style="margin-top:8px;"><span class="om-label">Payment Status</span><span class="om-value">${escapeHtml(order.settlement.status)}</span></div>
     ${order.settlement.paidDate ? `<div class="om-detail-row"><span class="om-label">Paid on</span><span class="om-value">${fmtDate(order.settlement.paidDate)}</span></div>` : ''}
     <div class="om-settlement-toggle">
       <button class="btn btn-secondary" id="omMarkPending" style="flex:none;width:auto;padding:8px 14px;">Mark Pending</button>
       <button class="btn btn-primary" id="omMarkPaid" style="flex:none;width:auto;padding:8px 14px;">Mark Paid</button>
-    </div>
-    </div>
-
-    <div class="om-panel-card">
-    <div class="om-section-title">Files</div>
-    <div id="omFilesList">
-      ${order.files && order.files.length ? order.files.map((f) => `
-        <div class="om-file-row" data-file-id="${escapeHtml(f.id)}">
-          <a href="${escapeHtml(f.url)}" target="_blank" rel="noopener" class="om-file-link">
-            <span class="om-file-category">${escapeHtml(f.category)}</span>
-            ${escapeHtml(f.originalName)}
-            ${f.relatedTo ? `<span class="om-file-related">for: ${escapeHtml(f.relatedTo)}</span>` : ''}
-          </a>
-          <button class="om-file-remove" data-remove-file="${escapeHtml(f.id)}" title="Remove">&times;</button>
-        </div>
-      `).join('') : '<div class="om-cl-meta">No files uploaded yet.</div>'}
-    </div>
-    <div class="om-file-upload-row">
-      <select id="omFileCategory">
-        ${FILE_CATEGORIES.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')}
-      </select>
-      <input type="text" id="omFileRelatedTo" placeholder="Related part/accessory (optional)" style="flex:1 1 160px;padding:8px 10px;border-radius:var(--radius-sm);border:1.5px solid var(--jc-border);font-size:12.5px;" />
-      <input type="file" id="omFileInput" />
-      <button class="btn btn-secondary" id="omFileUploadBtn" style="flex:none;width:auto;padding:8px 14px;">Upload</button>
     </div>
     </div>
 
@@ -1336,48 +1359,16 @@ async function openDetailPanel(id, scope) {
   document.getElementById('omMarkPaid').addEventListener('click', () => setSettlement(order.id, 'Paid'));
   document.getElementById('omMarkPending').addEventListener('click', () => setSettlement(order.id, 'Pending'));
 
-  // ---- Files ----
-  panel.querySelectorAll('[data-remove-file]').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      try {
-        await api(`/api/order-management/orders/${encodeURIComponent(order.id)}/files/${encodeURIComponent(btn.dataset.removeFile)}`, {
-          method: 'DELETE'
-        });
-        showToast('File removed');
-        closePanel();
-        openDetailPanel(order.id);
-        refreshCurrentView();
-      } catch (e) { showToast(e.message, true); }
-    });
-  });
-  document.getElementById('omFileUploadBtn').addEventListener('click', async () => {
-    const input = document.getElementById('omFileInput');
-    const file = input.files[0];
-    if (!file) return showToast('Choose a file first', true);
-    const category = document.getElementById('omFileCategory').value;
-    const relatedTo = document.getElementById('omFileRelatedTo').value;
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('category', category);
-    formData.append('relatedTo', relatedTo);
-    try {
-      const res = await fetch(`/api/order-management/orders/${encodeURIComponent(order.id)}/files`, {
-        method: 'POST',
-        body: formData
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || 'Upload failed');
-      }
-      showToast('File uploaded');
-      closePanel();
-      openDetailPanel(order.id);
-      refreshCurrentView();
-    } catch (e) { showToast(e.message, true); }
+  document.getElementById('fProductRisk').addEventListener('change', (e) => {
+    e.target.setAttribute('data-risk', e.target.value);
   });
 
   document.getElementById('fPhotoReferenceUploadBtn').addEventListener('click', () => {
     document.getElementById('fPhotoReferenceFile').click();
+  });
+  document.getElementById('fPhotoReferencePreview').addEventListener('click', () => {
+    const src = document.getElementById('fPhotoReferencePreview').src;
+    if (src) openImageLightbox(src);
   });
   document.getElementById('fPhotoReferenceFile').addEventListener('change', async (e) => {
     const file = e.target.files[0];
@@ -1474,7 +1465,7 @@ async function openDetailPanel(id, scope) {
   }
 
   function addAccessoryRow(data) {
-    accessoryRowsHost.insertAdjacentHTML('beforeend', accessoryRowHtml(editAccessoryRowCount, data));
+    accessoryRowsHost.insertAdjacentHTML('beforeend', accessoryRowHtml(editAccessoryRowCount, data, order.mainComponent.warehouse));
     const idx = editAccessoryRowCount;
     const row = panel.querySelector(`[data-accessory-row="${idx}"]`);
     panel.querySelector(`[data-remove-accessory="${idx}"]`).addEventListener('click', () => { row.remove(); });
@@ -1483,32 +1474,46 @@ async function openDetailPanel(id, scope) {
   }
   (order.accessories && order.accessories.length ? order.accessories : [{}]).forEach(addAccessoryRow);
   panel.querySelector('#omAddAccessoryRow').addEventListener('click', () => addAccessoryRow());
+  document.getElementById('fWarehouse').addEventListener('input', (e) => {
+    accessoryRowsHost.querySelectorAll('.om-acc-address-cell').forEach((cell) => { cell.textContent = e.target.value || '—'; });
+  });
 
-  // ---- Copy from previous PO: pulls product identity info forward (not
-  // order-specific things like quantities, dates, or status) so PO2 doesn't
-  // start from a blank form when it's really the same product as PO1. ----
-  document.getElementById('omCopyFromPoBtn').addEventListener('click', async () => {
-    const sourcePoNumber = document.getElementById('omCopyFromPoInput').value.trim();
-    if (!sourcePoNumber) return showToast('Enter a PO number to copy from', true);
-    if (sourcePoNumber.toLowerCase() === order.poNumber.toLowerCase()) {
-      return showToast("That's this same PO", true);
-    }
+  // ---- Copy from previous PO: auto-detects a match on SKU as you type it,
+  // rather than making you know and manually enter a prior PO number.
+  // Pulls product identity info forward (not order-specific things like
+  // quantities, dates, or status) so PO2 doesn't start from a blank form
+  // when it's really the same product as PO1. ----
+  let copyFromMatch = null;
+  async function checkForCopyFromMatch() {
+    const sku = document.getElementById('fMainSku').value.trim();
+    const box = document.getElementById('omCopyFromPoSuggestion');
+    if (!sku) { box.style.display = 'none'; copyFromMatch = null; return; }
     try {
-      const data = await api(`/api/order-management/orders/by-po-number/${encodeURIComponent(sourcePoNumber)}`);
-      const src = data.order;
+      const data = await api(`/api/order-management/orders/by-sku/${encodeURIComponent(sku)}`);
+      const match = (data.orders || []).find((o) => o.id !== order.id);
+      if (!match) { box.style.display = 'none'; copyFromMatch = null; return; }
+      copyFromMatch = match;
+      document.getElementById('omCopyFromPoText').textContent = `Found a previous PO with this SKU: ${match.poNumber}`;
+      box.style.display = 'flex';
+    } catch (e) { box.style.display = 'none'; copyFromMatch = null; }
+  }
+  document.getElementById('fMainSku').addEventListener('change', checkForCopyFromMatch);
+  checkForCopyFromMatch();
 
-      document.getElementById('fMainSku').value = src.mainComponent.sku || '';
+  document.getElementById('omCopyFromPoBtn').addEventListener('click', async () => {
+    if (!copyFromMatch) return;
+    try {
+      const src = copyFromMatch;
+
       document.getElementById('fSupplierName').value = src.supplier.name || '';
       document.getElementById('fSupplierCode').value = src.supplier.code || '';
-      document.getElementById('fProductRisk').value = src.productRisk || '';
+      const riskSelect = document.getElementById('fProductRisk');
+      riskSelect.value = src.productRisk || '';
+      riskSelect.setAttribute('data-risk', src.productRisk || '');
       document.getElementById('fFabricInfo').value = src.mainComponent.fabricInfo || '';
       document.getElementById('fComponent').value = src.mainComponent.component || '';
-      document.getElementById('fWashLabel').value = src.mainComponent.washLabel || '';
       document.getElementById('fManufacturingDrawing').value = src.mainComponent.manufacturingDrawing || '';
-      document.getElementById('fModelNumber').value = src.mainComponent.modelNumber || '';
-      document.getElementById('fDimensions').value = src.mainComponent.dimensions || '';
       document.getElementById('fFactoryPrice').value = src.mainComponent.factoryPrice || '';
-      document.getElementById('fSalesUnitPrice').value = src.mainComponent.salesUnitPrice || '';
       document.getElementById('fWarehouse').value = src.mainComponent.warehouse || '';
 
       // Size distribution: carry the SKU/size structure forward, not the
@@ -1536,6 +1541,7 @@ async function openDetailPanel(id, scope) {
 
   // ---- Order Status dropdown - saves immediately, same as clicking the tracker ----
   document.getElementById('fOrderStatusSelect').addEventListener('change', async (e) => {
+    e.target.setAttribute('data-status', e.target.value);
     try {
       await api(`/api/order-management/orders/${encodeURIComponent(order.id)}/status`, {
         method: 'POST',
@@ -1554,20 +1560,17 @@ async function openDetailPanel(id, scope) {
   // a future suggestion without needing a separate managed list. ----
   (async () => {
     try {
-      const [suppliersData, historyData] = await Promise.all([
+      const [suppliersData, historyData, optionsData] = await Promise.all([
         api('/api/suppliers'),
-        api('/api/order-management/field-history')
+        api('/api/order-management/field-history'),
+        api('/api/options')
       ]);
       const suppliers = suppliersData.suppliers || [];
-      const fillList = (id, values) => {
-        const dl = document.getElementById(id);
-        if (dl) dl.innerHTML = values.map((v) => `<option value="${escapeHtml(v)}"></option>`).join('');
-      };
-      fillList('dlSupplierNames', suppliers.map((s) => s.name));
-      fillList('dlFabricCodes', historyData.fabricCodes || []);
-      fillList('dlFabricTypes', historyData.fabricTypes || []);
-      fillList('dlWashLabels', historyData.washLabels || []);
-      fillList('dlManufacturingDrawings', historyData.manufacturingDrawings || []);
+      const supplierNames = suppliers.map((s) => s.name);
+
+      attachTypeahead('fSupplierName', () => supplierNames);
+      attachTypeahead('fFabricInfo', () => historyData.fabricCodes || []);
+      attachTypeahead('fComponent', () => historyData.fabricTypes || []);
 
       const supplierNameInput = document.getElementById('fSupplierName');
       const supplierCodeInput = document.getElementById('fSupplierCode');
@@ -1575,8 +1578,25 @@ async function openDetailPanel(id, scope) {
         const match = suppliers.find((s) => s.name.trim().toLowerCase() === supplierNameInput.value.trim().toLowerCase());
         if (match && match.vendorCode) supplierCodeInput.value = match.vendorCode;
       });
-    } catch (e) { /* datalists are a convenience - fine to skip silently if this fails */ }
+
+      // Order Management Specialist - same list as QA/QC team names.
+      const buyerSelect = document.getElementById('fBuyer');
+      if (buyerSelect) {
+        const qaLeads = optionsData.qaLeads || [];
+        const current = buyerSelect.dataset.current || '';
+        const names = current && !qaLeads.includes(current) ? [current, ...qaLeads] : qaLeads;
+        buyerSelect.innerHTML = `<option value="">— Select —</option>` +
+          names.map((n) => `<option value="${escapeHtml(n)}" ${n === current ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('');
+      }
+    } catch (e) { /* these are conveniences - fine to skip silently if this fails */ }
   })();
+
+  wireUploadField('fManufacturingDrawing', order.id, 'Design document', true);
+  wireUploadField('fWashingTagUrl', order.id, 'Other', true);
+  wireUploadField('fPackagingUrl', order.id, 'Other', true);
+  if (order.productLine !== 'clothing') wireUploadField('fDimensionsUrl', order.id, 'Other', true);
+  wireUploadField('fWeightUrl', order.id, 'Other', true);
+  wireUploadField('fShippingWeightUrl', order.id, 'Other', true);
 
   // Master "Save changes": everything on the page except status (saves
   // immediately above) and payment status (its own Mark Paid/Pending toggle).
@@ -1596,22 +1616,18 @@ async function openDetailPanel(id, scope) {
       mainComponent: {
         name: document.getElementById('fMainName').value,
         sku: document.getElementById('fMainSku').value,
-        modelNumber: document.getElementById('fModelNumber').value,
-        dimensions: document.getElementById('fDimensions').value,
         factoryPrice: document.getElementById('fFactoryPrice').value || null,
-        salesUnitPrice: document.getElementById('fSalesUnitPrice').value || null,
         purchaseQuantity: document.getElementById('fPurchaseQty').value || null,
-        salesVolume: document.getElementById('fSalesVolume').value || null,
-        totalPurchasePrice: document.getElementById('fTotalPurchasePrice').value || null,
-        actualWeight: document.getElementById('fActualWeight').value || null,
-        transportWeight: document.getElementById('fTransportWeight').value || null,
         warehouse: document.getElementById('fWarehouse').value,
-        productionPrecautions: document.getElementById('fProductionPrecautions').value,
         photoReference: document.getElementById('fPhotoReference').value,
         manufacturingDrawing: document.getElementById('fManufacturingDrawing').value,
+        washingTagUrl: document.getElementById('fWashingTagUrl').value,
+        packagingUrl: document.getElementById('fPackagingUrl').value,
+        dimensionsUrl: productLine !== 'clothing' ? document.getElementById('fDimensionsUrl').value : '',
+        weightUrl: document.getElementById('fWeightUrl').value,
+        shippingWeightUrl: document.getElementById('fShippingWeightUrl').value,
         fabricInfo: document.getElementById('fFabricInfo').value,
         component: document.getElementById('fComponent').value,
-        washLabel: document.getElementById('fWashLabel').value,
         sizeDistribution: productLine === 'clothing' ? Array.from(sizeRowsHost.querySelectorAll('[data-size-row]')).map((row) => ({
           sku: row.querySelector('.om-size-sku').value,
           size: row.querySelector('.om-size-size').value,
@@ -1780,38 +1796,103 @@ function collectReplacementRows(container) {
   })).filter((r) => r.sku || r.size || r.quantity);
 }
 
-function accessoryRowHtml(idx, data) {
+// Generic upload-type field: label + (thumbnail or file link) + Upload
+// button, backed by the same order-management file-upload endpoint used
+// elsewhere. Used for the several Product Documentation fields that are
+// uploads rather than typed values (Manufacturing Drawing, Washing Tag,
+// Packaging, etc).
+function uploadFieldHtml(fieldId, label, currentUrl, isImage) {
+  const preview = currentUrl
+    ? (isImage
+      ? `<img id="${fieldId}Preview" class="om-table-thumb" style="width:44px;height:44px;cursor:pointer;" src="${escapeHtml(currentUrl)}" alt="" title="Click to view larger" />`
+      : `<a id="${fieldId}Preview" href="${escapeHtml(currentUrl)}" target="_blank" rel="noopener" style="font-size:12px;">View file</a>`)
+    : `<span id="${fieldId}Preview" style="display:none;"></span>`;
+  return `
+    <div>
+      <label>${escapeHtml(label)}</label>
+      <div style="display:flex;align-items:center;gap:10px;">
+        ${preview}
+        <input type="hidden" id="${fieldId}" value="${escapeHtml(currentUrl || '')}" />
+        <input type="file" id="${fieldId}File" style="display:none;" />
+        <button type="button" class="om-table-upload-btn" id="${fieldId}UploadBtn">Upload</button>
+      </div>
+    </div>
+  `;
+}
+
+// Wires the button/file-input/preview behavior for a field built with
+// uploadFieldHtml() above. Call once per field, after it's in the DOM.
+function wireUploadField(fieldId, orderId, category, isImage) {
+  const uploadBtn = document.getElementById(`${fieldId}UploadBtn`);
+  const fileInput = document.getElementById(`${fieldId}File`);
+  if (!uploadBtn || !fileInput) return;
+  uploadBtn.addEventListener('click', () => fileInput.click());
+  if (isImage) {
+    const img = document.getElementById(`${fieldId}Preview`);
+    if (img && img.tagName === 'IMG') img.addEventListener('click', () => openImageLightbox(img.src));
+  }
+  fileInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('category', category);
+    formData.append('relatedTo', fieldId);
+    try {
+      const res = await fetch(`/api/order-management/orders/${encodeURIComponent(orderId)}/files`, { method: 'POST', body: formData });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Upload failed');
+      document.getElementById(fieldId).value = body.file.url;
+      const container = document.getElementById(`${fieldId}Preview`).parentNode;
+      const old = document.getElementById(`${fieldId}Preview`);
+      let fresh;
+      if (isImage) {
+        fresh = document.createElement('img');
+        fresh.id = `${fieldId}Preview`;
+        fresh.className = 'om-table-thumb';
+        fresh.style.cssText = 'width:44px;height:44px;cursor:pointer;';
+        fresh.src = body.file.url;
+        fresh.addEventListener('click', () => openImageLightbox(body.file.url));
+      } else {
+        fresh = document.createElement('a');
+        fresh.id = `${fieldId}Preview`;
+        fresh.href = body.file.url;
+        fresh.target = '_blank';
+        fresh.rel = 'noopener';
+        fresh.style.fontSize = '12px';
+        fresh.textContent = 'View file';
+      }
+      container.replaceChild(fresh, old);
+      showToast('File uploaded');
+    } catch (err) { showToast(err.message, true); }
+  });
+}
+
+function accessoryRowHtml(idx, data, mainAddress) {
   data = data || {};
   const rowId = data.id || `tmp-${Date.now()}-${idx}`;
   return `
     <tr data-accessory-row="${idx}" data-accessory-id="${escapeHtml(rowId)}">
+      <td><input type="text" class="om-acc-name" value="${escapeHtml(data.partName || '')}" /></td>
       <td class="om-acc-image-cell">
         ${data.imageUrl ? `<img class="om-table-thumb" src="${escapeHtml(data.imageUrl)}" alt="" />` : ''}
         <input type="hidden" class="om-acc-image-url" value="${escapeHtml(data.imageUrl || '')}" />
         <input type="file" class="om-acc-image-file" accept="image/*" style="display:none;" />
         <button type="button" class="om-table-upload-btn om-acc-image-upload-btn">Upload</button>
       </td>
-      <td><input type="text" class="om-acc-name" value="${escapeHtml(data.partName || '')}" /></td>
       <td><input type="text" class="om-acc-dims" value="${escapeHtml(data.dimensions || '')}" /></td>
-      <td><input type="number" step="0.01" class="om-acc-unit-price" value="${escapeHtml(data.unitPrice ?? '')}" /></td>
       <td><input type="number" class="om-acc-qty" value="${escapeHtml(data.quantity ?? '')}" /></td>
-      <td><input type="number" step="0.01" class="om-acc-total-price" value="${escapeHtml(data.totalPrice ?? '')}" /></td>
       <td><input type="text" class="om-acc-supplier" list="dlSupplierNames" value="${escapeHtml(data.supplierName || '')}" /></td>
+      <td><input type="number" step="0.01" class="om-acc-unit-price" value="${escapeHtml(data.unitPrice ?? '')}" /></td>
       <td><input type="text" class="om-acc-supplier-contact" value="${escapeHtml(data.supplierContact || '')}" /></td>
       <td><input type="date" class="om-acc-expected-delivery" value="${escapeHtml(data.expectedDeliveryDate || '')}" /></td>
-      <td><input type="text" class="om-acc-address" value="${escapeHtml(data.deliveryAddress || '')}" /></td>
+      <td class="om-acc-address-cell" style="color:var(--jc-muted);font-size:12.5px;">${escapeHtml(mainAddress || '—')}</td>
       <td class="om-acc-doc-cell">
         ${data.designDocUrl ? `<a href="${escapeHtml(data.designDocUrl)}" target="_blank" rel="noopener" style="display:block;font-size:11.5px;margin-bottom:4px;">View file</a>` : ''}
         <input type="hidden" class="om-acc-doc-url" value="${escapeHtml(data.designDocUrl || '')}" />
         <input type="file" class="om-acc-doc-file" style="display:none;" />
         <button type="button" class="om-table-upload-btn om-acc-doc-upload-btn">Upload</button>
       </td>
-      <td>
-        <select class="om-acc-status">
-          ${ACCESSORY_STATUSES.map((s) => `<option value="${escapeHtml(s)}" ${data.status === s ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('')}
-        </select>
-      </td>
-      <td><input type="text" class="om-acc-remark" value="${escapeHtml(data.remark || '')}" /></td>
       <td><button type="button" class="om-row-remove" data-remove-accessory="${idx}" title="Remove">&times;</button></td>
     </tr>
   `;
@@ -1996,13 +2077,11 @@ function collectAccessoryRows(container) {
     dimensions: row.querySelector('.om-acc-dims').value,
     quantity: row.querySelector('.om-acc-qty').value || null,
     unitPrice: row.querySelector('.om-acc-unit-price').value || null,
-    totalPrice: row.querySelector('.om-acc-total-price').value || null,
+    totalPrice: (row.querySelector('.om-acc-qty').value || 0) * (row.querySelector('.om-acc-unit-price').value || 0) || null,
     expectedDeliveryDate: row.querySelector('.om-acc-expected-delivery').value || null,
     supplierName: row.querySelector('.om-acc-supplier').value,
     supplierContact: row.querySelector('.om-acc-supplier-contact').value,
-    deliveryAddress: row.querySelector('.om-acc-address').value,
-    status: row.querySelector('.om-acc-status').value,
-    remark: row.querySelector('.om-acc-remark').value,
+    deliveryAddress: row.querySelector('.om-acc-address-cell') ? row.querySelector('.om-acc-address-cell').textContent : '',
     imageUrl: row.querySelector('.om-acc-image-url').value,
     designDocUrl: row.querySelector('.om-acc-doc-url').value
   })).filter((a) => a.partName || a.supplierName);

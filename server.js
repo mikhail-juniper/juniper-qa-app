@@ -761,6 +761,11 @@ app.get('/api/order-management/orders/by-po-number/:poNumber', (req, res) => {
   res.json({ order });
 });
 
+// Also placed before the generic :id route for the same reason.
+app.get('/api/order-management/orders/by-sku/:sku', (req, res) => {
+  res.json({ orders: orderManagementStore.getOrdersBySku(req.params.sku) });
+});
+
 app.get('/api/order-management/orders/:id', (req, res) => {
   const order = orderManagementStore.getOrderById(req.params.id);
   if (!order) return res.status(404).json({ error: 'Order not found' });

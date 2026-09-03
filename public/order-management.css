@@ -314,6 +314,38 @@
   background: #fff; cursor: pointer; white-space: nowrap;
 }
 
+/* Custom typeahead: standard dropdown below the field, filters to options
+   starting with what's typed. Replaces native <datalist>, whose rendering
+   position and "contains anywhere" matching aren't reliably controllable
+   across browsers. */
+.om-typeahead-wrap { position: relative; }
+.om-typeahead-menu {
+  position: absolute; top: 100%; left: 0; right: 0; margin-top: 2px;
+  background: #fff; border: 1.5px solid var(--jc-border); border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12); max-height: 220px; overflow-y: auto;
+  z-index: 30; display: none;
+}
+.om-typeahead-menu.open { display: block; }
+.om-typeahead-option { padding: 8px 12px; font-size: 13px; cursor: pointer; }
+.om-typeahead-option:hover, .om-typeahead-option.active { background: var(--jc-mint-light); }
+.om-typeahead-empty { padding: 8px 12px; font-size: 12.5px; color: var(--jc-muted); }
+
+/* Color-coded status / risk pills, used as <select> backgrounds so the
+   selected state itself carries the color, not just a separate badge. */
+select.om-status-select[data-status="New Request"] { background: #eef1f4; color: #445056; border-color: #d3d9de; }
+select.om-status-select[data-status="Order Placed"] { background: #e6f0fd; color: #1955a8; border-color: #aecdf5; }
+select.om-status-select[data-status="PP Quality Inspection"] { background: #f3e8fd; color: #6b21a8; border-color: #d9b8f5; }
+select.om-status-select[data-status="In Production"] { background: #fff1e0; color: #a35a00; border-color: #f5cd94; }
+select.om-status-select[data-status="Bulk Quality Inspection"] { background: #f3e8fd; color: #6b21a8; border-color: #d9b8f5; }
+select.om-status-select[data-status="In Transportation"] { background: #e6f0fd; color: #1955a8; border-color: #aecdf5; }
+select.om-status-select[data-status="Delivered"] { background: #e0f7f3; color: #0f7d6c; border-color: #9fe3d6; }
+select.om-status-select[data-status="Completed"] { background: #e9f9ee; color: #17794a; border-color: #a9e3bf; }
+
+select.om-risk-select[data-risk="high"] { background: #fde8e8; color: #b42318; border-color: #f5b5ac; }
+select.om-risk-select[data-risk="medium"] { background: #fff6e5; color: #9a6700; border-color: #f3d38a; }
+select.om-risk-select[data-risk="low"] { background: #e9f9ee; color: #17794a; border-color: #a9e3bf; }
+select.om-risk-select[data-risk=""] { background: #fff; color: var(--jc-text); }
+
 .om-pill {
   display: inline-block;
   padding: 4px 10px;
