@@ -291,13 +291,122 @@ async function renderSuppliersShell(root) {
       <button class="btn btn-primary" id="omNewSupplierBtn" style="flex:none;width:auto;padding:10px 18px;">+ New supplier</button>
     </div>
     <div id="omSuppliersHost" class="om-table-wrap"><div class="om-empty">Loading...</div></div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin:32px 0 14px 0;">
+      <h2 class="om-view-title" style="margin:0;">Warehouses</h2>
+      <button class="btn btn-primary" id="omNewWarehouseBtn" style="flex:none;width:auto;padding:10px 18px;">+ New warehouse</button>
+    </div>
+    <div id="omWarehousesHost" class="om-table-wrap"><div class="om-empty">Loading...</div></div>
   `;
   bindBackToHub();
   document.getElementById('omNewSupplierBtn').addEventListener('click', () => openSupplierForm(null));
+  document.getElementById('omNewWarehouseBtn').addEventListener('click', () => openWarehouseForm(null));
   try {
     const data = await api('/api/suppliers');
     renderSuppliersTable(data.suppliers || []);
   } catch (e) { showToast(e.message, true); }
+  try {
+    const data = await api('/api/warehouses');
+    renderWarehousesTable(data.warehouses || []);
+  } catch (e) { showToast(e.message, true); }
+}
+
+function renderWarehousesTable(warehouses) {
+  const host = document.getElementById('omWarehousesHost');
+  if (!host) return;
+  if (!warehouses.length) {
+    host.innerHTML = `<div class="om-empty">No warehouses recorded yet. Click "New warehouse" to add your first one.</div>`;
+    return;
+  }
+  host.innerHTML = `
+    <table class="om-table">
+      <thead><tr><th>Warehouse name</th><th>Address</th><th>Contact name</th><th>Phone number</th></tr></thead>
+      <tbody>
+        ${warehouses.map((w) => `
+          <tr data-id="${escapeHtml(w.id)}">
+            <td><strong>${escapeHtml(w.name)}</strong></td>
+            <td>${escapeHtml(w.address || '—')}</td>
+            <td>${escapeHtml(w.contactName || '—')}</td>
+            <td>${escapeHtml(w.phoneNumber || '—')}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+  host.querySelectorAll('tbody tr').forEach((tr) => {
+    tr.addEventListener('click', async () => {
+      try {
+        const data = await api(`/api/warehouses/${encodeURIComponent(tr.dataset.id)}`);
+        openWarehouseForm(data.warehouse);
+      } catch (e) { showToast(e.message, true); }
+    });
+  });
+}
+
+function openWarehouseForm(warehouse) {
+  const panel = document.createElement('div');
+  panel.className = 'om-panel';
+  panel.innerHTML = `
+   <div class="om-panel-inner">
+    <div class="om-panel-header">
+      <div style="font-size:19px;font-weight:700;">${warehouse ? 'Edit warehouse' : 'New warehouse'}</div>
+      <button class="om-panel-close" id="whClose">&times;</button>
+    </div>
+    <div class="om-field-grid">
+      <div><label>Warehouse name *</label><input id="whName" type="text" value="${val(warehouse && warehouse.name)}" /></div>
+      <div><label>Contact name</label><input id="whContactName" type="text" value="${val(warehouse && warehouse.contactName)}" /></div>
+      <div><label>Phone number</label><input id="whPhoneNumber" type="text" value="${val(warehouse && warehouse.phoneNumber)}" /></div>
+    </div>
+    <div class="om-field-grid" style="margin-top:10px;">
+      <div style="grid-column:1/-1;"><label>Address</label><input id="whAddress" type="text" value="${val(warehouse && warehouse.address)}" /></div>
+      <div style="grid-column:1/-1;"><label>Notes</label><input id="whNotes" type="text" value="${val(warehouse && warehouse.notes)}" /></div>
+    </div>
+    <div style="margin-top:22px;display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn btn-secondary" id="whCancel" style="flex:none;width:auto;padding:10px 18px;">Cancel</button>
+      ${warehouse ? `<button class="btn btn-secondary" id="whDelete" style="flex:none;width:auto;padding:10px 18px;color:var(--jc-fail);">Delete</button>` : ''}
+      <button class="btn btn-primary" id="whSave" style="flex:none;width:auto;padding:10px 18px;">${warehouse ? 'Save changes' : 'Create warehouse'}</button>
+    </div>
+   </div>
+  `;
+  mountPanel(panel);
+  bindPanelEscape();
+  document.getElementById('whClose').addEventListener('click', closePanel);
+  document.getElementById('whCancel').addEventListener('click', closePanel);
+
+  if (warehouse) {
+    document.getElementById('whDelete').addEventListener('click', async () => {
+      if (!confirm(`Delete "${warehouse.name}"? This can't be undone.`)) return;
+      try {
+        await api(`/api/warehouses/${encodeURIComponent(warehouse.id)}`, { method: 'DELETE' });
+        showToast('Warehouse deleted');
+        closePanel();
+        refreshCurrentView();
+      } catch (e) { showToast(e.message, true); }
+    });
+  }
+
+  document.getElementById('whSave').addEventListener('click', async () => {
+    const name = document.getElementById('whName').value.trim();
+    if (!name) return showToast('Warehouse name is required', true);
+    const payload = {
+      name,
+      contactName: document.getElementById('whContactName').value,
+      phoneNumber: document.getElementById('whPhoneNumber').value,
+      address: document.getElementById('whAddress').value,
+      notes: document.getElementById('whNotes').value
+    };
+    try {
+      if (warehouse) {
+        await api(`/api/warehouses/${encodeURIComponent(warehouse.id)}`, { method: 'PATCH', body: JSON.stringify(payload) });
+        showToast('Warehouse updated');
+      } else {
+        await api('/api/warehouses', { method: 'POST', body: JSON.stringify(payload) });
+        showToast('Warehouse created');
+      }
+      closePanel();
+      refreshCurrentView();
+    } catch (e) { showToast(e.message, true); }
+  });
 }
 
 function renderSuppliersTable(suppliers) {
@@ -451,72 +560,142 @@ async function renderProductsShell(root) {
   const host = document.getElementById('omProductsHost');
   host.innerHTML = `<div class="om-empty">Loading...</div>`;
   try {
-    const [clothing, toys, other, manualData] = await Promise.all([
-      api('/api/order-management/products?productLine=clothing'),
-      api('/api/order-management/products?productLine=toys'),
-      api('/api/order-management/products?productLine=other'),
-      api('/api/catalog/products')
-    ]);
-    const manual = manualData.products || [];
-    host.innerHTML = [
-      productsCategoryBlock('clothing', clothing.products || [], manual.filter((p) => p.productLine === 'clothing')),
-      productsCategoryBlock('toys', toys.products || [], manual.filter((p) => p.productLine === 'toys')),
-      productsCategoryBlock('other', other.products || [], manual.filter((p) => p.productLine === 'other'))
-    ].join('');
-    host.querySelectorAll('tbody tr[data-po]').forEach((tr) => {
-      tr.addEventListener('click', () => openProductDetailView(tr.dataset.po));
-    });
-    host.querySelectorAll('tbody tr[data-manual-id]').forEach((tr) => {
-      tr.addEventListener('click', async () => {
-        try {
-          const data = await api(`/api/catalog/products/${encodeURIComponent(tr.dataset.manualId)}`);
-          openProductForm(data.product);
-        } catch (e) { showToast(e.message, true); }
-      });
+    // A real directory now (like Suppliers) - every product that's ever
+    // been on a PO already has a record here (auto-synced server-side),
+    // so this is just one list, not a manual-entries table plus a
+    // separate PO-derived table.
+    const data = await api('/api/catalog/products');
+    const products = data.products || [];
+    host.innerHTML = ['clothing', 'toys', 'other']
+      .map((line) => productsCategoryBlock(line, products.filter((p) => p.productLine === line)))
+      .join('');
+    host.querySelectorAll('tbody tr[data-id]').forEach((tr) => {
+      tr.addEventListener('click', () => openProductProfile(tr.dataset.id));
     });
   } catch (e) { showToast(e.message, true); }
 }
 
-function productsCategoryBlock(productLine, products, manualProducts) {
+function productsCategoryBlock(productLine, products) {
   const meta = CATEGORY_META[productLine];
-  const total = products.length + manualProducts.length;
   return `
     <div class="om-category-tile" style="margin-bottom:20px;">
-      <div class="om-category-tile-header" style="border-color:${meta.color};"><span>${meta.label} Products (${total})</span></div>
-      ${total ? `
-        <table class="om-table">
-          <thead><tr><th>Name</th><th>SKU</th><th>Model #</th><th>Factory price</th><th>Sales unit price</th><th># POs</th></tr></thead>
-          <tbody>
-            ${manualProducts.map((p) => `
-              <tr data-manual-id="${escapeHtml(p.id)}">
-                <td><strong>${escapeHtml(p.name)}</strong></td>
-                <td>${escapeHtml(p.sku || '—')}</td>
-                <td>${escapeHtml(p.modelNumber || '—')}</td>
-                <td>${fmtMoney(p.factoryPrice)}</td>
-                <td>${fmtMoney(p.salesUnitPrice)}</td>
-                <td>—</td>
-              </tr>
-            `).join('')}
-            ${products.map((p) => `
-              <tr data-po="${escapeHtml(p.examplePoId)}">
-                <td><strong>${escapeHtml(p.name)}</strong></td>
-                <td>${escapeHtml(p.sku || '—')}</td>
-                <td>${escapeHtml(p.modelNumber || '—')}</td>
-                <td>${fmtMoney(p.factoryPrice)}</td>
-                <td>${fmtMoney(p.salesUnitPrice)}</td>
-                <td>${p.poCount}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
+      <div class="om-category-tile-header" style="border-color:${meta.color};"><span>${meta.label} Products (${products.length})</span></div>
+      ${products.length ? `
+        <div class="om-table-wrap">
+          <table class="om-table">
+            <thead><tr><th>Name</th><th>SKU</th><th>Unit price</th><th>Supplier</th><th># POs</th></tr></thead>
+            <tbody>
+              ${products.map((p) => `
+                <tr data-id="${escapeHtml(p.id)}">
+                  <td><strong>${escapeHtml(p.name)}</strong></td>
+                  <td>${escapeHtml(p.sku || '—')}</td>
+                  <td>${fmtMoney(p.factoryPrice)}</td>
+                  <td>${escapeHtml(p.supplierName || '—')}</td>
+                  <td>${p.poCount || 0}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
       ` : `<div class="om-empty">No ${meta.label.toLowerCase()} products recorded yet.</div>`}
     </div>
   `;
 }
 
+/** Read-first profile for one directory product: its own details plus a
+ *  live list of every PO that's used it. Editing happens via the "Edit"
+ *  button, which reuses the same create/edit form as "+ Add product". */
+async function openProductProfile(id) {
+  let product, history;
+  try {
+    const [productData, historyData] = await Promise.all([
+      api(`/api/catalog/products/${encodeURIComponent(id)}`),
+      api(`/api/catalog/products/${encodeURIComponent(id)}/history`)
+    ]);
+    product = productData.product;
+    history = historyData.orders || [];
+  } catch (e) { return showToast(e.message, true); }
+
+  const isApparel = product.productLine === 'clothing';
+  const meta = CATEGORY_META[product.productLine] || {};
+
+  const panel = document.createElement('div');
+  panel.className = 'om-panel';
+  panel.innerHTML = `
+   <div class="om-panel-inner">
+    <div class="om-panel-header">
+      <div>
+        <div style="font-size:19px;font-weight:700;">${escapeHtml(product.name || 'Unnamed product')}</div>
+        <div style="color:var(--jc-muted);font-size:13px;">SKU: ${escapeHtml(product.sku || '—')}</div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <button class="btn btn-secondary" id="omEditProductBtn" style="flex:none;width:auto;padding:7px 14px;font-size:13px;">Edit</button>
+        <button class="om-panel-close" id="omClosePanel">&times;</button>
+      </div>
+    </div>
+
+    <div class="om-section-title">Product details</div>
+    <div class="om-detail-grid">
+      <div class="om-detail-row"><span class="om-label">Name</span><span class="om-value">${escapeHtml(product.name || '—')}</span></div>
+      <div class="om-detail-row"><span class="om-label">SKU</span><span class="om-value">${escapeHtml(product.sku || '—')}</span></div>
+      <div class="om-detail-row"><span class="om-label">Unit Price</span><span class="om-value">${fmtMoney(product.factoryPrice)}</span></div>
+      <div class="om-detail-row"><span class="om-label">Product Category</span><span class="om-value">${escapeHtml(meta.label || product.productLine || '—')}</span></div>
+      <div class="om-detail-row"><span class="om-label">Dimensions</span><span class="om-value">${escapeHtml(product.dimensions || '—')}</span></div>
+      <div class="om-detail-row"><span class="om-label">Weight</span><span class="om-value">${product.weight ? escapeHtml(String(product.weight)) : '—'}</span></div>
+      ${isApparel ? `
+        <div class="om-detail-row"><span class="om-label">Sizing chart</span><span class="om-value"><a href="sizing-charts.html" target="_blank" rel="noopener">View Sizing Charts →</a></span></div>
+        <div class="om-detail-row"><span class="om-label">Fabric Code</span><span class="om-value">${escapeHtml(product.fabricCode || '—')}</span></div>
+        <div class="om-detail-row"><span class="om-label">Fabric Type</span><span class="om-value">${escapeHtml(product.fabricType || '—')}</span></div>
+        <div class="om-detail-row"><span class="om-label">Washing Tag</span><span class="om-value">${escapeHtml(product.washingTag || '—')}</span></div>
+      ` : ''}
+    </div>
+
+    <div class="om-section-title" style="margin-top:20px;">Supplier</div>
+    <div class="om-detail-grid">
+      <div class="om-detail-row"><span class="om-label">Name</span><span class="om-value">${escapeHtml(product.supplierName || '—')}</span></div>
+      <div class="om-detail-row"><span class="om-label">Code</span><span class="om-value">${escapeHtml(product.supplierCode || '—')}</span></div>
+      <div class="om-detail-row"><span class="om-label">Contact</span><span class="om-value">${escapeHtml(product.supplierContact || '—')}</span></div>
+    </div>
+
+    <div class="om-section-title" style="margin-top:20px;">Historical POs</div>
+    ${history.length ? `
+      <div class="om-table-wrap">
+        <table class="om-table" style="min-width:0;">
+          <thead><tr><th>PO Number</th><th>Order date</th><th>Quantity</th></tr></thead>
+          <tbody>
+            ${history.map((o) => `
+              <tr data-order-id="${escapeHtml(o.id)}">
+                <td><strong>${escapeHtml(o.poNumber || '—')}</strong></td>
+                <td>${fmtDate(o.orderDate || o.createdAt)}</td>
+                <td>${o.orderQuantity != null ? o.orderQuantity : '—'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    ` : `<div class="om-empty">No POs recorded yet for this product.</div>`}
+   </div>
+  `;
+
+  mountPanel(panel);
+  bindPanelEscape();
+  document.getElementById('omClosePanel').addEventListener('click', closePanel);
+  document.getElementById('omEditProductBtn').addEventListener('click', () => {
+    closePanel();
+    openProductForm(product);
+  });
+  panel.querySelectorAll('tbody tr[data-order-id]').forEach((tr) => {
+    tr.addEventListener('click', () => {
+      closePanel();
+      openDetailPanel(tr.dataset.orderId, 'full');
+    });
+  });
+}
+
 function openProductForm(product) {
   const panel = document.createElement('div');
   panel.className = 'om-panel';
+  const isApparel = !product || product.productLine === 'clothing';
   panel.innerHTML = `
    <div class="om-panel-inner">
     <div class="om-panel-header">
@@ -527,16 +706,30 @@ function openProductForm(product) {
       <div><label>Name *</label><input id="prodName" type="text" value="${val(product && product.name)}" /></div>
       <div><label>SKU</label><input id="prodSku" type="text" value="${val(product && product.sku)}" /></div>
       <div><label>Model number</label><input id="prodModelNumber" type="text" value="${val(product && product.modelNumber)}" /></div>
-      <div><label>Product line</label>
+      <div><label>Product Category</label>
         <select id="prodProductLine">
           <option value="clothing" ${!product || product.productLine === 'clothing' ? 'selected' : ''}>Apparel</option>
           <option value="toys" ${product && product.productLine === 'toys' ? 'selected' : ''}>Toys</option>
           <option value="other" ${product && product.productLine === 'other' ? 'selected' : ''}>Other</option>
         </select>
       </div>
-      <div><label>Factory price (¥)</label><input id="prodFactoryPrice" type="number" step="0.01" value="${val(product && product.factoryPrice)}" /></div>
+      <div><label>Unit Price (¥)</label><input id="prodFactoryPrice" type="number" step="0.01" value="${val(product && product.factoryPrice)}" /></div>
       <div><label>Sales unit price (¥)</label><input id="prodSalesUnitPrice" type="number" step="0.01" value="${val(product && product.salesUnitPrice)}" /></div>
+      <div><label>Dimensions</label><input id="prodDimensions" type="text" placeholder="e.g. 30 x 20 x 5 cm" value="${val(product && product.dimensions)}" /></div>
+      <div><label>Weight</label><input id="prodWeight" type="text" placeholder="e.g. 450g" value="${val(product && product.weight)}" /></div>
     </div>
+    <div id="prodApparelFields" class="om-field-grid" style="margin-top:10px;${isApparel ? '' : 'display:none;'}">
+      <div><label>Fabric code</label><input id="prodFabricCode" type="text" value="${val(product && product.fabricCode)}" /></div>
+      <div><label>Fabric type</label><input id="prodFabricType" type="text" value="${val(product && product.fabricType)}" /></div>
+      <div style="grid-column:1/-1;"><label>Washing tag</label><input id="prodWashingTag" type="text" value="${val(product && product.washingTag)}" /></div>
+    </div>
+    <div class="om-section-title" style="margin-top:20px;">Supplier</div>
+    <div class="om-field-grid">
+      <div><label>Supplier name</label><input id="prodSupplierName" type="text" list="dlProdSupplierNames" value="${val(product && product.supplierName)}" /></div>
+      <div><label>Supplier code</label><input id="prodSupplierCode" type="text" value="${val(product && product.supplierCode)}" /></div>
+      <div><label>Supplier contact</label><input id="prodSupplierContact" type="text" value="${val(product && product.supplierContact)}" /></div>
+    </div>
+    <datalist id="dlProdSupplierNames"></datalist>
     <div class="om-field-grid" style="margin-top:10px;">
       <div style="grid-column:1/-1;"><label>Notes</label><input id="prodNotes" type="text" value="${val(product && product.notes)}" /></div>
     </div>
@@ -551,6 +744,15 @@ function openProductForm(product) {
   bindPanelEscape();
   document.getElementById('prodClose').addEventListener('click', closePanel);
   document.getElementById('prodCancel').addEventListener('click', closePanel);
+
+  api('/api/suppliers').then((data) => {
+    const dl = document.getElementById('dlProdSupplierNames');
+    if (dl) dl.innerHTML = (data.suppliers || []).map((s) => `<option value="${escapeHtml(s.name)}"></option>`).join('');
+  }).catch(() => { /* datalist is a convenience - fine to skip if this fails */ });
+
+  document.getElementById('prodProductLine').addEventListener('change', (e) => {
+    document.getElementById('prodApparelFields').style.display = e.target.value === 'clothing' ? '' : 'none';
+  });
 
   if (product) {
     document.getElementById('prodDelete').addEventListener('click', async () => {
@@ -574,6 +776,14 @@ function openProductForm(product) {
       productLine: document.getElementById('prodProductLine').value,
       factoryPrice: document.getElementById('prodFactoryPrice').value || null,
       salesUnitPrice: document.getElementById('prodSalesUnitPrice').value || null,
+      dimensions: document.getElementById('prodDimensions').value,
+      weight: document.getElementById('prodWeight').value,
+      fabricCode: document.getElementById('prodFabricCode').value,
+      fabricType: document.getElementById('prodFabricType').value,
+      washingTag: document.getElementById('prodWashingTag').value,
+      supplierName: document.getElementById('prodSupplierName').value,
+      supplierCode: document.getElementById('prodSupplierCode').value,
+      supplierContact: document.getElementById('prodSupplierContact').value,
       notes: document.getElementById('prodNotes').value
     };
     try {
@@ -604,68 +814,119 @@ async function renderComponentsShell(root) {
   const host = document.getElementById('omComponentsHost');
   host.innerHTML = `<div class="om-empty">Loading...</div>`;
   try {
-    const [clothing, toys, other, manualData] = await Promise.all([
-      api('/api/order-management/components?productLine=clothing'),
-      api('/api/order-management/components?productLine=toys'),
-      api('/api/order-management/components?productLine=other'),
-      api('/api/catalog/components')
-    ]);
-    const manual = manualData.components || [];
-    host.innerHTML = [
-      componentsCategoryBlock('clothing', clothing.components || [], manual.filter((c) => c.productLine === 'clothing')),
-      componentsCategoryBlock('toys', toys.components || [], manual.filter((c) => c.productLine === 'toys')),
-      componentsCategoryBlock('other', other.components || [], manual.filter((c) => c.productLine === 'other'))
-    ].join('');
-    host.querySelectorAll('tbody tr[data-po]').forEach((tr) => {
-      tr.addEventListener('click', () => {
-        if (tr.dataset.accessoryId) openAccessoryDetailPanel(tr.dataset.po, tr.dataset.accessoryId);
-        else openDetailPanel(tr.dataset.po);
-      });
-    });
-    host.querySelectorAll('tbody tr[data-manual-id]').forEach((tr) => {
-      tr.addEventListener('click', async () => {
-        try {
-          const data = await api(`/api/catalog/components/${encodeURIComponent(tr.dataset.manualId)}`);
-          openComponentForm(data.component);
-        } catch (e) { showToast(e.message, true); }
-      });
+    const data = await api('/api/catalog/components');
+    const components = data.components || [];
+    host.innerHTML = ['clothing', 'toys', 'other']
+      .map((line) => componentsCategoryBlock(line, components.filter((c) => c.productLine === line)))
+      .join('');
+    host.querySelectorAll('tbody tr[data-id]').forEach((tr) => {
+      tr.addEventListener('click', () => openComponentProfile(tr.dataset.id));
     });
   } catch (e) { showToast(e.message, true); }
 }
 
-function componentsCategoryBlock(productLine, components, manualComponents) {
+function componentsCategoryBlock(productLine, components) {
   const meta = CATEGORY_META[productLine];
-  const total = components.length + manualComponents.length;
   return `
     <div class="om-category-tile" style="margin-bottom:20px;">
-      <div class="om-category-tile-header" style="border-color:${meta.color};"><span>${meta.label} Components (${total})</span></div>
-      ${total ? `
-        <table class="om-table">
-          <thead><tr><th>Part name</th><th>Material</th><th>Supplier</th><th>Unit price</th><th># uses</th></tr></thead>
+      <div class="om-category-tile-header" style="border-color:${meta.color};"><span>${meta.label} Components (${components.length})</span></div>
+      ${components.length ? `
+        <div class="om-table-wrap">
+          <table class="om-table">
+            <thead><tr><th>Part name</th><th>Material</th><th>Supplier</th><th>Unit price</th><th># uses</th></tr></thead>
+            <tbody>
+              ${components.map((c) => `
+                <tr data-id="${escapeHtml(c.id)}">
+                  <td><strong>${escapeHtml(c.partName)}</strong></td>
+                  <td>${escapeHtml(c.material || '—')}</td>
+                  <td>${escapeHtml(c.supplierName || '—')}</td>
+                  <td>${fmtMoney(c.unitPrice)}</td>
+                  <td>${c.useCount || 0}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      ` : `<div class="om-empty">No ${meta.label.toLowerCase()} components recorded yet.</div>`}
+    </div>
+  `;
+}
+
+/** Read-first profile for one directory component, mirroring
+ *  openProductProfile. */
+async function openComponentProfile(id) {
+  let component, history;
+  try {
+    const [componentData, historyData] = await Promise.all([
+      api(`/api/catalog/components/${encodeURIComponent(id)}`),
+      api(`/api/catalog/components/${encodeURIComponent(id)}/history`)
+    ]);
+    component = componentData.component;
+    history = historyData.orders || [];
+  } catch (e) { return showToast(e.message, true); }
+
+  const meta = CATEGORY_META[component.productLine] || {};
+
+  const panel = document.createElement('div');
+  panel.className = 'om-panel';
+  panel.innerHTML = `
+   <div class="om-panel-inner">
+    <div class="om-panel-header">
+      <div>
+        <div style="font-size:19px;font-weight:700;">${escapeHtml(component.partName || 'Unnamed component')}</div>
+        <div style="color:var(--jc-muted);font-size:13px;">${escapeHtml(meta.label || component.productLine || '')}</div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <button class="btn btn-secondary" id="omEditComponentBtn" style="flex:none;width:auto;padding:7px 14px;font-size:13px;">Edit</button>
+        <button class="om-panel-close" id="omClosePanel">&times;</button>
+      </div>
+    </div>
+
+    <div class="om-section-title">Component details</div>
+    <div class="om-detail-grid">
+      <div class="om-detail-row"><span class="om-label">Part name</span><span class="om-value">${escapeHtml(component.partName || '—')}</span></div>
+      <div class="om-detail-row"><span class="om-label">Material</span><span class="om-value">${escapeHtml(component.material || '—')}</span></div>
+      <div class="om-detail-row"><span class="om-label">Unit Price</span><span class="om-value">${fmtMoney(component.unitPrice)}</span></div>
+      <div class="om-detail-row"><span class="om-label">Product Category</span><span class="om-value">${escapeHtml(meta.label || component.productLine || '—')}</span></div>
+    </div>
+
+    <div class="om-section-title" style="margin-top:20px;">Supplier</div>
+    <div class="om-detail-grid">
+      <div class="om-detail-row"><span class="om-label">Name</span><span class="om-value">${escapeHtml(component.supplierName || '—')}</span></div>
+    </div>
+
+    <div class="om-section-title" style="margin-top:20px;">Historical POs</div>
+    ${history.length ? `
+      <div class="om-table-wrap">
+        <table class="om-table" style="min-width:0;">
+          <thead><tr><th>PO Number</th><th>Order date</th></tr></thead>
           <tbody>
-            ${manualComponents.map((c) => `
-              <tr data-manual-id="${escapeHtml(c.id)}">
-                <td><strong>${escapeHtml(c.partName)}</strong></td>
-                <td>${escapeHtml(c.material || '—')}</td>
-                <td>${escapeHtml(c.supplierName || '—')}</td>
-                <td>${fmtMoney(c.unitPrice)}</td>
-                <td>—</td>
-              </tr>
-            `).join('')}
-            ${components.map((c) => `
-              <tr data-po="${escapeHtml(c.examplePoId)}" data-accessory-id="${escapeHtml(c.exampleAccessoryId || '')}">
-                <td><strong>${escapeHtml(c.partName)}</strong></td>
-                <td>${escapeHtml(c.material || '—')}</td>
-                <td>${escapeHtml(c.supplierName || '—')}</td>
-                <td>${fmtMoney(c.unitPrice)}</td>
-                <td>${c.useCount}</td>
+            ${history.map((o) => `
+              <tr data-order-id="${escapeHtml(o.id)}">
+                <td><strong>${escapeHtml(o.poNumber || '—')}</strong></td>
+                <td>${fmtDate(o.orderDate || o.createdAt)}</td>
               </tr>
             `).join('')}
           </tbody>
         </table>
-      ` : `<div class="om-empty">No ${meta.label.toLowerCase()} components recorded yet.</div>`}
-    </div>
+      </div>
+    ` : `<div class="om-empty">No POs recorded yet for this component.</div>`}
+   </div>
   `;
+
+  mountPanel(panel);
+  bindPanelEscape();
+  document.getElementById('omClosePanel').addEventListener('click', closePanel);
+  document.getElementById('omEditComponentBtn').addEventListener('click', () => {
+    closePanel();
+    openComponentForm(component);
+  });
+  panel.querySelectorAll('tbody tr[data-order-id]').forEach((tr) => {
+    tr.addEventListener('click', () => {
+      closePanel();
+      openDetailPanel(tr.dataset.orderId, 'full');
+    });
+  });
 }
 
 function openComponentForm(component) {
@@ -1330,7 +1591,11 @@ async function openDetailPanel(id, scope) {
     <div class="om-panel-card">
     <div class="om-section-title">Warehousing Breakdown</div>
     <div class="om-field-grid">
-      <div><label>Warehouse Address</label><input id="fWarehouse" type="text" value="${val(order.mainComponent.warehouse)}" /></div>
+      <div><label>Warehouse Address</label>
+        <select id="fWarehouse" data-current="${escapeHtml(order.mainComponent.warehouse || '')}">
+          <option value="${escapeHtml(order.mainComponent.warehouse || '')}">${escapeHtml(order.mainComponent.warehouse || '— Select —')}</option>
+        </select>
+      </div>
       <div><label>Shipping cost (¥)</label><input id="fTransportationFees" type="number" step="0.01" value="${val(order.costs.transportationFees)}" /></div>
       <div><label>Packing List Number</label><input id="fFulfillPacking" type="text" value="${val(order.fulfillment.packingListNumber)}" /></div>
       <div><label>Waybill Number</label><input id="fFulfillWaybill" type="text" value="${val(order.fulfillment.waybillNumber)}" /></div>
@@ -1532,7 +1797,7 @@ async function openDetailPanel(id, scope) {
   }
   (order.accessories && order.accessories.length ? order.accessories : [{}]).forEach(addAccessoryRow);
   panel.querySelector('#omAddAccessoryRow').addEventListener('click', () => { addAccessoryRow(); recalcTotals(); });
-  document.getElementById('fWarehouse').addEventListener('input', (e) => {
+  document.getElementById('fWarehouse').addEventListener('change', (e) => {
     accessoryRowsHost.querySelectorAll('.om-acc-address-cell').forEach((cell) => { cell.textContent = e.target.value || '—'; });
   });
 
@@ -1867,10 +2132,11 @@ async function openDetailPanel(id, scope) {
   // a future suggestion without needing a separate managed list. ----
   (async () => {
     try {
-      const [suppliersData, historyData, optionsData] = await Promise.all([
+      const [suppliersData, historyData, optionsData, warehousesData] = await Promise.all([
         api('/api/suppliers'),
         api('/api/order-management/field-history'),
-        api('/api/options')
+        api('/api/options'),
+        api('/api/warehouses')
       ]);
       const suppliers = suppliersData.suppliers || [];
       const supplierNames = suppliers.map((s) => s.name);
@@ -1896,6 +2162,19 @@ async function openDetailPanel(id, scope) {
         const names = current && !qaLeads.includes(current) ? [current, ...qaLeads] : qaLeads;
         buyerSelect.innerHTML = `<option value="">— Select —</option>` +
           names.map((n) => `<option value="${escapeHtml(n)}" ${n === current ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('');
+      }
+
+      // Warehouse Address - real Warehouse records, managed on the
+      // Suppliers page's Warehouses section.
+      const warehouseSelect = document.getElementById('fWarehouse');
+      if (warehouseSelect) {
+        const warehouses = (warehousesData && warehousesData.warehouses) || [];
+        const current = warehouseSelect.dataset.current || '';
+        const names = warehouses.map((w) => w.name);
+        const allNames = current && !names.includes(current) ? [current, ...names] : names;
+        warehouseSelect.innerHTML = `<option value="">— Select —</option>` +
+          allNames.map((n) => `<option value="${escapeHtml(n)}" ${n === current ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('');
+        accessoryRowsHost.querySelectorAll('.om-acc-address-cell').forEach((cell) => { cell.textContent = current || '—'; });
       }
     } catch (e) { /* these are conveniences - fine to skip silently if this fails */ }
   })();
@@ -2055,85 +2334,6 @@ async function openAccessoryDetailPanel(orderId, accessoryId) {
       refreshCurrentView();
     } catch (e) { showToast(e.message, true); }
   });
-}
-
-// Lightweight, mostly read-only product view - reachable from the Products
-// page, shows only what a product actually is (photo, SKU, pricing,
-// fabric/sizing, supplier chain) instead of the full PO's order-management
-// fields (dates, status, warehousing, payment) that don't describe the
-// product itself.
-async function openProductDetailView(orderId) {
-  let order;
-  try {
-    const data = await api(`/api/order-management/orders/${encodeURIComponent(orderId)}`);
-    order = data.order;
-  } catch (e) {
-    return showToast(e.message, true);
-  }
-  const mc = order.mainComponent;
-  const isApparel = order.productLine === 'clothing';
-
-  const panel = document.createElement('div');
-  panel.className = 'om-panel';
-  panel.innerHTML = `
-   <div class="om-panel-inner">
-    <div class="om-panel-header">
-      <div>
-        <div style="font-size:19px;font-weight:700;">${escapeHtml(mc.name || 'Unnamed product')}</div>
-        <div style="color:var(--jc-muted);font-size:13px;">SKU: ${escapeHtml(mc.sku || '—')}</div>
-        <div style="margin-top:4px;font-size:12px;font-weight:700;color:var(--jc-teal-dark);text-transform:uppercase;">Product view</div>
-      </div>
-      <div style="display:flex;gap:10px;align-items:center;">
-        <button class="btn btn-secondary" id="omViewFullPoFromProduct" style="flex:none;width:auto;padding:7px 14px;font-size:13px;">View full PO</button>
-        <button class="om-panel-close" id="omClosePanel">&times;</button>
-      </div>
-    </div>
-
-    ${mc.photoReference ? `<img id="omProductPhoto" src="${escapeHtml(mc.photoReference)}" alt="" style="width:140px;height:140px;object-fit:cover;border-radius:10px;border:1px solid var(--jc-border);cursor:pointer;margin-bottom:16px;" title="Click to view larger" />` : ''}
-
-    <div class="om-detail-grid">
-      <div class="om-detail-row"><span class="om-label">Name</span><span class="om-value">${escapeHtml(mc.name || '—')}</span></div>
-      <div class="om-detail-row"><span class="om-label">Main SKU</span><span class="om-value">${escapeHtml(mc.sku || '—')}</span></div>
-      <div class="om-detail-row"><span class="om-label">Unit Price</span><span class="om-value">${fmtMoney(mc.factoryPrice)}</span></div>
-      <div class="om-detail-row"><span class="om-label">Fabric Code</span><span class="om-value">${escapeHtml(mc.fabricInfo || '—')}</span></div>
-      <div class="om-detail-row"><span class="om-label">Fabric Type</span><span class="om-value">${escapeHtml(mc.component || '—')}</span></div>
-      ${isApparel
-        ? `<div class="om-detail-row"><span class="om-label">Sizing chart</span><span class="om-value"><a href="sizing-charts.html" target="_blank" rel="noopener">View Sizing Charts →</a></span></div>`
-        : `
-          <div class="om-detail-row"><span class="om-label">Dimensions</span><span class="om-value">${mc.dimensionsUrl ? `<a href="${escapeHtml(mc.dimensionsUrl)}" target="_blank" rel="noopener">View file</a>` : '—'}</span></div>
-          <div class="om-detail-row"><span class="om-label">Weight</span><span class="om-value">${mc.weightUrl ? `<a href="${escapeHtml(mc.weightUrl)}" target="_blank" rel="noopener">View file</a>` : '—'}</span></div>
-        `}
-      <div class="om-detail-row"><span class="om-label">Washing Tag</span><span class="om-value">${mc.washingTagUrl ? `<a href="${escapeHtml(mc.washingTagUrl)}" target="_blank" rel="noopener">View file</a>` : '—'}</span></div>
-    </div>
-
-    <div class="om-section-title" style="margin-top:20px;">Main Supplier</div>
-    <div class="om-detail-grid">
-      <div class="om-detail-row"><span class="om-label">Name</span><span class="om-value">${escapeHtml(order.supplier.name || '—')}</span></div>
-      <div class="om-detail-row"><span class="om-label">Code</span><span class="om-value">${escapeHtml(order.supplier.code || '—')}</span></div>
-      <div class="om-detail-row"><span class="om-label">Contact</span><span class="om-value">${escapeHtml(order.supplier.contact || '—')}</span></div>
-    </div>
-
-    <div class="om-section-title" style="margin-top:20px;">Accessory Supplier Breakdown</div>
-    ${order.accessories && order.accessories.length ? `
-      <table class="om-table" style="min-width:0;">
-        <thead><tr><th>Part</th><th>Supplier</th></tr></thead>
-        <tbody>
-          ${order.accessories.map((a) => `<tr><td>${escapeHtml(a.partName || '—')}</td><td>${escapeHtml(a.supplierName || '—')}</td></tr>`).join('')}
-        </tbody>
-      </table>
-    ` : `<div class="om-empty">No accessories on this PO.</div>`}
-   </div>
-  `;
-
-  mountPanel(panel);
-  bindPanelEscape();
-  document.getElementById('omClosePanel').addEventListener('click', closePanel);
-  document.getElementById('omViewFullPoFromProduct').addEventListener('click', () => {
-    closePanel();
-    openDetailPanel(order.id, 'full');
-  });
-  const photo = document.getElementById('omProductPhoto');
-  if (photo) photo.addEventListener('click', () => openImageLightbox(photo.src));
 }
 
 async function setSettlement(id, status) {

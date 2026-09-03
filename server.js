@@ -20,6 +20,7 @@ const orderManagementStore = require('./lib/orderManagementStore');
 // deleted, since fits.json (via /api/fits) is now the single source of
 // truth for sizing charts.
 const supplierStore = require('./lib/supplierStore');
+const warehouseStore = require('./lib/warehouseStore');
 const catalogStore = require('./lib/catalogStore');
 const approvalStore = require('./lib/approvalStore');
 const approvalPhotoSets = require('./config/approvalPhotoSets.json');
@@ -927,10 +928,46 @@ app.delete('/api/suppliers/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-// ---- Manually-added Products / Components (merged with the live-derived
-// order-management/products|components endpoints on the frontend) ----
+// ---- Warehouses (split out from Suppliers) ----
+app.get('/api/warehouses', (req, res) => {
+  res.json({ warehouses: warehouseStore.listWarehouses() });
+});
+app.get('/api/warehouses/:id', (req, res) => {
+  const warehouse = warehouseStore.getWarehouse(req.params.id);
+  if (!warehouse) return res.status(404).json({ error: 'Warehouse not found' });
+  res.json({ warehouse });
+});
+app.post('/api/warehouses', (req, res) => {
+  const body = req.body || {};
+  if (!body.name) return res.status(400).json({ error: 'name is required' });
+  const warehouse = warehouseStore.createWarehouse({ ...body, id: uuidv4() });
+  res.json({ ok: true, warehouse });
+});
+app.patch('/api/warehouses/:id', (req, res) => {
+  const updated = warehouseStore.updateWarehouse(req.params.id, req.body || {});
+  if (!updated) return res.status(404).json({ error: 'Warehouse not found' });
+  res.json({ ok: true, warehouse: updated });
+});
+app.delete('/api/warehouses/:id', (req, res) => {
+  const ok = warehouseStore.deleteWarehouse(req.params.id);
+  if (!ok) return res.status(404).json({ error: 'Warehouse not found' });
+  res.json({ ok: true });
+});
+
+// ---- Products / Components directory (Product Information) ----
+// The catalog is now the single directory - every SKU/part seen on any PO
+// gets a record here automatically (see catalogStore.syncFromOrder, wired
+// into order create/update), so listing it also runs a cheap, idempotent
+// backfill first to pick up anything from before this directory existed.
+// Each item comes back with its live "poCount" so the list can show it
+// without a separate request per row.
 app.get('/api/catalog/products', (req, res) => {
-  res.json({ products: catalogStore.listManualProducts() });
+  catalogStore.backfillFromOrders(orderManagementStore.listOrders({}));
+  const products = catalogStore.listManualProducts().map((p) => ({
+    ...p,
+    poCount: orderManagementStore.getOrdersForProduct(p.sku, p.name).length
+  }));
+  res.json({ products });
 });
 app.post('/api/catalog/products', (req, res) => {
   const body = req.body || {};
@@ -953,9 +990,22 @@ app.delete('/api/catalog/products/:id', (req, res) => {
   if (!ok) return res.status(404).json({ error: 'Product not found' });
   res.json({ ok: true });
 });
+// Historical POs for one product - the list a click on "Historical POs"
+// opens back into via Order Management's own full PO view.
+app.get('/api/catalog/products/:id/history', (req, res) => {
+  const product = catalogStore.getManualProduct(req.params.id);
+  if (!product) return res.status(404).json({ error: 'Product not found' });
+  const orders = orderManagementStore.getOrdersForProduct(product.sku, product.name);
+  res.json({ orders: orders.map(orderManagementStore.toQaShape) });
+});
 
 app.get('/api/catalog/components', (req, res) => {
-  res.json({ components: catalogStore.listManualComponents() });
+  catalogStore.backfillFromOrders(orderManagementStore.listOrders({}));
+  const components = catalogStore.listManualComponents().map((c) => ({
+    ...c,
+    useCount: orderManagementStore.getOrdersForComponent(c.partName, c.supplierName).length
+  }));
+  res.json({ components });
 });
 app.post('/api/catalog/components', (req, res) => {
   const body = req.body || {};
@@ -977,6 +1027,13 @@ app.delete('/api/catalog/components/:id', (req, res) => {
   const ok = catalogStore.deleteManualComponent(req.params.id);
   if (!ok) return res.status(404).json({ error: 'Component not found' });
   res.json({ ok: true });
+});
+// Historical POs for one component.
+app.get('/api/catalog/components/:id/history', (req, res) => {
+  const component = catalogStore.getManualComponent(req.params.id);
+  if (!component) return res.status(404).json({ error: 'Component not found' });
+  const orders = orderManagementStore.getOrdersForComponent(component.partName, component.supplierName);
+  res.json({ orders: orders.map(orderManagementStore.toQaShape) });
 });
 
 app.get('/api/order-management/counts', (req, res) => {

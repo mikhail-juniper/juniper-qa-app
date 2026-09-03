@@ -70,16 +70,32 @@
 .om-nav-subitem { padding-left: 26px; }
 
 /* Single-tile-per-category with internal sub-tab counts, matching the
-   "Apparel Order Management" mockup rather than three separate boxes. */
+   "Apparel Order Management" mockup rather than three separate boxes.
+   NOTE: this used to have `overflow: hidden` to clip the header's square
+   corners to the tile's rounded ones. That's exactly the same trap as the
+   .om-table-wrap bug fixed above: any overflow value other than `visible`
+   makes an element a scroll container, which becomes the nearest sticky
+   positioning context for any .om-table thead nested inside it (like the
+   Products/Components/Home PO Requests tiles). Since this tile never
+   actually scrolls on its own, that pinned the header `top: 72px` down
+   from the TILE's top instead of the page's, landing it on top of/behind
+   the first data row. Rounding the header's own corners instead of
+   clipping the parent avoids creating that scroll container. */
 .om-category-tile {
   background: #fff;
   border: 1px solid var(--jc-border);
   border-radius: var(--radius);
   margin-bottom: 36px;
-  overflow: hidden;
 }
+/* Radius only - no overflow here. .om-tile-table-scroll is often this
+   last child and needs to keep its own overflow-y: auto for its
+   independent internal scroll/sticky-header behavior; adding overflow
+   here would clobber that (and would recreate the same trap this whole
+   comment is about). */
+.om-category-tile > *:last-child { border-radius: 0 0 var(--radius) var(--radius); }
 .om-category-tile-header {
   border-top: 5px solid var(--jc-teal);
+  border-radius: var(--radius) var(--radius) 0 0;
   padding: 14px 18px;
   font-weight: 800;
   font-size: 16px;
