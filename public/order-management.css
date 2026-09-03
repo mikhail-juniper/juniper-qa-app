@@ -259,7 +259,8 @@
 
 .om-table-wrap {
   overflow-x: auto;
-  overflow-y: visible;
+  overflow-y: auto;
+  max-height: calc(100vh - var(--app-header-height) - 160px);
   border: 1px solid var(--jc-border);
   border-radius: var(--radius);
   background: #fff;
@@ -272,12 +273,21 @@
   white-space: nowrap;
 }
 .om-table th { color: var(--jc-muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; }
-/* Keep column headers visible while scrolling a long table. On a normal
-   page the table scrolls with the whole document, so the header sticks
-   just below the fixed app header (72px tall). Inside a popup (.om-panel),
-   the panel itself is the scrolling container and has no such header
-   overlapping it, so it sticks flush to the top of that panel instead. */
+/* Keep column headers visible while scrolling a long table. Because
+   .om-table-wrap needs overflow-x: auto for horizontal scrolling on wide
+   tables, it unavoidably becomes its own scroll container (per the CSS
+   overflow spec, pairing overflow-x: auto with overflow-y: visible makes
+   the "visible" axis compute to auto too) - so it's always the nearest
+   scrolling ancestor for position: sticky, never the page/window. That
+   means the sticky offset must be relative to the wrap itself (top: 0),
+   not the fixed app header - using the app header's height here pushed
+   the header down inside its own box instead of sticking it to the page.
+   Same story for .om-panel (a popup's own scroll container) and
+   .om-tile-table-scroll (a bounded inline preview) - both already scroll
+   independently of the page, so their headers stick flush to their own
+   top too. */
 .om-table thead th { position: sticky; top: var(--app-header-height); background: #fff; z-index: 2; box-shadow: 0 1px 0 var(--jc-border); }
+.om-table-wrap .om-table thead th { top: 0; }
 .om-panel .om-table thead th { top: 0; }
 .om-tile-table-scroll .om-table thead th { top: 0; }
 .om-table tr:last-child td { border-bottom: none; }
