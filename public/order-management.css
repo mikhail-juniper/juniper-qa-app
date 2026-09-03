@@ -385,6 +385,24 @@ select.om-risk-select[data-risk=""] { background-color: #fff; color: var(--jc-te
 select.om-paid-select[data-paid="pending"] { background-color: #fff6e5; color: #9a6700; border-color: #f3d38a; }
 select.om-paid-select[data-paid="paid"] { background-color: #e9f9ee; color: #17794a; border-color: #a9e3bf; }
 
+/* Editable money inputs get a ¥ prefix rendered inside the field, so they
+   read the same as the computed/disabled fields (which bake ¥ into their
+   text) - a type="number" input can't contain the symbol itself. */
+div.om-money-wrap { position: relative; }
+div.om-money-wrap::before {
+  content: '¥';
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--jc-muted);
+  font-size: 14px;
+  pointer-events: none;
+}
+/* div.om-money-wrap input outranks the later .om-field-grid input rule
+   (same class+element count would tie, and later-in-file would win). */
+div.om-money-wrap input { padding-left: 28px; width: 100%; }
+
 .om-pill {
   display: inline-block;
   padding: 4px 10px;

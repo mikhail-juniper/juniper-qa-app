@@ -764,10 +764,11 @@ app.post('/api/purchase-orders', (req, res) => {
         name: body.productTitle || '',
         purchaseQuantity: body.orderQuantity ? parseInt(body.orderQuantity, 10) : null,
         // Full size/variant distribution from the New PO setup step, if any
-        // was entered - each row shares the PO's one SKU, matching how
-        // Order Management already models size variants of one product.
+        // was entered. Each row can carry its own variant SKU; rows without
+        // one fall back to the PO's parent SKU, matching how Order
+        // Management already models size variants of one product.
         sizeDistribution: Array.isArray(body.sizeDistribution)
-          ? body.sizeDistribution.filter((r) => r && r.size).map((r) => ({ sku: body.sku, size: r.size, quantity: r.quantity != null ? r.quantity : null }))
+          ? body.sizeDistribution.filter((r) => r && r.size).map((r) => ({ sku: (r.sku && String(r.sku).trim()) || body.sku, size: r.size, quantity: r.quantity != null ? r.quantity : null }))
           : []
       },
       category: body.category || null,

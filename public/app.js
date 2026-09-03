@@ -716,6 +716,7 @@ function renderNewPoSizesBlock() {
       ${isApparel
         ? `<span style="flex:1;font-weight:600;">${escapeHtml(row.label)}</span>`
         : `<input type="text" data-po-variant-label="${i}" placeholder="Variant name" value="${escapeHtml(row.label)}" style="flex:1;" />`}
+      <input type="text" data-po-variant-sku="${i}" placeholder="Variant SKU (blank = parent SKU)" value="${escapeHtml(row.sku || '')}" style="flex:1;" />
       <input type="number" min="0" data-po-variant-qty="${i}" placeholder="Order Quantity" value="${row.quantity === null || row.quantity === undefined ? '' : row.quantity}" style="width:120px;" />
       <button type="button" class="settings-remove" data-po-variant-remove="${i}">✕</button>
     </div>
@@ -725,6 +726,7 @@ function renderNewPoSizesBlock() {
     <div class="card">
       <div class="section-title">${isApparel ? biBlockHtml('sizesInPo', 'Size Distribution') : 'Variant Distribution'}</div>
       <div class="section-help">${isApparel ? (escapeHtml(bi('sizesInPoHelp').en) + '<br/>' + escapeHtml(bi('sizesInPoHelp').zh)) : 'Optional - break this PO into variants (colorways, styles, etc.) with a quantity each. Skip this if the PO is just one thing.'}</div>
+      <div class="section-help">Each variant can carry its own SKU - leave it blank to use this PO's parent SKU.</div>
       ${preFilledNote}
       ${isApparel ? `
         <div class="segmented" style="flex-wrap:wrap; margin-top:8px;">
@@ -884,6 +886,12 @@ function attachNewPoSizeHandlers() {
       newPoState.sizesIncluded[i].quantity = isNaN(n) ? null : n;
     });
   });
+  document.querySelectorAll('[data-po-variant-sku]').forEach((el) => {
+    el.addEventListener('input', (e) => {
+      const i = parseInt(el.getAttribute('data-po-variant-sku'), 10);
+      newPoState.sizesIncluded[i].sku = e.target.value;
+    });
+  });
   document.querySelectorAll('[data-po-variant-label]').forEach((el) => {
     el.addEventListener('input', (e) => {
       const i = parseInt(el.getAttribute('data-po-variant-label'), 10);
@@ -1029,7 +1037,7 @@ async function submitNewPo() {
         productDevelopmentLead: newPoState.productDevelopmentLead,
         fulfillmentRequestDate: newPoState.fulfillmentRequestDate || null,
         sizesIncluded: newPoState.sizesIncluded.map((x) => x.label).filter(Boolean),
-        sizeDistribution: newPoState.sizesIncluded.filter((x) => x.label).map((x) => ({ size: x.label, quantity: x.quantity })),
+        sizeDistribution: newPoState.sizesIncluded.filter((x) => x.label).map((x) => ({ size: x.label, quantity: x.quantity, sku: (x.sku || '').trim() || null })),
         asanaTaskLink: newPoState.asanaTaskLink
       })
     });

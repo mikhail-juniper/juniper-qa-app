@@ -721,8 +721,8 @@ function openProductForm(product) {
           <option value="other" ${product && product.productLine === 'other' ? 'selected' : ''}>Other</option>
         </select>
       </div>
-      <div><label>Unit Price (¥)</label><input id="prodFactoryPrice" type="number" step="0.01" value="${val(product && product.factoryPrice)}" /></div>
-      <div><label>Sales unit price (¥)</label><input id="prodSalesUnitPrice" type="number" step="0.01" value="${val(product && product.salesUnitPrice)}" /></div>
+      <div><label>Unit Price (¥)</label><div class="om-money-wrap"><input id="prodFactoryPrice" type="number" step="0.01" value="${val(product && product.factoryPrice)}" /></div></div>
+      <div><label>Sales unit price (¥)</label><div class="om-money-wrap"><input id="prodSalesUnitPrice" type="number" step="0.01" value="${val(product && product.salesUnitPrice)}" /></div></div>
       <div><label>Dimensions</label><input id="prodDimensions" type="text" placeholder="e.g. 30 x 20 x 5 cm" value="${val(product && product.dimensions)}" /></div>
       <div><label>Weight</label><input id="prodWeight" type="text" placeholder="e.g. 450g" value="${val(product && product.weight)}" /></div>
     </div>
@@ -956,7 +956,7 @@ function openComponentForm(component) {
       <div><label>Part name *</label><input id="compPartName" type="text" value="${val(component && component.partName)}" /></div>
       <div><label>Material</label><input id="compMaterial" type="text" value="${val(component && component.material)}" /></div>
       <div><label>Supplier</label><input id="compSupplierName" type="text" list="dlSupplierNames" value="${val(component && component.supplierName)}" /></div>
-      <div><label>Unit price (¥)</label><input id="compUnitPrice" type="number" step="0.01" value="${val(component && component.unitPrice)}" /></div>
+      <div><label>Unit price (¥)</label><div class="om-money-wrap"><input id="compUnitPrice" type="number" step="0.01" value="${val(component && component.unitPrice)}" /></div></div>
       <div><label>Product line</label>
         <select id="compProductLine">
           <option value="clothing" ${!component || component.productLine === 'clothing' ? 'selected' : ''}>Apparel</option>
@@ -1590,6 +1590,8 @@ async function openDetailPanel(id, scope) {
   let order;
   let supplierNamesShared = []; // populated once the async supplier fetch below resolves; typeahead callbacks read it lazily so timing doesn't matter
   let suppliersShared = []; // full supplier records (for Supplier Contact autofill), same lazy-population deal
+  let componentsShared = []; // component library records, for the sub-component Component Name typeahead + autofill
+  let componentNamesShared = [];
   let paymentLineItemsState = {};
   try {
     const data = await api(`/api/order-management/orders/${encodeURIComponent(id)}`);
@@ -1646,21 +1648,6 @@ async function openDetailPanel(id, scope) {
       <div><label>Product Name</label><input id="fMainName" type="text" value="${val(order.mainComponent.name)}" /></div>
       <div><label>Purchase Order Number</label><input type="text" value="${escapeHtml(order.poNumber)}" disabled /></div>
       <div><label>SKU</label><input id="fMainSku" type="text" value="${val(order.mainComponent.sku)}" /></div>
-      <div><label>Supplier Name</label><input id="fSupplierName" type="text" list="dlSupplierNames" value="${val(order.supplier.name)}" /></div>
-      <div><label>Supplier Code</label><input id="fSupplierCode" type="text" value="${val(order.supplier.code)}" /></div>
-      <div><label>Order Status</label>
-        <select id="fOrderStatusSelect" class="om-status-select" data-status="${escapeHtml(order.status)}">
-          ${STATUSES.map((s) => `<option value="${escapeHtml(s)}" ${s === order.status ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('')}
-        </select>
-      </div>
-      <div><label>Product Complexity/Risk</label>
-        <select id="fProductRisk" class="om-risk-select" data-risk="${escapeHtml(order.productRisk || '')}">
-          <option value="" ${!order.productRisk ? 'selected' : ''}>—</option>
-          <option value="high" ${order.productRisk === 'high' ? 'selected' : ''}>High</option>
-          <option value="medium" ${order.productRisk === 'medium' ? 'selected' : ''}>Medium</option>
-          <option value="low" ${order.productRisk === 'low' ? 'selected' : ''}>Low</option>
-        </select>
-      </div>
       <div>
         <label>Photo reference</label>
         <div style="display:flex;align-items:center;gap:10px;">
@@ -1670,9 +1657,28 @@ async function openDetailPanel(id, scope) {
           <button type="button" class="om-table-upload-btn" id="fPhotoReferenceUploadBtn">Upload photo</button>
         </div>
       </div>
+      <div><label>Supplier Name</label><input id="fSupplierName" type="text" list="dlSupplierNames" value="${val(order.supplier.name)}" /></div>
+      <div><label>Supplier Code</label><input id="fSupplierCode" type="text" value="${val(order.supplier.code)}" /></div>
+      <div><label>Product Complexity/Risk</label>
+        <select id="fProductRisk" class="om-risk-select" data-risk="${escapeHtml(order.productRisk || '')}">
+          <option value="" ${!order.productRisk ? 'selected' : ''}>—</option>
+          <option value="high" ${order.productRisk === 'high' ? 'selected' : ''}>High</option>
+          <option value="medium" ${order.productRisk === 'medium' ? 'selected' : ''}>Medium</option>
+          <option value="low" ${order.productRisk === 'low' ? 'selected' : ''}>Low</option>
+        </select>
+      </div>
+      <div><label>Order Status</label>
+        <select id="fOrderStatusSelect" class="om-status-select" data-status="${escapeHtml(order.status)}">
+          ${STATUSES.map((s) => `<option value="${escapeHtml(s)}" ${s === order.status ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        <label>Order placement date</label>
+        <input id="fOrderDate" type="date" value="${val(order.orderPlacementDate)}" ${order.orderPlacementDate ? 'disabled title="Set once when the order was placed - not editable afterward"' : ''} />
+      </div>
+      <div><label>Fulfillment Request Date</label><input id="fFulfillmentRequestDate" type="date" value="${val(order.fulfillmentRequestDate)}" /></div>
       <div><label>Required Warehouse Arrival Date</label><input id="fDesiredEntry" type="date" value="${val(order.desiredEntryDate)}" /></div>
       <div><label>Required Manufacturer Delivery Date</label><input id="fManufDelivery" type="date" value="${val(order.manufacturerDeliveryDate)}" /></div>
-      <div><label>Fulfillment Request Date</label><input id="fFulfillmentRequestDate" type="date" value="${val(order.fulfillmentRequestDate)}" /></div>
       <div><label>Order Quantity</label><input id="fPurchaseQty" type="number" value="${val(order.mainComponent.purchaseQuantity)}" /></div>
       <div><label>Quantity received</label><input id="fFulfillQtyReceived" type="number" value="${val(order.fulfillment.quantityReceived)}" /></div>
       <div><label>Order Management Specialist</label>
@@ -1680,10 +1686,6 @@ async function openDetailPanel(id, scope) {
           <option value="${escapeHtml(order.buyer || '')}">${escapeHtml(order.buyer || '— Select —')}</option>
         </select>
         <input type="text" id="fBuyerOther" placeholder="Enter new specialist name" style="margin-top:8px;display:none;" />
-      </div>
-      <div>
-        <label>Order placement date</label>
-        <input id="fOrderDate" type="date" value="${val(order.orderPlacementDate)}" ${order.orderPlacementDate ? 'disabled title="Set once when the order was placed - not editable afterward"' : ''} />
       </div>
     </div>
     </div>
@@ -1722,28 +1724,28 @@ async function openDetailPanel(id, scope) {
       ${uploadFieldHtml('fPackagingUrl', 'Packaging', order.mainComponent.packagingUrl, true)}
       ${order.productLine !== 'clothing' ? uploadFieldHtml('fDimensionsUrl', 'Product Dimensions', order.mainComponent.dimensionsUrl, true) : ''}
     </div>
-    <div class="om-field-grid om-field-grid-row" style="margin-top:10px;">
+    <div class="om-field-grid om-field-grid-row" style="margin-top:22px;">
       <div><label>Weight (g)</label><input id="fWeightGrams" type="number" step="1" value="${val(order.mainComponent.weightGrams)}" /></div>
       <div><label>Shipping Weight (g)</label><input id="fShippingWeightGrams" type="number" step="1" value="${val(order.mainComponent.shippingWeightGrams)}" /></div>
       <div><label>Volume Weight (g)</label><input id="fVolumeWeightGrams" type="number" step="1" value="${val(order.mainComponent.volumeWeightGrams)}" /></div>
     </div>
     ${order.productLine === 'clothing' ? `
-      <div style="margin-top:18px;">
+      <div style="margin-top:28px;">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
-          <label style="margin:0;">Product Dimensions - sizing source of truth for this PO</label>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <select id="fDimensionsStandardSelect" style="width:auto;"><option value="">Select a standard to load...</option></select>
+          <div style="flex:1;min-width:260px;">
+            <label style="margin:0;">Product Dimensions - sizing source of truth for this PO</label>
+            <div class="section-help" style="margin-top:4px;">Loading a standard copies it in as an editable starting point - edits here only affect this PO. This becomes what QA/QC checks against for this specific order.</div>
           </div>
+          <select id="fDimensionsStandardSelect" style="width:auto;"><option value="">Select a standard to load...</option></select>
         </div>
-        <div class="section-help" style="margin-top:4px;">Loading a standard copies it in as an editable starting point - edits here only affect this PO. This becomes what QA/QC checks against for this specific order.</div>
-        <div id="fDimensionsTableWrap" style="margin-top:10px;"></div>
+        <div id="fDimensionsTableWrap" style="margin-top:12px;"></div>
         <div style="display:flex;gap:8px;margin-top:8px;">
           <button type="button" class="btn btn-secondary" id="fDimensionsAddSize" style="flex:none;width:auto;padding:7px 14px;font-size:13px;">+ Add size</button>
           <button type="button" class="btn btn-secondary" id="fDimensionsAddPoint" style="flex:none;width:auto;padding:7px 14px;font-size:13px;">+ Add measurement point</button>
         </div>
       </div>
     ` : `
-      <div style="margin-top:18px;">
+      <div style="margin-top:28px;">
         <label style="margin:0;">Product Dimensions</label>
         <div class="om-field-grid om-field-grid-row" style="margin-top:8px;">
           <div><label>Length (cm)</label><input id="fDimensionsLength" type="number" step="0.1" value="${val(order.mainComponent.dimensionsLength)}" /></div>
@@ -1761,7 +1763,7 @@ async function openDetailPanel(id, scope) {
         <div><label>Fabric Code</label><input id="fFabricInfo" type="text" value="${val(order.mainComponent.fabricInfo)}" /></div>
         <div><label>Fabric Type</label><input id="fComponent" type="text" placeholder="e.g. 100% Cotton" value="${val(order.mainComponent.component)}" /></div>
       ` : ''}
-      <div><label>Unit Price (¥)</label><input id="fFactoryPrice" type="number" step="0.01" value="${val(order.mainComponent.factoryPrice)}" /></div>
+      <div><label>Unit Price (¥)</label><div class="om-money-wrap"><input id="fFactoryPrice" type="number" step="0.01" value="${val(order.mainComponent.factoryPrice)}" /></div></div>
       <div><label>Supplier Address</label><input id="fSupplierAddress" type="text" value="${val(order.supplier.address)}" placeholder="Auto-fills from Supplier Name above" /></div>
     </div>
     </div>
@@ -1791,7 +1793,7 @@ async function openDetailPanel(id, scope) {
           <option value="${escapeHtml(order.mainComponent.warehouse || '')}">${escapeHtml(order.mainComponent.warehouse || '— Select —')}</option>
         </select>
       </div>
-      <div><label>Shipping cost (¥)</label><input id="fTransportationFees" type="number" step="0.01" value="${val(order.costs.transportationFees)}" /></div>
+      <div><label>Shipping cost (¥)</label><div class="om-money-wrap"><input id="fTransportationFees" type="number" step="0.01" value="${val(order.costs.transportationFees)}" /></div></div>
       <div><label>Packing List Number</label><input id="fFulfillPacking" type="text" value="${val(order.fulfillment.packingListNumber)}" /></div>
       <div><label>Waybill Number</label><input id="fFulfillWaybill" type="text" value="${val(order.fulfillment.waybillNumber)}" /></div>
     </div>
@@ -1800,9 +1802,9 @@ async function openDetailPanel(id, scope) {
     <div class="om-panel-card">
     <div class="om-section-title">Payment</div>
     <div class="om-field-grid">
-      <div><label>Additional Assembly Fee (¥)</label><input id="fAssemblyFee" type="number" step="0.01" value="${val(order.costs.assemblyFee)}" /></div>
-      <div><label>Additional Labor Fee (¥)</label><input id="fLaborCosts" type="number" step="0.01" value="${val(order.costs.laborCosts)}" /></div>
-      <div><label>Other Expenses (¥)</label><input id="fOtherExpenses" type="number" step="0.01" value="${val(order.costs.otherExpenses)}" /></div>
+      <div><label>Additional Assembly Fee (¥)</label><div class="om-money-wrap"><input id="fAssemblyFee" type="number" step="0.01" value="${val(order.costs.assemblyFee)}" /></div></div>
+      <div><label>Additional Labor Fee (¥)</label><div class="om-money-wrap"><input id="fLaborCosts" type="number" step="0.01" value="${val(order.costs.laborCosts)}" /></div></div>
+      <div><label>Other Expenses (¥)</label><div class="om-money-wrap"><input id="fOtherExpenses" type="number" step="0.01" value="${val(order.costs.otherExpenses)}" /></div></div>
       <div><label>Manufacturing Cost per unit (¥)</label><input id="fManufacturingCostTotal" type="text" value="${fmtMoney(computeManufacturingCostPerUnit(order))}" disabled title="Main component unit price + sum of sub-component unit prices" /></div>
       <div><label>Total PO Cost (¥)</label><input id="fTotalPoCost" type="text" value="${fmtMoney(computeOrderTotal(order))}" disabled title="Manufacturing Cost x Order Quantity, plus shipping and additional fees" /></div>
       <div><label>Total Price per Unit (¥)</label><input id="fTotalPricePerUnit" type="text" value="${order.mainComponent.purchaseQuantity ? fmtMoney(computeOrderTotal(order) / order.mainComponent.purchaseQuantity) : '—'}" disabled title="Total PO cost divided by units ordered" /></div>
@@ -1992,6 +1994,25 @@ async function openDetailPanel(id, scope) {
     document.getElementById(`accSupplier${idx}`).addEventListener('change', (e) => {
       const match = suppliersShared.find((s) => s.name.trim().toLowerCase() === e.target.value.trim().toLowerCase());
       if (match && match.contactName) row.querySelector('.om-acc-supplier-contact').value = match.contactName;
+    });
+    // Component Name pulls from the Components library - picking a known
+    // part auto-populates its supplier, unit price, and contact. Typing a
+    // new name still works: it becomes a library entry on save via the
+    // existing auto-sync, so it'll be in this dropdown next time.
+    attachTypeahead(`accName${idx}`, () => componentNamesShared);
+    document.getElementById(`accName${idx}`).addEventListener('change', (e) => {
+      const match = componentsShared.find((c) => (c.partName || '').trim().toLowerCase() === e.target.value.trim().toLowerCase());
+      if (!match) return;
+      if (match.supplierName) row.querySelector('.om-acc-supplier').value = match.supplierName;
+      if (match.unitPrice !== null && match.unitPrice !== undefined && match.unitPrice !== '') {
+        const priceInput = row.querySelector('.om-acc-unit-price');
+        if (!priceInput.value) priceInput.value = match.unitPrice;
+      }
+      if (match.supplierName) {
+        const sup = suppliersShared.find((s) => s.name.trim().toLowerCase() === match.supplierName.trim().toLowerCase());
+        if (sup && sup.contactName) row.querySelector('.om-acc-supplier-contact').value = sup.contactName;
+      }
+      recalcTotals();
     });
     editAccessoryRowCount++;
   }
@@ -2403,16 +2424,19 @@ async function openDetailPanel(id, scope) {
   // a future suggestion without needing a separate managed list. ----
   (async () => {
     try {
-      const [suppliersData, historyData, optionsData, warehousesData] = await Promise.all([
+      const [suppliersData, historyData, optionsData, warehousesData, componentsData] = await Promise.all([
         api('/api/suppliers'),
         api('/api/order-management/field-history'),
         api('/api/options'),
-        api('/api/warehouses')
+        api('/api/warehouses'),
+        api('/api/catalog/components')
       ]);
       const suppliers = suppliersData.suppliers || [];
       const supplierNames = suppliers.map((s) => s.name);
       supplierNamesShared = supplierNames;
       suppliersShared = suppliers;
+      componentsShared = (componentsData && componentsData.components) || [];
+      componentNamesShared = componentsShared.map((c) => c.partName).filter(Boolean);
 
       attachTypeahead('fSupplierName', () => supplierNames);
       attachTypeahead('fFabricInfo', () => historyData.fabricCodes || []);
@@ -2728,7 +2752,7 @@ function accessoryRowHtml(idx, data, mainAddress) {
   const rowId = data.id || `tmp-${Date.now()}-${idx}`;
   return `
     <tr data-accessory-row="${idx}" data-accessory-id="${escapeHtml(rowId)}">
-      <td><input type="text" class="om-acc-name" value="${escapeHtml(data.partName || '')}" /></td>
+      <td><input type="text" id="accName${idx}" class="om-acc-name" value="${escapeHtml(data.partName || '')}" /></td>
       <td class="om-acc-image-cell">
         ${data.imageUrl ? `<img class="om-table-thumb" src="${escapeHtml(data.imageUrl)}" alt="" />` : ''}
         <input type="hidden" class="om-acc-image-url" value="${escapeHtml(data.imageUrl || '')}" />
