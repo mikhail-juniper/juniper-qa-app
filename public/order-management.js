@@ -2002,3 +2002,11 @@ function collectAccessoryRows(container) {
   })).filter((a) => a.partName || a.supplierName);
 }
 
+
+(async function init() {
+  const params = new URLSearchParams(location.search);
+  const view = params.get('view');
+  if (view === 'suppliers' || view === 'settlement' || view === 'products' || view === 'components') currentView = view;
+  await Promise.all([loadStatuses(), loadAccessoryStatuses(), loadFileCategories()]);
+  render();
+})();
