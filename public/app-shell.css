@@ -64,9 +64,18 @@
    Reports, Analytics, Settings) gets it too without each needing their own
    copy - order-management.html/sizing-charts.html/clients.html already
    carry both classes, so this and .om-root simply agree with each other. */
+/* True viewport-centered content, independent of the sidebar - matches how
+   the popups already center themselves. Centering within just the
+   remaining flex space (viewport minus sidebar) visually skews content
+   right of true center; this instead computes margin-left as if centering
+   on the full viewport, then subtracts the sidebar's own width (since this
+   rule lives inside <main>, whose local x=0 already starts after the
+   sidebar). Clamped to a sane minimum so it never goes negative on
+   in-between widths. */
 .form-root {
   max-width: 1700px;
-  margin: 0 auto;
+  margin-left: max(24px, calc((100vw - 1700px) / 2 - 220px));
+  margin-right: auto;
   padding: 28px 40px 80px 40px;
   box-sizing: border-box;
 }

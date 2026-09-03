@@ -17,7 +17,8 @@ const newPoState = {
   skuChecked: null,
   pdLeadOtherMode: false,
   creatorOtherMode: false,
-  asanaTaskLink: ''
+  asanaTaskLink: '',
+  productRisk: 'medium'
 };
 
 let idCounter = 0;
@@ -757,6 +758,12 @@ function renderNewPoScreen() {
       ${textField2('newPoProductTitle', 'productTitle', newPoState.productTitle, {})}
       ${newPoSelectFieldWithOther('newPoPdLead', 'productDevelopmentLead', newPoState.productDevelopmentLead, OPTIONS.productDevelopmentLeads || [], newPoState.pdLeadOtherMode)}
       ${textField2('newPoAsanaLink', 'asanaTaskLink', newPoState.asanaTaskLink, { placeholderKey: 'asanaTaskLinkPlaceholder' })}
+      <div class="field">
+        <label class="field-label">${biBlockHtml('productRisk', 'Product Complexity/Risk')}</label>
+        <div class="segmented">
+          ${['high', 'medium', 'low'].map((r) => `<div class="segmented-option ${newPoState.productRisk === r ? 'selected' : ''}" data-newpo-seg="productRisk" data-val="${r}">${escapeHtml(bi('risk' + r.charAt(0).toUpperCase() + r.slice(1)).en)}<span class="zh">${escapeHtml(bi('risk' + r.charAt(0).toUpperCase() + r.slice(1)).zh)}</span></div>`).join('')}
+        </div>
+      </div>
     </div>
 
     <div id="newPoSizesBlock">${renderNewPoSizesBlock()}</div>
@@ -937,6 +944,14 @@ function attachNewPoHandlers() {
   const subSelect = document.getElementById('newPoSubcategory');
   if (subSelect) subSelect.addEventListener('change', (e) => { newPoState.subcategory = e.target.value || null; });
 
+  document.querySelectorAll('[data-newpo-seg]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const field = el.getAttribute('data-newpo-seg');
+      newPoState[field] = el.getAttribute('data-val');
+      render();
+    });
+  });
+
   attachNewPoSizeHandlers();
 
   const btnBack = document.getElementById('btnNewPoBack');
@@ -969,7 +984,7 @@ async function submitNewPo() {
         poNumber: newPoState.poNumber, sku: newPoState.sku, category: newPoState.category, subcategory: newPoState.subcategory,
         orderDate: newPoState.orderDate, creator: newPoState.creator, productTitle: newPoState.productTitle, orderQuantity: newPoState.orderQuantity,
         productDevelopmentLead: newPoState.productDevelopmentLead, sizesIncluded: newPoState.sizesIncluded,
-        asanaTaskLink: newPoState.asanaTaskLink
+        asanaTaskLink: newPoState.asanaTaskLink, productRisk: newPoState.productRisk
       })
     });
     const data = await res.json();
@@ -1058,6 +1073,7 @@ async function submitPoLookup() {
     state.productTitle = record.productTitle || '';
     state.poQuantity = record.orderQuantity ? String(record.orderQuantity) : '';
     state.poSizesIncluded = sortSizesCanonically(record.sizesIncluded || []);
+    if (record.productRisk) state.productRisk = record.productRisk;
 
     // Pull Factory Code / Product Risk / sizing standard from QA/QC Approval's
     // Sample Approval, if it's been completed for this PO. Also gather

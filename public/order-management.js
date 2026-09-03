@@ -4,6 +4,7 @@
  */
 
 let STATUSES = [];
+let ACCESSORY_STATUSES = [];
 let FILE_CATEGORIES = [];
 let currentView = 'home'; // 'home' | 'category' | 'suppliers' | 'settlement'
 let currentTab = 'toys'; // 'clothing' | 'toys' | 'other' (only relevant when currentView === 'category')
@@ -74,6 +75,11 @@ async function loadStatuses() {
   STATUSES = data.statuses || [];
 }
 
+async function loadAccessoryStatuses() {
+  const data = await api('/api/order-management/accessory-statuses');
+  ACCESSORY_STATUSES = data.statuses || [];
+}
+
 async function loadFileCategories() {
   const data = await api('/api/order-management/file-categories');
   FILE_CATEGORIES = data.categories || [];
@@ -124,7 +130,7 @@ async function renderHome(root) {
   let newRequests = [];
   try {
     counts = await api('/api/order-management/counts');
-    const req = await api('/api/order-management/orders?status=' + encodeURIComponent('New request'));
+    const req = await api('/api/order-management/orders?status=' + encodeURIComponent('New Request'));
     newRequests = req.orders || [];
   } catch (e) { showToast(e.message, true); }
 
@@ -305,8 +311,8 @@ function renderSuppliersTable(suppliers) {
     <table class="om-table">
       <thead>
         <tr>
-          <th>Supplier name</th><th>Shipping address</th><th>Vendor code</th><th>Product type</th>
-          <th>Company name</th><th>Contact name</th><th>Phone number</th><th>Business license</th>
+          <th>Supplier name</th><th>Shipping address</th><th>Additional address</th><th>Vendor code</th><th>Product type</th>
+          <th>Company name</th><th>Contact name</th><th>Phone number</th><th>Additional phone</th><th>Business license</th>
         </tr>
       </thead>
       <tbody>
@@ -314,11 +320,13 @@ function renderSuppliersTable(suppliers) {
           <tr data-id="${escapeHtml(s.id)}">
             <td><strong>${escapeHtml(s.name)}</strong></td>
             <td>${escapeHtml(s.shippingAddress || '—')}</td>
+            <td>${escapeHtml(s.additionalAddress || '—')}</td>
             <td>${escapeHtml(s.vendorCode || '—')}</td>
             <td>${escapeHtml(s.productType || '—')}</td>
             <td>${escapeHtml(s.companyName || '—')}</td>
             <td>${escapeHtml(s.contactName || '—')}</td>
             <td>${escapeHtml(s.phoneNumber || '—')}</td>
+            <td>${escapeHtml(s.additionalPhoneNumber || '—')}</td>
             <td>${escapeHtml(s.businessLicense || '—')}</td>
           </tr>
         `).join('')}
@@ -351,6 +359,7 @@ function openSupplierForm(supplier) {
       <div><label>Product type</label><input id="spProductType" type="text" placeholder="e.g. Apparel, Bag, Carabiner" value="${val(supplier && supplier.productType)}" /></div>
       <div><label>Contact name</label><input id="spContactName" type="text" value="${val(supplier && supplier.contactName)}" /></div>
       <div><label>Phone number</label><input id="spPhoneNumber" type="text" value="${val(supplier && supplier.phoneNumber)}" /></div>
+      <div><label>Additional phone number</label><input id="spAdditionalPhoneNumber" type="text" value="${val(supplier && supplier.additionalPhoneNumber)}" /></div>
       <div><label>WeChat</label><input id="spWechat" type="text" value="${val(supplier && supplier.wechat)}" /></div>
       <div><label>Currency</label>
         <select id="spCurrency">
@@ -362,6 +371,7 @@ function openSupplierForm(supplier) {
     <div class="om-field-grid" style="margin-top:10px;">
       <div style="grid-column:1/-1;"><label>Mailing address</label><input id="spMailingAddress" type="text" value="${val(supplier && supplier.mailingAddress)}" /></div>
       <div style="grid-column:1/-1;"><label>Shipping address</label><input id="spShippingAddress" type="text" value="${val(supplier && supplier.shippingAddress)}" /></div>
+      <div style="grid-column:1/-1;"><label>Additional address</label><input id="spAdditionalAddress" type="text" value="${val(supplier && supplier.additionalAddress)}" /></div>
       <div style="grid-column:1/-1;"><label>Business license</label><input id="spBusinessLicense" type="text" value="${val(supplier && supplier.businessLicense)}" /></div>
       <div style="grid-column:1/-1;"><label>Notes</label><input id="spNotes" type="text" value="${val(supplier && supplier.notes)}" /></div>
     </div>
@@ -399,10 +409,12 @@ function openSupplierForm(supplier) {
       productType: document.getElementById('spProductType').value,
       contactName: document.getElementById('spContactName').value,
       phoneNumber: document.getElementById('spPhoneNumber').value,
+      additionalPhoneNumber: document.getElementById('spAdditionalPhoneNumber').value,
       wechat: document.getElementById('spWechat').value,
       currency: document.getElementById('spCurrency').value,
       mailingAddress: document.getElementById('spMailingAddress').value,
       shippingAddress: document.getElementById('spShippingAddress').value,
+      additionalAddress: document.getElementById('spAdditionalAddress').value,
       businessLicense: document.getElementById('spBusinessLicense').value,
       notes: document.getElementById('spNotes').value
     };
@@ -426,36 +438,65 @@ function openSupplierForm(supplier) {
 // there's nothing separate to keep in sync.
 
 async function renderProductsShell(root) {
-  root.innerHTML = `${backToHubHtml()}<h2 class="om-view-title">Products</h2><div id="omProductsHost"></div>`;
+  root.innerHTML = `
+    ${backToHubHtml()}
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <h2 class="om-view-title" style="margin:0;">Products</h2>
+      <button class="btn btn-primary" id="omNewProductBtn" style="flex:none;width:auto;padding:10px 18px;">+ Add product</button>
+    </div>
+    <div id="omProductsHost"></div>
+  `;
   bindBackToHub();
+  document.getElementById('omNewProductBtn').addEventListener('click', () => openProductForm(null));
   const host = document.getElementById('omProductsHost');
   host.innerHTML = `<div class="om-empty">Loading...</div>`;
   try {
-    const [clothing, toys, other] = await Promise.all([
+    const [clothing, toys, other, manualData] = await Promise.all([
       api('/api/order-management/products?productLine=clothing'),
       api('/api/order-management/products?productLine=toys'),
-      api('/api/order-management/products?productLine=other')
+      api('/api/order-management/products?productLine=other'),
+      api('/api/catalog/products')
     ]);
+    const manual = manualData.products || [];
     host.innerHTML = [
-      productsCategoryBlock('clothing', clothing.products || []),
-      productsCategoryBlock('toys', toys.products || []),
-      productsCategoryBlock('other', other.products || [])
+      productsCategoryBlock('clothing', clothing.products || [], manual.filter((p) => p.productLine === 'clothing')),
+      productsCategoryBlock('toys', toys.products || [], manual.filter((p) => p.productLine === 'toys')),
+      productsCategoryBlock('other', other.products || [], manual.filter((p) => p.productLine === 'other'))
     ].join('');
     host.querySelectorAll('tbody tr[data-po]').forEach((tr) => {
       tr.addEventListener('click', () => openDetailPanel(tr.dataset.po));
     });
+    host.querySelectorAll('tbody tr[data-manual-id]').forEach((tr) => {
+      tr.addEventListener('click', async () => {
+        try {
+          const data = await api(`/api/catalog/products/${encodeURIComponent(tr.dataset.manualId)}`);
+          openProductForm(data.product);
+        } catch (e) { showToast(e.message, true); }
+      });
+    });
   } catch (e) { showToast(e.message, true); }
 }
 
-function productsCategoryBlock(productLine, products) {
+function productsCategoryBlock(productLine, products, manualProducts) {
   const meta = CATEGORY_META[productLine];
+  const total = products.length + manualProducts.length;
   return `
     <div class="om-category-tile" style="margin-bottom:20px;">
-      <div class="om-category-tile-header" style="border-color:${meta.color};"><span>${meta.label} Products (${products.length})</span></div>
-      ${products.length ? `
+      <div class="om-category-tile-header" style="border-color:${meta.color};"><span>${meta.label} Products (${total})</span></div>
+      ${total ? `
         <table class="om-table">
           <thead><tr><th>Name</th><th>SKU</th><th>Model #</th><th>Factory price</th><th>Sales unit price</th><th># POs</th></tr></thead>
           <tbody>
+            ${manualProducts.map((p) => `
+              <tr data-manual-id="${escapeHtml(p.id)}">
+                <td><strong>${escapeHtml(p.name)}</strong></td>
+                <td>${escapeHtml(p.sku || '—')}</td>
+                <td>${escapeHtml(p.modelNumber || '—')}</td>
+                <td>${fmtMoney(p.factoryPrice)}</td>
+                <td>${fmtMoney(p.salesUnitPrice)}</td>
+                <td>—</td>
+              </tr>
+            `).join('')}
             ${products.map((p) => `
               <tr data-po="${escapeHtml(p.examplePoId)}">
                 <td><strong>${escapeHtml(p.name)}</strong></td>
@@ -473,37 +514,141 @@ function productsCategoryBlock(productLine, products) {
   `;
 }
 
+function openProductForm(product) {
+  const panel = document.createElement('div');
+  panel.className = 'om-panel';
+  panel.innerHTML = `
+   <div class="om-panel-inner">
+    <div class="om-panel-header">
+      <div style="font-size:19px;font-weight:700;">${product ? 'Edit product' : 'New product'}</div>
+      <button class="om-panel-close" id="prodClose">&times;</button>
+    </div>
+    <div class="om-field-grid">
+      <div><label>Name *</label><input id="prodName" type="text" value="${val(product && product.name)}" /></div>
+      <div><label>SKU</label><input id="prodSku" type="text" value="${val(product && product.sku)}" /></div>
+      <div><label>Model number</label><input id="prodModelNumber" type="text" value="${val(product && product.modelNumber)}" /></div>
+      <div><label>Product line</label>
+        <select id="prodProductLine">
+          <option value="clothing" ${!product || product.productLine === 'clothing' ? 'selected' : ''}>Apparel</option>
+          <option value="toys" ${product && product.productLine === 'toys' ? 'selected' : ''}>Toys</option>
+          <option value="other" ${product && product.productLine === 'other' ? 'selected' : ''}>Other</option>
+        </select>
+      </div>
+      <div><label>Factory price</label><input id="prodFactoryPrice" type="number" step="0.01" value="${val(product && product.factoryPrice)}" /></div>
+      <div><label>Sales unit price</label><input id="prodSalesUnitPrice" type="number" step="0.01" value="${val(product && product.salesUnitPrice)}" /></div>
+    </div>
+    <div class="om-field-grid" style="margin-top:10px;">
+      <div style="grid-column:1/-1;"><label>Notes</label><input id="prodNotes" type="text" value="${val(product && product.notes)}" /></div>
+    </div>
+    <div style="margin-top:22px;display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn btn-secondary" id="prodCancel" style="flex:none;width:auto;padding:10px 18px;">Cancel</button>
+      ${product ? `<button class="btn btn-secondary" id="prodDelete" style="flex:none;width:auto;padding:10px 18px;color:var(--jc-fail);">Delete</button>` : ''}
+      <button class="btn btn-primary" id="prodSave" style="flex:none;width:auto;padding:10px 18px;">${product ? 'Save changes' : 'Create product'}</button>
+    </div>
+   </div>
+  `;
+  mountPanel(panel);
+  bindPanelEscape();
+  document.getElementById('prodClose').addEventListener('click', closePanel);
+  document.getElementById('prodCancel').addEventListener('click', closePanel);
+
+  if (product) {
+    document.getElementById('prodDelete').addEventListener('click', async () => {
+      if (!confirm(`Delete "${product.name}"? This can't be undone.`)) return;
+      try {
+        await api(`/api/catalog/products/${encodeURIComponent(product.id)}`, { method: 'DELETE' });
+        showToast('Product deleted');
+        closePanel();
+        refreshCurrentView();
+      } catch (e) { showToast(e.message, true); }
+    });
+  }
+
+  document.getElementById('prodSave').addEventListener('click', async () => {
+    const name = document.getElementById('prodName').value.trim();
+    if (!name) return showToast('Product name is required', true);
+    const payload = {
+      name,
+      sku: document.getElementById('prodSku').value,
+      modelNumber: document.getElementById('prodModelNumber').value,
+      productLine: document.getElementById('prodProductLine').value,
+      factoryPrice: document.getElementById('prodFactoryPrice').value || null,
+      salesUnitPrice: document.getElementById('prodSalesUnitPrice').value || null,
+      notes: document.getElementById('prodNotes').value
+    };
+    try {
+      if (product) {
+        await api(`/api/catalog/products/${encodeURIComponent(product.id)}`, { method: 'PATCH', body: JSON.stringify(payload) });
+        showToast('Product updated');
+      } else {
+        await api('/api/catalog/products', { method: 'POST', body: JSON.stringify(payload) });
+        showToast('Product created');
+      }
+      closePanel();
+      refreshCurrentView();
+    } catch (e) { showToast(e.message, true); }
+  });
+}
+
 async function renderComponentsShell(root) {
-  root.innerHTML = `${backToHubHtml()}<h2 class="om-view-title">Components</h2><div id="omComponentsHost"></div>`;
+  root.innerHTML = `
+    ${backToHubHtml()}
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <h2 class="om-view-title" style="margin:0;">Components</h2>
+      <button class="btn btn-primary" id="omNewComponentBtn" style="flex:none;width:auto;padding:10px 18px;">+ Add component</button>
+    </div>
+    <div id="omComponentsHost"></div>
+  `;
   bindBackToHub();
+  document.getElementById('omNewComponentBtn').addEventListener('click', () => openComponentForm(null));
   const host = document.getElementById('omComponentsHost');
   host.innerHTML = `<div class="om-empty">Loading...</div>`;
   try {
-    const [clothing, toys, other] = await Promise.all([
+    const [clothing, toys, other, manualData] = await Promise.all([
       api('/api/order-management/components?productLine=clothing'),
       api('/api/order-management/components?productLine=toys'),
-      api('/api/order-management/components?productLine=other')
+      api('/api/order-management/components?productLine=other'),
+      api('/api/catalog/components')
     ]);
+    const manual = manualData.components || [];
     host.innerHTML = [
-      componentsCategoryBlock('clothing', clothing.components || []),
-      componentsCategoryBlock('toys', toys.components || []),
-      componentsCategoryBlock('other', other.components || [])
+      componentsCategoryBlock('clothing', clothing.components || [], manual.filter((c) => c.productLine === 'clothing')),
+      componentsCategoryBlock('toys', toys.components || [], manual.filter((c) => c.productLine === 'toys')),
+      componentsCategoryBlock('other', other.components || [], manual.filter((c) => c.productLine === 'other'))
     ].join('');
     host.querySelectorAll('tbody tr[data-po]').forEach((tr) => {
       tr.addEventListener('click', () => openDetailPanel(tr.dataset.po));
     });
+    host.querySelectorAll('tbody tr[data-manual-id]').forEach((tr) => {
+      tr.addEventListener('click', async () => {
+        try {
+          const data = await api(`/api/catalog/components/${encodeURIComponent(tr.dataset.manualId)}`);
+          openComponentForm(data.component);
+        } catch (e) { showToast(e.message, true); }
+      });
+    });
   } catch (e) { showToast(e.message, true); }
 }
 
-function componentsCategoryBlock(productLine, components) {
+function componentsCategoryBlock(productLine, components, manualComponents) {
   const meta = CATEGORY_META[productLine];
+  const total = components.length + manualComponents.length;
   return `
     <div class="om-category-tile" style="margin-bottom:20px;">
-      <div class="om-category-tile-header" style="border-color:${meta.color};"><span>${meta.label} Components (${components.length})</span></div>
-      ${components.length ? `
+      <div class="om-category-tile-header" style="border-color:${meta.color};"><span>${meta.label} Components (${total})</span></div>
+      ${total ? `
         <table class="om-table">
           <thead><tr><th>Part name</th><th>Material</th><th>Supplier</th><th>Unit price</th><th># uses</th></tr></thead>
           <tbody>
+            ${manualComponents.map((c) => `
+              <tr data-manual-id="${escapeHtml(c.id)}">
+                <td><strong>${escapeHtml(c.partName)}</strong></td>
+                <td>${escapeHtml(c.material || '—')}</td>
+                <td>${escapeHtml(c.supplierName || '—')}</td>
+                <td>${fmtMoney(c.unitPrice)}</td>
+                <td>—</td>
+              </tr>
+            `).join('')}
             ${components.map((c) => `
               <tr data-po="${escapeHtml(c.examplePoId)}">
                 <td><strong>${escapeHtml(c.partName)}</strong></td>
@@ -518,6 +663,86 @@ function componentsCategoryBlock(productLine, components) {
       ` : `<div class="om-empty">No ${meta.label.toLowerCase()} components recorded yet.</div>`}
     </div>
   `;
+}
+
+function openComponentForm(component) {
+  const panel = document.createElement('div');
+  panel.className = 'om-panel';
+  panel.innerHTML = `
+   <div class="om-panel-inner">
+    <div class="om-panel-header">
+      <div style="font-size:19px;font-weight:700;">${component ? 'Edit component' : 'New component'}</div>
+      <button class="om-panel-close" id="compClose">&times;</button>
+    </div>
+    <div class="om-field-grid">
+      <div><label>Part name *</label><input id="compPartName" type="text" value="${val(component && component.partName)}" /></div>
+      <div><label>Material</label><input id="compMaterial" type="text" value="${val(component && component.material)}" /></div>
+      <div><label>Supplier</label><input id="compSupplierName" type="text" list="dlSupplierNames" value="${val(component && component.supplierName)}" /></div>
+      <div><label>Unit price</label><input id="compUnitPrice" type="number" step="0.01" value="${val(component && component.unitPrice)}" /></div>
+      <div><label>Product line</label>
+        <select id="compProductLine">
+          <option value="clothing" ${!component || component.productLine === 'clothing' ? 'selected' : ''}>Apparel</option>
+          <option value="toys" ${component && component.productLine === 'toys' ? 'selected' : ''}>Toys</option>
+          <option value="other" ${component && component.productLine === 'other' ? 'selected' : ''}>Other</option>
+        </select>
+      </div>
+    </div>
+    <div class="om-field-grid" style="margin-top:10px;">
+      <div style="grid-column:1/-1;"><label>Notes</label><input id="compNotes" type="text" value="${val(component && component.notes)}" /></div>
+    </div>
+    <datalist id="dlSupplierNames"></datalist>
+    <div style="margin-top:22px;display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn btn-secondary" id="compCancel" style="flex:none;width:auto;padding:10px 18px;">Cancel</button>
+      ${component ? `<button class="btn btn-secondary" id="compDelete" style="flex:none;width:auto;padding:10px 18px;color:var(--jc-fail);">Delete</button>` : ''}
+      <button class="btn btn-primary" id="compSave" style="flex:none;width:auto;padding:10px 18px;">${component ? 'Save changes' : 'Create component'}</button>
+    </div>
+   </div>
+  `;
+  mountPanel(panel);
+  bindPanelEscape();
+  document.getElementById('compClose').addEventListener('click', closePanel);
+  document.getElementById('compCancel').addEventListener('click', closePanel);
+
+  api('/api/suppliers').then((data) => {
+    const dl = document.getElementById('dlSupplierNames');
+    if (dl) dl.innerHTML = (data.suppliers || []).map((s) => `<option value="${escapeHtml(s.name)}"></option>`).join('');
+  }).catch(() => { /* datalist is a convenience - fine to skip if this fails */ });
+
+  if (component) {
+    document.getElementById('compDelete').addEventListener('click', async () => {
+      if (!confirm(`Delete "${component.partName}"? This can't be undone.`)) return;
+      try {
+        await api(`/api/catalog/components/${encodeURIComponent(component.id)}`, { method: 'DELETE' });
+        showToast('Component deleted');
+        closePanel();
+        refreshCurrentView();
+      } catch (e) { showToast(e.message, true); }
+    });
+  }
+
+  document.getElementById('compSave').addEventListener('click', async () => {
+    const partName = document.getElementById('compPartName').value.trim();
+    if (!partName) return showToast('Part name is required', true);
+    const payload = {
+      partName,
+      material: document.getElementById('compMaterial').value,
+      supplierName: document.getElementById('compSupplierName').value,
+      unitPrice: document.getElementById('compUnitPrice').value || null,
+      productLine: document.getElementById('compProductLine').value,
+      notes: document.getElementById('compNotes').value
+    };
+    try {
+      if (component) {
+        await api(`/api/catalog/components/${encodeURIComponent(component.id)}`, { method: 'PATCH', body: JSON.stringify(payload) });
+        showToast('Component updated');
+      } else {
+        await api('/api/catalog/components', { method: 'POST', body: JSON.stringify(payload) });
+        showToast('Component created');
+      }
+      closePanel();
+      refreshCurrentView();
+    } catch (e) { showToast(e.message, true); }
+  });
 }
 
 // "Accessories" sub-tab: flattened parts/accessories across every order in
@@ -539,7 +764,7 @@ function renderAccessoriesTable(host, rows) {
       </thead>
       <tbody>
         ${rows.map(({ order, accessory: a }) => `
-          <tr data-id="${escapeHtml(order.id)}">
+          <tr data-id="${escapeHtml(order.id)}" data-accessory-id="${escapeHtml(a.id)}">
             <td><strong>${escapeHtml(a.partName || 'Unnamed part')}</strong></td>
             <td>${escapeHtml(order.poNumber)}</td>
             <td>${escapeHtml(a.specifications || '—')}</td>
@@ -559,7 +784,7 @@ function renderAccessoriesTable(host, rows) {
     </table>
   `;
   host.querySelectorAll('tbody tr').forEach((tr) => {
-    tr.addEventListener('click', () => openDetailPanel(tr.dataset.id));
+    tr.addEventListener('click', () => openAccessoryDetailPanel(tr.dataset.id, tr.dataset.accessoryId));
   });
 }
 
@@ -836,11 +1061,9 @@ function renderComponentsTable(host, orders) {
     </table>
   `;
   host.querySelectorAll('tbody tr').forEach((tr) => {
-    tr.addEventListener('click', () => openDetailPanel(tr.dataset.id));
+    tr.addEventListener('click', () => openDetailPanel(tr.dataset.id, 'main-component'));
   });
 }
-
-// ---- Detail panel ----
 
 function closePanel() {
   document.querySelectorAll('.om-panel-backdrop').forEach((el) => el.remove());
@@ -865,7 +1088,8 @@ function mountPanel(panel) {
   document.body.appendChild(backdrop);
 }
 
-async function openDetailPanel(id) {
+async function openDetailPanel(id, scope) {
+  scope = scope || 'full';
   let order;
   try {
     const data = await api(`/api/order-management/orders/${encodeURIComponent(id)}`);
@@ -883,8 +1107,10 @@ async function openDetailPanel(id) {
       <div>
         <div style="font-size:19px;font-weight:700;">${escapeHtml(order.poNumber)}</div>
         <div style="color:var(--jc-muted);font-size:13px;">${escapeHtml(order.mainComponent && order.mainComponent.name || '')}</div>
+        ${scope !== 'full' ? `<div style="margin-top:4px;font-size:12px;font-weight:700;color:var(--jc-teal-dark);text-transform:uppercase;">Main component view</div>` : ''}
       </div>
       <div style="display:flex;gap:10px;align-items:center;">
+        ${scope !== 'full' ? `<button class="btn btn-secondary" id="omViewFullPo" style="flex:none;width:auto;padding:7px 14px;font-size:13px;">View full PO</button>` : ''}
         <button class="om-panel-close" id="omClosePanel">&times;</button>
       </div>
     </div>
@@ -918,7 +1144,15 @@ async function openDetailPanel(id) {
           ${STATUSES.map((s) => `<option value="${escapeHtml(s)}" ${s === order.status ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('')}
         </select>
       </div>
-      <div><label>Photo reference</label><input id="fPhotoReference" type="text" placeholder="Link to style photo" value="${val(order.mainComponent.photoReference)}" /></div>
+      <div>
+        <label>Photo reference</label>
+        <div style="display:flex;align-items:center;gap:10px;">
+          ${order.mainComponent.photoReference ? `<img id="fPhotoReferencePreview" class="om-table-thumb" style="width:52px;height:52px;" src="${escapeHtml(order.mainComponent.photoReference)}" alt="" />` : `<img id="fPhotoReferencePreview" class="om-table-thumb" style="width:52px;height:52px;display:none;" alt="" />`}
+          <input type="hidden" id="fPhotoReference" value="${val(order.mainComponent.photoReference)}" />
+          <input type="file" id="fPhotoReferenceFile" accept="image/*" style="display:none;" />
+          <button type="button" class="om-table-upload-btn" id="fPhotoReferenceUploadBtn">Upload photo</button>
+        </div>
+      </div>
       <div><label>Required Warehouse Arrival Date</label><input id="fDesiredEntry" type="date" value="${val(order.desiredEntryDate)}" /></div>
       <div><label>Required Manufacturer Delivery Date</label><input id="fManufDelivery" type="date" value="${val(order.manufacturerDeliveryDate)}" /></div>
       <div><label>Order Quantity</label><input id="fPurchaseQty" type="number" value="${val(order.mainComponent.purchaseQuantity)}" /></div>
@@ -929,7 +1163,10 @@ async function openDetailPanel(id) {
 
     <div id="fClothingOnly" style="${order.productLine === 'clothing' ? '' : 'display:none;'}">
       <div class="om-section-title">Size Distribution</div>
-      <div id="omSizeRows"></div>
+      <table class="om-table om-table-editable" style="min-width:0;">
+        <thead><tr><th>SKU</th><th>Size</th><th>Order Qty</th><th>Qty Received</th><th></th></tr></thead>
+        <tbody id="omSizeRows"></tbody>
+      </table>
       <button type="button" class="btn btn-secondary" id="omAddSizeRow" style="flex:none;width:auto;padding:8px 14px;margin-top:6px;">+ Add size row</button>
     </div>
 
@@ -962,9 +1199,22 @@ async function openDetailPanel(id) {
       <div style="grid-column:1/-1;"><label>Production precautions</label><input id="fProductionPrecautions" type="text" value="${val(order.mainComponent.productionPrecautions)}" /></div>
     </div>
 
-    <div class="om-section-title">Component Breakdown</div>
-    <div id="omAccessoryRows"></div>
-    <button type="button" class="btn btn-secondary" id="omAddAccessoryRow" style="flex:none;width:auto;padding:8px 14px;margin-top:6px;">+ Add accessory / part</button>
+    <div id="omComponentBreakdownSection" style="${scope === 'main-component' ? 'display:none;' : ''}">
+      <div class="om-section-title">Component Breakdown</div>
+      <div class="om-table-wrap">
+        <table class="om-table om-table-editable">
+          <thead>
+            <tr>
+              <th>Image</th><th>Part Name</th><th>Dimensions</th><th>Purchase Price</th><th># Parts</th>
+              <th>Total Price</th><th>Supplier Name</th><th>Supplier Contact</th><th>Desired Delivery</th>
+              <th>Delivery Address</th><th>Design Document</th><th>Status</th><th>Remark</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="omAccessoryRows"></tbody>
+        </table>
+      </div>
+      <button type="button" class="btn btn-secondary" id="omAddAccessoryRow" style="flex:none;width:auto;padding:8px 14px;margin-top:6px;">+ Add accessory / part</button>
+    </div>
 
     <div class="om-section-title">Warehousing Breakdown</div>
     <div class="om-field-grid">
@@ -1030,6 +1280,8 @@ async function openDetailPanel(id) {
   bindPanelEscape();
 
   document.getElementById('omClosePanel').addEventListener('click', closePanel);
+  const viewFullPoBtn = document.getElementById('omViewFullPo');
+  if (viewFullPoBtn) viewFullPoBtn.addEventListener('click', () => { closePanel(); openDetailPanel(order.id, 'full'); });
   panel.querySelectorAll('.om-tracker-step').forEach((btn) => {
     btn.addEventListener('click', async () => {
       try {
@@ -1086,18 +1338,40 @@ async function openDetailPanel(id) {
     } catch (e) { showToast(e.message, true); }
   });
 
+  document.getElementById('fPhotoReferenceUploadBtn').addEventListener('click', () => {
+    document.getElementById('fPhotoReferenceFile').click();
+  });
+  document.getElementById('fPhotoReferenceFile').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('category', 'Style picture');
+    formData.append('relatedTo', 'main-photo');
+    try {
+      const res = await fetch(`/api/order-management/orders/${encodeURIComponent(order.id)}/files`, { method: 'POST', body: formData });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Upload failed');
+      document.getElementById('fPhotoReference').value = body.file.url;
+      const preview = document.getElementById('fPhotoReferencePreview');
+      preview.src = body.file.url;
+      preview.style.display = 'block';
+      showToast('Photo uploaded');
+    } catch (err) { showToast(err.message, true); }
+  });
+
   // ---- Always-editable size distribution, accessories ----
   let editSizeRowCount = 0;
   const sizeRowsHost = panel.querySelector('#omSizeRows');
   function addSizeRow(data) {
     sizeRowsHost.insertAdjacentHTML('beforeend',
-      `<div class="om-repeat-row" data-size-row="${editSizeRowCount}">
-        <input type="text" placeholder="SKU" class="om-size-sku" value="${val(data && data.sku)}" />
-        <input type="text" placeholder="Size" class="om-size-size" value="${val(data && data.size)}" />
-        <input type="number" placeholder="Order Qty" class="om-size-qty" value="${val(data && data.quantity)}" />
-        <input type="number" placeholder="Qty Received" class="om-size-qty-received" value="${val(data && data.quantityReceived)}" />
-        <button type="button" class="om-row-remove" data-remove-size="${editSizeRowCount}">&times;</button>
-      </div>`);
+      `<tr data-size-row="${editSizeRowCount}">
+        <td><input type="text" placeholder="SKU" class="om-size-sku" value="${val(data && data.sku)}" /></td>
+        <td><input type="text" placeholder="Size" class="om-size-size" value="${val(data && data.size)}" /></td>
+        <td><input type="number" placeholder="Order Qty" class="om-size-qty" value="${val(data && data.quantity)}" /></td>
+        <td><input type="number" placeholder="Qty Received" class="om-size-qty-received" value="${val(data && data.quantityReceived)}" /></td>
+        <td><button type="button" class="om-row-remove" data-remove-size="${editSizeRowCount}">&times;</button></td>
+      </tr>`);
     const idx = editSizeRowCount;
     panel.querySelector(`[data-remove-size="${idx}"]`).addEventListener('click', () => {
       panel.querySelector(`[data-size-row="${idx}"]`).remove();
@@ -1109,12 +1383,64 @@ async function openDetailPanel(id) {
 
   let editAccessoryRowCount = 0;
   const accessoryRowsHost = panel.querySelector('#omAccessoryRows');
+
+  async function uploadAccessoryFile(row, file, category, urlInputSelector, onDone) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('category', category);
+    formData.append('relatedTo', row.dataset.accessoryId || '');
+    try {
+      const res = await fetch(`/api/order-management/orders/${encodeURIComponent(order.id)}/files`, { method: 'POST', body: formData });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Upload failed');
+      row.querySelector(urlInputSelector).value = body.file.url;
+      showToast('File uploaded');
+      onDone(body.file.url);
+    } catch (e) { showToast(e.message, true); }
+  }
+
+  function wireAccessoryRowUploads(row) {
+    const imageInput = row.querySelector('.om-acc-image-file');
+    row.querySelector('.om-acc-image-upload-btn').addEventListener('click', () => imageInput.click());
+    imageInput.addEventListener('change', () => {
+      if (!imageInput.files[0]) return;
+      uploadAccessoryFile(row, imageInput.files[0], 'Style picture', '.om-acc-image-url', (url) => {
+        const cell = row.querySelector('.om-acc-image-cell');
+        let img = cell.querySelector('img');
+        if (!img) {
+          img = document.createElement('img');
+          img.className = 'om-table-thumb';
+          cell.insertBefore(img, cell.firstChild);
+        }
+        img.src = url;
+      });
+    });
+    const docInput = row.querySelector('.om-acc-doc-file');
+    row.querySelector('.om-acc-doc-upload-btn').addEventListener('click', () => docInput.click());
+    docInput.addEventListener('change', () => {
+      if (!docInput.files[0]) return;
+      uploadAccessoryFile(row, docInput.files[0], 'Design document', '.om-acc-doc-url', (url) => {
+        const cell = row.querySelector('.om-acc-doc-cell');
+        let link = cell.querySelector('a');
+        if (!link) {
+          link = document.createElement('a');
+          link.target = '_blank';
+          link.rel = 'noopener';
+          link.style.cssText = 'display:block;font-size:11.5px;margin-bottom:4px;';
+          link.textContent = 'View file';
+          cell.insertBefore(link, cell.firstChild);
+        }
+        link.href = url;
+      });
+    });
+  }
+
   function addAccessoryRow(data) {
     accessoryRowsHost.insertAdjacentHTML('beforeend', accessoryRowHtml(editAccessoryRowCount, data));
     const idx = editAccessoryRowCount;
-    panel.querySelector(`[data-remove-accessory="${idx}"]`).addEventListener('click', () => {
-      panel.querySelector(`[data-accessory-row="${idx}"]`).remove();
-    });
+    const row = panel.querySelector(`[data-accessory-row="${idx}"]`);
+    panel.querySelector(`[data-remove-accessory="${idx}"]`).addEventListener('click', () => { row.remove(); });
+    wireAccessoryRowUploads(row);
     editAccessoryRowCount++;
   }
   (order.accessories && order.accessories.length ? order.accessories : [{}]).forEach(addAccessoryRow);
@@ -1234,6 +1560,89 @@ async function openDetailPanel(id) {
   }
 }
 
+// Lightweight, mostly-read-only view scoped to a single accessory/sub-PO -
+// reachable only from the Accessories sub-tab, since that's the only place
+// a bare accessory (rather than a full order) is the thing being clicked.
+async function openAccessoryDetailPanel(orderId, accessoryId) {
+  let order, accessory;
+  try {
+    const data = await api(`/api/order-management/orders/${encodeURIComponent(orderId)}`);
+    order = data.order;
+    accessory = (order.accessories || []).find((a) => a.id === accessoryId);
+    if (!accessory) throw new Error('That component could not be found - it may have been removed.');
+  } catch (e) {
+    return showToast(e.message, true);
+  }
+
+  const panel = document.createElement('div');
+  panel.className = 'om-panel';
+  panel.innerHTML = `
+   <div class="om-panel-inner">
+    <div class="om-panel-header">
+      <div>
+        <div style="font-size:19px;font-weight:700;">${escapeHtml(accessory.partName || 'Unnamed part')}</div>
+        <div style="color:var(--jc-muted);font-size:13px;">Component of ${escapeHtml(order.poNumber)}</div>
+        <div style="margin-top:4px;font-size:12px;font-weight:700;color:var(--jc-teal-dark);text-transform:uppercase;">Component view</div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <button class="btn btn-secondary" id="omViewFullPoFromAccessory" style="flex:none;width:auto;padding:7px 14px;font-size:13px;">View main PO</button>
+        <button class="om-panel-close" id="omClosePanel">&times;</button>
+      </div>
+    </div>
+
+    <div class="om-section-title">Status</div>
+    <div class="om-field-grid">
+      <div><label>Status</label>
+        <select id="accStatus">
+          ${ACCESSORY_STATUSES.map((s) => `<option value="${escapeHtml(s)}" ${s === accessory.status ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+
+    <div class="om-section-title">Component Details</div>
+    ${accessory.imageUrl ? `<img src="${escapeHtml(accessory.imageUrl)}" alt="" style="width:96px;height:96px;object-fit:cover;border-radius:8px;border:1px solid var(--jc-border);margin-bottom:12px;" />` : ''}
+    <div class="om-detail-grid">
+      <div class="om-detail-row"><span class="om-label">Part name</span><span class="om-value">${escapeHtml(accessory.partName || '—')}</span></div>
+      <div class="om-detail-row"><span class="om-label">Dimensions</span><span class="om-value">${escapeHtml(accessory.dimensions || '—')}</span></div>
+      <div class="om-detail-row"><span class="om-label">Quantity</span><span class="om-value">${escapeHtml(accessory.quantity ?? '—')}</span></div>
+      <div class="om-detail-row"><span class="om-label">Unit price</span><span class="om-value">${fmtMoney(accessory.unitPrice)}</span></div>
+      <div class="om-detail-row"><span class="om-label">Total price</span><span class="om-value">${fmtMoney(accessory.totalPrice)}</span></div>
+      <div class="om-detail-row"><span class="om-label">Supplier name</span><span class="om-value">${escapeHtml(accessory.supplierName || '—')}</span></div>
+      <div class="om-detail-row"><span class="om-label">Supplier contact</span><span class="om-value">${escapeHtml(accessory.supplierContact || '—')}</span></div>
+      <div class="om-detail-row"><span class="om-label">Desired delivery date</span><span class="om-value">${fmtDate(accessory.expectedDeliveryDate)}</span></div>
+      <div class="om-detail-row"><span class="om-label">Delivery address</span><span class="om-value">${escapeHtml(accessory.deliveryAddress || '—')}</span></div>
+      ${accessory.designDocUrl ? `<div class="om-detail-row"><span class="om-label">Design document</span><span class="om-value"><a href="${escapeHtml(accessory.designDocUrl)}" target="_blank" rel="noopener">View file</a></span></div>` : ''}
+      <div class="om-detail-row"><span class="om-label">Remark</span><span class="om-value">${escapeHtml(accessory.remark || '—')}</span></div>
+    </div>
+
+    <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--jc-border);display:flex;justify-content:flex-end;">
+      <button class="btn btn-primary" id="omSaveAccessoryStatus" style="flex:none;width:auto;padding:10px 24px;">Save status</button>
+    </div>
+   </div>
+  `;
+
+  mountPanel(panel);
+  bindPanelEscape();
+  document.getElementById('omClosePanel').addEventListener('click', closePanel);
+  document.getElementById('omViewFullPoFromAccessory').addEventListener('click', () => {
+    closePanel();
+    openDetailPanel(order.id, 'full');
+  });
+  document.getElementById('omSaveAccessoryStatus').addEventListener('click', async () => {
+    const newStatus = document.getElementById('accStatus').value;
+    const accessories = order.accessories.map((a) => a.id === accessoryId ? { ...a, status: newStatus } : a);
+    try {
+      await api(`/api/order-management/orders/${encodeURIComponent(order.id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ patch: { accessories }, actor: 'Web user' })
+      });
+      showToast('Status saved');
+      closePanel();
+      refreshCurrentView();
+    } catch (e) { showToast(e.message, true); }
+  });
+}
+
 async function setSettlement(id, status) {
   try {
     await api(`/api/order-management/orders/${encodeURIComponent(id)}/settlement`, {
@@ -1284,27 +1693,38 @@ function collectReplacementRows(container) {
 
 function accessoryRowHtml(idx, data) {
   data = data || {};
+  const rowId = data.id || `tmp-${Date.now()}-${idx}`;
   return `
-    <div class="om-accessory-form-row" data-accessory-row="${idx}">
-      <div class="om-field-grid">
-        <div><label>Part name</label><input type="text" class="om-acc-name" value="${escapeHtml(data.partName || '')}" /></div>
-        <div><label>Specifications</label><input type="text" class="om-acc-specs" value="${escapeHtml(data.specifications || '')}" /></div>
-        <div><label>Dimensions</label><input type="text" class="om-acc-dims" value="${escapeHtml(data.dimensions || '')}" /></div>
-        <div><label>Material</label><input type="text" class="om-acc-material" value="${escapeHtml(data.material || '')}" /></div>
-        <div><label>Quantity</label><input type="number" class="om-acc-qty" value="${escapeHtml(data.quantity ?? '')}" /></div>
-        <div><label>Unit price</label><input type="number" step="0.01" class="om-acc-unit-price" value="${escapeHtml(data.unitPrice ?? '')}" /></div>
-        <div><label>Total price</label><input type="number" step="0.01" class="om-acc-total-price" value="${escapeHtml(data.totalPrice ?? '')}" /></div>
-        <div><label>Expected delivery date</label><input type="date" class="om-acc-expected-delivery" value="${escapeHtml(data.expectedDeliveryDate || '')}" /></div>
-        <div><label>Accessory supplier</label><input type="text" class="om-acc-supplier" value="${escapeHtml(data.supplierName || '')}" /></div>
-        <div><label>Supplier contact</label><input type="text" class="om-acc-supplier-contact" value="${escapeHtml(data.supplierContact || '')}" /></div>
-        <div><label>Waybill number</label><input type="text" class="om-acc-waybill" value="${escapeHtml(data.waybillNumber || '')}" /></div>
-        <div><label>Shipment quantity</label><input type="number" class="om-acc-shipment-qty" value="${escapeHtml(data.shipmentQuantity ?? '')}" /></div>
-        <div><label>Refund order number</label><input type="text" class="om-acc-refund" value="${escapeHtml(data.refundOrderNumber || '')}" /></div>
-        <div style="grid-column:1/-1;"><label>Delivery address</label><input type="text" class="om-acc-address" value="${escapeHtml(data.deliveryAddress || '')}" /></div>
-        <div style="grid-column:1/-1;"><label>Remark</label><input type="text" class="om-acc-remark" value="${escapeHtml(data.remark || '')}" /></div>
-      </div>
-      <button type="button" class="btn btn-secondary om-row-remove-block" data-remove-accessory="${idx}">Remove this part</button>
-    </div>
+    <tr data-accessory-row="${idx}" data-accessory-id="${escapeHtml(rowId)}">
+      <td class="om-acc-image-cell">
+        ${data.imageUrl ? `<img class="om-table-thumb" src="${escapeHtml(data.imageUrl)}" alt="" />` : ''}
+        <input type="hidden" class="om-acc-image-url" value="${escapeHtml(data.imageUrl || '')}" />
+        <input type="file" class="om-acc-image-file" accept="image/*" style="display:none;" />
+        <button type="button" class="om-table-upload-btn om-acc-image-upload-btn">Upload</button>
+      </td>
+      <td><input type="text" class="om-acc-name" value="${escapeHtml(data.partName || '')}" /></td>
+      <td><input type="text" class="om-acc-dims" value="${escapeHtml(data.dimensions || '')}" /></td>
+      <td><input type="number" step="0.01" class="om-acc-unit-price" value="${escapeHtml(data.unitPrice ?? '')}" /></td>
+      <td><input type="number" class="om-acc-qty" value="${escapeHtml(data.quantity ?? '')}" /></td>
+      <td><input type="number" step="0.01" class="om-acc-total-price" value="${escapeHtml(data.totalPrice ?? '')}" /></td>
+      <td><input type="text" class="om-acc-supplier" list="dlSupplierNames" value="${escapeHtml(data.supplierName || '')}" /></td>
+      <td><input type="text" class="om-acc-supplier-contact" value="${escapeHtml(data.supplierContact || '')}" /></td>
+      <td><input type="date" class="om-acc-expected-delivery" value="${escapeHtml(data.expectedDeliveryDate || '')}" /></td>
+      <td><input type="text" class="om-acc-address" value="${escapeHtml(data.deliveryAddress || '')}" /></td>
+      <td class="om-acc-doc-cell">
+        ${data.designDocUrl ? `<a href="${escapeHtml(data.designDocUrl)}" target="_blank" rel="noopener" style="display:block;font-size:11.5px;margin-bottom:4px;">View file</a>` : ''}
+        <input type="hidden" class="om-acc-doc-url" value="${escapeHtml(data.designDocUrl || '')}" />
+        <input type="file" class="om-acc-doc-file" style="display:none;" />
+        <button type="button" class="om-table-upload-btn om-acc-doc-upload-btn">Upload</button>
+      </td>
+      <td>
+        <select class="om-acc-status">
+          ${ACCESSORY_STATUSES.map((s) => `<option value="${escapeHtml(s)}" ${data.status === s ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('')}
+        </select>
+      </td>
+      <td><input type="text" class="om-acc-remark" value="${escapeHtml(data.remark || '')}" /></td>
+      <td><button type="button" class="om-row-remove" data-remove-accessory="${idx}" title="Remove">&times;</button></td>
+    </tr>
   `;
 }
 
@@ -1398,7 +1818,7 @@ function openNewOrderPanel(existingOrder) {
       <button class="btn btn-secondary" id="omCancelNew" style="flex:none;width:auto;padding:10px 18px;">Cancel</button>
       ${isEdit ? `
         <button class="btn btn-secondary" id="omSaveDraft" style="flex:none;width:auto;padding:10px 18px;">Save &amp; complete later</button>
-        ${o.status === 'New request' ? `<button class="btn btn-primary" id="omSubmitManufacturing" style="flex:none;width:auto;padding:10px 18px;">Submit for manufacturing</button>` : ''}
+        ${o.status === 'New Request' ? `<button class="btn btn-primary" id="omSubmitManufacturing" style="flex:none;width:auto;padding:10px 18px;">Submit for manufacturing</button>` : ''}
       ` : `
         <button class="btn btn-primary" id="omSubmitNew" style="flex:none;width:auto;padding:10px 18px;">Create request</button>
       `}
@@ -1482,10 +1902,9 @@ function collectSizeRows() {
 function collectAccessoryRows(container) {
   const scope = container || document;
   return Array.from(scope.querySelectorAll('[data-accessory-row]')).map((row) => ({
+    id: row.dataset.accessoryId || undefined,
     partName: row.querySelector('.om-acc-name').value,
-    specifications: row.querySelector('.om-acc-specs').value,
     dimensions: row.querySelector('.om-acc-dims').value,
-    material: row.querySelector('.om-acc-material').value,
     quantity: row.querySelector('.om-acc-qty').value || null,
     unitPrice: row.querySelector('.om-acc-unit-price').value || null,
     totalPrice: row.querySelector('.om-acc-total-price').value || null,
@@ -1493,10 +1912,10 @@ function collectAccessoryRows(container) {
     supplierName: row.querySelector('.om-acc-supplier').value,
     supplierContact: row.querySelector('.om-acc-supplier-contact').value,
     deliveryAddress: row.querySelector('.om-acc-address').value,
-    waybillNumber: row.querySelector('.om-acc-waybill').value,
-    shipmentQuantity: row.querySelector('.om-acc-shipment-qty').value || null,
-    refundOrderNumber: row.querySelector('.om-acc-refund').value,
-    remark: row.querySelector('.om-acc-remark').value
+    status: row.querySelector('.om-acc-status').value,
+    remark: row.querySelector('.om-acc-remark').value,
+    imageUrl: row.querySelector('.om-acc-image-url').value,
+    designDocUrl: row.querySelector('.om-acc-doc-url').value
   })).filter((a) => a.partName || a.supplierName);
 }
 
@@ -1549,7 +1968,7 @@ async function submitOrderForm(existingOrder, submitForManufacturing) {
       if (submitForManufacturing) {
         await api(`/api/order-management/orders/${encodeURIComponent(existingOrder.id)}/status`, {
           method: 'POST',
-          body: JSON.stringify({ status: 'Order placed' })
+          body: JSON.stringify({ status: 'Order Placed' })
         });
       }
       showToast(submitForManufacturing ? 'Submitted for manufacturing' : 'Saved — you can finish this later');
@@ -1559,7 +1978,7 @@ async function submitOrderForm(existingOrder, submitForManufacturing) {
     } else {
       const poNumber = document.getElementById('fPoNumber').value.trim();
       if (!poNumber) return showToast('PO number is required', true);
-      const payload = { poNumber, productLine, status: 'New request', ...fields };
+      const payload = { poNumber, productLine, status: 'New Request', ...fields };
       await api('/api/order-management/orders', { method: 'POST', body: JSON.stringify(payload) });
       showToast('Purchase order request created');
       closePanel();
@@ -1577,7 +1996,7 @@ async function submitOrderForm(existingOrder, submitForManufacturing) {
     const params = new URLSearchParams(location.search);
     const view = params.get('view');
     if (view === 'suppliers' || view === 'settlement' || view === 'products' || view === 'components') currentView = view;
-    await Promise.all([loadStatuses(), loadFileCategories()]);
+    await Promise.all([loadStatuses(), loadAccessoryStatuses(), loadFileCategories()]);
     render();
   } catch (e) {
     showToast(e.message, true);

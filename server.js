@@ -14,6 +14,7 @@ const poStore = require('./lib/poStore');
 const orderManagementStore = require('./lib/orderManagementStore');
 const sizingChartStore = require('./lib/sizingChartStore');
 const supplierStore = require('./lib/supplierStore');
+const catalogStore = require('./lib/catalogStore');
 const approvalStore = require('./lib/approvalStore');
 const approvalPhotoSets = require('./config/approvalPhotoSets.json');
 const asanaClient = require('./lib/asanaClient');
@@ -678,6 +679,7 @@ app.post('/api/purchase-orders', (req, res) => {
       fitSizes: established ? established.sizes : [],
       asanaTaskLink: body.asanaTaskLink || null,
       asanaTaskGid: extractAsanaTaskGid(body.asanaTaskLink),
+      productRisk: body.productRisk || null,
       createdAt: new Date().toISOString()
     });
     res.json({ ok: true, po: entry, approvalUrl: `/approval.html?po=${encodeURIComponent(id)}` });
@@ -727,6 +729,10 @@ app.get('/api/sku-established-fit/:sku', (req, res) => {
 
 app.get('/api/order-management/statuses', (req, res) => {
   res.json({ statuses: orderManagementStore.STATUSES });
+});
+
+app.get('/api/order-management/accessory-statuses', (req, res) => {
+  res.json({ statuses: orderManagementStore.ACCESSORY_STATUSES });
 });
 
 app.get('/api/order-management/orders', (req, res) => {
@@ -848,6 +854,58 @@ app.patch('/api/suppliers/:id', (req, res) => {
 app.delete('/api/suppliers/:id', (req, res) => {
   const ok = supplierStore.deleteSupplier(req.params.id);
   if (!ok) return res.status(404).json({ error: 'Supplier not found' });
+  res.json({ ok: true });
+});
+
+// ---- Manually-added Products / Components (merged with the live-derived
+// order-management/products|components endpoints on the frontend) ----
+app.get('/api/catalog/products', (req, res) => {
+  res.json({ products: catalogStore.listManualProducts() });
+});
+app.post('/api/catalog/products', (req, res) => {
+  const body = req.body || {};
+  if (!body.name) return res.status(400).json({ error: 'name is required' });
+  const product = catalogStore.createManualProduct({ ...body, id: uuidv4() });
+  res.json({ ok: true, product });
+});
+app.get('/api/catalog/products/:id', (req, res) => {
+  const product = catalogStore.getManualProduct(req.params.id);
+  if (!product) return res.status(404).json({ error: 'Product not found' });
+  res.json({ product });
+});
+app.patch('/api/catalog/products/:id', (req, res) => {
+  const updated = catalogStore.updateManualProduct(req.params.id, req.body || {});
+  if (!updated) return res.status(404).json({ error: 'Product not found' });
+  res.json({ ok: true, product: updated });
+});
+app.delete('/api/catalog/products/:id', (req, res) => {
+  const ok = catalogStore.deleteManualProduct(req.params.id);
+  if (!ok) return res.status(404).json({ error: 'Product not found' });
+  res.json({ ok: true });
+});
+
+app.get('/api/catalog/components', (req, res) => {
+  res.json({ components: catalogStore.listManualComponents() });
+});
+app.post('/api/catalog/components', (req, res) => {
+  const body = req.body || {};
+  if (!body.partName) return res.status(400).json({ error: 'partName is required' });
+  const component = catalogStore.createManualComponent({ ...body, id: uuidv4() });
+  res.json({ ok: true, component });
+});
+app.get('/api/catalog/components/:id', (req, res) => {
+  const component = catalogStore.getManualComponent(req.params.id);
+  if (!component) return res.status(404).json({ error: 'Component not found' });
+  res.json({ component });
+});
+app.patch('/api/catalog/components/:id', (req, res) => {
+  const updated = catalogStore.updateManualComponent(req.params.id, req.body || {});
+  if (!updated) return res.status(404).json({ error: 'Component not found' });
+  res.json({ ok: true, component: updated });
+});
+app.delete('/api/catalog/components/:id', (req, res) => {
+  const ok = catalogStore.deleteManualComponent(req.params.id);
+  if (!ok) return res.status(404).json({ error: 'Component not found' });
   res.json({ ok: true });
 });
 
@@ -1123,15 +1181,22 @@ function migrateFactoryCodesToSuppliers() {
     const options = loadOptions();
     const factoryCodes = options.factoryCodes || [];
     if (!factoryCodes.length) return;
-    const existingNames = new Set(supplierStore.listSuppliers().map((s) => s.name.trim().toLowerCase()));
+    const suppliers = supplierStore.listSuppliers();
+    const existingCodes = new Set(suppliers.map((s) => (s.vendorCode || '').trim().toLowerCase()).filter(Boolean));
+    const existingNames = new Set(suppliers.map((s) => s.name.trim().toLowerCase()));
     let migrated = 0;
     factoryCodes.forEach((code) => {
       const trimmed = String(code).trim();
-      if (!trimmed || existingNames.has(trimmed.toLowerCase())) return;
+      const key = trimmed.toLowerCase();
+      // Skip if this code is already represented either as a real vendor
+      // code (the common case now that the richer vendor seed runs first)
+      // or, for older bare entries, as a plain name.
+      if (!trimmed || existingCodes.has(key) || existingNames.has(key)) return;
       // Vendor code is the real identifier here - name is a placeholder
       // (the code itself) until the actual factory name is filled in.
       supplierStore.createSupplier({ id: uuidv4(), name: trimmed, vendorCode: trimmed });
-      existingNames.add(trimmed.toLowerCase());
+      existingCodes.add(key);
+      existingNames.add(key);
       migrated += 1;
     });
     if (migrated) console.log(`Migrated ${migrated} factory code(s) into Suppliers as bare records.`);
@@ -1139,6 +1204,42 @@ function migrateFactoryCodesToSuppliers() {
     console.error('Factory code -> Supplier migration failed:', err);
   }
 }
+// (migrateFactoryCodesToSuppliers call moved below seedVendorsFromFile - see
+// there for why order matters)
+
+// ---- One-time seed: real vendor list pulled from Juniper_Factories.xlsx ----
+// Idempotent by vendor code, same as the factory-code migration above - safe
+// to run on every startup, only fills in vendors that aren't already there.
+function seedVendorsFromFile() {
+  try {
+    const seedPath = path.join(__dirname, 'seeds', 'vendorSeed.json');
+    if (!fs.existsSync(seedPath)) return;
+    const vendors = JSON.parse(fs.readFileSync(seedPath, 'utf8'));
+    const existingCodes = new Set(
+      supplierStore.listSuppliers().map((s) => (s.vendorCode || '').trim().toLowerCase()).filter(Boolean)
+    );
+    let added = 0;
+    vendors.forEach((v) => {
+      const code = (v.vendorCode || '').trim().toLowerCase();
+      if (code && existingCodes.has(code)) return;
+      supplierStore.createSupplier({ ...v, id: uuidv4() });
+      if (code) existingCodes.add(code);
+      added += 1;
+    });
+    if (added) console.log(`Seeded ${added} vendor(s) from Juniper_Factories.xlsx into Suppliers.`);
+  } catch (err) {
+    console.error('Vendor seed import failed:', err);
+  }
+}
+seedVendorsFromFile();
+
+// Runs after the vendor seed on purpose: several factory codes are also
+// real vendor codes in that seed, and this migration only checks by name
+// (not vendor code), so running it first would create a shallow duplicate
+// (name=code, everything else blank) that beats the real, richer vendor
+// record to the punch. Running it second means those codes are already
+// properly represented and get skipped; only genuinely unmatched factory
+// codes still get a bare placeholder.
 migrateFactoryCodesToSuppliers();
 
 // ---- Scheduled weekly backup ----
