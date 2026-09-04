@@ -85,17 +85,36 @@ function todayStr() {
   return d.toISOString().slice(0, 10);
 }
 
+/* One active language at a time, chosen with the header toggle (see
+ * i18n-shared.js). The returned shape is unchanged so every existing
+ * biHtml/biBlockHtml call site still works - the secondary slot is just
+ * always empty now, which makes those helpers render a single language. */
+/** Category/subcategory labels live in config as label_en/label_zh pairs
+ *  rather than in the i18n table, so they need their own language pick. */
+function catLabel(def) {
+  if (!def) return '';
+  const lang = (window.JuniperLang && window.JuniperLang.get()) || 'zh';
+  return (lang === 'en' ? (def.label_en || def.label_zh) : (def.label_zh || def.label_en)) || '';
+}
+
 function bi(key, fallback) {
   const e = I18N[key];
   if (!e) return { en: fallback || key, zh: '' };
-  return { en: e.zh, zh: e.en };
+  const lang = (window.JuniperLang && window.JuniperLang.get()) || 'zh';
+  const primary = lang === 'en' ? (e.en || e.zh) : (e.zh || e.en);
+  return { en: primary || fallback || key, zh: '' };
 }
 function biHtml(key, fallback, tag = 'span') {
   const e = bi(key, fallback);
+  // With one active language the secondary slot is empty - emit nothing at
+  // all rather than an empty .zh element, which would still take up its
+  // display:block line and leave a gap under every label.
+  if (!e.zh) return escapeHtml(e.en);
   return `${escapeHtml(e.en)} <${tag} class="zh">${escapeHtml(e.zh)}</${tag}>`;
 }
 function biBlockHtml(key, fallback) {
   const e = bi(key, fallback);
+  if (!e.zh) return escapeHtml(e.en);
   return `${escapeHtml(e.en)}<span class="zh">${escapeHtml(e.zh)}</span>`;
 }
 function escapeHtml(str) {
@@ -667,7 +686,7 @@ function render() {
 /* ---- Chooser: New Purchase Order / Pre-Production / Bulk Sampling Reporting ---- */
 function renderChooserScreen() {
   return `
-    <div class="step-title">质检报告 QA/QC Reporting</div>
+    <div class="step-title">${biBlockHtml('qaQcReportingTitle', 'QA/QC Reporting')}</div>
     <div class="section-help" style="margin-bottom:16px;">${escapeHtml(bi('chooserHelp').en)}<br/>${escapeHtml(bi('chooserHelp').zh)}</div>
 
     <div class="home-nav-card" data-chooser="pre_production">
@@ -742,9 +761,9 @@ function renderNewPoSizesBlock() {
 /* ---- New Purchase Order ---- */
 function renderNewPoScreen() {
   const cats = (CONFIG.categories && CONFIG.categories.categories) || {};
-  const catOptions = CATEGORY_ORDER.filter((k) => cats[k]).map((k) => `<option value="${k}" ${newPoState.category === k ? 'selected' : ''}>${escapeHtml(cats[k].label_zh)} ${escapeHtml(cats[k].label_en)}</option>`).join('');
+  const catOptions = CATEGORY_ORDER.filter((k) => cats[k]).map((k) => `<option value="${k}" ${newPoState.category === k ? 'selected' : ''}>${escapeHtml(catLabel(cats[k]))}</option>`).join('');
   const catDef = newPoState.category ? cats[newPoState.category] : null;
-  const subOptions = (catDef && catDef.subcategories || []).map((s) => `<option value="${s.key}" ${newPoState.subcategory === s.key ? 'selected' : ''}>${escapeHtml(s.label_zh)} ${escapeHtml(s.label_en)}</option>`).join('');
+  const subOptions = (catDef && catDef.subcategories || []).map((s) => `<option value="${s.key}" ${newPoState.subcategory === s.key ? 'selected' : ''}>${escapeHtml(catLabel(s))}</option>`).join('');
 
   return `
     <div class="step-title">🆕 ${biBlockHtml('chooserNewPO', 'New Purchase Order')}</div>
@@ -797,7 +816,7 @@ function textField2(id, i18nKey, value, opts = {}) {
   return `
     <div class="field" data-field="${id}">
       <label class="field-label">${escapeHtml(l.en)} <span class="zh">${escapeHtml(l.zh)}</span>${opts.required ? '<span class="required">*</span>' : ''}</label>
-      <input type="${opts.numeric ? 'number' : 'text'}" id="${id}" value="${escapeHtml(value || '')}" placeholder="${escapeHtml(ph.en)} / ${escapeHtml(ph.zh)}" />
+      <input type="${opts.numeric ? 'number' : 'text'}" id="${id}" value="${escapeHtml(value || '')}" placeholder="${escapeHtml(ph.en)}" />
     </div>
   `;
 }
@@ -817,7 +836,7 @@ function selectFieldPlain(id, i18nKey, value, optionsList) {
     <div class="field" data-field="${id}">
       <label class="field-label">${escapeHtml(l.en)} <span class="zh">${escapeHtml(l.zh)}</span></label>
       <select id="${id}">
-        <option value="">${escapeHtml(ph.en)} / ${escapeHtml(ph.zh)}</option>
+        <option value="">${escapeHtml(ph.en)}</option>
         ${optionsList.map((o) => `<option value="${escapeHtml(o)}" ${value === o ? 'selected' : ''}>${escapeHtml(o)}</option>`).join('')}
       </select>
     </div>
@@ -838,11 +857,11 @@ function newPoSelectFieldWithOther(id, i18nKey, value, optionsList, otherModeOn)
     <div class="field" data-field="${id}">
       <label class="field-label">${escapeHtml(l.en)} <span class="zh">${escapeHtml(l.zh)}</span></label>
       <select data-newpo-select-other="${id}">
-        <option value="">${escapeHtml(ph.en)} / ${escapeHtml(ph.zh)}</option>
-        <option value="${OTHER_VALUE}" ${isOther ? 'selected' : ''}>${escapeHtml(otherLabel.en)} / ${escapeHtml(otherLabel.zh)}</option>
+        <option value="">${escapeHtml(ph.en)}</option>
+        <option value="${OTHER_VALUE}" ${isOther ? 'selected' : ''}>${escapeHtml(otherLabel.en)}</option>
         ${optsHtml}
       </select>
-      ${isOther ? `<input type="text" data-newpo-other-text="${id}" value="${escapeHtml(value || '')}" placeholder="${escapeHtml(otherPh.en)} / ${escapeHtml(otherPh.zh)}" style="margin-top:8px;" />` : ''}
+      ${isOther ? `<input type="text" data-newpo-other-text="${id}" value="${escapeHtml(value || '')}" placeholder="${escapeHtml(otherPh.en)}" style="margin-top:8px;" />` : ''}
     </div>
   `;
 }
@@ -1068,7 +1087,7 @@ function renderNewPoSuccess(data) {
       <div class="card" style="text-align:left; margin-top:16px;">
         <div class="section-title">${biBlockHtml('shareLinkTitle', 'Share this link for QA/QC Approval')}</div>
         <input type="text" readonly value="${escapeHtml(fullUrl)}" id="approvalLinkInput" style="margin-top:8px;" onclick="this.select()" />
-        <button class="btn btn-secondary" id="btnCopyLink" style="margin-top:8px;">${escapeHtml(bi('copyLink').en)} / ${escapeHtml(bi('copyLink').zh)}</button>
+        <button class="btn btn-secondary" id="btnCopyLink" style="margin-top:8px;">${escapeHtml(bi('copyLink').en)}</button>
       </div>
       <button class="btn btn-secondary" id="btnPoStartOver" style="max-width:280px; margin:16px auto 0 auto;">${biBlockHtml('submitAnotherPo', 'Submit Another PO')}</button>
       <a href="index.html" class="btn btn-secondary" style="max-width:280px; margin:10px auto 0 auto; text-decoration:none; display:block; text-align:center;">${biBlockHtml('goHome', 'Go Home')}</a>
@@ -1484,7 +1503,7 @@ function renderPriorReportCard() {
           </div>
         `;
       }).join('')
-    : `<div class="section-help" style="margin-top:6px;">${escapeHtml(bi('noIssues').en)} / ${escapeHtml(bi('noIssues').zh)}</div>`;
+    : `<div class="section-help" style="margin-top:6px;">${escapeHtml(bi('noIssues').en)}</div>`;
 
   return `
     <div class="card" style="background:var(--jc-mint-light); border-color:var(--jc-teal);">
@@ -1496,7 +1515,7 @@ function renderPriorReportCard() {
       <div class="section-photos-label" style="margin-top:12px;">${biBlockHtml('priorReportIssues', 'Issues Found')}</div>
       ${issuesHtml}
       <a href="/submissions/${encodeURIComponent(latest.pdfFilename)}" target="_blank" rel="noopener" class="btn btn-secondary" style="display:block; text-decoration:none; text-align:center; margin-top:12px; max-width:260px;">
-        ${escapeHtml(bi('downloadFullReport').en)} / ${escapeHtml(bi('downloadFullReport').zh)}
+        ${escapeHtml(bi('downloadFullReport').en)}
       </a>
       ${priorReports.length > 1 ? `<div class="section-help" style="margin-top:8px;">${priorReports.length - 1} ${escapeHtml(bi('moreEarlierReports').en)} ${escapeHtml(bi('moreEarlierReports').zh)}</div>` : ''}
     </div>
@@ -1718,7 +1737,7 @@ function textField(id, i18nKey, value, opts = {}) {
   return `
     <div class="field" data-field="${id}">
       <label class="field-label">${escapeHtml(l.en)} <span class="zh">${escapeHtml(l.zh)}</span>${opts.required ? '<span class="required">*</span>' : ''}</label>
-      <input type="text" data-bind="${id}" value="${escapeHtml(value || '')}" placeholder="${escapeHtml(ph.en)} / ${escapeHtml(ph.zh)}" />
+      <input type="text" data-bind="${id}" value="${escapeHtml(value || '')}" placeholder="${escapeHtml(ph.en)}" />
     </div>
   `;
 }
@@ -1728,7 +1747,7 @@ function numberField(id, i18nKey, value, opts = {}) {
   return `
     <div class="field" data-field="${id}">
       <label class="field-label">${escapeHtml(l.en)} <span class="zh">${escapeHtml(l.zh)}</span>${opts.required ? '<span class="required">*</span>' : ''}</label>
-      <input type="number" min="2" step="1" inputmode="numeric" data-bind-live="${id}" value="${escapeHtml(value || '')}" placeholder="${escapeHtml(ph.en)} / ${escapeHtml(ph.zh)}" />
+      <input type="number" min="2" step="1" inputmode="numeric" data-bind-live="${id}" value="${escapeHtml(value || '')}" placeholder="${escapeHtml(ph.en)}" />
     </div>
   `;
 }
@@ -1749,7 +1768,7 @@ function selectField(id, i18nKey, value, optionsList, opts = {}) {
     <div class="field" data-field="${id}">
       <label class="field-label">${escapeHtml(l.en)} <span class="zh">${escapeHtml(l.zh)}</span>${opts.required ? '<span class="required">*</span>' : ''}</label>
       <select data-bind="${id}">
-        <option value="">${escapeHtml(ph.en)} / ${escapeHtml(ph.zh)}</option>
+        <option value="">${escapeHtml(ph.en)}</option>
         ${opts_html}
       </select>
     </div>
@@ -1776,11 +1795,11 @@ function selectFieldWithOther(id, i18nKey, value, optionsList, opts = {}) {
     <div class="field" data-field="${id}">
       <label class="field-label">${escapeHtml(l.en)} <span class="zh">${escapeHtml(l.zh)}</span>${opts.required ? '<span class="required">*</span>' : ''}</label>
       <select data-select-other="${id}">
-        <option value="">${escapeHtml(ph.en)} / ${escapeHtml(ph.zh)}</option>
+        <option value="">${escapeHtml(ph.en)}</option>
         ${opts_html}
-        <option value="${OTHER_VALUE}" ${isOther ? 'selected' : ''}>${escapeHtml(otherLabel.en)} / ${escapeHtml(otherLabel.zh)}</option>
+        <option value="${OTHER_VALUE}" ${isOther ? 'selected' : ''}>${escapeHtml(otherLabel.en)}</option>
       </select>
-      ${isOther ? `<input type="text" data-other-text="${id}" value="${escapeHtml(value || '')}" placeholder="${escapeHtml(otherPh.en)} / ${escapeHtml(otherPh.zh)}" style="margin-top:8px;" />` : ''}
+      ${isOther ? `<input type="text" data-other-text="${id}" value="${escapeHtml(value || '')}" placeholder="${escapeHtml(otherPh.en)}" style="margin-top:8px;" />` : ''}
     </div>
   `;
 }
@@ -1799,11 +1818,11 @@ function renderInspectionDetailsStep() {
     <div class="card">
       <div class="section-title">${biBlockHtml('materials', 'Fabric / Material(s)')}</div>
       <div class="field">
-        <textarea data-bind="materials" placeholder="${escapeHtml(bi('materialsPlaceholder').en)} / ${escapeHtml(bi('materialsPlaceholder').zh)}">${escapeHtml(state.materials)}</textarea>
+        <textarea data-bind="materials" placeholder="${escapeHtml(bi('materialsPlaceholder').en)}">${escapeHtml(state.materials)}</textarea>
       </div>
       <div class="section-title" style="margin-top:10px;">${biBlockHtml('printingMethod', 'Printing Method(s)')}</div>
       <div class="field">
-        <textarea data-bind="printingMethod" placeholder="${escapeHtml(bi('printingMethodPlaceholder').en)} / ${escapeHtml(bi('printingMethodPlaceholder').zh)}">${escapeHtml(state.printingMethod)}</textarea>
+        <textarea data-bind="printingMethod" placeholder="${escapeHtml(bi('printingMethodPlaceholder').en)}">${escapeHtml(state.printingMethod)}</textarea>
       </div>
     </div>
   `;
@@ -1818,7 +1837,7 @@ function renderInspectionDetailsStep() {
     body += `<div class="card">
       <div class="section-title">${biBlockHtml('customNotes', 'Additional Notes')}</div>
       <div class="field">
-        <textarea data-bind="cd.customNotes" placeholder="${escapeHtml(bi('customNotesPlaceholder').en)} / ${escapeHtml(bi('customNotesPlaceholder').zh)}">${escapeHtml(cd.customNotes)}</textarea>
+        <textarea data-bind="cd.customNotes" placeholder="${escapeHtml(bi('customNotesPlaceholder').en)}">${escapeHtml(cd.customNotes)}</textarea>
       </div>
     </div>`;
   }
@@ -1857,7 +1876,7 @@ function checklistItem(key, i18nKey) {
         }).join('')}
       </div>
       <div class="checklist-notes">
-        <textarea data-checklist-notes="${key}" placeholder="${escapeHtml(bi('notesPlaceholder').en)} / ${escapeHtml(bi('notesPlaceholder').zh)}">${escapeHtml(entry.notes)}</textarea>
+        <textarea data-checklist-notes="${key}" placeholder="${escapeHtml(bi('notesPlaceholder').en)}">${escapeHtml(entry.notes)}</textarea>
       </div>
       ${defectsBlock}
     </div>
@@ -1871,7 +1890,7 @@ function defectCard(d, ownerKey) {
     <div class="defect-card" data-defect-card="${d.id}" data-owner="${ownerKey || ''}">
       <div class="field">
         <label class="field-label">${biBlockHtml('defectDescription', 'Defect Description')}${missingDesc ? '<span class="required">*</span>' : ''}</label>
-        <textarea data-defect-field="description" data-defect-id="${d.id}" placeholder="${escapeHtml(bi('defectDescriptionPlaceholder').en)} / ${escapeHtml(bi('defectDescriptionPlaceholder').zh)}">${escapeHtml(d.description)}</textarea>
+        <textarea data-defect-field="description" data-defect-id="${d.id}" placeholder="${escapeHtml(bi('defectDescriptionPlaceholder').en)}">${escapeHtml(d.description)}</textarea>
       </div>
       <div class="field-row">
         <div style="flex:1">
@@ -1894,7 +1913,7 @@ function defectCard(d, ownerKey) {
         <label class="field-label">${biBlockHtml('defectPhotos', 'Defect Photos')}${missingPhoto ? '<span class="required">*</span>' : ''}</label>
         ${photoGrid('defect:' + d.id, true)}
       </div>
-      <button type="button" class="remove-defect-btn" data-remove-defect="${d.id}">${escapeHtml(bi('removeIssue').en)} / ${escapeHtml(bi('removeIssue').zh)}</button>
+      <button type="button" class="remove-defect-btn" data-remove-defect="${d.id}">${escapeHtml(bi('removeIssue').en)}</button>
     </div>
   `;
 }
@@ -1907,7 +1926,7 @@ function checklistCard(sectionKey, rows, photoSectionKey) {
       ${photoSectionKey ? `
         <div class="section-photos-block">
           <div class="section-photos-label">${biBlockHtml('sectionPhotosGeneral', 'Section Photos')}</div>
-          <div class="section-help" style="margin-bottom:6px;">${escapeHtml(bi('sectionPhotosHelp').en)} / ${escapeHtml(bi('sectionPhotosHelp').zh)}</div>
+          <div class="section-help" style="margin-bottom:6px;">${escapeHtml(bi('sectionPhotosHelp').en)}</div>
           ${photoGrid('section:' + photoSectionKey, true)}
         </div>
       ` : ''}
@@ -2046,7 +2065,7 @@ function renderCustomSizeChart() {
         <div class="section-photos-label">${biBlockHtml('sizingPhotosForSize', 'Photos for this size')}</div>
         ${photoGrid('customsizerow:' + ridx, true, true)}
       </div>
-      <button type="button" class="remove-defect-btn" data-remove-custom-size="${ridx}">${escapeHtml(bi('removeIssue').en)} / ${escapeHtml(bi('removeIssue').zh)}</button>
+      <button type="button" class="remove-defect-btn" data-remove-custom-size="${ridx}">${escapeHtml(bi('removeIssue').en)}</button>
     </div>
   `).join('');
 
@@ -2078,9 +2097,9 @@ function renderFitPicker() {
       <div class="section-title">${biBlockHtml('fitSelect', 'Standard Fit')}</div>
       <div class="field">
         <select id="fitSelect">
-          <option value="">${escapeHtml(bi('fitSelectPlaceholder').en)} / ${escapeHtml(bi('fitSelectPlaceholder').zh)}</option>
+          <option value="">${escapeHtml(bi('fitSelectPlaceholder').en)}</option>
           ${options}
-          <option value="${OTHER_FIT_VALUE}" ${otherSel}>${escapeHtml(bi('fitOther').en)} / ${escapeHtml(bi('fitOther').zh)}</option>
+          <option value="${OTHER_FIT_VALUE}" ${otherSel}>${escapeHtml(bi('fitOther').en)}</option>
         </select>
       </div>
     </div>
@@ -2226,7 +2245,7 @@ function renderSizingPhotosCard() {
   return `
     <div class="card">
       <div class="section-title">${biBlockHtml('sizingPhotos', 'Sizing Photos')}</div>
-      <div class="section-help">${escapeHtml(bi('sectionPhotosHelp').en)} / ${escapeHtml(bi('sectionPhotosHelp').zh)}</div>
+      <div class="section-help">${escapeHtml(bi('sectionPhotosHelp').en)}</div>
       ${photoGrid('section:sizing', true)}
     </div>
   `;
@@ -2240,12 +2259,12 @@ function renderPhotosStep() {
     <div class="section-help" style="margin-bottom:14px;">${escapeHtml(bi('finalApprovalHelp').en)}<br/>${escapeHtml(bi('finalApprovalHelp').zh)}</div>
     <div class="card">
       <div class="section-title">${biBlockHtml('generalPhotos', 'General Photos')}</div>
-      <div class="section-help">${escapeHtml(bi('generalPhotosHelp').en)} / ${escapeHtml(bi('generalPhotosHelp').zh)}</div>
+      <div class="section-help">${escapeHtml(bi('generalPhotosHelp').en)}</div>
       ${photoGrid('general')}
     </div>
     <div class="card">
       <div class="section-title">${biBlockHtml('tagPhotos', 'Tag Photos')}</div>
-      <div class="section-help">${escapeHtml(bi('tagPhotosHelp').en)} / ${escapeHtml(bi('tagPhotosHelp').zh)}</div>
+      <div class="section-help">${escapeHtml(bi('tagPhotosHelp').en)}</div>
       ${photoGrid('tags')}
     </div>
     <div class="nav-buttons">
@@ -2295,8 +2314,8 @@ function renderAdditionalIssuesStep() {
       <div class="section-title" style="font-size:14px;">${biBlockHtml('severityGuideTitle', 'How to classify an issue')}</div>
       <div class="section-help">${escapeHtml(bi('severityGuideText').en)}<br/>${escapeHtml(bi('severityGuideText').zh)}</div>
     </div>
-    ${state.additionalIssues.length === 0 ? `<div class="no-issues-note">${escapeHtml(bi('noIssues').en)} / ${escapeHtml(bi('noIssues').zh)}</div>` : issuesHtml}
-    <button class="add-issue-btn" id="btnAddIssue">${escapeHtml(bi('addDefect').en)} / ${escapeHtml(bi('addDefect').zh)}</button>
+    ${state.additionalIssues.length === 0 ? `<div class="no-issues-note">${escapeHtml(bi('noIssues').en)}</div>` : issuesHtml}
+    <button class="add-issue-btn" id="btnAddIssue">${escapeHtml(bi('addDefect').en)}</button>
     <div id="issuesAqlLive">${renderAqlTallyCard()}</div>
     <div class="nav-buttons">
       <button class="btn btn-secondary" id="btnBack">${biBlockHtml('back', 'Back')}</button>
@@ -2379,7 +2398,7 @@ function renderReviewStep() {
     <div class="step-title">${biBlockHtml('reviewTitle', 'Review & Submit')}</div>
 
     <div class="result-banner ${result.overall === 'fail' ? 'fail' : ''}">
-      <div class="result-banner-title">${escapeHtml(bi('overallResult').en)} / ${escapeHtml(bi('overallResult').zh)}</div>
+      <div class="result-banner-title">${escapeHtml(bi('overallResult').en)}</div>
       <div class="result-banner-value">${escapeHtml(resultLabel.en)} ${escapeHtml(resultLabel.zh)}</div>
       ${result.reasons.length ? `<div class="result-banner-reasons">${result.reasons.map((r) => escapeHtml(bi(reasonKeyMap[r]).en) + ' ' + escapeHtml(bi(reasonKeyMap[r]).zh)).join('<br/>')}</div>`
         : `<div class="result-banner-reasons">${escapeHtml(bi('noIssuesReason').en)} ${escapeHtml(bi('noIssuesReason').zh)}</div>`}

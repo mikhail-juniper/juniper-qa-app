@@ -1189,3 +1189,9 @@ td.reference-selectable { outline-offset: -2px; }
   background: var(--jc-fail-bg);
 }
 
+
+/* With one active language (see i18n-shared.js) the secondary-language span
+   is rendered empty. Several pages build that markup inline rather than via
+   biHtml, so hide empty ones globally - otherwise each leaves a blank
+   display:block line and a gap under its label. */
+.zh:empty { display: none; }

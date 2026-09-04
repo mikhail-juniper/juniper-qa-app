@@ -22,10 +22,16 @@ const state = {
   factoryCode: ''
 };
 
+/* One active language at a time, chosen with the header toggle (see
+ * i18n-shared.js). The returned shape is unchanged so every existing
+ * biHtml/biBlockHtml call site still works - the secondary slot is just
+ * always empty now, which makes those helpers render a single language. */
 function bi(key, fallback) {
   const e = I18N[key];
   if (!e) return { en: fallback || key, zh: '' };
-  return { en: e.zh, zh: e.en };
+  const lang = (window.JuniperLang && window.JuniperLang.get()) || 'zh';
+  const primary = lang === 'en' ? (e.en || e.zh) : (e.zh || e.en);
+  return { en: primary || fallback || key, zh: '' };
 }
 function escapeHtml(str) {
   if (str === undefined || str === null) return '';
@@ -92,15 +98,15 @@ function render() {
   const root = document.getElementById('analyticsRoot');
   root.innerHTML = `
     <a href="index.html" class="btn btn-secondary" style="display:inline-block;width:auto;padding:10px 18px;margin-bottom:16px;text-decoration:none;">
-      ← ${escapeHtml(bi('backToApp').en)} / ${escapeHtml(bi('backToApp').zh)}
+      ← ${escapeHtml(bi('backToApp').en)}
     </a>
 
     <div class="card">
       <div class="field">
         <label class="field-label">${escapeHtml(bi('timePeriod').en)} <span class="zh">${escapeHtml(bi('timePeriod').zh)}</span></label>
         <select id="periodSelect">
-          ${Object.keys(PERIOD_PRESETS).map((k) => `<option value="${k}" ${state.period === k ? 'selected' : ''}>${escapeHtml(bi(PERIOD_PRESETS[k].labelKey).en)} / ${escapeHtml(bi(PERIOD_PRESETS[k].labelKey).zh)}</option>`).join('')}
-          <option value="custom" ${state.period === 'custom' ? 'selected' : ''}>${escapeHtml(bi('customDateRange', 'Custom Range').en)} / ${escapeHtml(bi('customDateRange', 'Custom Range').zh)}</option>
+          ${Object.keys(PERIOD_PRESETS).map((k) => `<option value="${k}" ${state.period === k ? 'selected' : ''}>${escapeHtml(bi(PERIOD_PRESETS[k].labelKey).en)}</option>`).join('')}
+          <option value="custom" ${state.period === 'custom' ? 'selected' : ''}>${escapeHtml(bi('customDateRange', 'Custom Range').en)}</option>
         </select>
       </div>
       ${state.period === 'custom' ? `
@@ -226,7 +232,7 @@ function statsTableHtml(monthRows, totalRow, exportKey, exportLabel) {
   return `
     ${exportKey ? `
       <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
-        <button class="btn btn-secondary" style="width:auto; padding:6px 14px; font-size:12px;" data-export-csv="${escapeHtml(exportKey)}">${escapeHtml(bi('exportCsv').en)} / ${escapeHtml(bi('exportCsv').zh)}</button>
+        <button class="btn btn-secondary" style="width:auto; padding:6px 14px; font-size:12px;" data-export-csv="${escapeHtml(exportKey)}">${escapeHtml(bi('exportCsv').en)}</button>
       </div>
     ` : ''}
     <div class="size-table-wrap">

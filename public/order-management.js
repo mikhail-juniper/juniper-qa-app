@@ -2056,10 +2056,10 @@ async function openDetailPanel(id, scope) {
     <div class="om-field-grid">
       ${order.productLine === 'clothing' ? `
         <div><label>${i18('fldFabricCode', 'Fabric Code')}</label><input id="fFabricInfo" type="text" value="${val(order.mainComponent.fabricInfo)}" /></div>
-        <div><label>${i18('fldFabricType', 'Fabric Type')}</label><input id="fComponent" type="text" placeholder="e.g. 100% Cotton" value="${val(order.mainComponent.component)}" /></div>
+        <div><label>${i18('fldFabricType', 'Fabric Type')}</label><input id="fComponent" type="text" placeholder="${i18t('phFabricTypeEg', 'e.g. 100% Cotton')}" value="${val(order.mainComponent.component)}" /></div>
       ` : ''}
-      <div><label>Unit Price (¥)</label><div class="om-money-wrap"><input id="fFactoryPrice" type="number" step="0.01" value="${val(order.mainComponent.factoryPrice)}" /></div></div>
-      <div><label>${i18('fldSupplierAddress', 'Supplier Address')}</label><input id="fSupplierAddress" type="text" value="${val(order.supplier.address)}" placeholder="Auto-fills from Supplier Name above" /></div>
+      <div><label>${i18('fldUnitPrice', 'Unit Price')} (¥)</label><div class="om-money-wrap"><input id="fFactoryPrice" type="number" step="0.01" value="${val(order.mainComponent.factoryPrice)}" /></div></div>
+      <div><label>${i18('fldSupplierAddress', 'Supplier Address')}</label><input id="fSupplierAddress" type="text" value="${val(order.supplier.address)}" placeholder="${i18t('phAutoFillsSupplier', 'Auto-fills from Supplier Name above')}" /></div>
     </div>
     </div>
 
@@ -2106,16 +2106,16 @@ async function openDetailPanel(id, scope) {
       <div><label>${i18('fldTotalPricePerUnit', 'Total Price per Unit')} (¥)</label><input id="fTotalPricePerUnit" type="text" value="${order.mainComponent.purchaseQuantity ? fmtMoney(computeOrderTotal(order) / order.mainComponent.purchaseQuantity) : '—'}" disabled title="Total PO cost divided by units ordered" /></div>
     </div>
 
-    <div class="om-section-title" style="margin-top:20px;">Paid Status by Component</div>
+    <div class="om-section-title" style="margin-top:20px;">${i18('secPaidStatusByComponent', 'Paid Status by Component')}</div>
     <table class="om-table" style="min-width:0;">
       <thead><tr><th>${i18i('thComponent', 'Component')}</th><th>${i18i('thAmount', 'Amount')} (¥)</th><th>${i18i('thStatus', 'Status')}</th></tr></thead>
       <tbody id="omPaymentLineItems"></tbody>
     </table>
-    <div class="om-detail-row" style="margin-top:10px;"><span class="om-label"><strong>Overall Payment Status</strong></span><span class="om-value" id="omOverallPaymentStatus">${escapeHtml(order.settlement.status)}</span></div>
-    ${order.settlement.paidDate ? `<div class="om-detail-row"><span class="om-label">Paid in full on</span><span class="om-value">${fmtDate(order.settlement.paidDate)}</span></div>` : ''}
+    <div class="om-detail-row" style="margin-top:10px;"><span class="om-label"><strong>${i18('payOverallStatus', 'Overall Payment Status')}</strong></span><span class="om-value" id="omOverallPaymentStatus">${tStatusText(order.settlement.status)}</span></div>
+    ${order.settlement.paidDate ? `<div class="om-detail-row"><span class="om-label">${i18('payPaidInFullOn', 'Paid in full on')}</span><span class="om-value">${fmtDate(order.settlement.paidDate)}</span></div>` : ''}
     <div style="margin-top:14px;">
       <button type="button" class="btn btn-primary" id="omCompletePoBtn" style="flex:none;width:auto;padding:9px 18px;" ${(order.status === STATUSES[STATUSES.length - 1] && order.settlement.status === 'Paid') ? '' : 'disabled title="Available once the order has reached its final status and every component is marked Paid"'}>
-        ${order.poCompletedAt ? `PO Completed ${fmtDate(order.poCompletedAt)}` : 'Complete PO'}
+        ${order.poCompletedAt ? `${i18t('payPoCompleted', 'PO Completed')} ${fmtDate(order.poCompletedAt)}` : i18('btnCompletePo', 'Complete PO')}
       </button>
     </div>
     </div>
@@ -2370,7 +2370,7 @@ async function openDetailPanel(id, scope) {
     const mainUnitCost = Number(document.getElementById('fFactoryPrice').value) || 0;
     const orderQuantity = Number(document.getElementById('fPurchaseQty').value) || 0;
     const items = [
-      { key: 'main', label: 'Main Component', amount: mainUnitCost * orderQuantity }
+      { key: 'main', label: i18t('payLineMainComponent', 'Main Component'), amount: mainUnitCost * orderQuantity }
     ];
     Array.from(accessoryRowsHost.querySelectorAll('[data-accessory-row]')).forEach((row) => {
       const name = row.querySelector('.om-acc-name').value || 'Unnamed component';
@@ -2378,9 +2378,9 @@ async function openDetailPanel(id, scope) {
       const shipping = Number(row.querySelector('.om-acc-shipping-cost').value) || 0;
       items.push({ key: row.dataset.accessoryId, label: name, amount: unitPrice * orderQuantity + shipping });
     });
-    items.push({ key: 'warehousing-shipping', label: 'Warehousing Shipping', amount: Number(document.getElementById('fTransportationFees').value) || 0 });
+    items.push({ key: 'warehousing-shipping', label: i18t('payLineWarehousingShipping', 'Warehousing Shipping'), amount: Number(document.getElementById('fTransportationFees').value) || 0 });
     items.push({
-      key: 'fees', label: 'Additional Fees (Assembly/Labor/Other)',
+      key: 'fees', label: i18t('payLineAdditionalFees', 'Additional Fees (Assembly/Labor/Other)'),
       amount: (Number(document.getElementById('fAssemblyFee').value) || 0) +
         (Number(document.getElementById('fLaborCosts').value) || 0) +
         (Number(document.getElementById('fOtherExpenses').value) || 0)
@@ -2482,7 +2482,7 @@ async function openDetailPanel(id, scope) {
           body: JSON.stringify({ patch: { poCompletedAt: new Date().toISOString() }, actor: 'Web user' })
         });
         order.poCompletedAt = new Date().toISOString();
-        completePoBtn.textContent = `PO Completed ${fmtDate(order.poCompletedAt)}`;
+        completePoBtn.textContent = `${i18t('payPoCompleted', 'PO Completed')} ${fmtDate(order.poCompletedAt)}`;
         completePoBtn.disabled = true;
         showToast(i18t('toastPoMarkedComplete', 'PO marked complete'));
         refreshCurrentView();

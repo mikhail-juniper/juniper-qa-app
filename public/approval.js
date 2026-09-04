@@ -59,13 +59,30 @@ const approvalState = {
   replyDrafts: {} // { sample: {author, approvalStatus, text}, preProduction: {...}, bulk: {...} }
 };
 
+/* One active language at a time, chosen with the header toggle (see
+ * i18n-shared.js). The returned shape is unchanged so every existing
+ * biHtml/biBlockHtml call site still works - the secondary slot is just
+ * always empty now, which makes those helpers render a single language. */
+/** Language pick for labels that come as separate en/zh values rather than
+ *  from the i18n table (photo slots, category definitions). */
+function pickLang(en, zh) {
+  const lang = (window.JuniperLang && window.JuniperLang.get()) || 'zh';
+  return (lang === 'en' ? (en || zh) : (zh || en)) || '';
+}
+function catLabel(def) {
+  return def ? pickLang(def.label_en, def.label_zh) : '';
+}
+
 function bi(key, fallback) {
   const e = I18N[key];
   if (!e) return { en: fallback || key, zh: '' };
-  return { en: e.zh, zh: e.en };
+  const lang = (window.JuniperLang && window.JuniperLang.get()) || 'zh';
+  const primary = lang === 'en' ? (e.en || e.zh) : (e.zh || e.en);
+  return { en: primary || fallback || key, zh: '' };
 }
 function biBlockHtml(key, fallback) {
   const e = bi(key, fallback);
+  if (!e.zh) return escapeHtml(e.en);
   return `${escapeHtml(e.en)}<span class="zh">${escapeHtml(e.zh)}</span>`;
 }
 function escapeHtml(str) {
@@ -471,7 +488,7 @@ function backHomeLink() {
 function renderPoEntry() {
   return `
     ${backHomeLink()}
-    <div class="step-title">产品开发审批<span class="zh">Product Development Approval</span></div>
+    <div class="step-title">${biBlockHtml('pdApprovalSectionTitle', 'Product Development Approval')}</div>
     <div class="card">
       <div class="field">
         <label class="field-label">${biBlockHtml('poNumber', 'Purchase Order Number')}</label>
@@ -622,7 +639,7 @@ function renderCommentCard(c, stage) {
  *  for a photo reference, or a text chip for a size-chart reference.
  *  Either way, clicking it jumps to and highlights the live original. */
 function renderCommentReferenceAttachment(ref) {
-  const label = `📎 ${escapeHtml(bi('reportAttachment', 'Report Attachment').en)} / ${escapeHtml(bi('reportAttachment').zh)}`;
+  const label = `📎 ${escapeHtml(bi('reportAttachment', 'Report Attachment').en)}`;
   if (ref.type === 'photo') {
     return `
       <div class="reference-preview" style="margin-top:8px;">
@@ -701,9 +718,9 @@ function renderReplyForm(stage, hasComments) {
         <select data-reply-author-select="${stage}">
           <option value="">${escapeHtml(bi('selectPlaceholder').en)}</option>
           ${pdOptions.map((o) => `<option value="${escapeHtml(o)}" ${!isOther && draft.author === o ? 'selected' : ''}>${escapeHtml(o)}</option>`).join('')}
-          <option value="${OTHER_VALUE}" ${isOther ? 'selected' : ''}>${escapeHtml(bi('other').en)} / ${escapeHtml(bi('other').zh)}</option>
+          <option value="${OTHER_VALUE}" ${isOther ? 'selected' : ''}>${escapeHtml(bi('other').en)}</option>
         </select>
-        ${isOther ? `<input type="text" data-reply-author="${stage}" value="${escapeHtml(draft.author)}" placeholder="${escapeHtml(bi('otherPlaceholder').en)} / ${escapeHtml(bi('otherPlaceholder').zh)}" style="margin-top:8px;" />` : ''}
+        ${isOther ? `<input type="text" data-reply-author="${stage}" value="${escapeHtml(draft.author)}" placeholder="${escapeHtml(bi('otherPlaceholder').en)}" style="margin-top:8px;" />` : ''}
       </div>
     `
     : `
@@ -712,9 +729,9 @@ function renderReplyForm(stage, hasComments) {
         <select data-reply-author-select="${stage}">
           <option value="">${escapeHtml(bi('selectPlaceholder').en)}</option>
           ${poNames.map((o) => `<option value="${escapeHtml(o)}" ${!isReplyOther && draft.author === o ? 'selected' : ''}>${escapeHtml(o)}</option>`).join('')}
-          <option value="${OTHER_VALUE}" ${isReplyOther ? 'selected' : ''}>${escapeHtml(bi('other').en)} / ${escapeHtml(bi('other').zh)}</option>
+          <option value="${OTHER_VALUE}" ${isReplyOther ? 'selected' : ''}>${escapeHtml(bi('other').en)}</option>
         </select>
-        ${isReplyOther ? `<input type="text" data-reply-author="${stage}" value="${escapeHtml(draft.author)}" placeholder="${escapeHtml(bi('otherPlaceholder').en)} / ${escapeHtml(bi('otherPlaceholder').zh)}" style="margin-top:8px;" />` : ''}
+        ${isReplyOther ? `<input type="text" data-reply-author="${stage}" value="${escapeHtml(draft.author)}" placeholder="${escapeHtml(bi('otherPlaceholder').en)}" style="margin-top:8px;" />` : ''}
       </div>
     `;
   return `
@@ -724,7 +741,7 @@ function renderReplyForm(stage, hasComments) {
       <div class="field">
         <label class="field-label">${biBlockHtml('approvalStatusLabel', 'Approval')}${!hasComments ? '<span class="required">*</span>' : ''}</label>
         <select data-reply-status="${stage}">
-          <option value="">${escapeHtml(bi(hasComments ? 'noStatusChange' : 'selectPlaceholder').en)} / ${escapeHtml(bi(hasComments ? 'noStatusChange' : 'selectPlaceholder').zh)}</option>
+          <option value="">${escapeHtml(bi(hasComments ? 'noStatusChange' : 'selectPlaceholder').en)}</option>
           <option value="approved" ${draft.approvalStatus === 'approved' ? 'selected' : ''}>${escapeHtml(bi('statusApproved').en)} ${escapeHtml(bi('statusApproved').zh)}</option>
           <option value="approvedWithComments" ${draft.approvalStatus === 'approvedWithComments' ? 'selected' : ''}>${escapeHtml(bi('statusApprovedWithComments').en)} ${escapeHtml(bi('statusApprovedWithComments').zh)}</option>
           <option value="majorCriticalIssue" ${draft.approvalStatus === 'majorCriticalIssue' ? 'selected' : ''}>${escapeHtml(bi('statusMajorCriticalIssue').en)} ${escapeHtml(bi('statusMajorCriticalIssue').zh)}</option>
@@ -739,8 +756,8 @@ function renderReplyForm(stage, hasComments) {
         ${renderPhotoSlot('_reply_' + stage, 'Photos', '照片', null, true)}
         <button type="button" class="reference-select-btn ${referenceSelectStage === stage ? 'active' : ''}" data-start-reference-select="${stage}" style="margin-top:10px;">
           ${referenceSelectStage === stage
-            ? `${escapeHtml(bi('clickToSelectReference', 'Click a photo or sizing row to select').en)} / ${escapeHtml(bi('clickToSelectReference').zh)}`
-            : `🔗 ${escapeHtml(bi('reportReference', 'Report Reference').en)} / ${escapeHtml(bi('reportReference').zh)}`}
+            ? `${escapeHtml(bi('clickToSelectReference', 'Click a photo or sizing row to select').en)}`
+            : `🔗 ${escapeHtml(bi('reportReference', 'Report Reference').en)}`}
         </button>
         ${draft.reference ? renderSelectedReferencePreview(draft.reference, stage) : ''}
       </div>
@@ -1121,7 +1138,7 @@ function renderPhotoComparisonLarge(columns, category, sizesIncluded, sampledSiz
                 if (sampledSize && size !== sampledSize) {
                   return `
                     <div class="photo-compare-col">
-                      <div class="photo-compare-col-label">${escapeHtml(col.label.en)} ${escapeHtml(col.label.zh)} · ${escapeHtml(slot.label_zh)} ${escapeHtml(slot.label_en)}</div>
+                      <div class="photo-compare-col-label">${escapeHtml(col.label.en)} · ${escapeHtml(catLabel(slot))}</div>
                       <div class="section-help">${escapeHtml(bi('notSampledAtThisSize').en)}<br/>${escapeHtml(bi('notSampledAtThisSize').zh)}</div>
                     </div>
                   `;
@@ -1129,7 +1146,7 @@ function renderPhotoComparisonLarge(columns, category, sizesIncluded, sampledSiz
                 const urls = col.photos[slot.key] || [];
                 return `
                   <div class="photo-compare-col">
-                    <div class="photo-compare-col-label">${escapeHtml(col.label.en)} ${escapeHtml(col.label.zh)} · ${escapeHtml(slot.label_zh)} ${escapeHtml(slot.label_en)}</div>
+                    <div class="photo-compare-col-label">${escapeHtml(col.label.en)} · ${escapeHtml(catLabel(slot))}</div>
                     ${urls.length ? urls.map((u) => `<div class="photo-compare-col-frame"><img src="${escapeHtml(u)}" class="js-lightbox" data-photo-target="${escapeHtml(u)}" /></div>`).join('') : `<div class="section-help">${escapeHtml(bi('noPhotosYet').en)}<span class="zh">${escapeHtml(bi('noPhotosYet').zh)}</span></div>`}
                   </div>
                 `;
@@ -1137,7 +1154,7 @@ function renderPhotoComparisonLarge(columns, category, sizesIncluded, sampledSiz
               const urls = col.photos[`${slot.key}__${size}`] || [];
               return `
                 <div class="photo-compare-col">
-                  <div class="photo-compare-col-label">${escapeHtml(col.label.en)} ${escapeHtml(col.label.zh)} · ${escapeHtml(slot.label_zh)} ${escapeHtml(slot.label_en)}</div>
+                  <div class="photo-compare-col-label">${escapeHtml(col.label.en)} · ${escapeHtml(catLabel(slot))}</div>
                   ${urls.length ? urls.map((u) => `<div class="photo-compare-col-frame"><img src="${escapeHtml(u)}" class="js-lightbox" data-photo-target="${escapeHtml(u)}" /></div>`).join('') : `<div class="section-help">${escapeHtml(bi('noPhotosYet').en)}<span class="zh">${escapeHtml(bi('noPhotosYet').zh)}</span></div>`}
                 </div>
               `;
@@ -1277,7 +1294,7 @@ function renderSampleApprovalForm() {
       <div class="section-title">${biBlockHtml('chinaSubmissionSectionTitle', 'Juniper China QA/QC Submission')}</div>
       <div class="field">
         <label class="field-label">${biBlockHtml('notesSection', 'Notes')} <span class="section-help">(${escapeHtml(bi('optional').en)})</span></label>
-        <textarea id="approvalNotes" placeholder="${escapeHtml(bi('notesPlaceholder').en)} / ${escapeHtml(bi('notesPlaceholder').zh)}">${escapeHtml(approvalState.notes)}</textarea>
+        <textarea id="approvalNotes" placeholder="${escapeHtml(bi('notesPlaceholder').en)}">${escapeHtml(approvalState.notes)}</textarea>
       </div>
       ${renderPhotoSlot('_notes', 'Notes Photos', '备注照片', null, true)}
     </div>
@@ -1297,7 +1314,7 @@ function renderSizingSection() {
   }
 
   const fits = fitsForPoSubcategory();
-  const options = Object.keys(fits).map((k) => `<option value="${k}" ${approvalState.fit === k ? 'selected' : ''}>${escapeHtml(fits[k].label_zh)} ${escapeHtml(fits[k].label_en)}</option>`).join('');
+  const options = Object.keys(fits).map((k) => `<option value="${k}" ${approvalState.fit === k ? 'selected' : ''}>${escapeHtml(catLabel(fits[k]))}</option>`).join('');
   const otherSel = approvalState.fit === OTHER_FIT_VALUE ? 'selected' : '';
 
   const pickerCard = `
@@ -1509,7 +1526,7 @@ function renderPhotoSlot(slotKey, labelEn, labelZh, size, mini) {
   const inputId = `approvalPhoto_${key.replace(/[^a-zA-Z0-9]/g, '_')}`;
   return `
     <div class="section-photos-block">
-      <div class="section-photos-label">${escapeHtml(labelEn)} <span class="zh">${escapeHtml(labelZh)}</span></div>
+      <div class="section-photos-label">${escapeHtml(pickLang(labelEn, labelZh))}</div>
       <div class="photo-grid ${mini ? 'mini' : 'compact'}">
         ${thumbs}
         <label class="photo-add" for="${inputId}">
@@ -1555,9 +1572,9 @@ function selectField3WithOther(id, i18nKey, value, optionsList) {
       <select data-approval-select-other="${id}">
         <option value="">${escapeHtml(bi('selectPlaceholder').en)}</option>
         ${optionsList.map((o) => `<option value="${escapeHtml(o)}" ${!isOther && value === o ? 'selected' : ''}>${escapeHtml(o)}</option>`).join('')}
-        <option value="${OTHER_VALUE}" ${isOther ? 'selected' : ''}>${escapeHtml(otherLabel.en)} / ${escapeHtml(otherLabel.zh)}</option>
+        <option value="${OTHER_VALUE}" ${isOther ? 'selected' : ''}>${escapeHtml(otherLabel.en)}</option>
       </select>
-      ${isOther ? `<input type="text" data-approval-other-text="${id}" value="${escapeHtml(value || '')}" placeholder="${escapeHtml(otherPh.en)} / ${escapeHtml(otherPh.zh)}" style="margin-top:8px;" />` : ''}
+      ${isOther ? `<input type="text" data-approval-other-text="${id}" value="${escapeHtml(value || '')}" placeholder="${escapeHtml(otherPh.en)}" style="margin-top:8px;" />` : ''}
     </div>
   `;
 }
@@ -1603,7 +1620,7 @@ function renderPrePorBulkForm() {
       ${renderChinaApprovalStatusField()}
       <div class="field" data-field="approvalNotes">
         <label class="field-label">${biBlockHtml('notesSection', 'Notes')}</label>
-        <textarea id="approvalNotes" placeholder="${escapeHtml(bi('notesPlaceholder').en)} / ${escapeHtml(bi('notesPlaceholder').zh)}">${escapeHtml(approvalState.notes)}</textarea>
+        <textarea id="approvalNotes" placeholder="${escapeHtml(bi('notesPlaceholder').en)}">${escapeHtml(approvalState.notes)}</textarea>
       </div>
       ${renderPhotoSlot('_notes', 'Notes Photos', '备注照片', null, true)}
     </div>

@@ -98,3 +98,41 @@
    quieter under the Chinese, and must not inherit the group's uppercase. */
 .app-sidebar-group .zh { text-transform: none; letter-spacing: 0; font-size: 0.85em; font-weight: 600; margin-top: 1px; }
 .app-sidebar-link .zh { font-size: 0.8em; margin-top: 1px; }
+
+/* The base .app-header (styles.css) is a plain block on some pages and a
+   flex row on others (order-management.css), so make it a flex row here for
+   every page - that's what lets the toggle sit hard right of the brand. */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Site-wide language selector, top-right of the header. Segmented control:
+   the active language is filled, the other is a quiet outline. */
+.lang-toggle {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 2px;
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  padding: 3px;
+  flex: none;
+}
+.lang-opt {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.82);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 5px 13px;
+  border-radius: 999px;
+  cursor: pointer;
+  line-height: 1.2;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.lang-opt:hover { color: #fff; }
+.lang-opt.active { background: #fff; color: var(--jc-teal-dark, #1F8570); }

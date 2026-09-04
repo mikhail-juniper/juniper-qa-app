@@ -3122,5 +3122,41 @@
   "toastClientExists": {
     "en": "That client already exists",
     "zh": "该客户已存在"
+  },
+  "payOverallStatus": {
+    "en": "Overall Payment Status",
+    "zh": "总付款状态"
+  },
+  "payPaidInFullOn": {
+    "en": "Paid in full on",
+    "zh": "全额付款日期"
+  },
+  "payPoCompleted": {
+    "en": "PO Completed",
+    "zh": "订单已完成"
+  },
+  "payLineMainComponent": {
+    "en": "Main Component",
+    "zh": "主料"
+  },
+  "payLineWarehousingShipping": {
+    "en": "Warehousing Shipping",
+    "zh": "仓储运输"
+  },
+  "payLineAdditionalFees": {
+    "en": "Additional Fees (Assembly/Labor/Other)",
+    "zh": "额外费用（组装/人工/其他）"
+  },
+  "phFabricTypeEg": {
+    "en": "e.g. 100% Cotton",
+    "zh": "例如 100% 棉"
+  },
+  "phAutoFillsSupplier": {
+    "en": "Auto-fills from Supplier Name above",
+    "zh": "根据上方供应商名称自动填充"
+  },
+  "qaQcReportingTitle": {
+    "en": "QA/QC Reporting",
+    "zh": "质检报告"
   }
 }

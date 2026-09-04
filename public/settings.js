@@ -25,10 +25,22 @@ const CATEGORY_LABELS = {
   plush: { en: 'Plush Toys', zh: '毛绒玩具' }
 };
 
+/* One active language at a time, chosen with the header toggle (see
+ * i18n-shared.js). The returned shape is unchanged so every existing
+ * biHtml/biBlockHtml call site still works - the secondary slot is just
+ * always empty now, which makes those helpers render a single language. */
+/** True when the header toggle is set to English. Used by the few labels
+ *  built from raw config data rather than the i18n table. */
+function langIsEn() {
+  return ((window.JuniperLang && window.JuniperLang.get()) || 'zh') === 'en';
+}
+
 function bi(key, fallback) {
   const e = I18N[key];
   if (!e) return { en: fallback || key, zh: '' };
-  return { en: e.zh, zh: e.en };
+  const lang = (window.JuniperLang && window.JuniperLang.get()) || 'zh';
+  const primary = lang === 'en' ? (e.en || e.zh) : (e.zh || e.en);
+  return { en: primary || fallback || key, zh: '' };
 }
 function escapeHtml(str) {
   if (str === undefined || str === null) return '';
@@ -74,7 +86,7 @@ async function loadEverything() {
 function renderBackupCard() {
   const warning = backupStatus && backupStatus.warning
     ? `<div class="card" style="background:#fde2e1; border-color:var(--jc-fail);">
-        <div class="section-title" style="color:var(--jc-fail);">⚠ ${escapeHtml(bi('dataDirWarningTitle', 'Data storage is not set up correctly').en)} / ${escapeHtml(bi('dataDirWarningTitle', 'Data storage is not set up correctly').zh)}</div>
+        <div class="section-title" style="color:var(--jc-fail);">⚠ ${escapeHtml(bi('dataDirWarningTitle', 'Data storage is not set up correctly').en)}</div>
         <div class="section-help" style="color:var(--jc-text);">${escapeHtml(backupStatus.warning)}</div>
       </div>`
     : '';
@@ -85,10 +97,10 @@ function renderBackupCard() {
     : '';
   return `
     <div class="card">
-      <div class="section-title">${escapeHtml(bi('backupTitle', 'Backup').en)} / ${escapeHtml(bi('backupTitle', 'Backup').zh)}</div>
+      <div class="section-title">${escapeHtml(bi('backupTitle', 'Backup').en)}</div>
       <div class="section-help">${escapeHtml(bi('backupHelp').en)}<br/>${escapeHtml(bi('backupHelp').zh)}</div>
       ${warning}
-      <a href="/api/backup/download" class="btn btn-primary" style="display:inline-block; width:auto; padding:10px 18px; text-decoration:none; margin-top:10px;">${escapeHtml(bi('downloadBackup').en)} / ${escapeHtml(bi('downloadBackup').zh)}</a>
+      <a href="/api/backup/download" class="btn btn-primary" style="display:inline-block; width:auto; padding:10px 18px; text-decoration:none; margin-top:10px;">${escapeHtml(bi('downloadBackup').en)}</a>
 
       <div style="margin-top:16px;">
         <div class="section-title" style="font-size:14px;">Automatic weekly backups</div>
@@ -106,13 +118,13 @@ function renderBackupCard() {
       </div>
 
       <div style="margin-top:20px; padding-top:16px; border-top:1px solid var(--jc-border);">
-        <div class="section-title" style="font-size:15px;">${escapeHtml(bi('restoreBackupTitle', 'Restore from Backup').en)} / ${escapeHtml(bi('restoreBackupTitle', 'Restore from Backup').zh)}</div>
+        <div class="section-title" style="font-size:15px;">${escapeHtml(bi('restoreBackupTitle', 'Restore from Backup').en)}</div>
         <div class="section-help">${escapeHtml(bi('restoreBackupHelp', "Upload a previously downloaded backup zip. Any PO it contains that isn't already in the system gets added. Choose below what happens for a PO that already exists.").en)}<br/>${escapeHtml(bi('restoreBackupHelp').zh)}</div>
         <div class="field" style="margin-top:10px;">
-          <label class="field-label">${escapeHtml(bi('duplicatePoHandling', 'If a PO already exists').en)} / ${escapeHtml(bi('duplicatePoHandling').zh)}</label>
+          <label class="field-label">${escapeHtml(bi('duplicatePoHandling', 'If a PO already exists').en)}</label>
           <select id="restoreModeSelect">
-            <option value="ignore" ${restoreMode === 'ignore' ? 'selected' : ''}>${escapeHtml(bi('restoreModeIgnore', 'Skip it - keep the current data').en)} / ${escapeHtml(bi('restoreModeIgnore').zh)}</option>
-            <option value="override" ${restoreMode === 'override' ? 'selected' : ''}>${escapeHtml(bi('restoreModeOverride', 'Replace it with the backup version').en)} / ${escapeHtml(bi('restoreModeOverride').zh)}</option>
+            <option value="ignore" ${restoreMode === 'ignore' ? 'selected' : ''}>${escapeHtml(bi('restoreModeIgnore', 'Skip it - keep the current data').en)}</option>
+            <option value="override" ${restoreMode === 'override' ? 'selected' : ''}>${escapeHtml(bi('restoreModeOverride', 'Replace it with the backup version').en)}</option>
           </select>
         </div>
         <input type="file" id="restoreFileInput" accept=".zip" style="margin-top:10px;" ${restoreInProgress ? 'disabled' : ''} />
@@ -126,7 +138,7 @@ function render() {
   const root = document.getElementById('settingsRoot');
   root.innerHTML = `
     <a href="index.html" class="btn btn-secondary" style="display:inline-block;width:auto;padding:10px 18px;margin-bottom:16px;text-decoration:none;">
-      ← ${escapeHtml(bi('backToApp').en)} / ${escapeHtml(bi('backToApp').zh)}
+      ← ${escapeHtml(bi('backToApp').en)}
     </a>
     <div class="step-title">${escapeHtml(bi('manageDropdowns').en)}<span class="zh">${escapeHtml(bi('manageDropdowns').zh)}</span></div>
     <div class="section-help" style="margin-bottom:16px;">${escapeHtml(bi('manageDropdownsHelp').en)}<br/>${escapeHtml(bi('manageDropdownsHelp').zh)}</div>
@@ -142,7 +154,7 @@ function render() {
     </div>
 
     <div class="nav-buttons">
-      <button class="btn btn-primary" id="btnSave">${escapeHtml(bi('saveSettings').en)} / ${escapeHtml(bi('saveSettings').zh)}</button>
+      <button class="btn btn-primary" id="btnSave">${escapeHtml(bi('saveSettings').en)}</button>
     </div>
   `;
   attachHandlers();
@@ -161,14 +173,14 @@ function renderListCard(def) {
 
   return `
     <div class="card">
-      <div class="section-title">${escapeHtml(def.pluralZh)}<span class="zh">${escapeHtml(def.pluralEn)}</span></div>
+      <div class="section-title">${escapeHtml(langIsEn() ? def.pluralEn : def.pluralZh)}</div>
       <div class="settings-list" id="list_${def.key}">
         ${rows || `<div class="section-help">No entries yet.</div>`}
       </div>
       <div class="field-row" style="margin-top:12px;">
         <input type="text" id="add_input_${def.key}" placeholder="${escapeHtml(l.en)}..." style="flex:1;" />
         <button type="button" class="btn btn-secondary" style="flex:0 0 auto;" data-add-item="${def.key}">
-          ${escapeHtml(bi('addOption').en)} / ${escapeHtml(bi('addOption').zh)}
+          ${escapeHtml(bi('addOption').en)}
         </button>
       </div>
     </div>
@@ -233,7 +245,7 @@ function renderUnitCostsCard() {
     `).join('');
     return `
       <div style="margin-top:10px;">
-        <div class="section-photos-label">${escapeHtml(label.zh || label.en)} <span class="zh">${escapeHtml(label.en)}</span></div>
+        <div class="section-photos-label">${escapeHtml(langIsEn() ? (label.en || label.zh) : (label.zh || label.en))}</div>
         ${rows}
       </div>
     `;

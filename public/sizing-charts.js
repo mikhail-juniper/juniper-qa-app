@@ -34,10 +34,23 @@ function escapeHtml(str) {
   }[m]));
 }
 
+/* One active language at a time, chosen with the header toggle (see
+ * i18n-shared.js). The returned shape is unchanged so every existing
+ * biHtml/biBlockHtml call site still works - the secondary slot is just
+ * always empty now, which makes those helpers render a single language. */
+/** Fit labels come as label_en/label_zh from fits.json, not the i18n table. */
+function catLabel(def) {
+  if (!def) return '';
+  const lang = (window.JuniperLang && window.JuniperLang.get()) || 'zh';
+  return (lang === 'en' ? (def.label_en || def.label_zh) : (def.label_zh || def.label_en)) || '';
+}
+
 function bi(key, fallback) {
   const e = I18N[key];
   if (!e) return { en: fallback || key, zh: '' };
-  return { en: e.zh, zh: e.en };
+  const lang = (window.JuniperLang && window.JuniperLang.get()) || 'zh';
+  const primary = lang === 'en' ? (e.en || e.zh) : (e.zh || e.en);
+  return { en: primary || fallback || key, zh: '' };
 }
 
 function parseFitValue(str) {
@@ -62,7 +75,7 @@ function renderFitsCard() {
   const fitKeys = Object.keys(currentFits.fits).sort();
   const options = fitKeys.map((k) => {
     const f = currentFits.fits[k];
-    return `<option value="${escapeHtml(k)}" ${selectedFitKey === k ? 'selected' : ''}>${escapeHtml(f.label_zh)} ${escapeHtml(f.label_en)}</option>`;
+    return `<option value="${escapeHtml(k)}" ${selectedFitKey === k ? 'selected' : ''}>${escapeHtml(catLabel(f))}</option>`;
   }).join('');
 
   let editorHtml = '';

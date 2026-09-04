@@ -2,13 +2,20 @@
 
 let I18N = {};
 
+/* One active language at a time, chosen with the header toggle (see
+ * i18n-shared.js). The returned shape is unchanged so every existing
+ * biHtml/biBlockHtml call site still works - the secondary slot is just
+ * always empty now, which makes those helpers render a single language. */
 function bi(key, fallback) {
   const e = I18N[key];
   if (!e) return { en: fallback || key, zh: '' };
-  return { en: e.zh, zh: e.en };
+  const lang = (window.JuniperLang && window.JuniperLang.get()) || 'zh';
+  const primary = lang === 'en' ? (e.en || e.zh) : (e.zh || e.en);
+  return { en: primary || fallback || key, zh: '' };
 }
 function biBlockHtml(key, fallback) {
   const e = bi(key, fallback);
+  if (!e.zh) return escapeHtml(e.en);
   return `${escapeHtml(e.en)}<span class="zh">${escapeHtml(e.zh)}</span>`;
 }
 function escapeHtml(str) {
