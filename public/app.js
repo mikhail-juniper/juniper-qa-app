@@ -2256,20 +2256,27 @@ function renderPhotosStep() {
 }
 function photoGrid(fieldId, compact, mini) {
   const arr = getPhotoArray(fieldId);
-  const thumbs = arr.map((file, idx) => `
+  const thumbs = arr.map((file, idx) => {
+    // Videos get a labeled, playable tile rather than an <img>, which
+    // would just render broken for a video blob.
+    const isVideo = (file.type || '').startsWith('video/') || /\.(mp4|mov|m4v|webm|avi|mkv|3gp)$/i.test(file.name || '');
+    return `
     <div class="photo-thumb">
-      <img src="${file._url}" />
+      ${isVideo
+        ? `<video src="${file._url}" class="photo-video" muted playsinline preload="metadata"></video><span class="photo-video-badge">&#9654; Video</span>`
+        : `<img src="${file._url}" />`}
       <button class="photo-remove" data-photo-remove="${fieldId}" data-photo-idx="${idx}">✕</button>
     </div>
-  `).join('');
+  `;
+  }).join('');
   const inputId = `photoInput_${fieldId.replace(/[:]/g, '_')}`;
   return `
     <div class="photo-grid ${mini ? 'mini' : (compact ? 'compact' : '')}">
       ${thumbs}
       <label class="photo-add" for="${inputId}">
         <span class="plus">+</span>
-        <span>${escapeHtml(bi('addPhoto').en)}</span>
-        <input type="file" id="${inputId}" accept="image/*" multiple
+        <span>${escapeHtml(bi('addPhotoOrVideo').en)}</span>
+        <input type="file" id="${inputId}" accept="image/*,video/*" multiple
           data-photo-input="${fieldId}" />
       </label>
     </div>

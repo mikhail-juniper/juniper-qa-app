@@ -1385,8 +1385,20 @@ function computeOrderTotal(order) {
   return Math.round((manufacturingCostPerUnit * orderQuantity + flatFeesTotal) * 100) / 100;
 }
 
+let settlementMonthFilter = '';
+
 async function renderSettlementShell(root) {
-  root.innerHTML = `${backToHubHtml()}<h2 class="om-view-title">Settlement Statement</h2><div id="omMonthlyHost"></div><div id="omSettlementHost" class="om-table-wrap"><div class="om-empty">Loading...</div></div>`;
+  root.innerHTML = `${backToHubHtml()}
+    <h2 class="om-view-title">Settlement Statement</h2>
+    <div style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
+      <div style="min-width:220px;">
+        <label>Month</label>
+        <select id="omMonthFilter"><option value="">All months</option></select>
+      </div>
+      <div id="omMonthSummary" class="section-help" style="margin:0 0 10px 0;"></div>
+    </div>
+    <div id="omMonthlyHost"></div>
+    <div id="omSettlementHost" class="om-table-wrap"><div class="om-empty">Loading...</div></div>`;
   bindBackToHub();
   try {
     const [monthly, toys, clothing, other] = await Promise.all([
@@ -1395,9 +1407,46 @@ async function renderSettlementShell(root) {
       api('/api/order-management/orders?productLine=clothing'),
       api('/api/order-management/orders?productLine=other')
     ]);
-    renderMonthlyFinancials(monthly.months || []);
-    renderSettlementTable([...(toys.orders || []), ...(clothing.orders || []), ...(other.orders || [])]);
+    const months = monthly.months || [];
+    const allOrders = [...(toys.orders || []), ...(clothing.orders || []), ...(other.orders || [])];
+
+    const monthSelect = document.getElementById('omMonthFilter');
+    monthSelect.innerHTML = `<option value="">All months</option>` +
+      months.map((m) => `<option value="${escapeHtml(m.month)}" ${m.month === settlementMonthFilter ? 'selected' : ''}>${escapeHtml(m.month)}</option>`).join('');
+    monthSelect.addEventListener('change', (e) => {
+      settlementMonthFilter = e.target.value;
+      applyMonthFilter();
+    });
+
+    // Filtering narrows both the month cards and the statement table to one
+    // month, so the page reads as that month's full financial breakdown.
+    function applyMonthFilter() {
+      const shown = settlementMonthFilter ? months.filter((m) => m.month === settlementMonthFilter) : months;
+      renderMonthlyFinancials(shown);
+      const orders = settlementMonthFilter
+        ? allOrders.filter((o) => monthKeyForOrder(o) === settlementMonthFilter)
+        : allOrders;
+      renderSettlementTable(orders);
+      const summary = document.getElementById('omMonthSummary');
+      if (summary) {
+        summary.textContent = settlementMonthFilter
+          ? `Showing ${orders.length} order${orders.length === 1 ? '' : 's'} placed in ${settlementMonthFilter}.`
+          : `Showing all ${allOrders.length} orders across ${months.length} month${months.length === 1 ? '' : 's'}.`;
+      }
+    }
+    applyMonthFilter();
   } catch (e) { showToast(e.message, true); }
+}
+
+/** Mirrors the server's monthKeyFor bucketing exactly (orderPlacementDate,
+ *  then desiredEntryDate, then createdAt) so the table filters to the same
+ *  month as the cards - any drift here would show mismatched totals. */
+function monthKeyForOrder(o) {
+  const raw = o.orderPlacementDate || o.desiredEntryDate || o.createdAt;
+  if (!raw) return 'Undated';
+  const d = new Date(raw);
+  if (isNaN(d)) return 'Undated';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
 function renderMonthlyFinancials(months) {
@@ -1843,10 +1892,33 @@ async function openDetailPanel(id, scope) {
 
     <div class="om-panel-card">
     <div class="om-section-title">QA/QC Reporting</div>
-    <div class="section-help" style="margin-bottom:12px;">Share either link with a factory or QA contact - it already knows this PO, so they can jump straight into the report.</div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;">
-      <button type="button" class="btn btn-secondary om-copy-link-btn" style="flex:none;width:auto;padding:9px 16px;" data-copy-url="${escapeHtml(`${location.origin}/reporting.html?mode=pre_production&po=${order.poNumber}`)}">Copy Pre-Production Report Link</button>
-      <button type="button" class="btn btn-secondary om-copy-link-btn" style="flex:none;width:auto;padding:9px 16px;" data-copy-url="${escapeHtml(`${location.origin}/reporting.html?mode=production&po=${order.poNumber}`)}">Copy Bulk Sampling Report Link</button>
+    <div class="section-help" style="margin-bottom:14px;">Share a report link with a factory or QA contact - it already knows this PO, so they can jump straight into the report. Setting a status here also moves the order along its production stages.</div>
+    <div class="om-qa-report-grid">
+      ${[
+        { stage: 'preProduction', title: 'Pre-Production Report', mode: 'pre_production' },
+        { stage: 'bulk', title: 'Bulk Production Report', mode: 'production' }
+      ].map(({ stage, title, mode }) => {
+        const rep = (order.qaReports && order.qaReports[stage]) || { status: 'Pending' };
+        return `
+        <div class="om-qa-report-col">
+          <div class="om-qa-report-title">${title}</div>
+          <label>Status</label>
+          <select class="om-report-status-select" data-report-stage="${stage}" data-report-status="${escapeHtml(rep.status || 'Pending')}">
+            ${['Pending', 'In Progress', 'Completed'].map((s) => `<option value="${s}" ${s === (rep.status || 'Pending') ? 'selected' : ''}>${s}</option>`).join('')}
+          </select>
+          <button type="button" class="btn btn-secondary om-copy-link-btn" style="width:100%;margin-top:10px;padding:9px 16px;" data-copy-url="${escapeHtml(`${location.origin}/reporting.html?mode=${mode}&po=${order.poNumber}`)}">Copy Report Link</button>
+          <div class="om-qa-report-file">
+            ${rep.pdfUrl ? `
+              <a href="${escapeHtml(rep.pdfUrl)}" target="_blank" rel="noopener" class="om-qa-report-link">Download report PDF</a>
+              <div class="om-qa-report-meta">
+                ${rep.result ? `<span class="om-qa-result om-qa-result-${escapeHtml(String(rep.result).toLowerCase())}">${escapeHtml(rep.result)}</span>` : ''}
+                ${rep.submittedAt ? `<span>${fmtDate(rep.submittedAt)}</span>` : ''}
+              </div>
+            ` : `<div class="om-qa-report-meta">No report submitted yet.</div>`}
+          </div>
+        </div>
+      `;
+      }).join('')}
     </div>
     </div>
 
@@ -2292,6 +2364,34 @@ async function openDetailPanel(id, scope) {
     btn.disabled = !eligible;
     btn.title = eligible ? '' : 'Available once the order has reached its final status and every component is marked Paid';
   }
+  // QA/QC report status: saves immediately (like the order status stepper)
+  // and can advance the main order status, so re-sync the stepper/select
+  // from whatever the server decided rather than assuming.
+  panel.querySelectorAll('.om-report-status-select').forEach((sel) => {
+    sel.addEventListener('change', async (e) => {
+      const stage = e.target.dataset.reportStage;
+      const status = e.target.value;
+      e.target.setAttribute('data-report-status', status);
+      try {
+        const res = await api(`/api/order-management/orders/${encodeURIComponent(order.id)}/qa-report-status`, {
+          method: 'POST',
+          body: JSON.stringify({ stage, status, actor: 'Web user' })
+        });
+        order.status = res.order.status;
+        order.qaReports = res.order.qaReports;
+        const statusSelect = document.getElementById('fOrderStatusSelect');
+        if (statusSelect) {
+          statusSelect.value = order.status;
+          statusSelect.setAttribute('data-status', order.status);
+        }
+        renderStatusTracker(order.status);
+        updateCompletePoButtonState();
+        showToast(`Report marked ${status}`);
+        refreshCurrentView();
+      } catch (err) { showToast(err.message, true); }
+    });
+  });
+
   const completePoBtn = document.getElementById('omCompletePoBtn');
   if (completePoBtn) {
     completePoBtn.addEventListener('click', async () => {

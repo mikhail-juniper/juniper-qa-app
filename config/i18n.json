@@ -1706,5 +1706,13 @@
   "fulfillmentRequestDate": {
     "en": "Fulfillment Request Date",
     "zh": "履约要求日期"
+  },
+  "videoAttachmentsTitle": {
+    "en": "Video Attachments",
+    "zh": "视频附件"
+  },
+  "addPhotoOrVideo": {
+    "en": "Add photo / video",
+    "zh": "添加照片/视频"
   }
 }

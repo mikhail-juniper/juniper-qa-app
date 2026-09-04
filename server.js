@@ -9,6 +9,15 @@ const archiver = require('archiver');
 
 const { buildPdf } = require('./lib/pdfBuilder');
 const { computeOverallResult, collectAllDefects } = require('./lib/passFail');
+
+/** True for an uploaded file that's a video rather than a still photo -
+ *  checked by mimetype first, with an extension fallback for browsers that
+ *  send a generic octet-stream. */
+function isVideoUpload(file) {
+  if (!file) return false;
+  if (file.mimetype && file.mimetype.startsWith('video/')) return true;
+  return /\.(mp4|mov|m4v|webm|avi|mkv|3gp|hevc)$/i.test(file.originalname || '');
+}
 const { getRecommendation } = require('./lib/aqlRecommendation');
 const submissionLog = require('./lib/submissionLog');
 // poStore.js is retired - orderManagementStore is now the single source of
@@ -168,6 +177,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // once a persistent disk is attached (e.g. on Render's paid tier).
 app.use('/submissions', express.static(submissionLog.PDF_ARCHIVE_DIR));
 app.use('/issue-photos', express.static(submissionLog.PHOTO_ARCHIVE_DIR));
+app.use('/issue-videos', express.static(submissionLog.VIDEO_ARCHIVE_DIR));
 app.use('/approval-photos', express.static(approvalStore.APPROVAL_PHOTO_DIR));
 app.use('/order-management-files', express.static(orderManagementStore.ORDER_FILES_DIR));
 // Fabric Library swatch uploads live here - not tied to any one order, so
@@ -348,6 +358,7 @@ app.post('/api/backup/upload', uploadBackup.single('backup'), (req, res) => {
     extractDir('approval-photos', approvalStore.APPROVAL_PHOTO_DIR);
     extractDir('submissions', submissionLog.PDF_ARCHIVE_DIR);
     extractDir('issue-photos', submissionLog.PHOTO_ARCHIVE_DIR);
+    extractDir('issue-videos', submissionLog.VIDEO_ARCHIVE_DIR);
 
     fs.writeFileSync(poPath, JSON.stringify(livePOs, null, 2));
     fs.writeFileSync(approvalsPath, JSON.stringify(liveApprovals, null, 2));
@@ -579,6 +590,22 @@ app.post('/api/submit', upload.any(), async (req, res) => {
       { category: payload.category, subcategory: payload.subcategory, poQuantity: payload.poQuantity, creator: payload.creator, risk: payload.productRisk, sku: payload.sku },
       { unitCosts: loadJson(UNIT_COSTS_PATH), aqlRecConfig: loadJson(AQL_RECOMMENDATION_PATH), creatorTiersConfig: loadJson(CREATOR_TIERS_PATH), findOrdersBySku: orderManagementStore.getOrdersBySku }
     );
+    // Videos can't be embedded in a PDF, so each one is archived here and
+    // linked from the report. Done before buildPdf so the links can go in.
+    fs.mkdirSync(submissionLog.VIDEO_ARCHIVE_DIR, { recursive: true });
+    const origin = `${req.protocol}://${req.get('host')}`;
+    const videoAttachments = [];
+    Object.entries(filesByField).forEach(([field, files]) => {
+      (files || []).filter(isVideoUpload).forEach((f, i) => {
+        const ext = path.extname(f.originalname || '') || '.mp4';
+        const videoFilename = `${submissionId}_${field.replace(/[^A-Za-z0-9_-]/g, '_')}_${i}${ext}`;
+        fs.writeFileSync(path.join(submissionLog.VIDEO_ARCHIVE_DIR, videoFilename), f.buffer);
+        const url = `/issue-videos/${encodeURIComponent(videoFilename)}`;
+        videoAttachments.push({ field, label: f.originalname || videoFilename, url, absoluteUrl: `${origin}${url}` });
+      });
+    });
+    payload._videoAttachments = videoAttachments;
+
     const pdfBuffer = await buildPdf(payload, filesByField, fits, i18n, overallResult, categories, recommendation, establishedSizing);
 
     const fileSafePo = (payload.poNumber || 'QA-Report').replace(/[^a-z0-9\-_]+/gi, '_');
@@ -598,8 +625,8 @@ app.post('/api/submit', upload.any(), async (req, res) => {
     fs.mkdirSync(submissionLog.PHOTO_ARCHIVE_DIR, { recursive: true });
     const issuesWithPhotos = collectAllDefects(payload).map((d) => {
       let photoUrl = null;
-      const photoFiles = filesByField[`photo_defect_${d.id}`];
-      if (photoFiles && photoFiles.length) {
+      const photoFiles = (filesByField[`photo_defect_${d.id}`] || []).filter((f) => !isVideoUpload(f));
+      if (photoFiles.length) {
         const photoFilename = `${submissionId}_${d.id}.jpg`;
         fs.writeFileSync(path.join(submissionLog.PHOTO_ARCHIVE_DIR, photoFilename), photoFiles[0].buffer);
         photoUrl = `/issue-photos/${encodeURIComponent(photoFilename)}`;
@@ -609,6 +636,10 @@ app.post('/api/submit', upload.any(), async (req, res) => {
         unitsAffected: parseInt(d.unitsAffected, 10) || 1, photoUrl
       };
     });
+
+    // Videos can't be embedded in a PDF, so each one is archived and
+    // linked from the report (and from the submission record) instead.
+    // Collected earlier, before the PDF is built, so the links can go in it.
 
     submissionLog.appendSubmission({
       id: submissionId,
@@ -636,6 +667,7 @@ app.post('/api/submit', upload.any(), async (req, res) => {
       minorCount: overallResult.aql ? overallResult.aql.minorCount : 0,
       pdfFilename,
       issues: issuesWithPhotos,
+      videoAttachments,
       // Sizing detail carried forward for pre-filling a later report on the same
       // PO - text/numbers only, since photos are physical evidence tied to a
       // specific inspection and shouldn't be silently reused.
@@ -647,6 +679,24 @@ app.post('/api/submit', upload.any(), async (req, res) => {
         dimensions: (payload.categoryData && payload.categoryData.dimensions) || null
       }
     });
+
+    // File this report against its PO's matching QA/QC stage so the PDF is
+    // downloadable from the Order Management panel, and let a passing
+    // result advance the order's status automatically.
+    try {
+      if (payload.poNumber) {
+        orderManagementStore.attachSubmittedReport(payload.poNumber, {
+          stage: payload.qaType === 'production' ? 'bulk' : 'preProduction',
+          submissionId,
+          pdfUrl,
+          result: overallResult.overall
+        }, payload.qaLead || 'QA submission');
+      }
+    } catch (syncErr) {
+      // Never fail the submission itself over this - the report is saved
+      // and the PDF exists either way.
+      console.error('Failed to attach submitted report to its order:', syncErr);
+    }
 
     res.json({ ok: true, submissionId, filename: pdfFilename, pdfUrl, overallResult });
   } catch (err) {
@@ -902,6 +952,17 @@ app.post('/api/order-management/orders/:id/status', (req, res) => {
   if (!body.status) return res.status(400).json({ error: 'status is required' });
   const updated = orderManagementStore.setStatus(req.params.id, body.status, body.actor || req.get('X-Actor'));
   if (!updated) return res.status(404).json({ error: 'Order not found' });
+  res.json({ ok: true, order: updated });
+});
+
+// Set one QA/QC stage's report status (Pending / In Progress / Completed).
+// This also advances the main order status per the workflow mapping, so the
+// two never drift apart - see setQaReportStatus.
+app.post('/api/order-management/orders/:id/qa-report-status', (req, res) => {
+  const body = req.body || {};
+  if (!body.stage || !body.status) return res.status(400).json({ error: 'stage and status are required' });
+  const updated = orderManagementStore.setQaReportStatus(req.params.id, body.stage, body.status, body.actor || req.get('X-Actor'));
+  if (!updated) return res.status(400).json({ error: 'Order not found, or invalid stage/status' });
   res.json({ ok: true, order: updated });
 });
 
