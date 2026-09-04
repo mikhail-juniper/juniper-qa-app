@@ -1504,11 +1504,27 @@ function seedFabricSwatchesFromFile() {
       if (!fs.existsSync(dest)) fs.copyFileSync(src, dest);
       return `/fabric-library-files/${encodeURIComponent(fname)}`;
     };
-    let added = 0, upgraded = 0;
+    let added = 0, upgraded = 0, renamed = 0;
+    // Display value convention for imported swatches: "Book Number -
+    // Material Blend" (pantones duplicate across books, so pantone alone
+    // is a poor primary label). Falls back gracefully when a book code is
+    // missing (a couple of source rows have none).
+    const displayValue = (e) => [e.bookCode, e.materialBlend].filter(Boolean).join(' - ') || e.pantone || '';
+    const existingBySeedKey = new Map(existing.filter((c) => c.seedKey).map((c) => [c.seedKey, c]));
     (seed.entries || []).forEach((e) => {
-      if (seededKeys.has(e.seedKey)) return;
+      if (seededKeys.has(e.seedKey)) {
+        // Already imported - but rename entries still carrying the old
+        // pantone-as-value convention to the new "Book - Blend" one,
+        // leaving any manually edited values alone.
+        const stored = existingBySeedKey.get(e.seedKey);
+        if (stored && stored.value === (e.pantone || '') && displayValue(e) !== stored.value) {
+          fabricLibraryStore.updateFabricCode(stored.id, { value: displayValue(e) });
+          renamed += 1;
+        }
+        return;
+      }
       const fields = {
-        value: e.pantone || '',
+        value: displayValue(e),
         materialBlend: e.materialBlend || '',
         swatchUrl: copyIn(e.swatchFile),
         digitalColorUrl: copyIn(e.digitalColorFile),
@@ -1525,8 +1541,10 @@ function seedFabricSwatchesFromFile() {
         : null;
       if (legacyMatch) {
         // Keep the existing record (and any notes added to it) - just fill
-        // in the richer fields from the full export.
+        // in the richer fields from the full export, including the new
+        // "Book - Blend" display value if the old pantone one is still set.
         fabricLibraryStore.updateFabricCode(legacyMatch.id, {
+          value: legacyMatch.value === (e.pantone || '') ? fields.value : legacyMatch.value,
           materialBlend: fields.materialBlend,
           fabricWeight: fields.fabricWeight,
           garmentType: fields.garmentType,
@@ -1541,7 +1559,7 @@ function seedFabricSwatchesFromFile() {
       }
       seededKeys.add(e.seedKey);
     });
-    if (added || upgraded) console.log(`Fabric Library seed: ${added} swatch(es) added, ${upgraded} upgraded from the earlier tab-1 import.`);
+    if (added || upgraded || renamed) console.log(`Fabric Library seed: ${added} added, ${upgraded} upgraded, ${renamed} renamed to the Book - Blend convention.`);
   } catch (err) {
     console.error('Fabric swatch seed import failed:', err);
   }

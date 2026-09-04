@@ -1072,7 +1072,7 @@ function renderFabricTable(hostId, kind, entries, withSwatch) {
     if (!clean) return '—';
     return `<span style="display:inline-flex;align-items:center;gap:7px;"><span style="width:18px;height:18px;border-radius:4px;border:1px solid var(--jc-border);background:#${escapeHtml(clean)};flex:none;"></span>#${escapeHtml(clean)}</span>`;
   };
-  const imgCell = (url) => url ? `<img class="om-table-thumb" src="${escapeHtml(url)}" alt="" />` : '—';
+  const imgCell = (url) => url ? `<img class="om-table-thumb om-fabric-zoom" style="cursor:zoom-in;" src="${escapeHtml(url)}" alt="" title="Click to view larger" />` : '—';
   host.innerHTML = kind === 'code' ? `
     <div class="om-table-wrap">
       <table class="om-table">
@@ -1120,6 +1120,15 @@ function renderFabricTable(hostId, kind, entries, withSwatch) {
       openFabricEntryForm(kind, entry);
     });
   });
+  // Clicking a swatch/color image zooms it in a lightbox instead of
+  // opening the row's edit form - stopPropagation keeps the row click
+  // from firing too, same pattern as photo thumbnails elsewhere.
+  host.querySelectorAll('.om-fabric-zoom').forEach((img) => {
+    img.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openImageLightbox(img.src);
+    });
+  });
 }
 
 function openFabricEntryForm(kind, entry) {
@@ -1147,7 +1156,7 @@ function openFabricEntryForm(kind, entry) {
           <label>Fabric Swatch</label>
           <div style="display:flex;align-items:center;gap:10px;">
             ${entry && entry.swatchUrl
-              ? `<img id="fabSwatchPreview" class="om-upload-preview" src="${escapeHtml(entry.swatchUrl)}" alt="" />`
+              ? `<img id="fabSwatchPreview" class="om-upload-preview" style="cursor:zoom-in;" src="${escapeHtml(entry.swatchUrl)}" alt="" title="Click to view larger" />`
               : `<div id="fabSwatchPreview" class="om-upload-preview-empty"></div>`}
             <input type="hidden" id="fabSwatchUrl" value="${val(entry && entry.swatchUrl)}" />
             <input type="file" id="fabSwatchFile" accept="image/*" style="display:none;" />
@@ -1158,7 +1167,7 @@ function openFabricEntryForm(kind, entry) {
           <label>Digital Color Reference</label>
           <div style="display:flex;align-items:center;gap:10px;">
             ${entry && entry.digitalColorUrl
-              ? `<img id="fabDigitalPreview" class="om-upload-preview" src="${escapeHtml(entry.digitalColorUrl)}" alt="" />`
+              ? `<img id="fabDigitalPreview" class="om-upload-preview" style="cursor:zoom-in;" src="${escapeHtml(entry.digitalColorUrl)}" alt="" title="Click to view larger" />`
               : `<div id="fabDigitalPreview" class="om-upload-preview-empty"></div>`}
             <input type="hidden" id="fabDigitalUrl" value="${val(entry && entry.digitalColorUrl)}" />
             <input type="file" id="fabDigitalFile" accept="image/*" style="display:none;" />
@@ -1190,6 +1199,12 @@ function openFabricEntryForm(kind, entry) {
       const uploadBtn = document.getElementById(btnId);
       const fileInput = document.getElementById(fileId);
       uploadBtn.addEventListener('click', () => fileInput.click());
+      // Existing preview image zooms in a lightbox, same as photo
+      // thumbnails elsewhere on the site.
+      const existingPreview = document.getElementById(previewId);
+      if (existingPreview && existingPreview.tagName === 'IMG') {
+        existingPreview.addEventListener('click', () => openImageLightbox(existingPreview.src));
+      }
       fileInput.addEventListener('change', async (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -1204,7 +1219,10 @@ function openFabricEntryForm(kind, entry) {
           const fresh = document.createElement('img');
           fresh.id = previewId;
           fresh.className = 'om-upload-preview';
+          fresh.style.cursor = 'zoom-in';
+          fresh.title = 'Click to view larger';
           fresh.src = body.file.url;
+          fresh.addEventListener('click', () => openImageLightbox(body.file.url));
           old.parentNode.replaceChild(fresh, old);
           showToast('Image uploaded');
         } catch (err) { showToast(err.message, true); }
