@@ -12,6 +12,40 @@ let currentStatusFilter = '';
 let currentSearch = '';
 let currentOrders = [];
 
+/* Bilingual label shorthands (Chinese first, English underneath), backed by
+ * i18n-shared.js. Kept short because they appear inline in a lot of
+ * template literals below:
+ *   i18(key)     stacked, for labels/section titles/buttons
+ *   i18i(key)    single line, for table headers and other tight spots
+ *   i18t(key)    plain text, for placeholders/toasts/confirm dialogs
+ * Each takes an English fallback so an untranslated key still renders real
+ * text rather than the key name.
+ */
+const i18 = (k, f) => (window.JuniperI18n ? window.JuniperI18n.t(k, f) : escapeHtml(f || k));
+const i18i = (k, f) => (window.JuniperI18n ? window.JuniperI18n.tInline(k, f) : escapeHtml(f || k));
+const i18t = (k, f) => (window.JuniperI18n ? window.JuniperI18n.tText(k, f) : (f || k));
+
+/** Order/report statuses come from the server as English strings; these map
+ *  them onto their translation keys so the tracker, dropdowns and chips all
+ *  read bilingually without changing the stored values. */
+const STATUS_KEYS = {
+  'New Request': 'statusNewRequest',
+  'Order Placed': 'statusOrderPlaced',
+  'PP Quality Inspection': 'statusPpQualityInspection',
+  'In Production': 'statusInProduction',
+  'Bulk Quality Inspection': 'statusBulkQualityInspection',
+  'Final Production': 'statusFinalProduction',
+  'In Transportation': 'statusInTransportation',
+  'Delivered': 'statusDelivered',
+  'Completed': 'statusCompleted',
+  'Pending': 'statusPending',
+  'In Progress': 'statusInProgress',
+  'Paid': 'statusPaid'
+};
+const tStatus = (s) => (STATUS_KEYS[s] ? i18(STATUS_KEYS[s], s) : escapeHtml(s || ''));
+const tStatusInline = (s) => (STATUS_KEYS[s] ? i18i(STATUS_KEYS[s], s) : escapeHtml(s || ''));
+const tStatusText = (s) => (STATUS_KEYS[s] ? i18t(STATUS_KEYS[s], s) : (s || ''));
+
 function showToast(msg, isError = false) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -46,9 +80,9 @@ function fmtDate(d) {
 let currentCategorySubTab = 'orders'; // 'orders' | 'components' | 'accessories', only used when currentView === 'category'
 
 const CATEGORY_META = {
-  clothing: { label: 'Apparel', color: '#B9540E' },
-  toys: { label: 'Toys', color: 'var(--jc-teal)' },
-  other: { label: 'Other', color: '#1F6FA5' }
+  clothing: { label: 'Apparel', key: 'catApparel', color: '#B9540E' },
+  toys: { label: 'Toys', key: 'catToys', color: 'var(--jc-teal)' },
+  other: { label: 'Other', key: 'catOther', color: '#1F6FA5' }
 };
 
 function refreshCurrentView() {
@@ -126,7 +160,7 @@ const homeTileState = {
 };
 
 async function renderHome(root) {
-  root.innerHTML = `<div class="om-empty">Loading...</div>`;
+  root.innerHTML = `<div class="om-empty">${i18('emptyLoading', 'Loading...')}</div>`;
   let counts = { toys: 0, clothing: 0, other: 0, suppliers: 0, settlementPending: 0, newRequests: 0 };
   let newRequests = [];
   try {
@@ -142,17 +176,17 @@ async function renderHome(root) {
       <div class="om-category-tile" data-tab="${productLine}">
         <div class="om-category-tile-header" style="border-color:${meta.color};">
           <span>${meta.label}</span>
-          <button class="btn btn-secondary om-view-all-btn" data-viewall="${productLine}">View all</button>
+          <button class="btn btn-secondary om-view-all-btn" data-viewall="${productLine}">${i18('btnViewAll', 'View all')}</button>
         </div>
         <div class="om-category-tile-subtabs">
-          <div class="om-subtab-btn ${st.subTab === 'orders' ? 'active' : ''}" data-subtab="orders">All Orders <span class="om-subtab-count">${counts[productLine] || 0}</span></div>
-          <div class="om-subtab-btn ${st.subTab === 'components' ? 'active' : ''}" data-subtab="components">Main Components <span class="om-subtab-count">${counts[productLine] || 0}</span></div>
+          <div class="om-subtab-btn ${st.subTab === 'orders' ? 'active' : ''}" data-subtab="orders">${i18i('tabAllOrders', 'All Orders')} <span class="om-subtab-count">${counts[productLine] || 0}</span></div>
+          <div class="om-subtab-btn ${st.subTab === 'components' ? 'active' : ''}" data-subtab="components">${i18i('tabMainComponents', 'Main Components')} <span class="om-subtab-count">${counts[productLine] || 0}</span></div>
           <div class="om-subtab-btn ${st.subTab === 'accessories' ? 'active' : ''}" data-subtab="accessories">Accessories <span class="om-subtab-count">${counts[productLine + 'Accessories'] || 0}</span></div>
         </div>
         <div class="om-tile-toolbar">
           <input type="text" class="om-tile-search" data-search-for="${productLine}" placeholder="Search PO number, supplier, SKU..." value="${escapeHtml(st.search)}" />
         </div>
-        <div class="om-tile-table-scroll" id="omTilePreview-${productLine}"><div class="om-empty">Loading...</div></div>
+        <div class="om-tile-table-scroll" id="omTilePreview-${productLine}"><div class="om-empty">${i18('emptyLoading', 'Loading...')}</div></div>
       </div>
     `;
   };
@@ -160,13 +194,13 @@ async function renderHome(root) {
   root.innerHTML = `
     <div class="om-category-tile" style="margin-bottom:24px;">
       <div class="om-category-tile-header" style="border-color:var(--jc-teal);">
-        <span>PO Requests</span>
+        <span>${i18('viewPoRequests', 'PO Requests')}</span>
         <span class="om-subtab-count" style="font-size:15px;">${counts.newRequests || 0}</span>
       </div>
       <div style="padding:14px 18px 20px 18px;" id="omPoRequestsHost">
         ${newRequests.length ? `
           <table class="om-table" style="min-width:0;">
-            <thead><tr><th>PO Number</th><th>Product line</th><th>Buyer</th><th>Supplier</th><th>Desired entry</th></tr></thead>
+            <thead><tr><th>${i18i('thPoNumber', 'PO Number')}</th><th>${i18i('thProductLine', 'Product line')}</th><th>${i18i('thBuyer', 'Buyer')}</th><th>${i18i('thSupplier', 'Supplier')}</th><th>${i18i('thDesiredEntry', 'Desired entry')}</th></tr></thead>
             <tbody>
               ${newRequests.slice(0, 10).map((o) => `
                 <tr data-id="${escapeHtml(o.id)}">
@@ -180,7 +214,7 @@ async function renderHome(root) {
             </tbody>
           </table>
           ${newRequests.length > 10 ? `<div class="section-help" style="margin-top:10px;">Showing 10 of ${newRequests.length} - the rest are in the category tiles below, filtered to New Request.</div>` : ''}
-        ` : '<div class="om-empty">No new PO requests right now.</div>'}
+        ` : `<div class="om-empty">${i18('emptyNoNewRequests', 'No new PO requests right now.')}</div>`}
       </div>
     </div>
 
@@ -244,14 +278,14 @@ function openCategoryFullScreen(productLine) {
       <button class="om-panel-close" id="omClosePanel">&times;</button>
     </div>
     <div class="om-subtabs-bar">
-      <button class="om-subtab ${st.subTab === 'orders' ? 'active' : ''}" data-subtab="orders">All Orders</button>
-      <button class="om-subtab ${st.subTab === 'components' ? 'active' : ''}" data-subtab="components">Main Components</button>
-      <button class="om-subtab ${st.subTab === 'accessories' ? 'active' : ''}" data-subtab="accessories">Accessories</button>
+      <button class="om-subtab ${st.subTab === 'orders' ? 'active' : ''}" data-subtab="orders">${i18i('tabAllOrders', 'All Orders')}</button>
+      <button class="om-subtab ${st.subTab === 'components' ? 'active' : ''}" data-subtab="components">${i18i('tabMainComponents', 'Main Components')}</button>
+      <button class="om-subtab ${st.subTab === 'accessories' ? 'active' : ''}" data-subtab="accessories">${i18i('tabAccessories', 'Accessories')}</button>
     </div>
     <div class="om-toolbar">
       <input class="om-search" id="omFullSearch" type="text" placeholder="Search PO number, supplier, SKU..." value="${escapeHtml(st.search)}" />
     </div>
-    <div class="om-table-wrap"><div id="omFullTableHost"><div class="om-empty">Loading...</div></div></div>
+    <div class="om-table-wrap"><div id="omFullTableHost"><div class="om-empty">${i18('emptyLoading', 'Loading...')}</div></div></div>
    </div>
   `;
   mountPanel(panel);
@@ -289,16 +323,16 @@ async function renderSuppliersShell(root) {
   root.innerHTML = `
     ${backToHubHtml()}
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-      <h2 class="om-view-title" style="margin:0;">Suppliers</h2>
-      <button class="btn btn-primary" id="omNewSupplierBtn" style="flex:none;width:auto;padding:10px 18px;">+ New supplier</button>
+      <h2 class="om-view-title" style="margin:0;">${i18('viewSuppliers', 'Suppliers')}</h2>
+      <button class="btn btn-primary" id="omNewSupplierBtn" style="flex:none;width:auto;padding:10px 18px;">${i18('btnNewSupplier', '+ New supplier')}</button>
     </div>
-    <div id="omSuppliersHost" class="om-table-wrap"><div class="om-empty">Loading...</div></div>
+    <div id="omSuppliersHost" class="om-table-wrap"><div class="om-empty">${i18('emptyLoading', 'Loading...')}</div></div>
 
     <div style="display:flex;justify-content:space-between;align-items:center;margin:32px 0 14px 0;">
-      <h2 class="om-view-title" style="margin:0;">Warehouses</h2>
-      <button class="btn btn-primary" id="omNewWarehouseBtn" style="flex:none;width:auto;padding:10px 18px;">+ New warehouse</button>
+      <h2 class="om-view-title" style="margin:0;">${i18('viewWarehouses', 'Warehouses')}</h2>
+      <button class="btn btn-primary" id="omNewWarehouseBtn" style="flex:none;width:auto;padding:10px 18px;">${i18('btnNewWarehouse', '+ New warehouse')}</button>
     </div>
-    <div id="omWarehousesHost" class="om-table-wrap"><div class="om-empty">Loading...</div></div>
+    <div id="omWarehousesHost" class="om-table-wrap"><div class="om-empty">${i18('emptyLoading', 'Loading...')}</div></div>
   `;
   bindBackToHub();
   document.getElementById('omNewSupplierBtn').addEventListener('click', () => openSupplierForm(null));
@@ -317,12 +351,12 @@ function renderWarehousesTable(warehouses) {
   const host = document.getElementById('omWarehousesHost');
   if (!host) return;
   if (!warehouses.length) {
-    host.innerHTML = `<div class="om-empty">No warehouses recorded yet. Click "New warehouse" to add your first one.</div>`;
+    host.innerHTML = `<div class="om-empty">${i18('emptyNoWarehouses', 'No warehouses recorded yet.')}</div>`;
     return;
   }
   host.innerHTML = `
     <table class="om-table">
-      <thead><tr><th>Warehouse name</th><th>Address</th><th>Contact name</th><th>Phone number</th></tr></thead>
+      <thead><tr><th>${i18i('thWarehouseName', 'Warehouse name')}</th><th>${i18i('thAddress', 'Address')}</th><th>${i18i('thContactName', 'Contact name')}</th><th>${i18i('thPhoneNumber', 'Phone number')}</th></tr></thead>
       <tbody>
         ${warehouses.map((w) => `
           <tr data-id="${escapeHtml(w.id)}">
@@ -351,21 +385,21 @@ function openWarehouseForm(warehouse) {
   panel.innerHTML = `
    <div class="om-panel-inner">
     <div class="om-panel-header">
-      <div style="font-size:19px;font-weight:700;">${warehouse ? 'Edit warehouse' : 'New warehouse'}</div>
+      <div style="font-size:19px;font-weight:700;">${warehouse ? i18('titleEditWarehouse', 'Edit warehouse') : i18('titleNewWarehouse', 'New warehouse')}</div>
       <button class="om-panel-close" id="whClose">&times;</button>
     </div>
     <div class="om-field-grid">
-      <div><label>Warehouse name *</label><input id="whName" type="text" value="${val(warehouse && warehouse.name)}" /></div>
-      <div><label>Contact name</label><input id="whContactName" type="text" value="${val(warehouse && warehouse.contactName)}" /></div>
-      <div><label>Phone number</label><input id="whPhoneNumber" type="text" value="${val(warehouse && warehouse.phoneNumber)}" /></div>
+      <div><label>${i18('fldWarehouseNameReq', 'Warehouse name *')}</label><input id="whName" type="text" value="${val(warehouse && warehouse.name)}" /></div>
+      <div><label>${i18('fldContactName', 'Contact name')}</label><input id="whContactName" type="text" value="${val(warehouse && warehouse.contactName)}" /></div>
+      <div><label>${i18('fldPhoneNumber', 'Phone number')}</label><input id="whPhoneNumber" type="text" value="${val(warehouse && warehouse.phoneNumber)}" /></div>
     </div>
     <div class="om-field-grid" style="margin-top:10px;">
-      <div style="grid-column:1/-1;"><label>Address</label><input id="whAddress" type="text" value="${val(warehouse && warehouse.address)}" /></div>
-      <div style="grid-column:1/-1;"><label>Notes</label><input id="whNotes" type="text" value="${val(warehouse && warehouse.notes)}" /></div>
+      <div style="grid-column:1/-1;"><label>${i18('fldAddress', 'Address')}</label><input id="whAddress" type="text" value="${val(warehouse && warehouse.address)}" /></div>
+      <div style="grid-column:1/-1;"><label>${i18('fldNotes', 'Notes')}</label><input id="whNotes" type="text" value="${val(warehouse && warehouse.notes)}" /></div>
     </div>
     <div style="margin-top:22px;display:flex;gap:10px;flex-wrap:wrap;">
-      <button class="btn btn-secondary" id="whCancel" style="flex:none;width:auto;padding:10px 18px;">Cancel</button>
-      ${warehouse ? `<button class="btn btn-secondary" id="whDelete" style="flex:none;width:auto;padding:10px 18px;color:var(--jc-fail);">Delete</button>` : ''}
+      <button class="btn btn-secondary" id="whCancel" style="flex:none;width:auto;padding:10px 18px;">${i18('btnCancel', 'Cancel')}</button>
+      ${warehouse ? `<button class="btn btn-secondary" id="whDelete" style="flex:none;width:auto;padding:10px 18px;color:var(--jc-fail);">${i18('btnDelete', 'Delete')}</button>` : ''}
       <button class="btn btn-primary" id="whSave" style="flex:none;width:auto;padding:10px 18px;">${warehouse ? 'Save changes' : 'Create warehouse'}</button>
     </div>
    </div>
@@ -377,10 +411,10 @@ function openWarehouseForm(warehouse) {
 
   if (warehouse) {
     document.getElementById('whDelete').addEventListener('click', async () => {
-      if (!confirm(`Delete "${warehouse.name}"? This can't be undone.`)) return;
+      if (!confirm(i18t('confirmDeleteNamed', 'Delete "{name}"? This can\'t be undone.').split('{name}').join(warehouse.name))) return;
       try {
         await api(`/api/warehouses/${encodeURIComponent(warehouse.id)}`, { method: 'DELETE' });
-        showToast('Warehouse deleted');
+        showToast(i18t('toastWarehouseDeleted', 'Warehouse deleted'));
         closePanel();
         refreshCurrentView();
       } catch (e) { showToast(e.message, true); }
@@ -400,10 +434,10 @@ function openWarehouseForm(warehouse) {
     try {
       if (warehouse) {
         await api(`/api/warehouses/${encodeURIComponent(warehouse.id)}`, { method: 'PATCH', body: JSON.stringify(payload) });
-        showToast('Warehouse updated');
+        showToast(i18t('toastWarehouseUpdated', 'Warehouse updated'));
       } else {
         await api('/api/warehouses', { method: 'POST', body: JSON.stringify(payload) });
-        showToast('Warehouse created');
+        showToast(i18t('toastWarehouseCreated', 'Warehouse created'));
       }
       closePanel();
       refreshCurrentView();
@@ -415,15 +449,15 @@ function renderSuppliersTable(suppliers) {
   const host = document.getElementById('omSuppliersHost');
   if (!host) return;
   if (!suppliers.length) {
-    host.innerHTML = `<div class="om-empty">No suppliers recorded yet. Click "New supplier" to add your first one.</div>`;
+    host.innerHTML = `<div class="om-empty">${i18('emptyNoSuppliers', 'No suppliers recorded yet.')}</div>`;
     return;
   }
   host.innerHTML = `
     <table class="om-table">
       <thead>
         <tr>
-          <th>Supplier name</th><th>Shipping address</th><th>Additional address</th><th>Vendor code</th><th>Product type</th>
-          <th>Company name</th><th>Contact name</th><th>Phone number</th><th>Additional phone</th><th>Business license</th>
+          <th>${i18i('thSupplierName', 'Supplier name')}</th><th>${i18i('thShippingAddress', 'Shipping address')}</th><th>${i18i('thAdditionalAddress', 'Additional address')}</th><th>${i18i('thVendorCode', 'Vendor code')}</th><th>${i18i('thProductType', 'Product type')}</th>
+          <th>${i18i('thCompanyName', 'Company name')}</th><th>${i18i('thContactName', 'Contact name')}</th><th>${i18i('thPhoneNumber', 'Phone number')}</th><th>${i18i('thAdditionalPhone', 'Additional phone')}</th><th>${i18i('thBusinessLicense', 'Business license')}</th>
         </tr>
       </thead>
       <tbody>
@@ -460,19 +494,19 @@ function openSupplierForm(supplier) {
   panel.innerHTML = `
    <div class="om-panel-inner">
     <div class="om-panel-header">
-      <div style="font-size:19px;font-weight:700;">${supplier ? 'Edit supplier' : 'New supplier'}</div>
+      <div style="font-size:19px;font-weight:700;">${supplier ? i18('titleEditSupplier', 'Edit supplier') : i18('titleNewSupplier', 'New supplier')}</div>
       <button class="om-panel-close" id="omSupplierClose">&times;</button>
     </div>
     <div class="om-field-grid">
-      <div><label>Supplier name *</label><input id="spName" type="text" value="${val(supplier && supplier.name)}" /></div>
-      <div><label>Company name</label><input id="spCompanyName" type="text" value="${val(supplier && supplier.companyName)}" /></div>
-      <div><label>Vendor code</label><input id="spVendorCode" type="text" value="${val(supplier && supplier.vendorCode)}" /></div>
-      <div><label>Product type</label><input id="spProductType" type="text" placeholder="e.g. Apparel, Bag, Carabiner" value="${val(supplier && supplier.productType)}" /></div>
-      <div><label>Contact name</label><input id="spContactName" type="text" value="${val(supplier && supplier.contactName)}" /></div>
-      <div><label>Phone number</label><input id="spPhoneNumber" type="text" value="${val(supplier && supplier.phoneNumber)}" /></div>
-      <div><label>Additional phone number</label><input id="spAdditionalPhoneNumber" type="text" value="${val(supplier && supplier.additionalPhoneNumber)}" /></div>
-      <div><label>WeChat</label><input id="spWechat" type="text" value="${val(supplier && supplier.wechat)}" /></div>
-      <div><label>Currency</label>
+      <div><label>${i18('fldSupplierNameReq', 'Supplier name *')}</label><input id="spName" type="text" value="${val(supplier && supplier.name)}" /></div>
+      <div><label>${i18('fldCompanyNameLc', 'Company name')}</label><input id="spCompanyName" type="text" value="${val(supplier && supplier.companyName)}" /></div>
+      <div><label>${i18('fldVendorCode', 'Vendor code')}</label><input id="spVendorCode" type="text" value="${val(supplier && supplier.vendorCode)}" /></div>
+      <div><label>${i18('fldProductType', 'Product type')}</label><input id="spProductType" type="text" placeholder="e.g. Apparel, Bag, Carabiner" value="${val(supplier && supplier.productType)}" /></div>
+      <div><label>${i18('fldContactName', 'Contact name')}</label><input id="spContactName" type="text" value="${val(supplier && supplier.contactName)}" /></div>
+      <div><label>${i18('fldPhoneNumber', 'Phone number')}</label><input id="spPhoneNumber" type="text" value="${val(supplier && supplier.phoneNumber)}" /></div>
+      <div><label>${i18('fldAdditionalPhoneNumber', 'Additional phone number')}</label><input id="spAdditionalPhoneNumber" type="text" value="${val(supplier && supplier.additionalPhoneNumber)}" /></div>
+      <div><label>${i18('fldWeChat', 'WeChat')}</label><input id="spWechat" type="text" value="${val(supplier && supplier.wechat)}" /></div>
+      <div><label>${i18('fldCurrency', 'Currency')}</label>
         <select id="spCurrency">
           <option value="RMB" ${!supplier || supplier.currency === 'RMB' ? 'selected' : ''}>RMB</option>
           <option value="USD" ${supplier && supplier.currency === 'USD' ? 'selected' : ''}>Dollar (USD)</option>
@@ -480,15 +514,15 @@ function openSupplierForm(supplier) {
       </div>
     </div>
     <div class="om-field-grid" style="margin-top:10px;">
-      <div style="grid-column:1/-1;"><label>Mailing address</label><input id="spMailingAddress" type="text" value="${val(supplier && supplier.mailingAddress)}" /></div>
-      <div style="grid-column:1/-1;"><label>Shipping address</label><input id="spShippingAddress" type="text" value="${val(supplier && supplier.shippingAddress)}" /></div>
-      <div style="grid-column:1/-1;"><label>Additional address</label><input id="spAdditionalAddress" type="text" value="${val(supplier && supplier.additionalAddress)}" /></div>
-      <div style="grid-column:1/-1;"><label>Business license</label><input id="spBusinessLicense" type="text" value="${val(supplier && supplier.businessLicense)}" /></div>
-      <div style="grid-column:1/-1;"><label>Notes</label><input id="spNotes" type="text" value="${val(supplier && supplier.notes)}" /></div>
+      <div style="grid-column:1/-1;"><label>${i18('fldMailingAddress', 'Mailing address')}</label><input id="spMailingAddress" type="text" value="${val(supplier && supplier.mailingAddress)}" /></div>
+      <div style="grid-column:1/-1;"><label>${i18('fldShippingAddress', 'Shipping address')}</label><input id="spShippingAddress" type="text" value="${val(supplier && supplier.shippingAddress)}" /></div>
+      <div style="grid-column:1/-1;"><label>${i18('fldAdditionalAddress', 'Additional address')}</label><input id="spAdditionalAddress" type="text" value="${val(supplier && supplier.additionalAddress)}" /></div>
+      <div style="grid-column:1/-1;"><label>${i18('fldBusinessLicense', 'Business license')}</label><input id="spBusinessLicense" type="text" value="${val(supplier && supplier.businessLicense)}" /></div>
+      <div style="grid-column:1/-1;"><label>${i18('fldNotes', 'Notes')}</label><input id="spNotes" type="text" value="${val(supplier && supplier.notes)}" /></div>
     </div>
     <div style="margin-top:22px;display:flex;gap:10px;flex-wrap:wrap;">
-      <button class="btn btn-secondary" id="spCancel" style="flex:none;width:auto;padding:10px 18px;">Cancel</button>
-      ${supplier ? `<button class="btn btn-secondary" id="spDelete" style="flex:none;width:auto;padding:10px 18px;color:var(--jc-fail);">Delete</button>` : ''}
+      <button class="btn btn-secondary" id="spCancel" style="flex:none;width:auto;padding:10px 18px;">${i18('btnCancel', 'Cancel')}</button>
+      ${supplier ? `<button class="btn btn-secondary" id="spDelete" style="flex:none;width:auto;padding:10px 18px;color:var(--jc-fail);">${i18('btnDelete', 'Delete')}</button>` : ''}
       <button class="btn btn-primary" id="spSave" style="flex:none;width:auto;padding:10px 18px;">${supplier ? 'Save changes' : 'Create supplier'}</button>
     </div>
    </div>
@@ -500,10 +534,10 @@ function openSupplierForm(supplier) {
 
   if (supplier) {
     document.getElementById('spDelete').addEventListener('click', async () => {
-      if (!confirm(`Delete "${supplier.name}"? This can't be undone.`)) return;
+      if (!confirm(i18t('confirmDeleteNamed', 'Delete "{name}"? This can\'t be undone.').split('{name}').join(supplier.name))) return;
       try {
         await api(`/api/suppliers/${encodeURIComponent(supplier.id)}`, { method: 'DELETE' });
-        showToast('Supplier deleted');
+        showToast(i18t('toastSupplierDeleted', 'Supplier deleted'));
         closePanel();
         refreshCurrentView();
       } catch (e) { showToast(e.message, true); }
@@ -532,10 +566,10 @@ function openSupplierForm(supplier) {
     try {
       if (supplier) {
         await api(`/api/suppliers/${encodeURIComponent(supplier.id)}`, { method: 'PATCH', body: JSON.stringify(payload) });
-        showToast('Supplier updated');
+        showToast(i18t('toastSupplierUpdated', 'Supplier updated'));
       } else {
         await api('/api/suppliers', { method: 'POST', body: JSON.stringify(payload) });
-        showToast('Supplier created');
+        showToast(i18t('toastSupplierCreated', 'Supplier created'));
       }
       closePanel();
       refreshCurrentView();
@@ -552,15 +586,15 @@ async function renderProductsShell(root) {
   root.innerHTML = `
     ${backToHubHtml()}
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-      <h2 class="om-view-title" style="margin:0;">Products</h2>
-      <button class="btn btn-primary" id="omNewProductBtn" style="flex:none;width:auto;padding:10px 18px;">+ Add product</button>
+      <h2 class="om-view-title" style="margin:0;">${i18('viewProducts', 'Products')}</h2>
+      <button class="btn btn-primary" id="omNewProductBtn" style="flex:none;width:auto;padding:10px 18px;">${i18('btnAddProduct', '+ Add product')}</button>
     </div>
     <div id="omProductsHost"></div>
   `;
   bindBackToHub();
   document.getElementById('omNewProductBtn').addEventListener('click', () => openProductForm(null));
   const host = document.getElementById('omProductsHost');
-  host.innerHTML = `<div class="om-empty">Loading...</div>`;
+  host.innerHTML = `<div class="om-empty">${i18('emptyLoading', 'Loading...')}</div>`;
   try {
     // A real directory now (like Suppliers) - every product that's ever
     // been on a PO already has a record here (auto-synced server-side),
@@ -581,11 +615,11 @@ function productsCategoryBlock(productLine, products) {
   const meta = CATEGORY_META[productLine];
   return `
     <div class="om-category-tile" style="margin-bottom:20px;">
-      <div class="om-category-tile-header" style="border-color:${meta.color};"><span>${meta.label} Products (${products.length})</span></div>
+      <div class="om-category-tile-header" style="border-color:${meta.color};"><span>${ti(meta.key, meta.label)} ${i18i('labelProducts', 'Products')} (${products.length})</span></div>
       ${products.length ? `
         <div class="om-table-wrap">
           <table class="om-table">
-            <thead><tr><th>Name</th><th>SKU</th><th>Unit price</th><th>Supplier</th><th># POs</th></tr></thead>
+            <thead><tr><th>${i18i('thName', 'Name')}</th><th>${i18i('thSku', 'SKU')}</th><th>${i18i('thUnitPrice', 'Unit price')}</th><th>${i18i('thSupplier', 'Supplier')}</th><th>${i18i('thNumPos', '# POs')}</th></tr></thead>
             <tbody>
               ${products.map((p) => `
                 <tr data-id="${escapeHtml(p.id)}">
@@ -599,7 +633,7 @@ function productsCategoryBlock(productLine, products) {
             </tbody>
           </table>
         </div>
-      ` : `<div class="om-empty">No ${meta.label.toLowerCase()} products recorded yet.</div>`}
+      ` : `<div class="om-empty">${i18('emptyNoProductsCat', 'No products recorded yet in this category.')}</div>`}
     </div>
   `;
 }
@@ -631,13 +665,13 @@ async function openProductProfile(id) {
         <div style="color:var(--jc-muted);font-size:13px;">SKU: ${escapeHtml(product.sku || '—')}</div>
       </div>
       <div style="display:flex;gap:10px;align-items:center;">
-        <button class="btn btn-secondary" id="omEditProductBtn" style="flex:none;width:auto;padding:7px 14px;font-size:13px;">Edit</button>
+        <button class="btn btn-secondary" id="omEditProductBtn" style="flex:none;width:auto;padding:7px 14px;font-size:13px;">${i18('btnEdit', 'Edit')}</button>
         <button class="om-panel-close" id="omClosePanel">&times;</button>
       </div>
     </div>
 
     <div class="om-panel-card">
-    <div class="om-section-title">Product details</div>
+    <div class="om-section-title">${i18('secProductDetails', 'Product details')}</div>
     <div class="om-detail-grid">
       <div class="om-detail-row"><span class="om-label">Name</span><span class="om-value">${escapeHtml(product.name || '—')}</span></div>
       <div class="om-detail-row"><span class="om-label">SKU</span><span class="om-value">${escapeHtml(product.sku || '—')}</span></div>
@@ -655,7 +689,7 @@ async function openProductProfile(id) {
     </div>
 
     <div class="om-panel-card">
-    <div class="om-section-title">Supplier</div>
+    <div class="om-section-title">${i18('secSupplier', 'Supplier')}</div>
     <div class="om-detail-grid">
       <div class="om-detail-row"><span class="om-label">Name</span><span class="om-value">${escapeHtml(product.supplierName || '—')}</span></div>
       <div class="om-detail-row"><span class="om-label">Code</span><span class="om-value">${escapeHtml(product.supplierCode || '—')}</span></div>
@@ -664,11 +698,11 @@ async function openProductProfile(id) {
     </div>
 
     <div class="om-panel-card">
-    <div class="om-section-title">Historical POs</div>
+    <div class="om-section-title">${i18('secHistoricalPos', 'Historical POs')}</div>
     ${history.length ? `
       <div class="om-table-wrap">
         <table class="om-table" style="min-width:0;">
-          <thead><tr><th>PO Number</th><th>Order date</th><th>Quantity</th></tr></thead>
+          <thead><tr><th>${i18i('thPoNumber', 'PO Number')}</th><th>${i18i('thOrderDate', 'Order date')}</th><th>${i18i('thQuantity', 'Quantity')}</th></tr></thead>
           <tbody>
             ${history.map((o) => `
               <tr data-order-id="${escapeHtml(o.id)}">
@@ -680,7 +714,7 @@ async function openProductProfile(id) {
           </tbody>
         </table>
       </div>
-    ` : `<div class="om-empty">No POs recorded yet for this product.</div>`}
+    ` : `<div class="om-empty">${i18('emptyNoPosProduct', 'No POs recorded yet for this product.')}</div>`}
     </div>
    </div>
   `;
@@ -711,39 +745,39 @@ function openProductForm(product) {
       <button class="om-panel-close" id="prodClose">&times;</button>
     </div>
     <div class="om-field-grid">
-      <div><label>Name *</label><input id="prodName" type="text" value="${val(product && product.name)}" /></div>
-      <div><label>SKU</label><input id="prodSku" type="text" value="${val(product && product.sku)}" /></div>
-      <div><label>Model number</label><input id="prodModelNumber" type="text" value="${val(product && product.modelNumber)}" /></div>
-      <div><label>Product Category</label>
+      <div><label>${i18('fldNameReq', 'Name *')}</label><input id="prodName" type="text" value="${val(product && product.name)}" /></div>
+      <div><label>${i18('fldSkuLc', 'SKU')}</label><input id="prodSku" type="text" value="${val(product && product.sku)}" /></div>
+      <div><label>${i18('fldModelNumber', 'Model number')}</label><input id="prodModelNumber" type="text" value="${val(product && product.modelNumber)}" /></div>
+      <div><label>${i18('fldProductCategoryLc', 'Product Category')}</label>
         <select id="prodProductLine">
           <option value="clothing" ${!product || product.productLine === 'clothing' ? 'selected' : ''}>Apparel</option>
           <option value="toys" ${product && product.productLine === 'toys' ? 'selected' : ''}>Toys</option>
           <option value="other" ${product && product.productLine === 'other' ? 'selected' : ''}>Other</option>
         </select>
       </div>
-      <div><label>Unit Price (¥)</label><div class="om-money-wrap"><input id="prodFactoryPrice" type="number" step="0.01" value="${val(product && product.factoryPrice)}" /></div></div>
-      <div><label>Sales unit price (¥)</label><div class="om-money-wrap"><input id="prodSalesUnitPrice" type="number" step="0.01" value="${val(product && product.salesUnitPrice)}" /></div></div>
-      <div><label>Dimensions</label><input id="prodDimensions" type="text" placeholder="e.g. 30 x 20 x 5 cm" value="${val(product && product.dimensions)}" /></div>
-      <div><label>Weight</label><input id="prodWeight" type="text" placeholder="e.g. 450g" value="${val(product && product.weight)}" /></div>
+      <div><label>${i18('fldUnitPrice', 'Unit Price')} (¥)</label><div class="om-money-wrap"><input id="prodFactoryPrice" type="number" step="0.01" value="${val(product && product.factoryPrice)}" /></div></div>
+      <div><label>${i18('fldSalesUnitPrice', 'Sales unit price')} (¥)</label><div class="om-money-wrap"><input id="prodSalesUnitPrice" type="number" step="0.01" value="${val(product && product.salesUnitPrice)}" /></div></div>
+      <div><label>${i18('fldDimensions', 'Dimensions')}</label><input id="prodDimensions" type="text" placeholder="e.g. 30 x 20 x 5 cm" value="${val(product && product.dimensions)}" /></div>
+      <div><label>${i18('fldWeight', 'Weight')}</label><input id="prodWeight" type="text" placeholder="e.g. 450g" value="${val(product && product.weight)}" /></div>
     </div>
     <div id="prodApparelFields" class="om-field-grid" style="margin-top:10px;${isApparel ? '' : 'display:none;'}">
-      <div><label>Fabric code</label><input id="prodFabricCode" type="text" value="${val(product && product.fabricCode)}" /></div>
-      <div><label>Fabric type</label><input id="prodFabricType" type="text" value="${val(product && product.fabricType)}" /></div>
-      <div style="grid-column:1/-1;"><label>Washing tag</label><input id="prodWashingTag" type="text" value="${val(product && product.washingTag)}" /></div>
+      <div><label>${i18('fldFabricCodeLc', 'Fabric code')}</label><input id="prodFabricCode" type="text" value="${val(product && product.fabricCode)}" /></div>
+      <div><label>${i18('fldFabricTypeLc', 'Fabric type')}</label><input id="prodFabricType" type="text" value="${val(product && product.fabricType)}" /></div>
+      <div style="grid-column:1/-1;"><label>${i18('fldWashingTagLc', 'Washing tag')}</label><input id="prodWashingTag" type="text" value="${val(product && product.washingTag)}" /></div>
     </div>
     <div class="om-section-title" style="margin-top:20px;">Supplier</div>
     <div class="om-field-grid">
-      <div><label>Supplier name</label><input id="prodSupplierName" type="text" list="dlProdSupplierNames" value="${val(product && product.supplierName)}" /></div>
-      <div><label>Supplier code</label><input id="prodSupplierCode" type="text" value="${val(product && product.supplierCode)}" /></div>
-      <div><label>Supplier contact</label><input id="prodSupplierContact" type="text" value="${val(product && product.supplierContact)}" /></div>
+      <div><label>${i18('fldSupplierNameLc', 'Supplier name')}</label><input id="prodSupplierName" type="text" list="dlProdSupplierNames" value="${val(product && product.supplierName)}" /></div>
+      <div><label>${i18('fldSupplierCodeLc', 'Supplier code')}</label><input id="prodSupplierCode" type="text" value="${val(product && product.supplierCode)}" /></div>
+      <div><label>${i18('fldSupplierContactLc', 'Supplier contact')}</label><input id="prodSupplierContact" type="text" value="${val(product && product.supplierContact)}" /></div>
     </div>
     <datalist id="dlProdSupplierNames"></datalist>
     <div class="om-field-grid" style="margin-top:10px;">
-      <div style="grid-column:1/-1;"><label>Notes</label><input id="prodNotes" type="text" value="${val(product && product.notes)}" /></div>
+      <div style="grid-column:1/-1;"><label>${i18('fldNotes', 'Notes')}</label><input id="prodNotes" type="text" value="${val(product && product.notes)}" /></div>
     </div>
     <div style="margin-top:22px;display:flex;gap:10px;flex-wrap:wrap;">
-      <button class="btn btn-secondary" id="prodCancel" style="flex:none;width:auto;padding:10px 18px;">Cancel</button>
-      ${product ? `<button class="btn btn-secondary" id="prodDelete" style="flex:none;width:auto;padding:10px 18px;color:var(--jc-fail);">Delete</button>` : ''}
+      <button class="btn btn-secondary" id="prodCancel" style="flex:none;width:auto;padding:10px 18px;">${i18('btnCancel', 'Cancel')}</button>
+      ${product ? `<button class="btn btn-secondary" id="prodDelete" style="flex:none;width:auto;padding:10px 18px;color:var(--jc-fail);">${i18('btnDelete', 'Delete')}</button>` : ''}
       <button class="btn btn-primary" id="prodSave" style="flex:none;width:auto;padding:10px 18px;">${product ? 'Save changes' : 'Create product'}</button>
     </div>
    </div>
@@ -764,10 +798,10 @@ function openProductForm(product) {
 
   if (product) {
     document.getElementById('prodDelete').addEventListener('click', async () => {
-      if (!confirm(`Delete "${product.name}"? This can't be undone.`)) return;
+      if (!confirm(i18t('confirmDeleteNamed', 'Delete "{name}"? This can\'t be undone.').split('{name}').join(product.name))) return;
       try {
         await api(`/api/catalog/products/${encodeURIComponent(product.id)}`, { method: 'DELETE' });
-        showToast('Product deleted');
+        showToast(i18t('toastProductDeleted', 'Product deleted'));
         closePanel();
         refreshCurrentView();
       } catch (e) { showToast(e.message, true); }
@@ -797,10 +831,10 @@ function openProductForm(product) {
     try {
       if (product) {
         await api(`/api/catalog/products/${encodeURIComponent(product.id)}`, { method: 'PATCH', body: JSON.stringify(payload) });
-        showToast('Product updated');
+        showToast(i18t('toastProductUpdated', 'Product updated'));
       } else {
         await api('/api/catalog/products', { method: 'POST', body: JSON.stringify(payload) });
-        showToast('Product created');
+        showToast(i18t('toastProductCreated', 'Product created'));
       }
       closePanel();
       refreshCurrentView();
@@ -812,15 +846,15 @@ async function renderComponentsShell(root) {
   root.innerHTML = `
     ${backToHubHtml()}
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-      <h2 class="om-view-title" style="margin:0;">Components</h2>
-      <button class="btn btn-primary" id="omNewComponentBtn" style="flex:none;width:auto;padding:10px 18px;">+ Add component</button>
+      <h2 class="om-view-title" style="margin:0;">${i18('viewComponents', 'Components')}</h2>
+      <button class="btn btn-primary" id="omNewComponentBtn" style="flex:none;width:auto;padding:10px 18px;">${i18('btnAddComponent', '+ Add component')}</button>
     </div>
     <div id="omComponentsHost"></div>
   `;
   bindBackToHub();
   document.getElementById('omNewComponentBtn').addEventListener('click', () => openComponentForm(null));
   const host = document.getElementById('omComponentsHost');
-  host.innerHTML = `<div class="om-empty">Loading...</div>`;
+  host.innerHTML = `<div class="om-empty">${i18('emptyLoading', 'Loading...')}</div>`;
   try {
     const data = await api('/api/catalog/components');
     const components = data.components || [];
@@ -837,11 +871,11 @@ function componentsCategoryBlock(productLine, components) {
   const meta = CATEGORY_META[productLine];
   return `
     <div class="om-category-tile" style="margin-bottom:20px;">
-      <div class="om-category-tile-header" style="border-color:${meta.color};"><span>${meta.label} Components (${components.length})</span></div>
+      <div class="om-category-tile-header" style="border-color:${meta.color};"><span>${ti(meta.key, meta.label)} ${i18i('labelComponents', 'Components')} (${components.length})</span></div>
       ${components.length ? `
         <div class="om-table-wrap">
           <table class="om-table">
-            <thead><tr><th>Part name</th><th>Material</th><th>Supplier</th><th>Unit price</th><th># uses</th></tr></thead>
+            <thead><tr><th>${i18i('thPartName', 'Part name')}</th><th>${i18i('thMaterial', 'Material')}</th><th>${i18i('thSupplier', 'Supplier')}</th><th>${i18i('thUnitPrice', 'Unit price')}</th><th>${i18i('thNumUses', '# uses')}</th></tr></thead>
             <tbody>
               ${components.map((c) => `
                 <tr data-id="${escapeHtml(c.id)}">
@@ -855,7 +889,7 @@ function componentsCategoryBlock(productLine, components) {
             </tbody>
           </table>
         </div>
-      ` : `<div class="om-empty">No ${meta.label.toLowerCase()} components recorded yet.</div>`}
+      ` : `<div class="om-empty">${i18('emptyNoComponentsCat', 'No components recorded yet in this category.')}</div>`}
     </div>
   `;
 }
@@ -885,13 +919,13 @@ async function openComponentProfile(id) {
         <div style="color:var(--jc-muted);font-size:13px;">${escapeHtml(meta.label || component.productLine || '')}</div>
       </div>
       <div style="display:flex;gap:10px;align-items:center;">
-        <button class="btn btn-secondary" id="omEditComponentBtn" style="flex:none;width:auto;padding:7px 14px;font-size:13px;">Edit</button>
+        <button class="btn btn-secondary" id="omEditComponentBtn" style="flex:none;width:auto;padding:7px 14px;font-size:13px;">${i18('btnEdit', 'Edit')}</button>
         <button class="om-panel-close" id="omClosePanel">&times;</button>
       </div>
     </div>
 
     <div class="om-panel-card">
-    <div class="om-section-title">Component details</div>
+    <div class="om-section-title">${i18('secComponentDetails', 'Component details')}</div>
     <div class="om-detail-grid">
       <div class="om-detail-row"><span class="om-label">Part name</span><span class="om-value">${escapeHtml(component.partName || '—')}</span></div>
       <div class="om-detail-row"><span class="om-label">Material</span><span class="om-value">${escapeHtml(component.material || '—')}</span></div>
@@ -901,18 +935,18 @@ async function openComponentProfile(id) {
     </div>
 
     <div class="om-panel-card">
-    <div class="om-section-title">Supplier</div>
+    <div class="om-section-title">${i18('secSupplier', 'Supplier')}</div>
     <div class="om-detail-grid">
       <div class="om-detail-row"><span class="om-label">Name</span><span class="om-value">${escapeHtml(component.supplierName || '—')}</span></div>
     </div>
     </div>
 
     <div class="om-panel-card">
-    <div class="om-section-title">Historical POs</div>
+    <div class="om-section-title">${i18('secHistoricalPos', 'Historical POs')}</div>
     ${history.length ? `
       <div class="om-table-wrap">
         <table class="om-table" style="min-width:0;">
-          <thead><tr><th>PO Number</th><th>Order date</th></tr></thead>
+          <thead><tr><th>${i18i('thPoNumber', 'PO Number')}</th><th>${i18i('thOrderDate', 'Order date')}</th></tr></thead>
           <tbody>
             ${history.map((o) => `
               <tr data-order-id="${escapeHtml(o.id)}">
@@ -923,7 +957,7 @@ async function openComponentProfile(id) {
           </tbody>
         </table>
       </div>
-    ` : `<div class="om-empty">No POs recorded yet for this component.</div>`}
+    ` : `<div class="om-empty">${i18('emptyNoPosComponent', 'No POs recorded yet for this component.')}</div>`}
     </div>
    </div>
   `;
@@ -953,11 +987,11 @@ function openComponentForm(component) {
       <button class="om-panel-close" id="compClose">&times;</button>
     </div>
     <div class="om-field-grid">
-      <div><label>Part name *</label><input id="compPartName" type="text" value="${val(component && component.partName)}" /></div>
-      <div><label>Material</label><input id="compMaterial" type="text" value="${val(component && component.material)}" /></div>
-      <div><label>Supplier</label><input id="compSupplierName" type="text" list="dlSupplierNames" value="${val(component && component.supplierName)}" /></div>
-      <div><label>Unit price (¥)</label><div class="om-money-wrap"><input id="compUnitPrice" type="number" step="0.01" value="${val(component && component.unitPrice)}" /></div></div>
-      <div><label>Product line</label>
+      <div><label>${i18('fldPartNameReq', 'Part name *')}</label><input id="compPartName" type="text" value="${val(component && component.partName)}" /></div>
+      <div><label>${i18('fldMaterialLc', 'Material')}</label><input id="compMaterial" type="text" value="${val(component && component.material)}" /></div>
+      <div><label>${i18('fldSupplierLc', 'Supplier')}</label><input id="compSupplierName" type="text" list="dlSupplierNames" value="${val(component && component.supplierName)}" /></div>
+      <div><label>${i18('fldUnitPriceLc', 'Unit price')} (¥)</label><div class="om-money-wrap"><input id="compUnitPrice" type="number" step="0.01" value="${val(component && component.unitPrice)}" /></div></div>
+      <div><label>${i18('fldProductLine', 'Product line')}</label>
         <select id="compProductLine">
           <option value="clothing" ${!component || component.productLine === 'clothing' ? 'selected' : ''}>Apparel</option>
           <option value="toys" ${component && component.productLine === 'toys' ? 'selected' : ''}>Toys</option>
@@ -966,12 +1000,12 @@ function openComponentForm(component) {
       </div>
     </div>
     <div class="om-field-grid" style="margin-top:10px;">
-      <div style="grid-column:1/-1;"><label>Notes</label><input id="compNotes" type="text" value="${val(component && component.notes)}" /></div>
+      <div style="grid-column:1/-1;"><label>${i18('fldNotes', 'Notes')}</label><input id="compNotes" type="text" value="${val(component && component.notes)}" /></div>
     </div>
     <datalist id="dlSupplierNames"></datalist>
     <div style="margin-top:22px;display:flex;gap:10px;flex-wrap:wrap;">
-      <button class="btn btn-secondary" id="compCancel" style="flex:none;width:auto;padding:10px 18px;">Cancel</button>
-      ${component ? `<button class="btn btn-secondary" id="compDelete" style="flex:none;width:auto;padding:10px 18px;color:var(--jc-fail);">Delete</button>` : ''}
+      <button class="btn btn-secondary" id="compCancel" style="flex:none;width:auto;padding:10px 18px;">${i18('btnCancel', 'Cancel')}</button>
+      ${component ? `<button class="btn btn-secondary" id="compDelete" style="flex:none;width:auto;padding:10px 18px;color:var(--jc-fail);">${i18('btnDelete', 'Delete')}</button>` : ''}
       <button class="btn btn-primary" id="compSave" style="flex:none;width:auto;padding:10px 18px;">${component ? 'Save changes' : 'Create component'}</button>
     </div>
    </div>
@@ -988,10 +1022,10 @@ function openComponentForm(component) {
 
   if (component) {
     document.getElementById('compDelete').addEventListener('click', async () => {
-      if (!confirm(`Delete "${component.partName}"? This can't be undone.`)) return;
+      if (!confirm(i18t('confirmDeleteNamed', 'Delete "{name}"? This can\'t be undone.').split('{name}').join(component.partName))) return;
       try {
         await api(`/api/catalog/components/${encodeURIComponent(component.id)}`, { method: 'DELETE' });
-        showToast('Component deleted');
+        showToast(i18t('toastComponentDeleted', 'Component deleted'));
         closePanel();
         refreshCurrentView();
       } catch (e) { showToast(e.message, true); }
@@ -1012,10 +1046,10 @@ function openComponentForm(component) {
     try {
       if (component) {
         await api(`/api/catalog/components/${encodeURIComponent(component.id)}`, { method: 'PATCH', body: JSON.stringify(payload) });
-        showToast('Component updated');
+        showToast(i18t('toastComponentUpdated', 'Component updated'));
       } else {
         await api('/api/catalog/components', { method: 'POST', body: JSON.stringify(payload) });
-        showToast('Component created');
+        showToast(i18t('toastComponentCreated', 'Component created'));
       }
       closePanel();
       refreshCurrentView();
@@ -1030,20 +1064,20 @@ function openComponentForm(component) {
 async function renderFabricLibraryShell(root) {
   root.innerHTML = `
     ${backToHubHtml()}
-    <h2 class="om-view-title">Fabric Library</h2>
+    <h2 class="om-view-title">${i18('viewFabricLibrary', 'Fabric Library')}</h2>
     <div class="om-category-tile" style="margin-bottom:20px;">
       <div class="om-category-tile-header" style="border-color:var(--jc-teal);">
-        <span>Fabric Codes</span>
-        <button class="btn btn-primary om-view-all-btn" id="omNewFabricCodeBtn">+ Add fabric code</button>
+        <span>${i18('secFabricCodes', 'Fabric Codes')}</span>
+        <button class="btn btn-primary om-view-all-btn" id="omNewFabricCodeBtn">${i18('btnAddFabricCode', '+ Add fabric code')}</button>
       </div>
-      <div id="omFabricCodesHost"><div class="om-empty">Loading...</div></div>
+      <div id="omFabricCodesHost"><div class="om-empty">${i18('emptyLoading', 'Loading...')}</div></div>
     </div>
     <div class="om-category-tile" style="margin-bottom:20px;">
       <div class="om-category-tile-header" style="border-color:var(--jc-teal);">
-        <span>Fabric Types</span>
-        <button class="btn btn-primary om-view-all-btn" id="omNewFabricTypeBtn">+ Add fabric type</button>
+        <span>${i18('secFabricTypes', 'Fabric Types')}</span>
+        <button class="btn btn-primary om-view-all-btn" id="omNewFabricTypeBtn">${i18('btnAddFabricType', '+ Add fabric type')}</button>
       </div>
-      <div id="omFabricTypesHost"><div class="om-empty">Loading...</div></div>
+      <div id="omFabricTypesHost"><div class="om-empty">${i18('emptyLoading', 'Loading...')}</div></div>
     </div>
   `;
   bindBackToHub();
@@ -1077,8 +1111,8 @@ function renderFabricTable(hostId, kind, entries, withSwatch) {
     <div class="om-table-wrap">
       <table class="om-table">
         <thead><tr>
-          <th>Fabric Code</th><th>Material Blend</th><th>Type</th><th>Fabric Swatch</th><th>Digital Color Reference</th>
-          <th>Pantone Color</th><th>Hex Color</th><th>CMYK Color</th><th>Book Code</th><th>Fabric Weight</th><th>Notes</th>
+          <th>${i18i('thFabricCode', 'Fabric Code')}</th><th>${i18i('fldMaterialBlend', 'Material Blend')}</th><th>${i18i('fldType', 'Type')}</th><th>${i18i('fldFabricSwatch', 'Fabric Swatch')}</th><th>${i18i('fldDigitalColorReference', 'Digital Color Reference')}</th>
+          <th>${i18i('fldPantoneColor', 'Pantone Color')}</th><th>${i18i('fldHexColor', 'Hex Color')}</th><th>${i18i('fldCmykColor', 'CMYK Color')}</th><th>${i18i('fldBookCode', 'Book Code')}</th><th>${i18i('fldFabricWeight', 'Fabric Weight')}</th><th>${i18i('thNotes', 'Notes')}</th>
         </tr></thead>
         <tbody>
           ${entries.map((e) => `
@@ -1102,7 +1136,7 @@ function renderFabricTable(hostId, kind, entries, withSwatch) {
   ` : `
     <div class="om-table-wrap">
       <table class="om-table">
-        <thead><tr><th>Fabric Type</th><th>Notes</th></tr></thead>
+        <thead><tr><th>${i18i('thFabricType', 'Fabric Type')}</th><th>${i18i('thNotes', 'Notes')}</th></tr></thead>
         <tbody>
           ${entries.map((e) => `
             <tr data-id="${escapeHtml(e.id)}">
@@ -1144,10 +1178,10 @@ function openFabricEntryForm(kind, entry) {
     <div class="om-field-grid">
       <div><label>${isCode ? 'Fabric Code' : 'Fabric Type'} *</label><input id="fabValue" type="text" value="${val(entry && entry.value)}" /></div>
       ${isCode ? `
-        <div><label>Material Blend</label><input id="fabMaterialBlend" type="text" placeholder="e.g. 65% Polyester, 35% Cotton" value="${val(entry && entry.materialBlend)}" /></div>
-        <div><label>Company Name</label><input id="fabCompanyName" type="text" placeholder="e.g. Haishuang" value="${val(entry && entry.companyName)}" /></div>
-        <div><label>Color</label><input id="fabColorName" type="text" placeholder="e.g. orange" value="${val(entry && entry.colorName)}" /></div>
-        <div><label>Type</label>
+        <div><label>${i18('fldMaterialBlend', 'Material Blend')}</label><input id="fabMaterialBlend" type="text" placeholder="e.g. 65% Polyester, 35% Cotton" value="${val(entry && entry.materialBlend)}" /></div>
+        <div><label>${i18('fldCompanyName', 'Company Name')}</label><input id="fabCompanyName" type="text" placeholder="e.g. Haishuang" value="${val(entry && entry.companyName)}" /></div>
+        <div><label>${i18('fldColor', 'Color')}</label><input id="fabColorName" type="text" placeholder="e.g. orange" value="${val(entry && entry.colorName)}" /></div>
+        <div><label>${i18('fldType', 'Type')}</label>
           <input id="fabGarmentType" type="text" list="fabGarmentTypeOptions" placeholder="e.g. Hoodie / Sweatshirt" value="${val(entry && entry.garmentType)}" />
           <datalist id="fabGarmentTypeOptions">
             <option value="Hoodie / Sweatshirt"></option>
@@ -1155,45 +1189,45 @@ function openFabricEntryForm(kind, entry) {
           </datalist>
         </div>
         <div>
-          <label>Fabric Swatch</label>
+          <label>${i18('fldFabricSwatch', 'Fabric Swatch')}</label>
           <div style="display:flex;align-items:center;gap:10px;">
             ${entry && entry.swatchUrl
               ? `<img id="fabSwatchPreview" class="om-upload-preview" style="cursor:zoom-in;" src="${escapeHtml(entry.swatchUrl)}" alt="" title="Click to view larger" />`
               : `<div id="fabSwatchPreview" class="om-upload-preview-empty"></div>`}
             <input type="hidden" id="fabSwatchUrl" value="${val(entry && entry.swatchUrl)}" />
             <input type="file" id="fabSwatchFile" accept="image/*" style="display:none;" />
-            <button type="button" class="om-table-upload-btn" id="fabSwatchUploadBtn">Upload</button>
+            <button type="button" class="om-table-upload-btn" id="fabSwatchUploadBtn">${i18('btnUpload', 'Upload')}</button>
           </div>
         </div>
         <div>
-          <label>Digital Color Reference</label>
+          <label>${i18('fldDigitalColorReference', 'Digital Color Reference')}</label>
           <div style="display:flex;align-items:center;gap:10px;">
             ${entry && entry.digitalColorUrl
               ? `<img id="fabDigitalPreview" class="om-upload-preview" style="cursor:zoom-in;" src="${escapeHtml(entry.digitalColorUrl)}" alt="" title="Click to view larger" />`
               : `<div id="fabDigitalPreview" class="om-upload-preview-empty"></div>`}
             <input type="hidden" id="fabDigitalUrl" value="${val(entry && entry.digitalColorUrl)}" />
             <input type="file" id="fabDigitalFile" accept="image/*" style="display:none;" />
-            <button type="button" class="om-table-upload-btn" id="fabDigitalUploadBtn">Upload</button>
+            <button type="button" class="om-table-upload-btn" id="fabDigitalUploadBtn">${i18('btnUpload', 'Upload')}</button>
           </div>
         </div>
-        <div><label>Pantone Color</label><input id="fabPantone" type="text" placeholder="e.g. 206C" value="${val(entry && entry.pantone)}" /></div>
-        <div><label>Hex Color</label><input id="fabHex" type="text" placeholder="e.g. ce0037" value="${val(entry && entry.hex)}" /></div>
-        <div><label>CMYK Color</label><input id="fabCmyk" type="text" placeholder="e.g. C: 11% M: 100% Y: 81% K: 3%" value="${val(entry && entry.cmyk)}" /></div>
-        <div><label>Book Code</label><input id="fabBookCode" type="text" value="${val(entry && entry.bookCode)}" /></div>
-        <div><label>Fabric Weight</label><input id="fabFabricWeight" type="text" placeholder="e.g. 340gsm" value="${val(entry && entry.fabricWeight)}" /></div>
+        <div><label>${i18('fldPantoneColor', 'Pantone Color')}</label><input id="fabPantone" type="text" placeholder="e.g. 206C" value="${val(entry && entry.pantone)}" /></div>
+        <div><label>${i18('fldHexColor', 'Hex Color')}</label><input id="fabHex" type="text" placeholder="e.g. ce0037" value="${val(entry && entry.hex)}" /></div>
+        <div><label>${i18('fldCmykColor', 'CMYK Color')}</label><input id="fabCmyk" type="text" placeholder="e.g. C: 11% M: 100% Y: 81% K: 3%" value="${val(entry && entry.cmyk)}" /></div>
+        <div><label>${i18('fldBookCode', 'Book Code')}</label><input id="fabBookCode" type="text" value="${val(entry && entry.bookCode)}" /></div>
+        <div><label>${i18('fldFabricWeight', 'Fabric Weight')}</label><input id="fabFabricWeight" type="text" placeholder="e.g. 340gsm" value="${val(entry && entry.fabricWeight)}" /></div>
       ` : ''}
-      <div style="grid-column:1/-1;"><label>Notes</label><input id="fabNotes" type="text" value="${val(entry && entry.notes)}" /></div>
+      <div style="grid-column:1/-1;"><label>${i18('fldNotes', 'Notes')}</label><input id="fabNotes" type="text" value="${val(entry && entry.notes)}" /></div>
     </div>
     ${entry ? `
     <div class="om-panel-card" style="margin-top:18px;">
-      <div class="om-section-title">Historical POs</div>
-      <div id="fabHistoryHost"><div class="om-empty">Loading...</div></div>
+      <div class="om-section-title">${i18('secHistoricalPos', 'Historical POs')}</div>
+      <div id="fabHistoryHost"><div class="om-empty">${i18('emptyLoading', 'Loading...')}</div></div>
     </div>
     ` : ''}
     <div style="margin-top:22px;display:flex;gap:10px;flex-wrap:wrap;">
-      <button class="btn btn-secondary" id="fabCancel" style="flex:none;width:auto;padding:10px 18px;">Cancel</button>
-      ${entry ? `<button class="btn btn-secondary" id="fabDelete" style="flex:none;width:auto;padding:10px 18px;color:var(--jc-fail);">Delete</button>` : ''}
-      <button class="btn btn-primary" id="fabSave" style="flex:none;width:auto;padding:10px 18px;">${entry ? 'Save changes' : 'Create'}</button>
+      <button class="btn btn-secondary" id="fabCancel" style="flex:none;width:auto;padding:10px 18px;">${i18('btnCancel', 'Cancel')}</button>
+      ${entry ? `<button class="btn btn-secondary" id="fabDelete" style="flex:none;width:auto;padding:10px 18px;color:var(--jc-fail);">${i18('btnDelete', 'Delete')}</button>` : ''}
+      <button class="btn btn-primary" id="fabSave" style="flex:none;width:auto;padding:10px 18px;">${entry ? i18('btnSaveChanges', 'Save changes') : i18('btnCreate', 'Create')}</button>
     </div>
    </div>
   `;
@@ -1212,13 +1246,13 @@ function openFabricEntryForm(kind, entry) {
         if (!host) return;
         const orders = data.orders || [];
         if (!orders.length) {
-          host.innerHTML = `<div class="om-empty">No POs have used this ${isCode ? 'fabric' : 'fabric type'} yet.</div>`;
+          host.innerHTML = `<div class="om-empty">${i18('emptyNoFabricPos', 'No POs have used this fabric yet.')}</div>`;
           return;
         }
         host.innerHTML = `
           <div class="om-table-wrap">
             <table class="om-table" style="min-width:0;">
-              <thead><tr><th>PO Number</th><th>Product</th><th>Order date</th><th>Quantity</th></tr></thead>
+              <thead><tr><th>${i18i('thPoNumber', 'PO Number')}</th><th>${i18i('thProduct', 'Product')}</th><th>${i18i('thOrderDate', 'Order date')}</th><th>${i18i('thQuantity', 'Quantity')}</th></tr></thead>
               <tbody>
                 ${orders.map((o) => `
                   <tr data-order-id="${escapeHtml(o.id)}" style="cursor:pointer;">
@@ -1272,7 +1306,7 @@ function openFabricEntryForm(kind, entry) {
           fresh.src = body.file.url;
           fresh.addEventListener('click', () => openImageLightbox(body.file.url));
           old.parentNode.replaceChild(fresh, old);
-          showToast('Image uploaded');
+          showToast(i18t('toastImageUploaded', 'Image uploaded'));
         } catch (err) { showToast(err.message, true); }
       });
     };
@@ -1282,10 +1316,10 @@ function openFabricEntryForm(kind, entry) {
 
   if (entry) {
     document.getElementById('fabDelete').addEventListener('click', async () => {
-      if (!confirm(`Delete "${entry.value}"? This can't be undone.`)) return;
+      if (!confirm(i18t('confirmDeleteNamed', 'Delete "{name}"? This can\'t be undone.').split('{name}').join(entry.value))) return;
       try {
         await api(`/api/fabric-library/${isCode ? 'codes' : 'types'}/${encodeURIComponent(entry.id)}`, { method: 'DELETE' });
-        showToast('Deleted');
+        showToast(i18t('toastDeleted', 'Deleted'));
         closePanel();
         refreshCurrentView();
       } catch (e) { showToast(e.message, true); }
@@ -1324,16 +1358,16 @@ function openFabricEntryForm(kind, entry) {
 // Confirmation Form.
 function renderAccessoriesTable(host, rows) {
   if (!rows.length) {
-    host.innerHTML = `<div class="om-empty">No accessories/parts recorded yet.</div>`;
+    host.innerHTML = `<div class="om-empty">${i18('emptyNoAccessories', 'No accessories/parts recorded yet.')}</div>`;
     return;
   }
   host.innerHTML = `
     <table class="om-table">
       <thead>
         <tr>
-          <th>Part name</th><th>PO Number</th><th>Specifications</th><th>Material</th><th>Dimensions</th>
-          <th>Qty</th><th>Unit price</th><th>Total</th><th>Expected delivery</th>
-          <th>Supplier</th><th>Supplier contact</th><th>Waybill #</th><th>Shipment qty</th>
+          <th>${i18i('thPartName', 'Part name')}</th><th>${i18i('thPoNumber', 'PO Number')}</th><th>${i18i('th2Specifications', 'Specifications')}</th><th>${i18i('thMaterial', 'Material')}</th><th>${i18i('th2Dimensions', 'Dimensions')}</th>
+          <th>${i18i('th2Qty', 'Qty')}</th><th>${i18i('thUnitPrice', 'Unit price')}</th><th>${i18i('th2Total', 'Total')}</th><th>${i18i('th2ExpectedDelivery', 'Expected delivery')}</th>
+          <th>${i18i('thSupplier', 'Supplier')}</th><th>${i18i('fldSupplierContact', 'Supplier contact')}</th><th>${i18i('th2Waybill', 'Waybill #')}</th><th>${i18i('th2ShipmentQty', 'Shipment qty')}</th>
         </tr>
       </thead>
       <tbody>
@@ -1389,16 +1423,16 @@ let settlementMonthFilter = '';
 
 async function renderSettlementShell(root) {
   root.innerHTML = `${backToHubHtml()}
-    <h2 class="om-view-title">Settlement Statement</h2>
+    <h2 class="om-view-title">${i18('viewSettlement', 'Settlement Statement')}</h2>
     <div style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
       <div style="min-width:220px;">
-        <label>Month</label>
-        <select id="omMonthFilter"><option value="">All months</option></select>
+        <label>${i18('fldMonth', 'Month')}</label>
+        <select id="omMonthFilter"><option value="">${i18t('helpAllMonths', 'All months')}</option></select>
       </div>
       <div id="omMonthSummary" class="section-help" style="margin:0 0 10px 0;"></div>
     </div>
     <div id="omMonthlyHost"></div>
-    <div id="omSettlementHost" class="om-table-wrap"><div class="om-empty">Loading...</div></div>`;
+    <div id="omSettlementHost" class="om-table-wrap"><div class="om-empty">${i18('emptyLoading', 'Loading...')}</div></div>`;
   bindBackToHub();
   try {
     const [monthly, toys, clothing, other] = await Promise.all([
@@ -1411,7 +1445,7 @@ async function renderSettlementShell(root) {
     const allOrders = [...(toys.orders || []), ...(clothing.orders || []), ...(other.orders || [])];
 
     const monthSelect = document.getElementById('omMonthFilter');
-    monthSelect.innerHTML = `<option value="">All months</option>` +
+    monthSelect.innerHTML = `<option value="">${i18t('helpAllMonths', 'All months')}</option>` +
       months.map((m) => `<option value="${escapeHtml(m.month)}" ${m.month === settlementMonthFilter ? 'selected' : ''}>${escapeHtml(m.month)}</option>`).join('');
     monthSelect.addEventListener('change', (e) => {
       settlementMonthFilter = e.target.value;
@@ -1429,9 +1463,17 @@ async function renderSettlementShell(root) {
       renderSettlementTable(orders);
       const summary = document.getElementById('omMonthSummary');
       if (summary) {
+        // Bilingual with the numbers interpolated into each language's own
+        // sentence, rather than concatenating a translated fragment onto an
+        // English one (which reads wrong in Chinese word order).
+        const fill = (key, fallback, vars) => {
+          const pr = window.JuniperI18n ? window.JuniperI18n.pair(key, fallback) : { primary: fallback, secondary: '' };
+          const sub = (str) => Object.entries(vars).reduce((acc, [k2, v]) => acc.split(`{${k2}}`).join(v), str);
+          return pr.secondary ? `${sub(pr.primary)} / ${sub(pr.secondary)}` : sub(pr.primary);
+        };
         summary.textContent = settlementMonthFilter
-          ? `Showing ${orders.length} order${orders.length === 1 ? '' : 's'} placed in ${settlementMonthFilter}.`
-          : `Showing all ${allOrders.length} orders across ${months.length} month${months.length === 1 ? '' : 's'}.`;
+          ? fill('finShowingMonth', 'Showing {n} order(s) placed in {m}.', { n: orders.length, m: settlementMonthFilter })
+          : fill('finShowingAll', 'Showing all {n} orders across {c} month(s).', { n: allOrders.length, c: months.length });
       }
     }
     applyMonthFilter();
@@ -1460,10 +1502,10 @@ function renderMonthlyFinancials(months) {
           <div class="om-month-label">${escapeHtml(m.month)}</div>
           <div class="om-month-total">${fmtMoney(m.total)}</div>
           <div class="om-month-split">
-            <span class="om-month-paid">Paid ${fmtMoney(m.paid)}</span>
-            <span class="om-month-pending">Pending ${fmtMoney(m.pending)}</span>
+            <span class="om-month-paid">${tStatusText('Paid')} ${fmtMoney(m.paid)}</span>
+            <span class="om-month-pending">${tStatusText('Pending')} ${fmtMoney(m.pending)}</span>
           </div>
-          <div class="om-month-count">${m.orderCount} order${m.orderCount === 1 ? '' : 's'}</div>
+          <div class="om-month-count">${m.orderCount} ${i18t('finOrdersCount', 'orders')}</div>
         </div>
       `).join('')}
     </div>
@@ -1479,7 +1521,7 @@ function renderSettlementTable(orders) {
   }
   host.innerHTML = `
     <table class="om-table">
-      <thead><tr><th>PO Number</th><th>Product line</th><th>Supplier</th><th>Total owed</th><th>Settlement</th><th>Paid on</th><th>Action</th></tr></thead>
+      <thead><tr><th>${i18i('thPoNumber', 'PO Number')}</th><th>${i18i('thProductLine', 'Product line')}</th><th>${i18i('thSupplier', 'Supplier')}</th><th>${i18i('thTotalOwed', 'Total owed')}</th><th>${i18i('thSettlement', 'Settlement')}</th><th>${i18i('thPaidOn', 'Paid on')}</th><th>${i18i('thAction', 'Action')}</th></tr></thead>
       <tbody>
         ${orders.map((o) => `
           <tr data-id="${escapeHtml(o.id)}">
@@ -1507,7 +1549,7 @@ function renderSettlementTable(orders) {
           method: 'POST',
           body: JSON.stringify({ status: btn.dataset.status })
         });
-        showToast('Settlement updated');
+        showToast(i18t('toastSettlementUpdated', 'Settlement updated'));
         renderSettlementShell(document.getElementById('omRoot'));
       } catch (err) { showToast(err.message, true); }
     });
@@ -1523,18 +1565,18 @@ function renderCategoryShell(root) {
   const meta = CATEGORY_META[currentTab];
   root.innerHTML = `
     ${backToHubHtml()}
-    <h2 class="om-view-title">${meta.label}</h2>
+    <h2 class="om-view-title">${i18(meta.key, meta.label)}</h2>
     <div class="om-subtabs-bar">
-      <button class="om-subtab ${currentCategorySubTab === 'orders' ? 'active' : ''}" data-subtab="orders">All Orders</button>
-      <button class="om-subtab ${currentCategorySubTab === 'components' ? 'active' : ''}" data-subtab="components">Main Components</button>
-      <button class="om-subtab ${currentCategorySubTab === 'accessories' ? 'active' : ''}" data-subtab="accessories">Accessories</button>
+      <button class="om-subtab ${currentCategorySubTab === 'orders' ? 'active' : ''}" data-subtab="orders">${i18i('tabAllOrders', 'All Orders')}</button>
+      <button class="om-subtab ${currentCategorySubTab === 'components' ? 'active' : ''}" data-subtab="components">${i18i('tabMainComponents', 'Main Components')}</button>
+      <button class="om-subtab ${currentCategorySubTab === 'accessories' ? 'active' : ''}" data-subtab="accessories">${i18i('tabAccessories', 'Accessories')}</button>
     </div>
     <div class="om-toolbar">
       <input class="om-search" id="omSearch" type="text" placeholder="Search PO number, supplier, SKU..." value="${escapeHtml(currentSearch)}" />
       ${currentCategorySubTab !== 'accessories' ? `
         <select class="om-status-filter" id="omStatusFilter">
           <option value="">All statuses</option>
-          ${STATUSES.map((s) => `<option value="${escapeHtml(s)}" ${s === currentStatusFilter ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('')}
+          ${STATUSES.map((s) => `<option value="${escapeHtml(s)}" ${s === currentStatusFilter ? 'selected' : ''}>${tStatusText(s)}</option>`).join('')}
         </select>
       ` : ''}
     </div>
@@ -1597,14 +1639,14 @@ function renderOrdersTableFull(host, orders, productLine) {
     <table class="om-table">
       <thead>
         <tr>
-          <th>PO Number</th><th>Status</th><th>Buyer</th><th>Order date</th><th>Desired entry</th>
-          <th>Manufacturer delivery</th><th>Supplier</th><th>Supplier contact</th><th>Supplier code</th>
-          <th>Main component</th><th>Main SKU</th><th>Model #</th>
-          ${isClothing ? '<th>Wash label</th>' : ''}
-          <th>Factory price</th><th>Sales unit price</th><th>Purchase qty</th><th>Total purchase price</th>
-          <th>Actual wt</th><th>Transport wt</th>
-          <th>Assembly fee</th><th>Labor costs</th><th>Transport fees</th><th>Other expenses</th>
-          <th>Warehouse</th><th>Total owed</th><th>Settlement</th>
+          <th>${i18i('thPoNumber', 'PO Number')}</th><th>${i18i('thStatus', 'Status')}</th><th>${i18i('thBuyer', 'Buyer')}</th><th>${i18i('thOrderDate', 'Order date')}</th><th>${i18i('thDesiredEntry', 'Desired entry')}</th>
+          <th>${i18i('th2ManufacturerDelivery', 'Manufacturer delivery')}</th><th>${i18i('thSupplier', 'Supplier')}</th><th>${i18i('fldSupplierContact', 'Supplier contact')}</th><th>${i18i('th2SupplierCode', 'Supplier code')}</th>
+          <th>${i18i('th2MainComponent', 'Main component')}</th><th>${i18i('th2MainSku', 'Main SKU')}</th><th>${i18i('th2Model', 'Model #')}</th>
+          ${isClothing ? `<th>${i18i('th2WashLabel', 'Wash label')}</th>` : ''}
+          <th>${i18i('th2FactoryPrice', 'Factory price')}</th><th>${i18i('th2SalesUnitPrice', 'Sales unit price')}</th><th>${i18i('th2PurchaseQty', 'Purchase qty')}</th><th>${i18i('th2TotalPurchasePrice', 'Total purchase price')}</th>
+          <th>${i18i('th2ActualWt', 'Actual wt')}</th><th>${i18i('th2TransportWt', 'Transport wt')}</th>
+          <th>${i18i('th2AssemblyFee', 'Assembly fee')}</th><th>${i18i('th2LaborCosts', 'Labor costs')}</th><th>${i18i('th2TransportFees', 'Transport fees')}</th><th>${i18i('th2OtherExpenses', 'Other expenses')}</th>
+          <th>${i18i('th2Warehouse', 'Warehouse')}</th><th>${i18i('thTotalOwed', 'Total owed')}</th><th>${i18i('thSettlement', 'Settlement')}</th>
         </tr>
       </thead>
       <tbody>
@@ -1614,7 +1656,7 @@ function renderOrdersTableFull(host, orders, productLine) {
           return `
           <tr data-id="${escapeHtml(o.id)}">
             <td><strong>${escapeHtml(o.poNumber)}</strong></td>
-            <td><span class="om-pill om-pill-${statusSlug(o.status)}">${escapeHtml(o.status)}</span></td>
+            <td><span class="om-pill om-pill-${statusSlug(o.status)}">${tStatusInline(o.status)}</span></td>
             <td>${escapeHtml(o.buyer || '—')}</td>
             <td>${fmtDate(o.orderPlacementDate)}</td>
             <td>${fmtDate(o.desiredEntryDate)}</td>
@@ -1662,10 +1704,10 @@ function renderComponentsTable(host, orders) {
     <table class="om-table">
       <thead>
         <tr>
-          <th>PO Number</th><th>Main component</th><th>Main SKU</th><th>Model #</th>
-          <th>Supplier</th><th>Supplier contact</th><th>Supplier code</th>
-          <th>Factory price</th><th>Purchase qty</th><th>Total purchase price</th>
-          <th>Warehouse entry date</th><th>Waybill number</th><th>Qty received</th>
+          <th>${i18i('thPoNumber', 'PO Number')}</th><th>${i18i('th2MainComponent', 'Main component')}</th><th>${i18i('th2MainSku', 'Main SKU')}</th><th>${i18i('th2Model', 'Model #')}</th>
+          <th>${i18i('thSupplier', 'Supplier')}</th><th>${i18i('fldSupplierContact', 'Supplier contact')}</th><th>${i18i('th2SupplierCode', 'Supplier code')}</th>
+          <th>${i18i('th2FactoryPrice', 'Factory price')}</th><th>${i18i('th2PurchaseQty', 'Purchase qty')}</th><th>${i18i('th2TotalPurchasePrice', 'Total purchase price')}</th>
+          <th>${i18i('th2WarehouseEntryDate', 'Warehouse entry date')}</th><th>${i18i('th2WaybillNumber', 'Waybill number')}</th><th>${i18i('th2QtyReceived', 'Qty received')}</th>
         </tr>
       </thead>
       <tbody>
@@ -1700,6 +1742,9 @@ function renderComponentsTable(host, orders) {
 
 function closePanel() {
   document.querySelectorAll('.om-panel-backdrop').forEach((el) => el.remove());
+  // Typeahead menus are rendered on <body> (so scroll containers can't clip
+  // them), which means they don't get removed along with the panel.
+  document.querySelectorAll('body > .om-typeahead-menu').forEach((el) => el.remove());
   document.removeEventListener('keydown', handlePanelEscapeKey);
 }
 
@@ -1746,29 +1791,64 @@ function attachTypeahead(inputId, getOptions) {
   wrap.className = 'om-typeahead-wrap';
   input.parentNode.insertBefore(wrap, input);
   wrap.appendChild(input);
+  // The menu lives on <body>, not inside the wrap, and is positioned with
+  // position:fixed against the input's viewport rect. Anchoring it to the
+  // wrap meant any scrolling/overflow ancestor clipped it - which is exactly
+  // what happened inside the Sub-Component Breakdown's horizontally
+  // scrolling table, where the list appeared cut off behind later sections.
   const menu = document.createElement('div');
   menu.className = 'om-typeahead-menu';
-  wrap.appendChild(menu);
+  document.body.appendChild(menu);
+
+  function positionMenu() {
+    const r = input.getBoundingClientRect();
+    menu.style.left = `${r.left}px`;
+    menu.style.top = `${r.bottom + 2}px`;
+    menu.style.minWidth = `${r.width}px`;
+    // Flip above the field when there isn't room below, so the list stays
+    // on screen for rows near the bottom of the panel.
+    const spaceBelow = window.innerHeight - r.bottom;
+    if (spaceBelow < 180 && r.top > spaceBelow) {
+      menu.style.top = '';
+      menu.style.bottom = `${window.innerHeight - r.top + 2}px`;
+    } else {
+      menu.style.bottom = '';
+    }
+  }
 
   function renderMenu() {
     const q = input.value.trim().toLowerCase();
     const options = (getOptions() || []).filter(Boolean);
     const filtered = (q ? options.filter((o) => o.toLowerCase().startsWith(q)) : options).slice(0, 200);
-    if (!filtered.length) { menu.classList.remove('open'); return; }
+    if (!filtered.length) { closeMenu(); return; }
     menu.innerHTML = filtered.map((o) => `<div class="om-typeahead-option">${escapeHtml(o)}</div>`).join('');
+    positionMenu();
     menu.classList.add('open');
     menu.querySelectorAll('.om-typeahead-option').forEach((el) => {
       el.addEventListener('mousedown', (e) => {
         e.preventDefault();
         input.value = el.textContent;
-        menu.classList.remove('open');
+        closeMenu();
         input.dispatchEvent(new Event('change'));
       });
     });
   }
+
+  function closeMenu() { menu.classList.remove('open'); }
+  // A fixed-position menu doesn't travel with its input, so reposition while
+  // anything scrolls (capture phase catches inner scrollers too).
+  const onScrollOrResize = () => { if (menu.classList.contains('open')) positionMenu(); };
+  window.addEventListener('scroll', onScrollOrResize, true);
+  window.addEventListener('resize', onScrollOrResize);
+
   input.addEventListener('focus', renderMenu);
   input.addEventListener('input', renderMenu);
-  input.addEventListener('blur', () => setTimeout(() => menu.classList.remove('open'), 150));
+  input.addEventListener('blur', () => setTimeout(closeMenu, 150));
+
+  // The menu outlives its input if the panel is torn down while open, so it
+  // removes itself once the input leaves the DOM (see closePanel, which
+  // sweeps these up directly).
+  menu.dataset.typeaheadOwner = inputId;
 }
 
 async function openDetailPanel(id, scope) {
@@ -1799,8 +1879,8 @@ async function openDetailPanel(id, scope) {
         ${scope !== 'full' ? `<div style="margin-top:4px;font-size:12px;font-weight:700;color:var(--jc-teal-dark);text-transform:uppercase;">Main component view</div>` : ''}
       </div>
       <div style="display:flex;gap:10px;align-items:center;">
-        ${scope !== 'full' ? `<button class="btn btn-secondary" id="omViewFullPo" style="flex:none;width:auto;padding:7px 14px;font-size:13px;">View full PO</button>` : ''}
-        <button class="btn btn-primary" id="omSaveOrder" style="flex:none;width:auto;padding:8px 18px;">Save changes</button>
+        ${scope !== 'full' ? `<button class="btn btn-secondary" id="omViewFullPo" style="flex:none;width:auto;padding:7px 14px;font-size:13px;">${i18('btnViewFullPo', 'View full PO')}</button>` : ''}
+        <button class="btn btn-primary" id="omSaveOrder" style="flex:none;width:auto;padding:8px 18px;">${i18('btnSaveChanges', 'Save changes')}</button>
         <button class="om-panel-close" id="omClosePanel">&times;</button>
       </div>
     </div>
@@ -1808,7 +1888,7 @@ async function openDetailPanel(id, scope) {
 
 
     <div class="om-panel-card">
-    <div class="om-section-title">Status</div>
+    <div class="om-section-title">${i18('secStatus', 'Status')}</div>
     <div class="om-tracker" id="omStatusStepper">
       ${STATUSES.map((s, i) => {
         const currentIdx = STATUSES.indexOf(order.status);
@@ -1817,7 +1897,7 @@ async function openDetailPanel(id, scope) {
         <div class="om-tracker-step om-tracker-${state}" data-status="${escapeHtml(s)}">
           <div class="om-tracker-line"></div>
           <div class="om-tracker-dot">${state === 'done' ? '&#10003;' : i + 1}</div>
-          <div class="om-tracker-label">${escapeHtml(s)}</div>
+          <div class="om-tracker-label">${tStatus(s)}</div>
         </div>
       `;
       }).join('')}
@@ -1825,55 +1905,55 @@ async function openDetailPanel(id, scope) {
     </div>
 
     <div class="om-panel-card">
-    <div class="om-section-title">Production Status</div>
+    <div class="om-section-title">${i18('secProductionStatus', 'Production Status')}</div>
     <div class="om-field-grid">
-      <div><label>Product Complexity/Risk</label>
+      <div><label>${i18('fldProductComplexityRisk', 'Product Complexity/Risk')}</label>
         <select id="fProductRisk" class="om-risk-select" data-risk="${escapeHtml(order.productRisk || '')}">
           <option value="" ${!order.productRisk ? 'selected' : ''}>—</option>
-          <option value="high" ${order.productRisk === 'high' ? 'selected' : ''}>High</option>
-          <option value="medium" ${order.productRisk === 'medium' ? 'selected' : ''}>Medium</option>
-          <option value="low" ${order.productRisk === 'low' ? 'selected' : ''}>Low</option>
+          <option value="high" ${order.productRisk === 'high' ? 'selected' : ''}>${i18t('riskHigh', 'High')}</option>
+          <option value="medium" ${order.productRisk === 'medium' ? 'selected' : ''}>${i18t('riskMedium', 'Medium')}</option>
+          <option value="low" ${order.productRisk === 'low' ? 'selected' : ''}>${i18t('riskLow', 'Low')}</option>
         </select>
       </div>
-      <div><label>Order Status</label>
+      <div><label>${i18('fldOrderStatus', 'Order Status')}</label>
         <select id="fOrderStatusSelect" class="om-status-select" data-status="${escapeHtml(order.status)}">
-          ${STATUSES.map((s) => `<option value="${escapeHtml(s)}" ${s === order.status ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('')}
+          ${STATUSES.map((s) => `<option value="${escapeHtml(s)}" ${s === order.status ? 'selected' : ''}>${tStatusText(s)}</option>`).join('')}
         </select>
       </div>
     </div>
     </div>
 
     <div class="om-panel-card">
-    <div class="om-section-title">Order Details</div>
+    <div class="om-section-title">${i18('secOrderDetails', 'Order Details')}</div>
     <div id="omCopyFromPoSuggestion" style="display:none;margin-bottom:14px;padding:10px 14px;background:var(--jc-mint-light);border-radius:var(--radius-sm);align-items:center;gap:10px;flex-wrap:wrap;">
       <span id="omCopyFromPoText" style="font-size:13px;color:var(--jc-teal-dark);"></span>
-      <button type="button" class="btn btn-primary" id="omCopyFromPoBtn" style="flex:none;width:auto;padding:6px 14px;font-size:12.5px;">Copy details</button>
+      <button type="button" class="btn btn-primary" id="omCopyFromPoBtn" style="flex:none;width:auto;padding:6px 14px;font-size:12.5px;">${i18('btnCopyDetails', 'Copy details')}</button>
     </div>
     <div class="om-field-grid">
-      <div><label>Product Name</label><input id="fMainName" type="text" value="${val(order.mainComponent.name)}" /></div>
-      <div><label>Purchase Order Number</label><input type="text" value="${escapeHtml(order.poNumber)}" disabled /></div>
-      <div><label>SKU</label><input id="fMainSku" type="text" value="${val(order.mainComponent.sku)}" /></div>
+      <div><label>${i18('fldProductName', 'Product Name')}</label><input id="fMainName" type="text" value="${val(order.mainComponent.name)}" /></div>
+      <div><label>${i18('fldPurchaseOrderNumber', 'Purchase Order Number')}</label><input type="text" value="${escapeHtml(order.poNumber)}" disabled /></div>
+      <div><label>${i18('fldSkuLc', 'SKU')}</label><input id="fMainSku" type="text" value="${val(order.mainComponent.sku)}" /></div>
       <div>
-        <label>Photo reference</label>
+        <label>${i18('fldPhotoReference', 'Photo reference')}</label>
         <div style="display:flex;align-items:center;gap:10px;">
           ${order.mainComponent.photoReference ? `<img id="fPhotoReferencePreview" class="om-table-thumb" style="width:52px;height:52px;cursor:pointer;" src="${escapeHtml(order.mainComponent.photoReference)}" alt="" title="Click to view larger" />` : `<img id="fPhotoReferencePreview" class="om-table-thumb" style="width:52px;height:52px;display:none;cursor:pointer;" alt="" title="Click to view larger" />`}
           <input type="hidden" id="fPhotoReference" value="${val(order.mainComponent.photoReference)}" />
           <input type="file" id="fPhotoReferenceFile" accept="image/*" style="display:none;" />
-          <button type="button" class="om-table-upload-btn" id="fPhotoReferenceUploadBtn">Upload photo</button>
+          <button type="button" class="om-table-upload-btn" id="fPhotoReferenceUploadBtn">${i18('btnUploadPhoto', 'Upload photo')}</button>
         </div>
       </div>
-      <div><label>Supplier Name</label><input id="fSupplierName" type="text" list="dlSupplierNames" value="${val(order.supplier.name)}" /></div>
-      <div><label>Supplier Code</label><input id="fSupplierCode" type="text" value="${val(order.supplier.code)}" /></div>
+      <div><label>${i18('fldSupplierName', 'Supplier Name')}</label><input id="fSupplierName" type="text" list="dlSupplierNames" value="${val(order.supplier.name)}" /></div>
+      <div><label>${i18('fldSupplierCode', 'Supplier Code')}</label><input id="fSupplierCode" type="text" value="${val(order.supplier.code)}" /></div>
       <div>
-        <label>Order placement date</label>
+        <label>${i18('fldOrderPlacementDate', 'Order placement date')}</label>
         <input id="fOrderDate" type="date" value="${val(order.orderPlacementDate)}" ${order.orderPlacementDate ? 'disabled title="Set once when the order was placed - not editable afterward"' : ''} />
       </div>
-      <div><label>Fulfillment Request Date</label><input id="fFulfillmentRequestDate" type="date" value="${val(order.fulfillmentRequestDate)}" /></div>
-      <div><label>Required Warehouse Arrival Date</label><input id="fDesiredEntry" type="date" value="${val(order.desiredEntryDate)}" /></div>
-      <div><label>Required Manufacturer Delivery Date</label><input id="fManufDelivery" type="date" value="${val(order.manufacturerDeliveryDate)}" /></div>
-      <div><label>Order Quantity</label><input id="fPurchaseQty" type="number" value="${val(order.mainComponent.purchaseQuantity)}" /></div>
-      <div><label>Quantity received</label><input id="fFulfillQtyReceived" type="number" value="${val(order.fulfillment.quantityReceived)}" /></div>
-      <div><label>Order Management Specialist</label>
+      <div><label>${i18('fldFulfillmentRequestDate', 'Fulfillment Request Date')}</label><input id="fFulfillmentRequestDate" type="date" value="${val(order.fulfillmentRequestDate)}" /></div>
+      <div><label>${i18('fldRequiredWarehouseArrival', 'Required Warehouse Arrival Date')}</label><input id="fDesiredEntry" type="date" value="${val(order.desiredEntryDate)}" /></div>
+      <div><label>${i18('fldRequiredManufacturerDelivery', 'Required Manufacturer Delivery Date')}</label><input id="fManufDelivery" type="date" value="${val(order.manufacturerDeliveryDate)}" /></div>
+      <div><label>${i18('fldOrderQuantity', 'Order Quantity')}</label><input id="fPurchaseQty" type="number" value="${val(order.mainComponent.purchaseQuantity)}" /></div>
+      <div><label>${i18('fldQuantityReceived', 'Quantity received')}</label><input id="fFulfillQtyReceived" type="number" value="${val(order.fulfillment.quantityReceived)}" /></div>
+      <div><label>${i18('fldOrderManagementSpecialist', 'Order Management Specialist')}</label>
         <select id="fBuyer" data-current="${escapeHtml(order.buyer || '')}">
           <option value="${escapeHtml(order.buyer || '')}">${escapeHtml(order.buyer || '— Select —')}</option>
         </select>
@@ -1883,38 +1963,38 @@ async function openDetailPanel(id, scope) {
     </div>
 
     <div class="om-panel-card">
-    <div class="om-section-title">Product Development Approval</div>
+    <div class="om-section-title">${i18('secProductDevelopmentApproval', 'Product Development Approval')}</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;">
-      <button type="button" class="btn btn-secondary om-copy-link-btn" style="flex:none;width:auto;padding:9px 16px;" data-copy-url="${escapeHtml(`${location.origin}/approval.html?po=${order.id}`)}">Share Link</button>
-      <a class="btn btn-primary" style="flex:none;width:auto;padding:9px 16px;text-decoration:none;" href="/approval.html?po=${encodeURIComponent(order.id)}" target="_blank" rel="noopener">Open Link</a>
+      <button type="button" class="btn btn-secondary om-copy-link-btn" style="flex:none;width:auto;padding:9px 16px;" data-copy-url="${escapeHtml(`${location.origin}/approval.html?po=${order.id}`)}">${i18('btnShareLink', 'Share Link')}</button>
+      <a class="btn btn-primary" style="flex:none;width:auto;padding:9px 16px;text-decoration:none;" href="/approval.html?po=${encodeURIComponent(order.id)}" target="_blank" rel="noopener">${i18('btnOpenLink', 'Open Link')}</a>
     </div>
     </div>
 
     <div class="om-panel-card">
-    <div class="om-section-title">QA/QC Reporting</div>
-    <div class="section-help" style="margin-bottom:14px;">Share a report link with a factory or QA contact - it already knows this PO, so they can jump straight into the report. Setting a status here also moves the order along its production stages.</div>
+    <div class="om-section-title">${i18('secQaQcReporting', 'QA/QC Reporting')}</div>
+    <div class="section-help" style="margin-bottom:14px;">${i18('helpQaReporting', 'Share a report link with a factory or QA contact.')}</div>
     <div class="om-qa-report-grid">
       ${[
-        { stage: 'preProduction', title: 'Pre-Production Report', mode: 'pre_production' },
-        { stage: 'bulk', title: 'Bulk Production Report', mode: 'production' }
+        { stage: 'preProduction', title: i18('titlePreProductionReport', 'Pre-Production Report'), mode: 'pre_production' },
+        { stage: 'bulk', title: i18('titleBulkProductionReport', 'Bulk Production Report'), mode: 'production' }
       ].map(({ stage, title, mode }) => {
         const rep = (order.qaReports && order.qaReports[stage]) || { status: 'Pending' };
         return `
         <div class="om-qa-report-col">
           <div class="om-qa-report-title">${title}</div>
-          <label>Status</label>
+          <label>${i18('fldStatusLc', 'Status')}</label>
           <select class="om-report-status-select" data-report-stage="${stage}" data-report-status="${escapeHtml(rep.status || 'Pending')}">
-            ${['Pending', 'In Progress', 'Completed'].map((s) => `<option value="${s}" ${s === (rep.status || 'Pending') ? 'selected' : ''}>${s}</option>`).join('')}
+            ${['Pending', 'In Progress', 'Completed'].map((s) => `<option value="${s}" ${s === (rep.status || 'Pending') ? 'selected' : ''}>${tStatusText(s)}</option>`).join('')}
           </select>
-          <button type="button" class="btn btn-secondary om-copy-link-btn" style="width:100%;margin-top:10px;padding:9px 16px;" data-copy-url="${escapeHtml(`${location.origin}/reporting.html?mode=${mode}&po=${order.poNumber}`)}">Copy Report Link</button>
+          <button type="button" class="btn btn-secondary om-copy-link-btn" style="width:100%;margin-top:10px;padding:9px 16px;" data-copy-url="${escapeHtml(`${location.origin}/reporting.html?mode=${mode}&po=${order.poNumber}`)}">${i18('btnCopyReportLink', 'Copy Report Link')}</button>
           <div class="om-qa-report-file">
             ${rep.pdfUrl ? `
-              <a href="${escapeHtml(rep.pdfUrl)}" target="_blank" rel="noopener" class="om-qa-report-link">Download report PDF</a>
+              <a href="${escapeHtml(rep.pdfUrl)}" target="_blank" rel="noopener" class="om-qa-report-link">${i18('btnDownloadReportPdf', 'Download report PDF')}</a>
               <div class="om-qa-report-meta">
                 ${rep.result ? `<span class="om-qa-result om-qa-result-${escapeHtml(String(rep.result).toLowerCase())}">${escapeHtml(rep.result)}</span>` : ''}
                 ${rep.submittedAt ? `<span>${fmtDate(rep.submittedAt)}</span>` : ''}
               </div>
-            ` : `<div class="om-qa-report-meta">No report submitted yet.</div>`}
+            ` : `<div class="om-qa-report-meta">${i18('emptyNoReportSubmitted', 'No report submitted yet.')}</div>`}
           </div>
         </div>
       `;
@@ -1923,16 +2003,16 @@ async function openDetailPanel(id, scope) {
     </div>
 
     <div id="fClothingOnly" class="om-panel-card">
-      <div class="om-section-title">${order.productLine === 'clothing' ? 'Size Distribution' : 'Variant Distribution'}</div>
+      <div class="om-section-title">${order.productLine === 'clothing' ? i18('secSizeDistribution', 'Size Distribution') : i18('secVariantDistribution', 'Variant Distribution')}</div>
       <table class="om-table om-table-editable" style="min-width:0;">
-        <thead><tr><th>SKU</th><th>${order.productLine === 'clothing' ? 'Size' : 'Variant'}</th><th>Order Qty</th><th>Qty Received</th><th></th></tr></thead>
+        <thead><tr><th>${i18i('thSku', 'SKU')}</th><th>${order.productLine === 'clothing' ? i18i('thSize', 'Size') : i18i('thVariant', 'Variant')}</th><th>${i18i('thOrderQty', 'Order Qty')}</th><th>${i18i('thQtyReceived', 'Qty Received')}</th><th></th></tr></thead>
         <tbody id="omSizeRows"></tbody>
       </table>
       <button type="button" class="btn btn-secondary" id="omAddSizeRow" style="flex:none;width:auto;padding:8px 14px;margin-top:6px;">+ Add ${order.productLine === 'clothing' ? 'size row' : 'variant'}</button>
     </div>
 
     <div class="om-panel-card">
-    <div class="om-section-title">Product Documentation</div>
+    <div class="om-section-title">${i18('secProductDocumentation', 'Product Documentation')}</div>
     <div class="om-field-grid om-field-grid-row">
       ${uploadFieldHtml('fManufacturingDrawing', 'Manufacturing Drawing', order.mainComponent.manufacturingDrawing, true)}
       ${uploadFieldHtml('fWashingTagUrl', 'Washing Tag', order.mainComponent.washingTagUrl, true)}
@@ -1940,58 +2020,58 @@ async function openDetailPanel(id, scope) {
       ${order.productLine !== 'clothing' ? uploadFieldHtml('fDimensionsUrl', 'Product Dimensions', order.mainComponent.dimensionsUrl, true) : ''}
     </div>
     <div class="om-field-grid om-field-grid-row" style="margin-top:22px;">
-      <div><label>Weight (g)</label><input id="fWeightGrams" type="number" step="1" value="${val(order.mainComponent.weightGrams)}" /></div>
-      <div><label>Shipping Weight (g)</label><input id="fShippingWeightGrams" type="number" step="1" value="${val(order.mainComponent.shippingWeightGrams)}" /></div>
-      <div><label>Volume Weight (g)</label><input id="fVolumeWeightGrams" type="number" step="1" value="${val(order.mainComponent.volumeWeightGrams)}" /></div>
+      <div><label>${i18('fldWeightG', 'Weight (g)')}</label><input id="fWeightGrams" type="number" step="1" value="${val(order.mainComponent.weightGrams)}" /></div>
+      <div><label>${i18('fldShippingWeightG', 'Shipping Weight (g)')}</label><input id="fShippingWeightGrams" type="number" step="1" value="${val(order.mainComponent.shippingWeightGrams)}" /></div>
+      <div><label>${i18('fldVolumeWeightG', 'Volume Weight (g)')}</label><input id="fVolumeWeightGrams" type="number" step="1" value="${val(order.mainComponent.volumeWeightGrams)}" /></div>
     </div>
     ${order.productLine === 'clothing' ? `
       <div style="margin-top:28px;">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
           <div style="flex:1;min-width:260px;">
-            <label style="margin:0;">Product Dimensions - sizing source of truth for this PO</label>
-            <div class="section-help" style="margin-top:4px;">Loading a standard copies it in as an editable starting point - edits here only affect this PO. This becomes what QA/QC checks against for this specific order.</div>
+            <label style="margin:0;">${i18('fldProductDimensionsSot', 'Product Dimensions - sizing source of truth for this PO')}</label>
+            <div class="section-help" style="margin-top:4px;">${i18('helpProductDimensions', 'Loading a standard copies it in as an editable starting point.')}</div>
           </div>
-          <select id="fDimensionsStandardSelect" style="width:auto;"><option value="">Select a standard to load...</option></select>
+          <select id="fDimensionsStandardSelect" style="width:auto;"><option value="">${i18t('helpSelectStandard', 'Select a standard to load...')}</option></select>
         </div>
         <div id="fDimensionsTableWrap" style="margin-top:12px;"></div>
         <div style="display:flex;gap:8px;margin-top:8px;">
-          <button type="button" class="btn btn-secondary" id="fDimensionsAddSize" style="flex:none;width:auto;padding:7px 14px;font-size:13px;">+ Add size</button>
-          <button type="button" class="btn btn-secondary" id="fDimensionsAddPoint" style="flex:none;width:auto;padding:7px 14px;font-size:13px;">+ Add measurement point</button>
+          <button type="button" class="btn btn-secondary" id="fDimensionsAddSize" style="flex:none;width:auto;padding:7px 14px;font-size:13px;">${i18('btnAddSize', '+ Add size')}</button>
+          <button type="button" class="btn btn-secondary" id="fDimensionsAddPoint" style="flex:none;width:auto;padding:7px 14px;font-size:13px;">${i18('btnAddMeasurementPoint', '+ Add measurement point')}</button>
         </div>
       </div>
     ` : `
       <div style="margin-top:28px;">
-        <label style="margin:0;">Product Dimensions</label>
+        <label style="margin:0;">${i18('fldProductDimensions', 'Product Dimensions')}</label>
         <div class="om-field-grid om-field-grid-row" style="margin-top:8px;">
-          <div><label>Length (cm)</label><input id="fDimensionsLength" type="number" step="0.1" value="${val(order.mainComponent.dimensionsLength)}" /></div>
-          <div><label>Width (cm)</label><input id="fDimensionsWidth" type="number" step="0.1" value="${val(order.mainComponent.dimensionsWidth)}" /></div>
-          <div><label>Height (cm)</label><input id="fDimensionsHeight" type="number" step="0.1" value="${val(order.mainComponent.dimensionsHeight)}" /></div>
+          <div><label>${i18('fldLengthCm', 'Length (cm)')}</label><input id="fDimensionsLength" type="number" step="0.1" value="${val(order.mainComponent.dimensionsLength)}" /></div>
+          <div><label>${i18('fldWidthCm', 'Width (cm)')}</label><input id="fDimensionsWidth" type="number" step="0.1" value="${val(order.mainComponent.dimensionsWidth)}" /></div>
+          <div><label>${i18('fldHeightCm', 'Height (cm)')}</label><input id="fDimensionsHeight" type="number" step="0.1" value="${val(order.mainComponent.dimensionsHeight)}" /></div>
         </div>
       </div>
     `}
     </div>
 
     <div class="om-panel-card">
-    <div class="om-section-title">Main Component Specifications</div>
+    <div class="om-section-title">${i18('secMainComponentSpecs', 'Main Component Specifications')}</div>
     <div class="om-field-grid">
       ${order.productLine === 'clothing' ? `
-        <div><label>Fabric Code</label><input id="fFabricInfo" type="text" value="${val(order.mainComponent.fabricInfo)}" /></div>
-        <div><label>Fabric Type</label><input id="fComponent" type="text" placeholder="e.g. 100% Cotton" value="${val(order.mainComponent.component)}" /></div>
+        <div><label>${i18('fldFabricCode', 'Fabric Code')}</label><input id="fFabricInfo" type="text" value="${val(order.mainComponent.fabricInfo)}" /></div>
+        <div><label>${i18('fldFabricType', 'Fabric Type')}</label><input id="fComponent" type="text" placeholder="e.g. 100% Cotton" value="${val(order.mainComponent.component)}" /></div>
       ` : ''}
       <div><label>Unit Price (¥)</label><div class="om-money-wrap"><input id="fFactoryPrice" type="number" step="0.01" value="${val(order.mainComponent.factoryPrice)}" /></div></div>
-      <div><label>Supplier Address</label><input id="fSupplierAddress" type="text" value="${val(order.supplier.address)}" placeholder="Auto-fills from Supplier Name above" /></div>
+      <div><label>${i18('fldSupplierAddress', 'Supplier Address')}</label><input id="fSupplierAddress" type="text" value="${val(order.supplier.address)}" placeholder="Auto-fills from Supplier Name above" /></div>
     </div>
     </div>
 
     <div id="omComponentBreakdownSection" class="om-panel-card" style="${scope === 'main-component' ? 'display:none;' : ''}">
-      <div class="om-section-title">Sub-Component Breakdown</div>
+      <div class="om-section-title">${i18('secSubComponentBreakdown', 'Sub-Component Breakdown')}</div>
       <div class="om-table-wrap">
         <table class="om-table om-table-editable">
           <thead>
             <tr>
-              <th>Component Name</th><th>Photo</th><th>Length</th><th>Width</th><th>Height</th><th>Quantity</th><th>Supplier</th>
-              <th>Price (¥)</th><th>Shipping Cost (¥)</th><th>Supplier Contact</th><th>Delivery Date</th><th>Component Delivery Address</th>
-              <th>Manufacturing Drawing</th><th></th>
+              <th>${i18i('thComponentName', 'Component Name')}</th><th>${i18i('thPhoto', 'Photo')}</th><th>${i18i('thLength', 'Length')}</th><th>${i18i('thWidth', 'Width')}</th><th>${i18i('thHeight', 'Height')}</th><th>${i18i('thQuantity', 'Quantity')}</th><th>${i18i('thSupplier', 'Supplier')}</th>
+              <th>${i18i('thPrice', 'Price')} (¥)</th><th>${i18i('thShippingCost', 'Shipping Cost')} (¥)</th><th>${i18i('thSupplierContact', 'Supplier Contact')}</th><th>${i18i('thDeliveryDate', 'Delivery Date')}</th><th>${i18i('thComponentDeliveryAddress', 'Component Delivery Address')}</th>
+              <th>${i18i('thManufacturingDrawing', 'Manufacturing Drawing')}</th><th></th>
             </tr>
           </thead>
           <tbody id="omAccessoryRows"></tbody>
@@ -2001,34 +2081,34 @@ async function openDetailPanel(id, scope) {
     </div>
 
     <div class="om-panel-card">
-    <div class="om-section-title">Warehousing Breakdown</div>
+    <div class="om-section-title">${i18('secWarehousingBreakdown', 'Warehousing Breakdown')}</div>
     <div class="om-field-grid">
-      <div><label>Warehouse Address</label>
+      <div><label>${i18('fldWarehouseAddress', 'Warehouse Address')}</label>
         <select id="fWarehouse" data-current="${escapeHtml(order.mainComponent.warehouse || '')}">
           <option value="${escapeHtml(order.mainComponent.warehouse || '')}">${escapeHtml(order.mainComponent.warehouse || '— Select —')}</option>
         </select>
         <input type="text" id="fWarehouseOther" placeholder="Enter new warehouse name" style="margin-top:8px;display:none;" />
       </div>
-      <div><label>Shipping cost (¥)</label><div class="om-money-wrap"><input id="fTransportationFees" type="number" step="0.01" value="${val(order.costs.transportationFees)}" /></div></div>
-      <div><label>Packing List Number</label><input id="fFulfillPacking" type="text" value="${val(order.fulfillment.packingListNumber)}" /></div>
-      <div><label>Waybill Number</label><input id="fFulfillWaybill" type="text" value="${val(order.fulfillment.waybillNumber)}" /></div>
+      <div><label>${i18('fldShippingCost', 'Shipping cost')} (¥)</label><div class="om-money-wrap"><input id="fTransportationFees" type="number" step="0.01" value="${val(order.costs.transportationFees)}" /></div></div>
+      <div><label>${i18('fldPackingListNumber', 'Packing List Number')}</label><input id="fFulfillPacking" type="text" value="${val(order.fulfillment.packingListNumber)}" /></div>
+      <div><label>${i18('fldWaybillNumber', 'Waybill Number')}</label><input id="fFulfillWaybill" type="text" value="${val(order.fulfillment.waybillNumber)}" /></div>
     </div>
     </div>
 
     <div class="om-panel-card">
-    <div class="om-section-title">Payment</div>
+    <div class="om-section-title">${i18('secPayment', 'Payment')}</div>
     <div class="om-field-grid">
-      <div><label>Additional Assembly Fee (¥)</label><div class="om-money-wrap"><input id="fAssemblyFee" type="number" step="0.01" value="${val(order.costs.assemblyFee)}" /></div></div>
-      <div><label>Additional Labor Fee (¥)</label><div class="om-money-wrap"><input id="fLaborCosts" type="number" step="0.01" value="${val(order.costs.laborCosts)}" /></div></div>
-      <div><label>Other Expenses (¥)</label><div class="om-money-wrap"><input id="fOtherExpenses" type="number" step="0.01" value="${val(order.costs.otherExpenses)}" /></div></div>
-      <div><label>Manufacturing Cost per unit (¥)</label><input id="fManufacturingCostTotal" type="text" value="${fmtMoney(computeManufacturingCostPerUnit(order))}" disabled title="Main component unit price + sum of sub-component unit prices" /></div>
-      <div><label>Total PO Cost (¥)</label><input id="fTotalPoCost" type="text" value="${fmtMoney(computeOrderTotal(order))}" disabled title="Manufacturing Cost x Order Quantity, plus shipping and additional fees" /></div>
-      <div><label>Total Price per Unit (¥)</label><input id="fTotalPricePerUnit" type="text" value="${order.mainComponent.purchaseQuantity ? fmtMoney(computeOrderTotal(order) / order.mainComponent.purchaseQuantity) : '—'}" disabled title="Total PO cost divided by units ordered" /></div>
+      <div><label>${i18('fldAdditionalAssemblyFee', 'Additional Assembly Fee')} (¥)</label><div class="om-money-wrap"><input id="fAssemblyFee" type="number" step="0.01" value="${val(order.costs.assemblyFee)}" /></div></div>
+      <div><label>${i18('fldAdditionalLaborFee', 'Additional Labor Fee')} (¥)</label><div class="om-money-wrap"><input id="fLaborCosts" type="number" step="0.01" value="${val(order.costs.laborCosts)}" /></div></div>
+      <div><label>${i18('fldOtherExpenses', 'Other Expenses')} (¥)</label><div class="om-money-wrap"><input id="fOtherExpenses" type="number" step="0.01" value="${val(order.costs.otherExpenses)}" /></div></div>
+      <div><label>${i18('fldManufacturingCostPerUnit', 'Manufacturing Cost per unit')} (¥)</label><input id="fManufacturingCostTotal" type="text" value="${fmtMoney(computeManufacturingCostPerUnit(order))}" disabled title="Main component unit price + sum of sub-component unit prices" /></div>
+      <div><label>${i18('fldTotalPoCost', 'Total PO Cost')} (¥)</label><input id="fTotalPoCost" type="text" value="${fmtMoney(computeOrderTotal(order))}" disabled title="Manufacturing Cost x Order Quantity, plus shipping and additional fees" /></div>
+      <div><label>${i18('fldTotalPricePerUnit', 'Total Price per Unit')} (¥)</label><input id="fTotalPricePerUnit" type="text" value="${order.mainComponent.purchaseQuantity ? fmtMoney(computeOrderTotal(order) / order.mainComponent.purchaseQuantity) : '—'}" disabled title="Total PO cost divided by units ordered" /></div>
     </div>
 
     <div class="om-section-title" style="margin-top:20px;">Paid Status by Component</div>
     <table class="om-table" style="min-width:0;">
-      <thead><tr><th>Component</th><th>Amount (¥)</th><th>Status</th></tr></thead>
+      <thead><tr><th>${i18i('thComponent', 'Component')}</th><th>${i18i('thAmount', 'Amount')} (¥)</th><th>${i18i('thStatus', 'Status')}</th></tr></thead>
       <tbody id="omPaymentLineItems"></tbody>
     </table>
     <div class="om-detail-row" style="margin-top:10px;"><span class="om-label"><strong>Overall Payment Status</strong></span><span class="om-value" id="omOverallPaymentStatus">${escapeHtml(order.settlement.status)}</span></div>
@@ -2041,14 +2121,14 @@ async function openDetailPanel(id, scope) {
     </div>
 
     <div class="om-panel-card">
-    <div class="om-section-title">Change log</div>
+    <div class="om-section-title">${i18('secChangeLog', 'Change log')}</div>
     <ul class="om-changelog">
       ${(order.changeLog || []).map((c) => `
         <li>
           <strong>${escapeHtml(c.action)}</strong>${c.details ? ' — ' + escapeHtml(c.details) : ''}
           <div class="om-cl-meta">${escapeHtml(c.actor || 'Unknown')} · ${new Date(c.timestamp).toLocaleString()}</div>
         </li>
-      `).join('') || '<li class="om-cl-meta">No changes logged yet.</li>'}
+      `).join('') || `<li class="om-cl-meta">${i18('emptyNoChanges', 'No changes logged yet.')}</li>`}
     </ul>
     </div>
    </div>
@@ -2117,7 +2197,7 @@ async function openDetailPanel(id, scope) {
       const preview = document.getElementById('fPhotoReferencePreview');
       preview.src = body.file.url;
       preview.style.display = 'block';
-      showToast('Photo uploaded');
+      showToast(i18t('toastPhotoUploaded', 'Photo uploaded'));
     } catch (err) { showToast(err.message, true); }
   });
 
@@ -2155,7 +2235,7 @@ async function openDetailPanel(id, scope) {
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || 'Upload failed');
       row.querySelector(urlInputSelector).value = body.file.url;
-      showToast('File uploaded');
+      showToast(i18t('toastFileUploaded', 'File uploaded'));
       onDone(body.file.url);
     } catch (e) { showToast(e.message, true); }
   }
@@ -2320,8 +2400,8 @@ async function openDetailPanel(id, scope) {
         <td>${fmtMoney(item.amount)}</td>
         <td>
           <select data-payment-key="${escapeHtml(item.key)}" class="om-paid-select" data-paid="${paid ? 'paid' : 'pending'}">
-            <option value="pending" ${!paid ? 'selected' : ''}>Pending</option>
-            <option value="paid" ${paid ? 'selected' : ''}>Paid</option>
+            <option value="pending" ${!paid ? 'selected' : ''}>${tStatusText('Pending')}</option>
+            <option value="paid" ${paid ? 'selected' : ''}>${tStatusText('Paid')}</option>
           </select>
         </td>
       </tr>
@@ -2404,7 +2484,7 @@ async function openDetailPanel(id, scope) {
         order.poCompletedAt = new Date().toISOString();
         completePoBtn.textContent = `PO Completed ${fmtDate(order.poCompletedAt)}`;
         completePoBtn.disabled = true;
-        showToast('PO marked complete');
+        showToast(i18t('toastPoMarkedComplete', 'PO marked complete'));
         refreshCurrentView();
       } catch (err) { showToast(err.message, true); }
     });
@@ -2426,7 +2506,7 @@ async function openDetailPanel(id, scope) {
     const wrap = document.getElementById('fDimensionsTableWrap');
     if (!wrap) return;
     if (!dimensionsTableState) {
-      wrap.innerHTML = `<div class="om-empty">No sizing table yet - select a standard above, or add sizes/points manually.</div>`;
+      wrap.innerHTML = `<div class="om-empty">${i18('emptyNoSizingTable', 'No sizing table yet - select a standard above, or add sizes/points manually.')}</div>`;
       return;
     }
     const t = dimensionsTableState;
@@ -2443,7 +2523,7 @@ async function openDetailPanel(id, scope) {
         <table class="om-table om-table-editable" style="min-width:0;">
           <thead>
             <tr>
-              <th>Size</th>
+              <th>${i18i('th2Size', 'Size')}</th>
               ${t.points.map((p) => `
                 <th>
                   ${escapeHtml((t.pointLabels[p] && t.pointLabels[p].en) || p)}
@@ -2508,7 +2588,7 @@ async function openDetailPanel(id, scope) {
     api('/api/fits').then((fitsData) => {
       const fits = (fitsData && fitsData.fits) || {};
       universalSizes = (fitsData && fitsData.universalSizes) || [];
-      dimStandardSelect.innerHTML = `<option value="">Select a standard to load...</option>` +
+      dimStandardSelect.innerHTML = `<option value="">${i18t('helpSelectStandard', 'Select a standard to load...')}</option>` +
         Object.keys(fits).sort().map((key) => `<option value="${escapeHtml(key)}">${escapeHtml(fits[key].label_en || key)}</option>`).join('');
       // Re-render now that universalSizes is populated, so any table
       // already on the page (loaded from this PO's saved data) gets the
@@ -2633,7 +2713,7 @@ async function openDetailPanel(id, scope) {
         <div class="om-tracker-step om-tracker-${state}" data-status="${escapeHtml(s)}">
           <div class="om-tracker-line"></div>
           <div class="om-tracker-dot">${state === 'done' ? '&#10003;' : i + 1}</div>
-          <div class="om-tracker-label">${escapeHtml(s)}</div>
+          <div class="om-tracker-label">${tStatus(s)}</div>
         </div>
       `;
     }).join('');
@@ -2653,7 +2733,7 @@ async function openDetailPanel(id, scope) {
       document.getElementById('fOrderStatusSelect').setAttribute('data-status', newStatusValue);
       renderStatusTracker(newStatusValue);
       updateCompletePoButtonState();
-      showToast('Status updated');
+      showToast(i18t('toastStatusUpdated', 'Status updated'));
       refreshCurrentView();
     } catch (err) { showToast(err.message, true); }
   }
@@ -2738,8 +2818,8 @@ async function openDetailPanel(id, scope) {
         const qaLeads = optionsData.qaLeads || [];
         const current = buyerSelect.dataset.current || '';
         const names = current && !qaLeads.includes(current) ? [current, ...qaLeads] : qaLeads;
-        buyerSelect.innerHTML = `<option value="">— Select —</option>` +
-          `<option value="__other__">+ Add new...</option>` +
+        buyerSelect.innerHTML = `<option value="">${i18t('btnSelect', '— Select —')}</option>` +
+          `<option value="__other__">${i18t('btnAddNew', '+ Add new...')}</option>` +
           names.map((n) => `<option value="${escapeHtml(n)}" ${n === current ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('');
         buyerSelect.addEventListener('change', (e) => {
           const isOther = e.target.value === '__other__';
@@ -2758,8 +2838,8 @@ async function openDetailPanel(id, scope) {
         const current = warehouseSelect.dataset.current || '';
         const names = warehouses.map((w) => w.name);
         const allNames = current && !names.includes(current) ? [current, ...names] : names;
-        warehouseSelect.innerHTML = `<option value="">— Select —</option>` +
-          `<option value="__other__">+ Add new...</option>` +
+        warehouseSelect.innerHTML = `<option value="">${i18t('btnSelect', '— Select —')}</option>` +
+          `<option value="__other__">${i18t('btnAddNew', '+ Add new...')}</option>` +
           allNames.map((n) => `<option value="${escapeHtml(n)}" ${n === current ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('');
         warehouseSelect.addEventListener('change', (e) => {
           const isOther = e.target.value === '__other__';
@@ -2846,7 +2926,7 @@ async function openDetailPanel(id, scope) {
         method: 'PATCH',
         body: JSON.stringify({ patch, actor: 'Web user' })
       });
-      showToast('Changes saved');
+      showToast(i18t('toastChangesSaved', 'Changes saved'));
       closePanel();
       openDetailPanel(order.id);
       refreshCurrentView();
@@ -2888,16 +2968,16 @@ async function openAccessoryDetailPanel(orderId, accessoryId) {
       </div>
     </div>
 
-    <div class="om-section-title">Status</div>
+    <div class="om-section-title">${i18('secStatus', 'Status')}</div>
     <div class="om-field-grid">
-      <div><label>Status</label>
+      <div><label>${i18('fldStatusLc', 'Status')}</label>
         <select id="accStatus">
-          ${ACCESSORY_STATUSES.map((s) => `<option value="${escapeHtml(s)}" ${s === accessory.status ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('')}
+          ${ACCESSORY_STATUSES.map((s) => `<option value="${escapeHtml(s)}" ${s === accessory.status ? 'selected' : ''}>${tStatusText(s)}</option>`).join('')}
         </select>
       </div>
     </div>
 
-    <div class="om-section-title">Component Details</div>
+    <div class="om-section-title">${i18('secComponentDetailsCap', 'Component Details')}</div>
     ${accessory.imageUrl ? `<img src="${escapeHtml(accessory.imageUrl)}" alt="" style="width:96px;height:96px;object-fit:cover;border-radius:8px;border:1px solid var(--jc-border);margin-bottom:12px;" />` : ''}
     <div class="om-detail-grid">
       <div class="om-detail-row"><span class="om-label">Part name</span><span class="om-value">${escapeHtml(accessory.partName || '—')}</span></div>
@@ -2934,7 +3014,7 @@ async function openAccessoryDetailPanel(orderId, accessoryId) {
         method: 'PATCH',
         body: JSON.stringify({ patch: { accessories }, actor: 'Web user' })
       });
-      showToast('Status saved');
+      showToast(i18t('toastStatusSaved', 'Status saved'));
       closePanel();
       refreshCurrentView();
     } catch (e) { showToast(e.message, true); }
@@ -2947,7 +3027,7 @@ async function setSettlement(id, status) {
       method: 'POST',
       body: JSON.stringify({ status })
     });
-    showToast('Settlement updated');
+    showToast(i18t('toastSettlementUpdated', 'Settlement updated'));
     closePanel();
     refreshCurrentView();
   } catch (e) { showToast(e.message, true); }
@@ -2978,7 +3058,7 @@ function uploadFieldHtml(fieldId, label, currentUrl, isImage) {
         ${preview}
         <input type="hidden" id="${fieldId}" value="${escapeHtml(currentUrl || '')}" />
         <input type="file" id="${fieldId}File" style="display:none;" ${isImage ? 'accept="image/*"' : ''} />
-        <button type="button" class="om-table-upload-btn" id="${fieldId}UploadBtn">Upload</button>
+        <button type="button" class="om-table-upload-btn" id="${fieldId}UploadBtn">${i18('btnUpload', 'Upload')}</button>
       </div>
     </div>
   `;
@@ -3026,7 +3106,7 @@ function wireUploadField(fieldId, orderId, category, isImage) {
         fresh.textContent = 'View file';
       }
       container.replaceChild(fresh, old);
-      showToast('File uploaded');
+      showToast(i18t('toastFileUploaded', 'File uploaded'));
     } catch (err) { showToast(err.message, true); }
   });
 }
@@ -3041,7 +3121,7 @@ function accessoryRowHtml(idx, data, mainAddress) {
         ${data.imageUrl ? `<img class="om-table-thumb" src="${escapeHtml(data.imageUrl)}" alt="" />` : ''}
         <input type="hidden" class="om-acc-image-url" value="${escapeHtml(data.imageUrl || '')}" />
         <input type="file" class="om-acc-image-file" accept="image/*" style="display:none;" />
-        <button type="button" class="om-table-upload-btn om-acc-image-upload-btn">Upload</button>
+        <button type="button" class="om-table-upload-btn om-acc-image-upload-btn">${i18('btnUpload', 'Upload')}</button>
       </td>
       <td><input type="number" step="0.01" class="om-acc-length" placeholder="L" value="${escapeHtml(data.dimensionsLength ?? '')}" style="min-width:56px;" /></td>
       <td><input type="number" step="0.01" class="om-acc-width" placeholder="W" value="${escapeHtml(data.dimensionsWidth ?? '')}" style="min-width:56px;" /></td>
@@ -3057,7 +3137,7 @@ function accessoryRowHtml(idx, data, mainAddress) {
         ${data.designDocUrl ? `<a href="${escapeHtml(data.designDocUrl)}" target="_blank" rel="noopener" style="display:block;font-size:11.5px;margin-bottom:4px;">View file</a>` : ''}
         <input type="hidden" class="om-acc-doc-url" value="${escapeHtml(data.designDocUrl || '')}" />
         <input type="file" class="om-acc-doc-file" style="display:none;" />
-        <button type="button" class="om-table-upload-btn om-acc-doc-upload-btn">Upload</button>
+        <button type="button" class="om-table-upload-btn om-acc-doc-upload-btn">${i18('btnUpload', 'Upload')}</button>
       </td>
       <td><button type="button" class="om-row-remove" data-remove-accessory="${idx}" title="Remove">&times;</button></td>
     </tr>
@@ -3093,6 +3173,9 @@ function collectAccessoryRows(container) {
   const params = new URLSearchParams(location.search);
   const view = params.get('view');
   if (view === 'suppliers' || view === 'settlement' || view === 'products' || view === 'components' || view === 'fabric-library') currentView = view;
+  // Translations first so the very first paint is already bilingual - the
+  // shared loader caches, so this costs one request for the whole page.
+  if (window.JuniperI18n) await window.JuniperI18n.loadI18n();
   await Promise.all([loadStatuses(), loadAccessoryStatuses(), loadFileCategories()]);
   render();
 })();

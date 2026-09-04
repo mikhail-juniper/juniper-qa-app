@@ -350,11 +350,14 @@
    across browsers. */
 .om-typeahead-wrap { position: relative; }
 .om-typeahead-menu {
-  position: absolute; top: 100%; left: 0; margin-top: 2px;
-  width: max-content; min-width: 100%; max-width: 320px;
+  /* Fixed, and mounted on <body>, so no scrolling ancestor can clip it -
+     position is set in JS from the input's rect. z-index sits above the
+     detail panel (which is 60) for the same reason. */
+  position: fixed; margin-top: 0;
+  width: max-content; max-width: 320px;
   background: #fff; border: 1.5px solid var(--jc-border); border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.12); max-height: 220px; overflow-y: auto;
-  z-index: 30; display: none;
+  z-index: 200; display: none;
 }
 .om-typeahead-menu.open { display: block; }
 .om-typeahead-option { padding: 8px 12px; font-size: 13px; cursor: pointer; }
@@ -625,3 +628,19 @@ div.om-money-wrap input { padding-left: 28px; width: 100%; }
   background: #fafbfa;
 }
 .om-row-remove-block { margin-top: 10px; width: auto !important; padding: 6px 12px !important; font-size: 12.5px; }
+
+/* Bilingual secondary line, inline variant - for table headers, chips and
+   other tight spots where the stacked .zh block would wrap awkwardly. */
+.zh-inline {
+  font-size: 0.85em;
+  color: var(--jc-muted-light);
+  font-weight: 500;
+  white-space: nowrap;
+}
+/* Table headers already run small and uppercase; keep the English readable
+   rather than shouting it in caps next to the Chinese. */
+.om-table th .zh-inline { text-transform: none; letter-spacing: 0; }
+.om-section-title .zh { text-transform: none; letter-spacing: 0; font-size: 12.5px; font-weight: 600; }
+.om-view-title .zh { font-size: 0.6em; font-weight: 600; }
+.om-sidebar-link .zh { font-size: 0.8em; margin-top: 1px; }
+.om-sidebar-group-label .zh { font-size: 0.85em; margin-top: 1px; }

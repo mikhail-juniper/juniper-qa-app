@@ -6,6 +6,12 @@
  * exactly that data shape - no reason to duplicate it.
  */
 
+/* Bilingual shorthands (Chinese first, English underneath), backed by
+ * i18n-shared.js - same convention as the Order Management pages. */
+const i18 = (k, f) => (window.JuniperI18n ? window.JuniperI18n.t(k, f) : escapeHtml(f || k));
+const i18i = (k, f) => (window.JuniperI18n ? window.JuniperI18n.tInline(k, f) : escapeHtml(f || k));
+const i18t = (k, f) => (window.JuniperI18n ? window.JuniperI18n.tText(k, f) : (f || k));
+
 function showToast(msg, isError = false) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -28,7 +34,7 @@ const DEFAULT_TIER = 2; // only used to seed a brand-new client's tier - never s
 
 async function loadClients() {
   const root = document.getElementById('clRoot');
-  root.innerHTML = `<div class="om-empty">Loading...</div>`;
+  root.innerHTML = `<div class="om-empty">${i18('emptyLoading', 'Loading...')}</div>`;
   try {
     const [optionsRes, tiersRes] = await Promise.all([
       fetch('/api/options'),
@@ -51,6 +57,7 @@ async function loadClients() {
       }
     });
     if (needsSave) await saveClients(false);
+    if (window.JuniperI18n) await window.JuniperI18n.loadI18n();
     render();
   } catch (e) { showToast(e.message, true); }
 }
@@ -59,31 +66,31 @@ function render() {
   const root = document.getElementById('clRoot');
   const rows = clientNames.slice().sort((a, b) => a.localeCompare(b));
   root.innerHTML = `
-    <h2 class="om-view-title">Clients</h2>
+    <h2 class="om-view-title">${i18('cliClients', 'Clients')}</h2>
     <div class="om-table-wrap">
       <table class="om-table">
-        <thead><tr><th>Client / Creator / Brand</th><th>Creator Tier</th><th></th></tr></thead>
+        <thead><tr><th>${i18i('cliClientCreatorBrand', 'Client / Creator / Brand')}</th><th>${i18i('cliCreatorTier', 'Creator Tier')}</th><th></th></tr></thead>
         <tbody>
           ${rows.map((name) => `
             <tr>
               <td><strong>${escapeHtml(name)}</strong></td>
               <td>
                 <select data-tier-for="${escapeHtml(name)}">
-                  ${[1, 2, 3].map((t) => `<option value="${t}" ${tiers[name] === t ? 'selected' : ''}>${t}</option>`).join('')}
+                  ${[1, 2, 3].map((tv) => `<option value="${tv}" ${tiers[name] === tv ? 'selected' : ''}>${i18t('cliTier' + tv, 'Tier ' + tv)}</option>`).join('')}
                 </select>
               </td>
               <td><button type="button" class="om-file-remove" data-remove="${escapeHtml(name)}" title="Remove">&times;</button></td>
             </tr>
-          `).join('') || `<tr><td colspan="3" class="om-empty">No clients yet.</td></tr>`}
+          `).join('') || `<tr><td colspan="3" class="om-empty">${i18('cliNoClients', 'No clients yet.')}</td></tr>`}
         </tbody>
       </table>
     </div>
     <div class="om-file-upload-row" style="margin-top:14px;max-width:520px;">
-      <input type="text" id="clNewName" placeholder="New client / creator / brand name..." style="flex:1 1 220px;padding:8px 12px;border-radius:var(--radius-sm);border:1.5px solid var(--jc-border);" />
+      <input type="text" id="clNewName" placeholder="${i18t('cliNewClientPlaceholder', 'New client / creator / brand name...')}" style="flex:1 1 220px;padding:8px 12px;border-radius:var(--radius-sm);border:1.5px solid var(--jc-border);" />
       <select id="clNewTier">
-        <option value="1">Tier 1</option>
-        <option value="2" selected>Tier 2</option>
-        <option value="3">Tier 3</option>
+        <option value="1">${i18t('cliTier1', 'Tier 1')}</option>
+        <option value="2" selected>${i18t('cliTier2', 'Tier 2')}</option>
+        <option value="3">${i18t('cliTier3', 'Tier 3')}</option>
       </select>
       <button class="btn btn-primary" id="clAddBtn" style="flex:none;width:auto;padding:8px 16px;">+ Add client</button>
     </div>
@@ -106,8 +113,8 @@ function render() {
   document.getElementById('clAddBtn').addEventListener('click', () => {
     const nameInput = document.getElementById('clNewName');
     const name = nameInput.value.trim();
-    if (!name) return showToast('Enter a name first', true);
-    if (clientNames.includes(name)) return showToast('That client already exists', true);
+    if (!name) return showToast(i18t('toastEnterNameFirst', 'Enter a name first'), true);
+    if (clientNames.includes(name)) return showToast(i18t('toastClientExists', 'That client already exists'), true);
     clientNames.push(name);
     tiers[name] = parseInt(document.getElementById('clNewTier').value, 10);
     saveClients();
@@ -127,7 +134,7 @@ async function saveClients(showConfirmation) {
       })
     ]);
     if (showConfirmation !== false) {
-      showToast('Saved');
+      showToast(i18t('toastSaved', 'Saved'));
       render();
     }
   } catch (e) { showToast(e.message, true); }

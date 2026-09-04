@@ -39,7 +39,11 @@
   padding-top: 14px;
 }
 
+/* Uppercasing lives here rather than in JS .toUpperCase(), which would
+   also uppercase the bilingual <span class="zh"> markup inside the label
+   and break the CSS hook. text-transform only affects rendered glyphs. */
 .app-sidebar-group {
+  text-transform: uppercase;
   font-size: 11.5px;
   font-weight: 800;
   letter-spacing: 0.06em;
@@ -89,3 +93,8 @@
   .app-body-flex { flex-direction: column; }
   .app-sidebar { width: 100%; flex: none; position: static; max-height: none; padding: 12px 0; }
 }
+
+/* Chinese-first nav labels: the English second line sits tighter and
+   quieter under the Chinese, and must not inherit the group's uppercase. */
+.app-sidebar-group .zh { text-transform: none; letter-spacing: 0; font-size: 0.85em; font-weight: 600; margin-top: 1px; }
+.app-sidebar-link .zh { font-size: 0.8em; margin-top: 1px; }

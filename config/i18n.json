@@ -1714,5 +1714,1413 @@
   "addPhotoOrVideo": {
     "en": "Add photo / video",
     "zh": "添加照片/视频"
+  },
+  "navOrderManagementGroup": {
+    "en": "Order Management",
+    "zh": "订单管理"
+  },
+  "navProductInformation": {
+    "en": "Product Information",
+    "zh": "产品信息"
+  },
+  "navQaQc": {
+    "en": "QA/QC",
+    "zh": "质检"
+  },
+  "navOther": {
+    "en": "Other",
+    "zh": "其他"
+  },
+  "navNewPurchaseOrder": {
+    "en": "New Purchase Order",
+    "zh": "新建采购订单"
+  },
+  "navOrderManagement": {
+    "en": "Order Management",
+    "zh": "订单管理"
+  },
+  "navQaQcReporting": {
+    "en": "QA/QC Reporting",
+    "zh": "质检报告"
+  },
+  "navFinances": {
+    "en": "Finances",
+    "zh": "财务"
+  },
+  "navProducts": {
+    "en": "Products",
+    "zh": "产品"
+  },
+  "navComponents": {
+    "en": "Components",
+    "zh": "组件"
+  },
+  "navFabricLibrary": {
+    "en": "Fabric Library",
+    "zh": "面料库"
+  },
+  "navSuppliers": {
+    "en": "Suppliers",
+    "zh": "供应商"
+  },
+  "navClients": {
+    "en": "Clients",
+    "zh": "客户"
+  },
+  "navSizingCharts": {
+    "en": "Sizing Charts",
+    "zh": "尺码表"
+  },
+  "navPdApproval": {
+    "en": "Product Development Approval",
+    "zh": "产品开发审批"
+  },
+  "navReports": {
+    "en": "Reports",
+    "zh": "报告"
+  },
+  "navAnalytics": {
+    "en": "Analytics",
+    "zh": "数据分析"
+  },
+  "navSettings": {
+    "en": "Settings",
+    "zh": "设置"
+  },
+  "statusNewRequest": {
+    "en": "New Request",
+    "zh": "新需求"
+  },
+  "statusOrderPlaced": {
+    "en": "Order Placed",
+    "zh": "已下单"
+  },
+  "statusPpQualityInspection": {
+    "en": "PP Quality Inspection",
+    "zh": "产前质检"
+  },
+  "statusInProduction": {
+    "en": "In Production",
+    "zh": "生产中"
+  },
+  "statusBulkQualityInspection": {
+    "en": "Bulk Quality Inspection",
+    "zh": "大货质检"
+  },
+  "statusFinalProduction": {
+    "en": "Final Production",
+    "zh": "后段生产"
+  },
+  "statusInTransportation": {
+    "en": "In Transportation",
+    "zh": "运输中"
+  },
+  "statusDelivered": {
+    "en": "Delivered",
+    "zh": "已交付"
+  },
+  "statusCompleted": {
+    "en": "Completed",
+    "zh": "已完成"
+  },
+  "statusPending": {
+    "en": "Pending",
+    "zh": "待处理"
+  },
+  "statusInProgress": {
+    "en": "In Progress",
+    "zh": "进行中"
+  },
+  "statusPaid": {
+    "en": "Paid",
+    "zh": "已付款"
+  },
+  "secStatus": {
+    "en": "Status",
+    "zh": "状态"
+  },
+  "secProductionStatus": {
+    "en": "Production Status",
+    "zh": "生产状态"
+  },
+  "secOrderDetails": {
+    "en": "Order Details",
+    "zh": "订单详情"
+  },
+  "secProductDevelopmentApproval": {
+    "en": "Product Development Approval",
+    "zh": "产品开发审批"
+  },
+  "secQaQcReporting": {
+    "en": "QA/QC Reporting",
+    "zh": "质检报告"
+  },
+  "secProductDocumentation": {
+    "en": "Product Documentation",
+    "zh": "产品文件"
+  },
+  "secMainComponentSpecs": {
+    "en": "Main Component Specifications",
+    "zh": "主料规格"
+  },
+  "secSubComponents": {
+    "en": "Sub-Components",
+    "zh": "辅料"
+  },
+  "secPayment": {
+    "en": "Payment",
+    "zh": "付款"
+  },
+  "secPaidStatusByComponent": {
+    "en": "Paid Status by Component",
+    "zh": "各组件付款状态"
+  },
+  "secWarehouseBreakdown": {
+    "en": "Warehouse Breakdown",
+    "zh": "仓库明细"
+  },
+  "secChangeLog": {
+    "en": "Change log",
+    "zh": "变更记录"
+  },
+  "secFiles": {
+    "en": "Files",
+    "zh": "文件"
+  },
+  "secSizeDistribution": {
+    "en": "Size Distribution",
+    "zh": "尺码分配"
+  },
+  "secVariantDistribution": {
+    "en": "Variant Distribution",
+    "zh": "款式分配"
+  },
+  "secProductDetails": {
+    "en": "Product details",
+    "zh": "产品详情"
+  },
+  "secComponentDetails": {
+    "en": "Component details",
+    "zh": "组件详情"
+  },
+  "secSupplier": {
+    "en": "Supplier",
+    "zh": "供应商"
+  },
+  "secHistoricalPos": {
+    "en": "Historical POs",
+    "zh": "历史订单"
+  },
+  "secFabricCodes": {
+    "en": "Fabric Codes",
+    "zh": "面料编号"
+  },
+  "secFabricTypes": {
+    "en": "Fabric Types",
+    "zh": "面料类型"
+  },
+  "fldProductName": {
+    "en": "Product Name",
+    "zh": "产品名称"
+  },
+  "fldPurchaseOrderNumber": {
+    "en": "Purchase Order Number",
+    "zh": "采购订单号"
+  },
+  "fldSku": {
+    "en": "SKU",
+    "zh": "SKU"
+  },
+  "fldPhotoReference": {
+    "en": "Photo reference",
+    "zh": "参考图片"
+  },
+  "fldSupplierName": {
+    "en": "Supplier Name",
+    "zh": "供应商名称"
+  },
+  "fldSupplierCode": {
+    "en": "Supplier Code",
+    "zh": "供应商编号"
+  },
+  "fldSupplierAddress": {
+    "en": "Supplier Address",
+    "zh": "供应商地址"
+  },
+  "fldProductComplexityRisk": {
+    "en": "Product Complexity/Risk",
+    "zh": "产品复杂度/风险"
+  },
+  "fldOrderStatus": {
+    "en": "Order Status",
+    "zh": "订单状态"
+  },
+  "fldOrderPlacementDate": {
+    "en": "Order placement date",
+    "zh": "下单日期"
+  },
+  "fldFulfillmentRequestDate": {
+    "en": "Fulfillment Request Date",
+    "zh": "履约请求日期"
+  },
+  "fldRequiredWarehouseArrival": {
+    "en": "Required Warehouse Arrival Date",
+    "zh": "要求到仓日期"
+  },
+  "fldRequiredManufacturerDelivery": {
+    "en": "Required Manufacturer Delivery Date",
+    "zh": "要求工厂交货日期"
+  },
+  "fldOrderQuantity": {
+    "en": "Order Quantity",
+    "zh": "订单数量"
+  },
+  "fldQuantityReceived": {
+    "en": "Quantity received",
+    "zh": "已收数量"
+  },
+  "fldOrderManagementSpecialist": {
+    "en": "Order Management Specialist",
+    "zh": "订单管理专员"
+  },
+  "fldWarehouseAddress": {
+    "en": "Warehouse Address",
+    "zh": "仓库地址"
+  },
+  "fldUnitPrice": {
+    "en": "Unit Price",
+    "zh": "单价"
+  },
+  "fldFabricCode": {
+    "en": "Fabric Code",
+    "zh": "面料编号"
+  },
+  "fldFabricType": {
+    "en": "Fabric Type",
+    "zh": "面料类型"
+  },
+  "fldManufacturingDrawing": {
+    "en": "Manufacturing Drawing",
+    "zh": "生产图纸"
+  },
+  "fldWashingTag": {
+    "en": "Washing Tag",
+    "zh": "水洗标"
+  },
+  "fldPackaging": {
+    "en": "Packaging",
+    "zh": "包装"
+  },
+  "fldWeightG": {
+    "en": "Weight (g)",
+    "zh": "重量 (克)"
+  },
+  "fldShippingWeightG": {
+    "en": "Shipping Weight (g)",
+    "zh": "运输重量 (克)"
+  },
+  "fldVolumeWeightG": {
+    "en": "Volume Weight (g)",
+    "zh": "体积重量 (克)"
+  },
+  "fldProductDimensions": {
+    "en": "Product Dimensions",
+    "zh": "产品尺寸"
+  },
+  "fldLengthCm": {
+    "en": "Length (cm)",
+    "zh": "长度 (厘米)"
+  },
+  "fldWidthCm": {
+    "en": "Width (cm)",
+    "zh": "宽度 (厘米)"
+  },
+  "fldHeightCm": {
+    "en": "Height (cm)",
+    "zh": "高度 (厘米)"
+  },
+  "fldWaybillNumber": {
+    "en": "Waybill Number",
+    "zh": "运单号"
+  },
+  "fldPackingListNumber": {
+    "en": "Packing List Number",
+    "zh": "装箱单号"
+  },
+  "fldWarehouseEntryDate": {
+    "en": "Warehouse entry date",
+    "zh": "入仓日期"
+  },
+  "fldMaterialBlend": {
+    "en": "Material Blend",
+    "zh": "材质成分"
+  },
+  "fldCompanyName": {
+    "en": "Company Name",
+    "zh": "公司名称"
+  },
+  "fldColor": {
+    "en": "Color",
+    "zh": "颜色"
+  },
+  "fldPantoneColor": {
+    "en": "Pantone Color",
+    "zh": "潘通色号"
+  },
+  "fldHexColor": {
+    "en": "Hex Color",
+    "zh": "十六进制色值"
+  },
+  "fldCmykColor": {
+    "en": "CMYK Color",
+    "zh": "CMYK 色值"
+  },
+  "fldBookCode": {
+    "en": "Book Code",
+    "zh": "色卡编号"
+  },
+  "fldFabricWeight": {
+    "en": "Fabric Weight",
+    "zh": "面料克重"
+  },
+  "fldFabricSwatch": {
+    "en": "Fabric Swatch",
+    "zh": "面料小样"
+  },
+  "fldDigitalColorReference": {
+    "en": "Digital Color Reference",
+    "zh": "电子色卡"
+  },
+  "fldNotes": {
+    "en": "Notes",
+    "zh": "备注"
+  },
+  "fldType": {
+    "en": "Type",
+    "zh": "类型"
+  },
+  "fldMonth": {
+    "en": "Month",
+    "zh": "月份"
+  },
+  "fldPartName": {
+    "en": "Part name",
+    "zh": "部件名称"
+  },
+  "fldMaterial": {
+    "en": "Material",
+    "zh": "材质"
+  },
+  "fldProductCategory": {
+    "en": "Product Category",
+    "zh": "产品类别"
+  },
+  "fldComponentName": {
+    "en": "Component Name",
+    "zh": "组件名称"
+  },
+  "fldSupplierContact": {
+    "en": "Supplier contact",
+    "zh": "供应商联系人"
+  },
+  "fldOrderDate": {
+    "en": "Order date",
+    "zh": "下单日期"
+  },
+  "fldQuantity": {
+    "en": "Quantity",
+    "zh": "数量"
+  },
+  "fldStatus": {
+    "en": "Status",
+    "zh": "状态"
+  },
+  "fldAmount": {
+    "en": "Amount",
+    "zh": "金额"
+  },
+  "fldComponent": {
+    "en": "Component",
+    "zh": "组件"
+  },
+  "btnSaveChanges": {
+    "en": "Save changes",
+    "zh": "保存更改"
+  },
+  "btnCancel": {
+    "en": "Cancel",
+    "zh": "取消"
+  },
+  "btnDelete": {
+    "en": "Delete",
+    "zh": "删除"
+  },
+  "btnCreate": {
+    "en": "Create",
+    "zh": "创建"
+  },
+  "btnEdit": {
+    "en": "Edit",
+    "zh": "编辑"
+  },
+  "btnUpload": {
+    "en": "Upload",
+    "zh": "上传"
+  },
+  "btnUploadPhoto": {
+    "en": "Upload photo",
+    "zh": "上传图片"
+  },
+  "btnViewAll": {
+    "en": "View all",
+    "zh": "查看全部"
+  },
+  "btnViewFullPo": {
+    "en": "View full PO",
+    "zh": "查看完整订单"
+  },
+  "btnShareLink": {
+    "en": "Share Link",
+    "zh": "分享链接"
+  },
+  "btnOpenLink": {
+    "en": "Open Link",
+    "zh": "打开链接"
+  },
+  "btnCopyReportLink": {
+    "en": "Copy Report Link",
+    "zh": "复制报告链接"
+  },
+  "btnCompletePo": {
+    "en": "Complete PO",
+    "zh": "完成订单"
+  },
+  "btnAddSize": {
+    "en": "+ Add size",
+    "zh": "+ 添加尺码"
+  },
+  "btnAddMeasurementPoint": {
+    "en": "+ Add measurement point",
+    "zh": "+ 添加测量点"
+  },
+  "btnAddSizeRow": {
+    "en": "+ Add size row",
+    "zh": "+ 添加尺码行"
+  },
+  "btnAddVariant": {
+    "en": "+ Add variant",
+    "zh": "+ 添加款式"
+  },
+  "btnAddSubComponent": {
+    "en": "+ Add sub-component",
+    "zh": "+ 添加辅料"
+  },
+  "btnAddFabricCode": {
+    "en": "+ Add fabric code",
+    "zh": "+ 添加面料编号"
+  },
+  "btnAddFabricType": {
+    "en": "+ Add fabric type",
+    "zh": "+ 添加面料类型"
+  },
+  "btnAddNew": {
+    "en": "+ Add new...",
+    "zh": "+ 新增..."
+  },
+  "btnBackToHub": {
+    "en": "Back",
+    "zh": "返回"
+  },
+  "btnDownloadReportPdf": {
+    "en": "Download report PDF",
+    "zh": "下载报告 PDF"
+  },
+  "btnCopyDetails": {
+    "en": "Copy details",
+    "zh": "复制详情"
+  },
+  "btnSelect": {
+    "en": "— Select —",
+    "zh": "— 请选择 —"
+  },
+  "viewOrderManagement": {
+    "en": "Order Management",
+    "zh": "订单管理"
+  },
+  "viewProducts": {
+    "en": "Products",
+    "zh": "产品"
+  },
+  "viewComponents": {
+    "en": "Components",
+    "zh": "组件"
+  },
+  "viewFabricLibrary": {
+    "en": "Fabric Library",
+    "zh": "面料库"
+  },
+  "viewSuppliers": {
+    "en": "Suppliers",
+    "zh": "供应商"
+  },
+  "viewSettlement": {
+    "en": "Settlement Statement",
+    "zh": "结算单"
+  },
+  "viewPoRequests": {
+    "en": "PO Requests",
+    "zh": "订单需求"
+  },
+  "titlePreProductionReport": {
+    "en": "Pre-Production Report",
+    "zh": "产前报告"
+  },
+  "titleBulkProductionReport": {
+    "en": "Bulk Production Report",
+    "zh": "大货报告"
+  },
+  "emptyNoPos": {
+    "en": "No POs recorded yet.",
+    "zh": "暂无订单记录。"
+  },
+  "emptyNoNewRequests": {
+    "en": "No new PO requests right now.",
+    "zh": "当前没有新的订单需求。"
+  },
+  "emptyNoFabricCodes": {
+    "en": "No fabric codes recorded yet.",
+    "zh": "暂无面料编号记录。"
+  },
+  "emptyNoFabricTypes": {
+    "en": "No fabric types recorded yet.",
+    "zh": "暂无面料类型记录。"
+  },
+  "emptyNoReportSubmitted": {
+    "en": "No report submitted yet.",
+    "zh": "尚未提交报告。"
+  },
+  "emptyLoading": {
+    "en": "Loading...",
+    "zh": "加载中..."
+  },
+  "emptyNoChanges": {
+    "en": "No changes logged yet.",
+    "zh": "暂无变更记录。"
+  },
+  "helpQaReporting": {
+    "en": "Share a report link with a factory or QA contact - it already knows this PO, so they can jump straight into the report. Setting a status here also moves the order along its production stages.",
+    "zh": "将报告链接分享给工厂或质检联系人 - 链接已关联此订单，可直接开始填写报告。在此设置状态也会同步推进订单的生产阶段。"
+  },
+  "helpProductDimensions": {
+    "en": "Loading a standard copies it in as an editable starting point - edits here only affect this PO. This becomes what QA/QC checks against for this specific order.",
+    "zh": "载入标准后会复制为可编辑的初始值 - 此处的修改仅影响本订单，并作为该订单质检的比对依据。"
+  },
+  "helpSelectStandard": {
+    "en": "Select a standard to load...",
+    "zh": "选择要载入的标准..."
+  },
+  "helpAllMonths": {
+    "en": "All months",
+    "zh": "全部月份"
+  },
+  "thPoNumber": {
+    "en": "PO Number",
+    "zh": "订单号"
+  },
+  "thProductLine": {
+    "en": "Product line",
+    "zh": "产品线"
+  },
+  "thBuyer": {
+    "en": "Buyer",
+    "zh": "采购员"
+  },
+  "thSupplier": {
+    "en": "Supplier",
+    "zh": "供应商"
+  },
+  "thDesiredEntry": {
+    "en": "Desired entry",
+    "zh": "期望到仓"
+  },
+  "thWarehouseName": {
+    "en": "Warehouse name",
+    "zh": "仓库名称"
+  },
+  "thAddress": {
+    "en": "Address",
+    "zh": "地址"
+  },
+  "thContactName": {
+    "en": "Contact name",
+    "zh": "联系人"
+  },
+  "thPhoneNumber": {
+    "en": "Phone number",
+    "zh": "电话号码"
+  },
+  "thName": {
+    "en": "Name",
+    "zh": "名称"
+  },
+  "thUnitPrice": {
+    "en": "Unit price",
+    "zh": "单价"
+  },
+  "thNumPos": {
+    "en": "# POs",
+    "zh": "订单数"
+  },
+  "thOrderDate": {
+    "en": "Order date",
+    "zh": "下单日期"
+  },
+  "thQuantity": {
+    "en": "Quantity",
+    "zh": "数量"
+  },
+  "thPartName": {
+    "en": "Part name",
+    "zh": "部件名称"
+  },
+  "thMaterial": {
+    "en": "Material",
+    "zh": "材质"
+  },
+  "thNumUses": {
+    "en": "# uses",
+    "zh": "使用次数"
+  },
+  "thProduct": {
+    "en": "Product",
+    "zh": "产品"
+  },
+  "thTotalOwed": {
+    "en": "Total owed",
+    "zh": "应付总额"
+  },
+  "thSettlement": {
+    "en": "Settlement",
+    "zh": "结算"
+  },
+  "thPaidOn": {
+    "en": "Paid on",
+    "zh": "付款日期"
+  },
+  "thAction": {
+    "en": "Action",
+    "zh": "操作"
+  },
+  "thSize": {
+    "en": "Size",
+    "zh": "尺码"
+  },
+  "thVariant": {
+    "en": "Variant",
+    "zh": "款式"
+  },
+  "thOrderQty": {
+    "en": "Order Qty",
+    "zh": "订单数量"
+  },
+  "thQtyReceived": {
+    "en": "Qty Received",
+    "zh": "已收数量"
+  },
+  "thComponent": {
+    "en": "Component",
+    "zh": "组件"
+  },
+  "thAmount": {
+    "en": "Amount",
+    "zh": "金额"
+  },
+  "thStatus": {
+    "en": "Status",
+    "zh": "状态"
+  },
+  "thNotes": {
+    "en": "Notes",
+    "zh": "备注"
+  },
+  "thFabricCode": {
+    "en": "Fabric Code",
+    "zh": "面料编号"
+  },
+  "thFabricType": {
+    "en": "Fabric Type",
+    "zh": "面料类型"
+  },
+  "thSku": {
+    "en": "SKU",
+    "zh": "SKU"
+  },
+  "viewWarehouses": {
+    "en": "Warehouses",
+    "zh": "仓库"
+  },
+  "catApparel": {
+    "en": "Apparel",
+    "zh": "服装"
+  },
+  "catToys": {
+    "en": "Toys",
+    "zh": "玩具"
+  },
+  "catOther": {
+    "en": "Other",
+    "zh": "其他"
+  },
+  "secSubComponentsTitle": {
+    "en": "Sub-Components",
+    "zh": "辅料"
+  },
+  "secWarehouseBreakdownTitle": {
+    "en": "Warehouse Breakdown",
+    "zh": "仓库明细"
+  },
+  "fldAdditionalAssemblyFee": {
+    "en": "Additional Assembly Fee",
+    "zh": "额外组装费"
+  },
+  "fldAdditionalLaborFee": {
+    "en": "Additional Labor Fee",
+    "zh": "额外人工费"
+  },
+  "fldOtherExpenses": {
+    "en": "Other Expenses",
+    "zh": "其他费用"
+  },
+  "fldManufacturingCostPerUnit": {
+    "en": "Manufacturing Cost per unit",
+    "zh": "单件生产成本"
+  },
+  "fldTotalPoCost": {
+    "en": "Total PO Cost",
+    "zh": "订单总成本"
+  },
+  "fldTotalPricePerUnit": {
+    "en": "Total Price per Unit",
+    "zh": "单件总价"
+  },
+  "fldShippingCost": {
+    "en": "Shipping cost",
+    "zh": "运费"
+  },
+  "fldSalesUnitPrice": {
+    "en": "Sales unit price",
+    "zh": "销售单价"
+  },
+  "fldAdditionalAddress": {
+    "en": "Additional address",
+    "zh": "附加地址"
+  },
+  "fldAdditionalPhoneNumber": {
+    "en": "Additional phone number",
+    "zh": "备用电话"
+  },
+  "fldAddress": {
+    "en": "Address",
+    "zh": "地址"
+  },
+  "fldBusinessLicense": {
+    "en": "Business license",
+    "zh": "营业执照"
+  },
+  "fldCompanyNameLc": {
+    "en": "Company name",
+    "zh": "公司名称"
+  },
+  "fldContactName": {
+    "en": "Contact name",
+    "zh": "联系人"
+  },
+  "fldCurrency": {
+    "en": "Currency",
+    "zh": "币种"
+  },
+  "fldDimensions": {
+    "en": "Dimensions",
+    "zh": "尺寸"
+  },
+  "fldFabricCodeLc": {
+    "en": "Fabric code",
+    "zh": "面料编号"
+  },
+  "fldFabricTypeLc": {
+    "en": "Fabric type",
+    "zh": "面料类型"
+  },
+  "fldMailingAddress": {
+    "en": "Mailing address",
+    "zh": "邮寄地址"
+  },
+  "fldMaterialLc": {
+    "en": "Material",
+    "zh": "材质"
+  },
+  "fldModelNumber": {
+    "en": "Model number",
+    "zh": "型号"
+  },
+  "fldNameReq": {
+    "en": "Name *",
+    "zh": "名称 *"
+  },
+  "fldPartNameReq": {
+    "en": "Part name *",
+    "zh": "部件名称 *"
+  },
+  "fldPhoneNumber": {
+    "en": "Phone number",
+    "zh": "电话号码"
+  },
+  "fldProductCategoryLc": {
+    "en": "Product Category",
+    "zh": "产品类别"
+  },
+  "fldProductLine": {
+    "en": "Product line",
+    "zh": "产品线"
+  },
+  "fldProductType": {
+    "en": "Product type",
+    "zh": "产品类型"
+  },
+  "fldShippingAddress": {
+    "en": "Shipping address",
+    "zh": "收货地址"
+  },
+  "fldStatusLc": {
+    "en": "Status",
+    "zh": "状态"
+  },
+  "fldSupplierLc": {
+    "en": "Supplier",
+    "zh": "供应商"
+  },
+  "fldSupplierCodeLc": {
+    "en": "Supplier code",
+    "zh": "供应商编号"
+  },
+  "fldSupplierContactLc": {
+    "en": "Supplier contact",
+    "zh": "供应商联系人"
+  },
+  "fldSupplierNameLc": {
+    "en": "Supplier name",
+    "zh": "供应商名称"
+  },
+  "fldSupplierNameReq": {
+    "en": "Supplier name *",
+    "zh": "供应商名称 *"
+  },
+  "fldVendorCode": {
+    "en": "Vendor code",
+    "zh": "厂商编号"
+  },
+  "fldWarehouseNameReq": {
+    "en": "Warehouse name *",
+    "zh": "仓库名称 *"
+  },
+  "fldWashingTagLc": {
+    "en": "Washing tag",
+    "zh": "水洗标"
+  },
+  "fldWeChat": {
+    "en": "WeChat",
+    "zh": "微信"
+  },
+  "fldWeight": {
+    "en": "Weight",
+    "zh": "重量"
+  },
+  "fldUnitPriceLc": {
+    "en": "Unit price",
+    "zh": "单价"
+  },
+  "fldSkuLc": {
+    "en": "SKU",
+    "zh": "SKU"
+  },
+  "secSubComponentBreakdown": {
+    "en": "Sub-Component Breakdown",
+    "zh": "辅料明细"
+  },
+  "secWarehousingBreakdown": {
+    "en": "Warehousing Breakdown",
+    "zh": "入仓明细"
+  },
+  "secComponentDetailsCap": {
+    "en": "Component Details",
+    "zh": "组件详情"
+  },
+  "emptyNoWarehouses": {
+    "en": "No warehouses recorded yet.",
+    "zh": "暂无仓库记录。"
+  },
+  "emptyNoSuppliers": {
+    "en": "No suppliers recorded yet.",
+    "zh": "暂无供应商记录。"
+  },
+  "emptyNoPosProduct": {
+    "en": "No POs recorded yet for this product.",
+    "zh": "此产品暂无订单记录。"
+  },
+  "emptyNoPosComponent": {
+    "en": "No POs recorded yet for this component.",
+    "zh": "此组件暂无订单记录。"
+  },
+  "emptyNoAccessories": {
+    "en": "No accessories/parts recorded yet.",
+    "zh": "暂无辅料/部件记录。"
+  },
+  "emptyNoFabricPos": {
+    "en": "No POs have used this fabric yet.",
+    "zh": "暂无订单使用此面料。"
+  },
+  "btnNewSupplier": {
+    "en": "+ New supplier",
+    "zh": "+ 新建供应商"
+  },
+  "btnNewWarehouse": {
+    "en": "+ New warehouse",
+    "zh": "+ 新建仓库"
+  },
+  "btnAddProduct": {
+    "en": "+ Add product",
+    "zh": "+ 添加产品"
+  },
+  "btnAddComponent": {
+    "en": "+ Add component",
+    "zh": "+ 添加组件"
+  },
+  "titleEditWarehouse": {
+    "en": "Edit warehouse",
+    "zh": "编辑仓库"
+  },
+  "titleNewWarehouse": {
+    "en": "New warehouse",
+    "zh": "新建仓库"
+  },
+  "titleEditSupplier": {
+    "en": "Edit supplier",
+    "zh": "编辑供应商"
+  },
+  "titleNewSupplier": {
+    "en": "New supplier",
+    "zh": "新建供应商"
+  },
+  "labelProducts": {
+    "en": "Products",
+    "zh": "产品"
+  },
+  "labelComponents": {
+    "en": "Components",
+    "zh": "组件"
+  },
+  "emptyNoProductsCat": {
+    "en": "No products recorded yet in this category.",
+    "zh": "此类别暂无产品记录。"
+  },
+  "emptyNoComponentsCat": {
+    "en": "No components recorded yet in this category.",
+    "zh": "此类别暂无组件记录。"
+  },
+  "thShippingAddress": {
+    "en": "Shipping address",
+    "zh": "收货地址"
+  },
+  "thAdditionalAddress": {
+    "en": "Additional address",
+    "zh": "附加地址"
+  },
+  "thVendorCode": {
+    "en": "Vendor code",
+    "zh": "厂商编号"
+  },
+  "thProductType": {
+    "en": "Product type",
+    "zh": "产品类型"
+  },
+  "thCompanyName": {
+    "en": "Company name",
+    "zh": "公司名称"
+  },
+  "summaryShowingMonth": {
+    "en": "orders placed in",
+    "zh": "笔订单，月份"
+  },
+  "thAdditionalPhone": {
+    "en": "Additional phone",
+    "zh": "备用电话"
+  },
+  "thBusinessLicense": {
+    "en": "Business license",
+    "zh": "营业执照"
+  },
+  "thSupplierName": {
+    "en": "Supplier name",
+    "zh": "供应商名称"
+  },
+  "finShowingMonth": {
+    "en": "Showing {n} order(s) placed in {m}.",
+    "zh": "显示 {m} 的 {n} 笔订单。"
+  },
+  "finShowingAll": {
+    "en": "Showing all {n} orders across {c} month(s).",
+    "zh": "显示全部 {n} 笔订单，共 {c} 个月。"
+  },
+  "finOrdersCount": {
+    "en": "orders",
+    "zh": "笔订单"
+  },
+  "tabAllOrders": {
+    "en": "All Orders",
+    "zh": "全部订单"
+  },
+  "tabMainComponents": {
+    "en": "Main Components",
+    "zh": "主料"
+  },
+  "tabAccessories": {
+    "en": "Accessories",
+    "zh": "辅料"
+  },
+  "emptyNoSizingTable": {
+    "en": "No sizing table yet - select a standard above, or add sizes/points manually.",
+    "zh": "尚无尺码表 - 请在上方选择标准，或手动添加尺码/测量点。"
+  },
+  "fldProductDimensionsSot": {
+    "en": "Product Dimensions - sizing source of truth for this PO",
+    "zh": "产品尺寸 - 本订单的尺码基准"
+  },
+  "toastChangesSaved": {
+    "en": "Changes saved",
+    "zh": "更改已保存"
+  },
+  "toastComponentCreated": {
+    "en": "Component created",
+    "zh": "组件已创建"
+  },
+  "toastComponentDeleted": {
+    "en": "Component deleted",
+    "zh": "组件已删除"
+  },
+  "toastComponentUpdated": {
+    "en": "Component updated",
+    "zh": "组件已更新"
+  },
+  "toastDeleted": {
+    "en": "Deleted",
+    "zh": "已删除"
+  },
+  "toastFileUploaded": {
+    "en": "File uploaded",
+    "zh": "文件已上传"
+  },
+  "toastImageUploaded": {
+    "en": "Image uploaded",
+    "zh": "图片已上传"
+  },
+  "toastPoMarkedComplete": {
+    "en": "PO marked complete",
+    "zh": "订单已标记完成"
+  },
+  "toastPartNameIsRequired": {
+    "en": "Part name is required",
+    "zh": "请填写部件名称"
+  },
+  "toastPhotoUploaded": {
+    "en": "Photo uploaded",
+    "zh": "图片已上传"
+  },
+  "toastProductCreated": {
+    "en": "Product created",
+    "zh": "产品已创建"
+  },
+  "toastProductDeleted": {
+    "en": "Product deleted",
+    "zh": "产品已删除"
+  },
+  "toastProductNameIsRequired": {
+    "en": "Product name is required",
+    "zh": "请填写产品名称"
+  },
+  "toastProductUpdated": {
+    "en": "Product updated",
+    "zh": "产品已更新"
+  },
+  "toastSettlementUpdated": {
+    "en": "Settlement updated",
+    "zh": "结算已更新"
+  },
+  "toastStatusSaved": {
+    "en": "Status saved",
+    "zh": "状态已保存"
+  },
+  "toastStatusUpdated": {
+    "en": "Status updated",
+    "zh": "状态已更新"
+  },
+  "toastSupplierCreated": {
+    "en": "Supplier created",
+    "zh": "供应商已创建"
+  },
+  "toastSupplierDeleted": {
+    "en": "Supplier deleted",
+    "zh": "供应商已删除"
+  },
+  "toastSupplierNameIsRequired": {
+    "en": "Supplier name is required",
+    "zh": "请填写供应商名称"
+  },
+  "toastSupplierUpdated": {
+    "en": "Supplier updated",
+    "zh": "供应商已更新"
+  },
+  "toastThatPointAlreadyExists": {
+    "en": "That point already exists",
+    "zh": "该测量点已存在"
+  },
+  "toastThatSizeIsAlreadyInTheTable": {
+    "en": "That size is already in the table",
+    "zh": "该尺码已在表中"
+  },
+  "toastWarehouseCreated": {
+    "en": "Warehouse created",
+    "zh": "仓库已创建"
+  },
+  "toastWarehouseDeleted": {
+    "en": "Warehouse deleted",
+    "zh": "仓库已删除"
+  },
+  "toastWarehouseNameIsRequired": {
+    "en": "Warehouse name is required",
+    "zh": "请填写仓库名称"
+  },
+  "toastWarehouseUpdated": {
+    "en": "Warehouse updated",
+    "zh": "仓库已更新"
+  },
+  "toastCreated": {
+    "en": "Created",
+    "zh": "已创建"
+  },
+  "toastUpdated": {
+    "en": "Updated",
+    "zh": "已更新"
+  },
+  "toastLinkCopied": {
+    "en": "Link copied",
+    "zh": "链接已复制"
+  },
+  "toastSwatchUploaded": {
+    "en": "Swatch uploaded",
+    "zh": "小样已上传"
+  },
+  "confirmDeleteNamed": {
+    "en": "Delete \"{name}\"? This can't be undone.",
+    "zh": "确定删除“{name}”？此操作无法撤销。"
+  },
+  "thComponentName": {
+    "en": "Component Name",
+    "zh": "组件名称"
+  },
+  "thPhoto": {
+    "en": "Photo",
+    "zh": "图片"
+  },
+  "thLength": {
+    "en": "Length",
+    "zh": "长"
+  },
+  "thWidth": {
+    "en": "Width",
+    "zh": "宽"
+  },
+  "thHeight": {
+    "en": "Height",
+    "zh": "高"
+  },
+  "thPrice": {
+    "en": "Price",
+    "zh": "价格"
+  },
+  "thShippingCost": {
+    "en": "Shipping Cost",
+    "zh": "运费"
+  },
+  "thSupplierContact": {
+    "en": "Supplier Contact",
+    "zh": "供应商联系人"
+  },
+  "thDeliveryDate": {
+    "en": "Delivery Date",
+    "zh": "交货日期"
+  },
+  "thComponentDeliveryAddress": {
+    "en": "Component Delivery Address",
+    "zh": "组件交货地址"
+  },
+  "thManufacturingDrawing": {
+    "en": "Manufacturing Drawing",
+    "zh": "生产图纸"
+  },
+  "th2ActualWt": {
+    "en": "Actual wt",
+    "zh": "实际重量"
+  },
+  "th2AssemblyFee": {
+    "en": "Assembly fee",
+    "zh": "组装费"
+  },
+  "th2Dimensions": {
+    "en": "Dimensions",
+    "zh": "尺寸"
+  },
+  "th2ExpectedDelivery": {
+    "en": "Expected delivery",
+    "zh": "预计交货"
+  },
+  "th2FactoryPrice": {
+    "en": "Factory price",
+    "zh": "工厂价"
+  },
+  "th2LaborCosts": {
+    "en": "Labor costs",
+    "zh": "人工费"
+  },
+  "th2MainSku": {
+    "en": "Main SKU",
+    "zh": "主 SKU"
+  },
+  "th2MainComponent": {
+    "en": "Main component",
+    "zh": "主料"
+  },
+  "th2ManufacturerDelivery": {
+    "en": "Manufacturer delivery",
+    "zh": "工厂交货"
+  },
+  "th2Model": {
+    "en": "Model #",
+    "zh": "型号"
+  },
+  "th2OtherExpenses": {
+    "en": "Other expenses",
+    "zh": "其他费用"
+  },
+  "th2PurchaseQty": {
+    "en": "Purchase qty",
+    "zh": "采购数量"
+  },
+  "th2Qty": {
+    "en": "Qty",
+    "zh": "数量"
+  },
+  "th2QtyReceived": {
+    "en": "Qty received",
+    "zh": "已收数量"
+  },
+  "th2SalesUnitPrice": {
+    "en": "Sales unit price",
+    "zh": "销售单价"
+  },
+  "th2ShipmentQty": {
+    "en": "Shipment qty",
+    "zh": "发货数量"
+  },
+  "th2Size": {
+    "en": "Size",
+    "zh": "尺码"
+  },
+  "th2Specifications": {
+    "en": "Specifications",
+    "zh": "规格"
+  },
+  "th2SupplierCode": {
+    "en": "Supplier code",
+    "zh": "供应商编号"
+  },
+  "th2Total": {
+    "en": "Total",
+    "zh": "合计"
+  },
+  "th2TotalPurchasePrice": {
+    "en": "Total purchase price",
+    "zh": "采购总价"
+  },
+  "th2TransportFees": {
+    "en": "Transport fees",
+    "zh": "运输费"
+  },
+  "th2TransportWt": {
+    "en": "Transport wt",
+    "zh": "运输重量"
+  },
+  "th2Warehouse": {
+    "en": "Warehouse",
+    "zh": "仓库"
+  },
+  "th2WarehouseEntryDate": {
+    "en": "Warehouse entry date",
+    "zh": "入仓日期"
+  },
+  "th2WashLabel": {
+    "en": "Wash label",
+    "zh": "水洗标"
+  },
+  "th2Waybill": {
+    "en": "Waybill #",
+    "zh": "运单号"
+  },
+  "th2WaybillNumber": {
+    "en": "Waybill number",
+    "zh": "运单号"
+  },
+  "cliClients": {
+    "en": "Clients",
+    "zh": "客户"
+  },
+  "cliClientCreatorBrand": {
+    "en": "Client / Creator / Brand",
+    "zh": "客户 / 创作者 / 品牌"
+  },
+  "cliCreatorTier": {
+    "en": "Creator Tier",
+    "zh": "创作者等级"
+  },
+  "cliNoClients": {
+    "en": "No clients yet.",
+    "zh": "暂无客户。"
+  },
+  "cliNewClientPlaceholder": {
+    "en": "New client / creator / brand name...",
+    "zh": "新客户 / 创作者 / 品牌名称..."
+  },
+  "cliTier1": {
+    "en": "Tier 1",
+    "zh": "一级"
+  },
+  "cliTier2": {
+    "en": "Tier 2",
+    "zh": "二级"
+  },
+  "cliTier3": {
+    "en": "Tier 3",
+    "zh": "三级"
+  },
+  "toastEnterNameFirst": {
+    "en": "Enter a name first",
+    "zh": "请先输入名称"
+  },
+  "toastSaved": {
+    "en": "Saved",
+    "zh": "已保存"
+  },
+  "toastClientExists": {
+    "en": "That client already exists",
+    "zh": "该客户已存在"
   }
 }

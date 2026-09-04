@@ -8,37 +8,37 @@
 
 const APP_NAV = [
   {
-    group: 'Order Management',
+    group: 'Order Management', groupKey: 'navOrderManagementGroup',
     items: [
-      { label: 'New Purchase Order', href: 'reporting.html?mode=newPO' },
-      { label: 'Order Management', href: 'order-management.html', omView: 'home' },
-      { label: 'QA/QC Reporting', href: 'reporting.html' },
-      { label: 'Finances', href: 'order-management.html?view=settlement', omView: 'settlement' }
+      { label: 'New Purchase Order', key: 'navNewPurchaseOrder', href: 'reporting.html?mode=newPO' },
+      { label: 'Order Management', key: 'navOrderManagement', href: 'order-management.html', omView: 'home' },
+      { label: 'QA/QC Reporting', key: 'navQaQcReporting', href: 'reporting.html' },
+      { label: 'Finances', key: 'navFinances', href: 'order-management.html?view=settlement', omView: 'settlement' }
     ]
   },
   {
-    group: 'Product Information',
+    group: 'Product Information', groupKey: 'navProductInformation',
     items: [
-      { label: 'Products', href: 'order-management.html?view=products', omView: 'products' },
-      { label: 'Components', href: 'order-management.html?view=components', omView: 'components' },
-      { label: 'Fabric Library', href: 'order-management.html?view=fabric-library', omView: 'fabric-library' },
-      { label: 'Suppliers', href: 'order-management.html?view=suppliers', omView: 'suppliers' },
-      { label: 'Clients', href: 'clients.html' },
-      { label: 'Sizing Charts', href: 'sizing-charts.html' }
+      { label: 'Products', key: 'navProducts', href: 'order-management.html?view=products', omView: 'products' },
+      { label: 'Components', key: 'navComponents', href: 'order-management.html?view=components', omView: 'components' },
+      { label: 'Fabric Library', key: 'navFabricLibrary', href: 'order-management.html?view=fabric-library', omView: 'fabric-library' },
+      { label: 'Suppliers', key: 'navSuppliers', href: 'order-management.html?view=suppliers', omView: 'suppliers' },
+      { label: 'Clients', key: 'navClients', href: 'clients.html' },
+      { label: 'Sizing Charts', key: 'navSizingCharts', href: 'sizing-charts.html' }
     ]
   },
   {
-    group: 'QA/QC',
+    group: 'QA/QC', groupKey: 'navQaQc',
     items: [
-      { label: 'Product Development Approval', href: 'approval.html' },
-      { label: 'Reports', href: 'reports.html' }
+      { label: 'Product Development Approval', key: 'navPdApproval', href: 'approval.html' },
+      { label: 'Reports', key: 'navReports', href: 'reports.html' }
     ]
   },
   {
-    group: 'Other',
+    group: 'Other', groupKey: 'navOther',
     items: [
-      { label: 'Analytics', href: 'analytics.html' },
-      { label: 'Settings', href: 'settings.html' }
+      { label: 'Analytics', key: 'navAnalytics', href: 'analytics.html' },
+      { label: 'Settings', key: 'navSettings', href: 'settings.html' }
     ]
   }
 ];
@@ -70,15 +70,25 @@ function isActiveNavItem(item) {
 function buildSidebar() {
   const nav = document.createElement('nav');
   nav.className = 'app-sidebar';
-  nav.innerHTML = `<div class="app-sidebar-inner">${APP_NAV.map((section, idx) => `
+  nav.innerHTML = sidebarInnerHtml();
+  return nav;
+}
+
+/** Nav labels render Chinese-first with English underneath, matching the
+ *  QA/QC reporting screens. The i18n table loads asynchronously, so this is
+ *  called once immediately (English-only fallback, so the nav is never
+ *  blank) and again once translations arrive. */
+function sidebarInnerHtml() {
+  const i18n = window.JuniperI18n;
+  const label = (key, fallback) => (i18n ? i18n.t(key, fallback) : fallback);
+  return `<div class="app-sidebar-inner">${APP_NAV.map((section, idx) => `
     <div class="app-sidebar-section ${idx > 0 ? 'app-sidebar-section-divided' : ''}">
-      <div class="app-sidebar-group">${section.group.toUpperCase()}</div>
+      <div class="app-sidebar-group">${label(section.groupKey, section.group)}</div>
       ${section.items.map((item) => `
-        <a class="app-sidebar-link ${isActiveNavItem(item) ? 'active' : ''}" href="${item.href}">${item.label}</a>
+        <a class="app-sidebar-link ${isActiveNavItem(item) ? 'active' : ''}" href="${item.href}">${label(item.key, item.label)}</a>
       `).join('')}
     </div>
   `).join('')}</div>`;
-  return nav;
 }
 
 (function initShell() {
@@ -91,7 +101,11 @@ function buildSidebar() {
   const flexWrap = document.createElement('div');
   flexWrap.className = 'app-body-flex';
   appRoot.insertBefore(flexWrap, main);
-  flexWrap.appendChild(buildSidebar());
+  const sidebar = buildSidebar();
+  flexWrap.appendChild(sidebar);
+  if (window.JuniperI18n) {
+    window.JuniperI18n.loadI18n().then(() => { sidebar.innerHTML = sidebarInnerHtml(); });
+  }
   flexWrap.appendChild(main);
 
   // Sticky table headers (order-management.css) and the sidebar itself
