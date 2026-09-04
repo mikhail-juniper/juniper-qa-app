@@ -1095,8 +1095,24 @@ app.delete('/api/fabric-library/codes/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/fabric-library/types', (req, res) => {
-  fabricLibraryStore.backfillFromOrders(orderManagementStore.listOrders({}));
+// Historical POs whose main component used this fabric code - matched by
+// the entry's value or its pantone (POs may reference either), so both
+// naming conventions link up.
+app.get('/api/fabric-library/codes/:id/history', (req, res) => {
+  const code = fabricLibraryStore.listFabricCodes().find((c) => c.id === req.params.id);
+  if (!code) return res.status(404).json({ error: 'Fabric code not found' });
+  const orders = orderManagementStore.getOrdersForFabric('fabricInfo', [code.value, code.pantone]);
+  res.json({ orders: orders.map(orderManagementStore.toQaShape) });
+});
+
+app.get('/api/fabric-library/types/:id/history', (req, res) => {
+  const type = fabricLibraryStore.listFabricTypes().find((t) => t.id === req.params.id);
+  if (!type) return res.status(404).json({ error: 'Fabric type not found' });
+  const orders = orderManagementStore.getOrdersForFabric('component', [type.value]);
+  res.json({ orders: orders.map(orderManagementStore.toQaShape) });
+});
+
+app.get('/api/fabric-library/types', (req, res) => {  fabricLibraryStore.backfillFromOrders(orderManagementStore.listOrders({}));
   fabricLibraryStore.backfillFromProducts(catalogStore.listManualProducts());
   res.json({ types: fabricLibraryStore.listFabricTypes() });
 });
@@ -1505,20 +1521,62 @@ function seedFabricSwatchesFromFile() {
       return `/fabric-library-files/${encodeURIComponent(fname)}`;
     };
     let added = 0, upgraded = 0, renamed = 0;
-    // Display value convention for imported swatches: "Book Number -
-    // Material Blend" (pantones duplicate across books, so pantone alone
-    // is a poor primary label). Falls back gracefully when a book code is
-    // missing (a couple of source rows have none).
-    const displayValue = (e) => [e.bookCode, e.materialBlend].filter(Boolean).join(' - ') || e.pantone || '';
+    // Derive a general color name from a hex value (broad buckets on
+    // purpose - "purple", not "lilac") for the display value below.
+    const hexToGeneralColor = (hex) => {
+      const clean = String(hex || '').trim().replace('#', '');
+      if (!/^[0-9a-fA-F]{6}$/.test(clean)) return '';
+      const r = parseInt(clean.slice(0, 2), 16) / 255, g = parseInt(clean.slice(2, 4), 16) / 255, b = parseInt(clean.slice(4, 6), 16) / 255;
+      const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, d = max - min;
+      const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+      let h = 0;
+      if (d !== 0) {
+        if (max === r) h = 60 * (((g - b) / d) % 6);
+        else if (max === g) h = 60 * ((b - r) / d + 2);
+        else h = 60 * ((r - g) / d + 4);
+      }
+      if (h < 0) h += 360;
+      if (l < 0.09) return 'black';
+      if (l > 0.93 && s < 0.2) return 'white';
+      if (s < 0.12) return 'gray';
+      if (h >= 15 && h < 48 && l < 0.42) return 'brown';
+      if (h < 15 || h >= 337) return 'red';
+      if (h < 42) return 'orange';
+      if (h < 68) return 'yellow';
+      if (h < 160) return 'green';
+      if (h < 200) return 'teal';
+      if (h < 258) return 'blue';
+      if (h < 300) return 'purple';
+      return 'pink';
+    };
+    // Display value convention for imported swatches, matching how fabric
+    // info reads in the manufacturing team's system: "Company Name, GSM,
+    // Book Code, Color". No company names in the source workbook yet, so
+    // that segment stays blank for now; weights that aren't a simple
+    // "NNN gsm" (one tab lists several) stay in the Fabric Weight column
+    // only, since embedding their commas here would garble the format.
+    const displayValue = (e) => {
+      const gsmMatch = String(e.fabricWeight || '').match(/^(\d+)\s*gsm$/i);
+      const gsm = gsmMatch ? `${gsmMatch[1]}gsm` : '';
+      const color = hexToGeneralColor(e.hex);
+      const parts = [e.companyName, gsm, e.bookCode, color].filter(Boolean);
+      return parts.length ? parts.join(', ') : (e.pantone || e.materialBlend || '');
+    };
+    // Prior auto-generated conventions, for telling "still auto-named"
+    // apart from manually edited values during the rename migration.
+    const priorConventions = (e) => [
+      e.pantone || '',
+      [e.bookCode, e.materialBlend].filter(Boolean).join(' - ') || (e.pantone || '')
+    ];
     const existingBySeedKey = new Map(existing.filter((c) => c.seedKey).map((c) => [c.seedKey, c]));
     (seed.entries || []).forEach((e) => {
       if (seededKeys.has(e.seedKey)) {
-        // Already imported - but rename entries still carrying the old
-        // pantone-as-value convention to the new "Book - Blend" one,
-        // leaving any manually edited values alone.
+        // Already imported - but rename entries still carrying an older
+        // auto-generated convention (pantone-as-value, or "Book - Blend")
+        // to the current one, leaving manually edited values alone.
         const stored = existingBySeedKey.get(e.seedKey);
-        if (stored && stored.value === (e.pantone || '') && displayValue(e) !== stored.value) {
-          fabricLibraryStore.updateFabricCode(stored.id, { value: displayValue(e) });
+        if (stored && priorConventions(e).includes(stored.value) && displayValue(e) !== stored.value) {
+          fabricLibraryStore.updateFabricCode(stored.id, { value: displayValue(e), colorName: hexToGeneralColor(e.hex) });
           renamed += 1;
         }
         return;
@@ -1526,6 +1584,8 @@ function seedFabricSwatchesFromFile() {
       const fields = {
         value: displayValue(e),
         materialBlend: e.materialBlend || '',
+        companyName: e.companyName || '',
+        colorName: hexToGeneralColor(e.hex),
         swatchUrl: copyIn(e.swatchFile),
         digitalColorUrl: copyIn(e.digitalColorFile),
         pantone: e.pantone || '',
@@ -1544,8 +1604,9 @@ function seedFabricSwatchesFromFile() {
         // in the richer fields from the full export, including the new
         // "Book - Blend" display value if the old pantone one is still set.
         fabricLibraryStore.updateFabricCode(legacyMatch.id, {
-          value: legacyMatch.value === (e.pantone || '') ? fields.value : legacyMatch.value,
+          value: priorConventions(e).includes(legacyMatch.value) ? fields.value : legacyMatch.value,
           materialBlend: fields.materialBlend,
+          colorName: fields.colorName,
           fabricWeight: fields.fabricWeight,
           garmentType: fields.garmentType,
           seedKey: fields.seedKey,
@@ -1559,7 +1620,7 @@ function seedFabricSwatchesFromFile() {
       }
       seededKeys.add(e.seedKey);
     });
-    if (added || upgraded || renamed) console.log(`Fabric Library seed: ${added} added, ${upgraded} upgraded, ${renamed} renamed to the Book - Blend convention.`);
+    if (added || upgraded || renamed) console.log(`Fabric Library seed: ${added} added, ${upgraded} upgraded, ${renamed} renamed to the "Company, GSM, Book Code, Color" convention.`);
   } catch (err) {
     console.error('Fabric swatch seed import failed:', err);
   }

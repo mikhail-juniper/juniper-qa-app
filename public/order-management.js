@@ -1145,6 +1145,8 @@ function openFabricEntryForm(kind, entry) {
       <div><label>${isCode ? 'Fabric Code' : 'Fabric Type'} *</label><input id="fabValue" type="text" value="${val(entry && entry.value)}" /></div>
       ${isCode ? `
         <div><label>Material Blend</label><input id="fabMaterialBlend" type="text" placeholder="e.g. 65% Polyester, 35% Cotton" value="${val(entry && entry.materialBlend)}" /></div>
+        <div><label>Company Name</label><input id="fabCompanyName" type="text" placeholder="e.g. Haishuang" value="${val(entry && entry.companyName)}" /></div>
+        <div><label>Color</label><input id="fabColorName" type="text" placeholder="e.g. orange" value="${val(entry && entry.colorName)}" /></div>
         <div><label>Type</label>
           <input id="fabGarmentType" type="text" list="fabGarmentTypeOptions" placeholder="e.g. Hoodie / Sweatshirt" value="${val(entry && entry.garmentType)}" />
           <datalist id="fabGarmentTypeOptions">
@@ -1182,6 +1184,12 @@ function openFabricEntryForm(kind, entry) {
       ` : ''}
       <div style="grid-column:1/-1;"><label>Notes</label><input id="fabNotes" type="text" value="${val(entry && entry.notes)}" /></div>
     </div>
+    ${entry ? `
+    <div class="om-panel-card" style="margin-top:18px;">
+      <div class="om-section-title">Historical POs</div>
+      <div id="fabHistoryHost"><div class="om-empty">Loading...</div></div>
+    </div>
+    ` : ''}
     <div style="margin-top:22px;display:flex;gap:10px;flex-wrap:wrap;">
       <button class="btn btn-secondary" id="fabCancel" style="flex:none;width:auto;padding:10px 18px;">Cancel</button>
       ${entry ? `<button class="btn btn-secondary" id="fabDelete" style="flex:none;width:auto;padding:10px 18px;color:var(--jc-fail);">Delete</button>` : ''}
@@ -1193,6 +1201,46 @@ function openFabricEntryForm(kind, entry) {
   bindPanelEscape();
   document.getElementById('fabClose').addEventListener('click', closePanel);
   document.getElementById('fabCancel').addEventListener('click', closePanel);
+
+  // Historical POs that used this material - every PO whose main
+  // component's Fabric Code/Type matches this entry, newest first.
+  if (entry) {
+    (async () => {
+      try {
+        const data = await api(`/api/fabric-library/${isCode ? 'codes' : 'types'}/${encodeURIComponent(entry.id)}/history`);
+        const host = document.getElementById('fabHistoryHost');
+        if (!host) return;
+        const orders = data.orders || [];
+        if (!orders.length) {
+          host.innerHTML = `<div class="om-empty">No POs have used this ${isCode ? 'fabric' : 'fabric type'} yet.</div>`;
+          return;
+        }
+        host.innerHTML = `
+          <div class="om-table-wrap">
+            <table class="om-table" style="min-width:0;">
+              <thead><tr><th>PO Number</th><th>Product</th><th>Order date</th><th>Quantity</th></tr></thead>
+              <tbody>
+                ${orders.map((o) => `
+                  <tr data-order-id="${escapeHtml(o.id)}" style="cursor:pointer;">
+                    <td><strong>${escapeHtml(o.poNumber || '—')}</strong></td>
+                    <td>${escapeHtml(o.productTitle || '—')}</td>
+                    <td>${fmtDate(o.orderDate || o.createdAt)}</td>
+                    <td>${o.orderQuantity != null ? o.orderQuantity : '—'}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+        host.querySelectorAll('tr[data-order-id]').forEach((tr) => {
+          tr.addEventListener('click', () => {
+            closePanel();
+            openDetailPanel(tr.dataset.orderId, 'full');
+          });
+        });
+      } catch (e) { /* history is a convenience - the form still works without it */ }
+    })();
+  }
 
   if (isCode) {
     const wireSwatchUpload = (btnId, fileId, urlId, previewId) => {
@@ -1252,6 +1300,8 @@ function openFabricEntryForm(kind, entry) {
       payload.swatchUrl = document.getElementById('fabSwatchUrl').value;
       payload.digitalColorUrl = document.getElementById('fabDigitalUrl').value;
       payload.materialBlend = document.getElementById('fabMaterialBlend').value;
+      payload.companyName = document.getElementById('fabCompanyName').value;
+      payload.colorName = document.getElementById('fabColorName').value;
       payload.pantone = document.getElementById('fabPantone').value;
       payload.hex = document.getElementById('fabHex').value.trim().replace('#', '');
       payload.cmyk = document.getElementById('fabCmyk').value;
@@ -1726,6 +1776,25 @@ async function openDetailPanel(id, scope) {
     </div>
 
     <div class="om-panel-card">
+    <div class="om-section-title">Production Status</div>
+    <div class="om-field-grid">
+      <div><label>Product Complexity/Risk</label>
+        <select id="fProductRisk" class="om-risk-select" data-risk="${escapeHtml(order.productRisk || '')}">
+          <option value="" ${!order.productRisk ? 'selected' : ''}>—</option>
+          <option value="high" ${order.productRisk === 'high' ? 'selected' : ''}>High</option>
+          <option value="medium" ${order.productRisk === 'medium' ? 'selected' : ''}>Medium</option>
+          <option value="low" ${order.productRisk === 'low' ? 'selected' : ''}>Low</option>
+        </select>
+      </div>
+      <div><label>Order Status</label>
+        <select id="fOrderStatusSelect" class="om-status-select" data-status="${escapeHtml(order.status)}">
+          ${STATUSES.map((s) => `<option value="${escapeHtml(s)}" ${s === order.status ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    </div>
+
+    <div class="om-panel-card">
     <div class="om-section-title">Order Details</div>
     <div id="omCopyFromPoSuggestion" style="display:none;margin-bottom:14px;padding:10px 14px;background:var(--jc-mint-light);border-radius:var(--radius-sm);align-items:center;gap:10px;flex-wrap:wrap;">
       <span id="omCopyFromPoText" style="font-size:13px;color:var(--jc-teal-dark);"></span>
@@ -1746,19 +1815,6 @@ async function openDetailPanel(id, scope) {
       </div>
       <div><label>Supplier Name</label><input id="fSupplierName" type="text" list="dlSupplierNames" value="${val(order.supplier.name)}" /></div>
       <div><label>Supplier Code</label><input id="fSupplierCode" type="text" value="${val(order.supplier.code)}" /></div>
-      <div><label>Product Complexity/Risk</label>
-        <select id="fProductRisk" class="om-risk-select" data-risk="${escapeHtml(order.productRisk || '')}">
-          <option value="" ${!order.productRisk ? 'selected' : ''}>—</option>
-          <option value="high" ${order.productRisk === 'high' ? 'selected' : ''}>High</option>
-          <option value="medium" ${order.productRisk === 'medium' ? 'selected' : ''}>Medium</option>
-          <option value="low" ${order.productRisk === 'low' ? 'selected' : ''}>Low</option>
-        </select>
-      </div>
-      <div><label>Order Status</label>
-        <select id="fOrderStatusSelect" class="om-status-select" data-status="${escapeHtml(order.status)}">
-          ${STATUSES.map((s) => `<option value="${escapeHtml(s)}" ${s === order.status ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('')}
-        </select>
-      </div>
       <div>
         <label>Order placement date</label>
         <input id="fOrderDate" type="date" value="${val(order.orderPlacementDate)}" ${order.orderPlacementDate ? 'disabled title="Set once when the order was placed - not editable afterward"' : ''} />
@@ -2512,12 +2568,13 @@ async function openDetailPanel(id, scope) {
   // a future suggestion without needing a separate managed list. ----
   (async () => {
     try {
-      const [suppliersData, historyData, optionsData, warehousesData, componentsData] = await Promise.all([
+      const [suppliersData, historyData, optionsData, warehousesData, componentsData, fabricCodesData] = await Promise.all([
         api('/api/suppliers'),
         api('/api/order-management/field-history'),
         api('/api/options'),
         api('/api/warehouses'),
-        api('/api/catalog/components')
+        api('/api/catalog/components'),
+        api('/api/fabric-library/codes')
       ]);
       const suppliers = suppliersData.suppliers || [];
       const supplierNames = suppliers.map((s) => s.name);
@@ -2525,10 +2582,37 @@ async function openDetailPanel(id, scope) {
       suppliersShared = suppliers;
       componentsShared = (componentsData && componentsData.components) || [];
       componentNamesShared = componentsShared.map((c) => c.partName).filter(Boolean);
+      const fabricCodesLib = (fabricCodesData && fabricCodesData.codes) || [];
 
       attachTypeahead('fSupplierName', () => supplierNames);
-      attachTypeahead('fFabricInfo', () => historyData.fabricCodes || []);
+      // Fabric Code suggestions lead with the Fabric Library's reference
+      // names ("01 - 100% Cotton") - that's the standard way to fill this
+      // in - followed by any historical PO values not already in the
+      // library, so older conventions still autocomplete.
+      const libraryFabricNames = fabricCodesLib.map((c) => c.value).filter(Boolean);
+      const librarySet = new Set(libraryFabricNames.map((v) => v.toLowerCase()));
+      const fabricCodeOptions = libraryFabricNames.concat(
+        (historyData.fabricCodes || []).filter((v) => v && !librarySet.has(v.toLowerCase()))
+      );
+      attachTypeahead('fFabricInfo', () => fabricCodeOptions);
       attachTypeahead('fComponent', () => historyData.fabricTypes || []);
+
+      // Picking a library swatch (by reference name or pantone) auto-fills
+      // the Fabric Type from its material blend - only when empty, so a
+      // hand-typed type is never clobbered.
+      const fabricInfoInput = document.getElementById('fFabricInfo');
+      const fabricTypeInput = document.getElementById('fComponent');
+      if (fabricInfoInput) {
+        fabricInfoInput.addEventListener('change', () => {
+          const q = fabricInfoInput.value.trim().toLowerCase();
+          if (!q) return;
+          const match = fabricCodesLib.find((c) =>
+            (c.value || '').trim().toLowerCase() === q || (c.pantone || '').trim().toLowerCase() === q);
+          if (match && match.materialBlend && fabricTypeInput && !fabricTypeInput.value.trim()) {
+            fabricTypeInput.value = match.materialBlend;
+          }
+        });
+      }
 
       const supplierNameInput = document.getElementById('fSupplierName');
       const supplierCodeInput = document.getElementById('fSupplierCode');
