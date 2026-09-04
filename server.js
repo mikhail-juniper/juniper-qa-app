@@ -1477,7 +1477,13 @@ function seedFabricSwatchesFromFile() {
   try {
     const seedDir = path.join(__dirname, 'seeds', 'fabric-swatches');
     const seedJson = path.join(seedDir, 'fabric-swatches.json');
-    if (!fs.existsSync(seedJson)) return;
+    if (!fs.existsSync(seedJson)) {
+      // Loud on purpose: the most likely reason this file is missing is the
+      // seeds/fabric-swatches folder not making it into the deployment
+      // (e.g. a zip extracted one level too deep, or a partial copy).
+      console.warn(`Fabric swatch seed skipped: ${seedJson} not found. If the Fabric Library is unexpectedly empty, make sure seeds/fabric-swatches/ (1 JSON + swatch images) is committed and deployed.`);
+      return;
+    }
     const seed = JSON.parse(fs.readFileSync(seedJson, 'utf8'));
     const existing = fabricLibraryStore.listFabricCodes();
     const seededKeys = new Set(existing.map((c) => c.seedKey).filter(Boolean));
