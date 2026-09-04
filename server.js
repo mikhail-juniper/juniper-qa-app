@@ -886,6 +886,12 @@ app.patch('/api/order-management/orders/:id', (req, res) => {
   // "+ Add new..." should stick around as a future suggestion, same as
   // Creator/PD Lead already do on the New PO form.
   if (body.patch && body.patch.buyer) addNewOptionIfMissing('qaLeads', body.patch.buyer);
+  // Same for a warehouse name typed via "+ Add new..." - it becomes a real
+  // Warehouse record (manageable on the Suppliers page's Warehouses
+  // section) so it shows up in the dropdown for every future PO.
+  if (body.patch && body.patch.mainComponent && body.patch.mainComponent.warehouse) {
+    warehouseStore.ensureWarehouseByName(body.patch.mainComponent.warehouse);
+  }
   const updated = orderManagementStore.updateOrder(req.params.id, body.patch || {}, actor);
   if (!updated) return res.status(404).json({ error: 'Order not found' });
   res.json({ ok: true, order: updated });
@@ -1457,6 +1463,84 @@ function seedVendorsFromFile() {
   }
 }
 seedVendorsFromFile();
+
+// ---- One-time seed: full fabric swatch book imported from
+// Fabric_Swatch_Translation_-_Data_Export.xlsx (all six tabs). Idempotent
+// by seedKey (each entry's position in the source workbook), so restarts
+// never duplicate - and duplicate pantones across books are expected and
+// preserved as separate entries. Entries seeded by the earlier tab-1-only
+// import (identifiable by their old-format blend "65% 35%" and no seedKey)
+// get upgraded in place with the richer per-row blend/weight/type data
+// rather than duplicated. Image files ship in seeds/fabric-swatches/ and
+// get copied onto the persistent disk the first time they're needed.
+function seedFabricSwatchesFromFile() {
+  try {
+    const seedDir = path.join(__dirname, 'seeds', 'fabric-swatches');
+    const seedJson = path.join(seedDir, 'fabric-swatches.json');
+    if (!fs.existsSync(seedJson)) return;
+    const seed = JSON.parse(fs.readFileSync(seedJson, 'utf8'));
+    const existing = fabricLibraryStore.listFabricCodes();
+    const seededKeys = new Set(existing.map((c) => c.seedKey).filter(Boolean));
+    // Old-format tab-1 entries from the previous import, matchable by
+    // pantone + book code (unique within that tab).
+    const legacy = new Map();
+    existing.forEach((c) => {
+      if (!c.seedKey && c.materialBlend === '65% 35%') {
+        legacy.set(`${(c.pantone || '').toLowerCase()}|${(c.bookCode || '').toLowerCase()}`, c);
+      }
+    });
+    const copyIn = (fname) => {
+      if (!fname) return '';
+      const src = path.join(seedDir, fname);
+      if (!fs.existsSync(src)) return '';
+      fs.mkdirSync(FABRIC_LIBRARY_FILES_DIR, { recursive: true });
+      const dest = path.join(FABRIC_LIBRARY_FILES_DIR, fname);
+      if (!fs.existsSync(dest)) fs.copyFileSync(src, dest);
+      return `/fabric-library-files/${encodeURIComponent(fname)}`;
+    };
+    let added = 0, upgraded = 0;
+    (seed.entries || []).forEach((e) => {
+      if (seededKeys.has(e.seedKey)) return;
+      const fields = {
+        value: e.pantone || '',
+        materialBlend: e.materialBlend || '',
+        swatchUrl: copyIn(e.swatchFile),
+        digitalColorUrl: copyIn(e.digitalColorFile),
+        pantone: e.pantone || '',
+        hex: e.hex || '',
+        cmyk: e.cmyk || '',
+        bookCode: e.bookCode || '',
+        fabricWeight: e.fabricWeight || '',
+        garmentType: e.garmentType || '',
+        seedKey: e.seedKey || ''
+      };
+      const legacyMatch = e.seedKey && e.seedKey.startsWith('t1_')
+        ? legacy.get(`${(e.pantone || '').toLowerCase()}|${(e.bookCode || '').toLowerCase()}`)
+        : null;
+      if (legacyMatch) {
+        // Keep the existing record (and any notes added to it) - just fill
+        // in the richer fields from the full export.
+        fabricLibraryStore.updateFabricCode(legacyMatch.id, {
+          materialBlend: fields.materialBlend,
+          fabricWeight: fields.fabricWeight,
+          garmentType: fields.garmentType,
+          seedKey: fields.seedKey,
+          swatchUrl: legacyMatch.swatchUrl || fields.swatchUrl,
+          digitalColorUrl: legacyMatch.digitalColorUrl || fields.digitalColorUrl
+        });
+        upgraded += 1;
+      } else {
+        fabricLibraryStore.createFabricCode({ id: uuidv4(), ...fields });
+        added += 1;
+      }
+      seededKeys.add(e.seedKey);
+    });
+    if (added || upgraded) console.log(`Fabric Library seed: ${added} swatch(es) added, ${upgraded} upgraded from the earlier tab-1 import.`);
+  } catch (err) {
+    console.error('Fabric swatch seed import failed:', err);
+  }
+}
+seedFabricSwatchesFromFile();
 
 // Runs after the vendor seed on purpose: several factory codes are also
 // real vendor codes in that seed, and this migration only checks by name

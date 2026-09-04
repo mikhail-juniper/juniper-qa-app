@@ -1067,14 +1067,45 @@ function renderFabricTable(hostId, kind, entries, withSwatch) {
     host.innerHTML = `<div class="om-empty">No fabric ${kind === 'code' ? 'codes' : 'types'} recorded yet.</div>`;
     return;
   }
-  host.innerHTML = `
+  const hexChip = (hex) => {
+    const clean = (hex || '').trim().replace('#', '');
+    if (!clean) return '—';
+    return `<span style="display:inline-flex;align-items:center;gap:7px;"><span style="width:18px;height:18px;border-radius:4px;border:1px solid var(--jc-border);background:#${escapeHtml(clean)};flex:none;"></span>#${escapeHtml(clean)}</span>`;
+  };
+  const imgCell = (url) => url ? `<img class="om-table-thumb" src="${escapeHtml(url)}" alt="" />` : '—';
+  host.innerHTML = kind === 'code' ? `
     <div class="om-table-wrap">
       <table class="om-table">
-        <thead><tr>${withSwatch ? '<th>Swatch</th>' : ''}<th>${kind === 'code' ? 'Fabric Code' : 'Fabric Type'}</th><th>Notes</th></tr></thead>
+        <thead><tr>
+          <th>Fabric Code</th><th>Material Blend</th><th>Type</th><th>Fabric Swatch</th><th>Digital Color Reference</th>
+          <th>Pantone Color</th><th>Hex Color</th><th>CMYK Color</th><th>Book Code</th><th>Fabric Weight</th><th>Notes</th>
+        </tr></thead>
         <tbody>
           ${entries.map((e) => `
             <tr data-id="${escapeHtml(e.id)}">
-              ${withSwatch ? `<td>${e.swatchUrl ? `<img class="om-table-thumb" src="${escapeHtml(e.swatchUrl)}" alt="" />` : '—'}</td>` : ''}
+              <td><strong>${escapeHtml(e.value)}</strong></td>
+              <td>${escapeHtml(e.materialBlend || '—')}</td>
+              <td>${escapeHtml(e.garmentType || '—')}</td>
+              <td>${imgCell(e.swatchUrl)}</td>
+              <td>${e.digitalColorUrl ? imgCell(e.digitalColorUrl) : hexChip(e.hex)}</td>
+              <td>${escapeHtml(e.pantone || '—')}</td>
+              <td>${hexChip(e.hex)}</td>
+              <td style="font-size:12px;white-space:nowrap;">${escapeHtml(e.cmyk || '—')}</td>
+              <td>${escapeHtml(e.bookCode || '—')}</td>
+              <td>${escapeHtml(e.fabricWeight || '—')}</td>
+              <td>${escapeHtml(e.notes || '—')}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  ` : `
+    <div class="om-table-wrap">
+      <table class="om-table">
+        <thead><tr><th>Fabric Type</th><th>Notes</th></tr></thead>
+        <tbody>
+          ${entries.map((e) => `
+            <tr data-id="${escapeHtml(e.id)}">
               <td><strong>${escapeHtml(e.value)}</strong></td>
               <td>${escapeHtml(e.notes || '—')}</td>
             </tr>
@@ -1102,19 +1133,43 @@ function openFabricEntryForm(kind, entry) {
       <button class="om-panel-close" id="fabClose">&times;</button>
     </div>
     <div class="om-field-grid">
-      <div style="grid-column:1/-1;"><label>${isCode ? 'Fabric Code' : 'Fabric Type'} *</label><input id="fabValue" type="text" value="${val(entry && entry.value)}" /></div>
+      <div><label>${isCode ? 'Fabric Code' : 'Fabric Type'} *</label><input id="fabValue" type="text" value="${val(entry && entry.value)}" /></div>
       ${isCode ? `
-        <div style="grid-column:1/-1;">
-          <label>Swatch</label>
+        <div><label>Material Blend</label><input id="fabMaterialBlend" type="text" placeholder="e.g. 65% Polyester, 35% Cotton" value="${val(entry && entry.materialBlend)}" /></div>
+        <div><label>Type</label>
+          <input id="fabGarmentType" type="text" list="fabGarmentTypeOptions" placeholder="e.g. Hoodie / Sweatshirt" value="${val(entry && entry.garmentType)}" />
+          <datalist id="fabGarmentTypeOptions">
+            <option value="Hoodie / Sweatshirt"></option>
+            <option value="T-Shirt"></option>
+          </datalist>
+        </div>
+        <div>
+          <label>Fabric Swatch</label>
           <div style="display:flex;align-items:center;gap:10px;">
             ${entry && entry.swatchUrl
-              ? `<img id="fabSwatchPreview" class="om-upload-preview" src="${escapeHtml(entry.swatchUrl)}" alt="" title="Click to view larger" />`
+              ? `<img id="fabSwatchPreview" class="om-upload-preview" src="${escapeHtml(entry.swatchUrl)}" alt="" />`
               : `<div id="fabSwatchPreview" class="om-upload-preview-empty"></div>`}
             <input type="hidden" id="fabSwatchUrl" value="${val(entry && entry.swatchUrl)}" />
             <input type="file" id="fabSwatchFile" accept="image/*" style="display:none;" />
             <button type="button" class="om-table-upload-btn" id="fabSwatchUploadBtn">Upload</button>
           </div>
         </div>
+        <div>
+          <label>Digital Color Reference</label>
+          <div style="display:flex;align-items:center;gap:10px;">
+            ${entry && entry.digitalColorUrl
+              ? `<img id="fabDigitalPreview" class="om-upload-preview" src="${escapeHtml(entry.digitalColorUrl)}" alt="" />`
+              : `<div id="fabDigitalPreview" class="om-upload-preview-empty"></div>`}
+            <input type="hidden" id="fabDigitalUrl" value="${val(entry && entry.digitalColorUrl)}" />
+            <input type="file" id="fabDigitalFile" accept="image/*" style="display:none;" />
+            <button type="button" class="om-table-upload-btn" id="fabDigitalUploadBtn">Upload</button>
+          </div>
+        </div>
+        <div><label>Pantone Color</label><input id="fabPantone" type="text" placeholder="e.g. 206C" value="${val(entry && entry.pantone)}" /></div>
+        <div><label>Hex Color</label><input id="fabHex" type="text" placeholder="e.g. ce0037" value="${val(entry && entry.hex)}" /></div>
+        <div><label>CMYK Color</label><input id="fabCmyk" type="text" placeholder="e.g. C: 11% M: 100% Y: 81% K: 3%" value="${val(entry && entry.cmyk)}" /></div>
+        <div><label>Book Code</label><input id="fabBookCode" type="text" value="${val(entry && entry.bookCode)}" /></div>
+        <div><label>Fabric Weight</label><input id="fabFabricWeight" type="text" placeholder="e.g. 340gsm" value="${val(entry && entry.fabricWeight)}" /></div>
       ` : ''}
       <div style="grid-column:1/-1;"><label>Notes</label><input id="fabNotes" type="text" value="${val(entry && entry.notes)}" /></div>
     </div>
@@ -1131,28 +1186,32 @@ function openFabricEntryForm(kind, entry) {
   document.getElementById('fabCancel').addEventListener('click', closePanel);
 
   if (isCode) {
-    const uploadBtn = document.getElementById('fabSwatchUploadBtn');
-    const fileInput = document.getElementById('fabSwatchFile');
-    uploadBtn.addEventListener('click', () => fileInput.click());
-    fileInput.addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const formData = new FormData();
-      formData.append('file', file);
-      try {
-        const res = await fetch('/api/fabric-library/upload', { method: 'POST', body: formData });
-        const body = await res.json();
-        if (!res.ok) throw new Error(body.error || 'Upload failed');
-        document.getElementById('fabSwatchUrl').value = body.file.url;
-        const old = document.getElementById('fabSwatchPreview');
-        const fresh = document.createElement('img');
-        fresh.id = 'fabSwatchPreview';
-        fresh.className = 'om-upload-preview';
-        fresh.src = body.file.url;
-        old.parentNode.replaceChild(fresh, old);
-        showToast('Swatch uploaded');
-      } catch (err) { showToast(err.message, true); }
-    });
+    const wireSwatchUpload = (btnId, fileId, urlId, previewId) => {
+      const uploadBtn = document.getElementById(btnId);
+      const fileInput = document.getElementById(fileId);
+      uploadBtn.addEventListener('click', () => fileInput.click());
+      fileInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+          const res = await fetch('/api/fabric-library/upload', { method: 'POST', body: formData });
+          const body = await res.json();
+          if (!res.ok) throw new Error(body.error || 'Upload failed');
+          document.getElementById(urlId).value = body.file.url;
+          const old = document.getElementById(previewId);
+          const fresh = document.createElement('img');
+          fresh.id = previewId;
+          fresh.className = 'om-upload-preview';
+          fresh.src = body.file.url;
+          old.parentNode.replaceChild(fresh, old);
+          showToast('Image uploaded');
+        } catch (err) { showToast(err.message, true); }
+      });
+    };
+    wireSwatchUpload('fabSwatchUploadBtn', 'fabSwatchFile', 'fabSwatchUrl', 'fabSwatchPreview');
+    wireSwatchUpload('fabDigitalUploadBtn', 'fabDigitalFile', 'fabDigitalUrl', 'fabDigitalPreview');
   }
 
   if (entry) {
@@ -1171,7 +1230,17 @@ function openFabricEntryForm(kind, entry) {
     const value = document.getElementById('fabValue').value.trim();
     if (!value) return showToast(`${isCode ? 'Fabric code' : 'Fabric type'} is required`, true);
     const payload = { value, notes: document.getElementById('fabNotes').value };
-    if (isCode) payload.swatchUrl = document.getElementById('fabSwatchUrl').value;
+    if (isCode) {
+      payload.swatchUrl = document.getElementById('fabSwatchUrl').value;
+      payload.digitalColorUrl = document.getElementById('fabDigitalUrl').value;
+      payload.materialBlend = document.getElementById('fabMaterialBlend').value;
+      payload.pantone = document.getElementById('fabPantone').value;
+      payload.hex = document.getElementById('fabHex').value.trim().replace('#', '');
+      payload.cmyk = document.getElementById('fabCmyk').value;
+      payload.bookCode = document.getElementById('fabBookCode').value;
+      payload.fabricWeight = document.getElementById('fabFabricWeight').value;
+      payload.garmentType = document.getElementById('fabGarmentType').value;
+    }
     try {
       const path = `/api/fabric-library/${isCode ? 'codes' : 'types'}${entry ? '/' + encodeURIComponent(entry.id) : ''}`;
       await api(path, { method: entry ? 'PATCH' : 'POST', body: JSON.stringify(payload) });
@@ -1792,6 +1861,7 @@ async function openDetailPanel(id, scope) {
         <select id="fWarehouse" data-current="${escapeHtml(order.mainComponent.warehouse || '')}">
           <option value="${escapeHtml(order.mainComponent.warehouse || '')}">${escapeHtml(order.mainComponent.warehouse || '— Select —')}</option>
         </select>
+        <input type="text" id="fWarehouseOther" placeholder="Enter new warehouse name" style="margin-top:8px;display:none;" />
       </div>
       <div><label>Shipping cost (¥)</label><div class="om-money-wrap"><input id="fTransportationFees" type="number" step="0.01" value="${val(order.costs.transportationFees)}" /></div></div>
       <div><label>Packing List Number</label><input id="fFulfillPacking" type="text" value="${val(order.fulfillment.packingListNumber)}" /></div>
@@ -2477,16 +2547,24 @@ async function openDetailPanel(id, scope) {
       }
 
       // Warehouse Address - real Warehouse records, managed on the
-      // Suppliers page's Warehouses section.
+      // Suppliers page's Warehouses section, with an "+ Add new..." option:
+      // a typed name becomes a real Warehouse record on save.
       const warehouseSelect = document.getElementById('fWarehouse');
+      const warehouseOtherInput = document.getElementById('fWarehouseOther');
       if (warehouseSelect) {
         const warehouses = (warehousesData && warehousesData.warehouses) || [];
         const current = warehouseSelect.dataset.current || '';
         const names = warehouses.map((w) => w.name);
         const allNames = current && !names.includes(current) ? [current, ...names] : names;
         warehouseSelect.innerHTML = `<option value="">— Select —</option>` +
+          `<option value="__other__">+ Add new...</option>` +
           allNames.map((n) => `<option value="${escapeHtml(n)}" ${n === current ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('');
-        accessoryRowsHost.querySelectorAll('.om-acc-address-cell').forEach((cell) => { cell.textContent = current || '—'; });
+        warehouseSelect.addEventListener('change', (e) => {
+          const isOther = e.target.value === '__other__';
+          warehouseOtherInput.style.display = isOther ? '' : 'none';
+          if (isOther) warehouseOtherInput.focus();
+        });
+        accessoryRowsHost.querySelectorAll('.om-acc-address-cell').forEach((cell) => { cell.textContent = currentSupplierAddress() || '—'; });
       }
     } catch (e) { /* these are conveniences - fine to skip silently if this fails */ }
   })();
@@ -2504,6 +2582,10 @@ async function openDetailPanel(id, scope) {
     const buyerValue = buyerSelectEl.value === '__other__'
       ? document.getElementById('fBuyerOther').value.trim()
       : buyerSelectEl.value;
+    const warehouseSelectEl = document.getElementById('fWarehouse');
+    const warehouseValue = warehouseSelectEl.value === '__other__'
+      ? document.getElementById('fWarehouseOther').value.trim()
+      : warehouseSelectEl.value;
     const patch = {
       buyer: buyerValue,
       orderPlacementDate: document.getElementById('fOrderDate').value || null,
@@ -2522,7 +2604,7 @@ async function openDetailPanel(id, scope) {
         sku: document.getElementById('fMainSku').value,
         factoryPrice: document.getElementById('fFactoryPrice').value || null,
         purchaseQuantity: document.getElementById('fPurchaseQty').value || null,
-        warehouse: document.getElementById('fWarehouse').value,
+        warehouse: warehouseValue,
         photoReference: document.getElementById('fPhotoReference').value,
         manufacturingDrawing: document.getElementById('fManufacturingDrawing').value,
         washingTagUrl: document.getElementById('fWashingTagUrl').value,
