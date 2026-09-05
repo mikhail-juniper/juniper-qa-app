@@ -3286,5 +3286,61 @@
   "helpPdApproval": {
     "en": "Share this link with PD and QA to run the three approval stages. Statuses below are set on that page - they're read-only here.",
     "zh": "将此链接分享给产品开发和质检团队以完成三个审批阶段。以下状态在该页面设置，此处仅供查看。"
+  },
+  "secParentPo": {
+    "en": "Order Details",
+    "zh": "订单详情"
+  },
+  "fldParentPoNumber": {
+    "en": "Parent PO Number",
+    "zh": "主订单号"
+  },
+  "fldParentPoProductName": {
+    "en": "Parent PO Product Name",
+    "zh": "主订单产品名称"
+  },
+  "btnViewMainPo": {
+    "en": "View main PO",
+    "zh": "查看主订单"
+  },
+  "fldShipToAddress": {
+    "en": "Ship to Address",
+    "zh": "收货地址"
+  },
+  "fldTotalShippingCost": {
+    "en": "Total Shipping Cost",
+    "zh": "运费总额"
+  },
+  "fldTotalPrice": {
+    "en": "Total price",
+    "zh": "总价"
+  },
+  "fldDesiredDeliveryDate": {
+    "en": "Desired delivery date",
+    "zh": "期望交货日期"
+  },
+  "fldDeliveryAddress": {
+    "en": "Delivery address",
+    "zh": "交货地址"
+  },
+  "fldDesignDocument": {
+    "en": "Design document",
+    "zh": "设计文件"
+  },
+  "fldRemark": {
+    "en": "Remark",
+    "zh": "备注"
+  },
+  "componentViewLabel": {
+    "en": "Component view",
+    "zh": "组件视图"
+  },
+  "componentOf": {
+    "en": "Component of",
+    "zh": "所属订单"
+  },
+  "btnSaveStatus": {
+    "en": "Save changes",
+    "zh": "保存更改"
   }
 }

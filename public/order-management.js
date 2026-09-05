@@ -615,7 +615,7 @@ function productsCategoryBlock(productLine, products) {
   const meta = CATEGORY_META[productLine];
   return `
     <div class="om-category-tile" style="margin-bottom:20px;">
-      <div class="om-category-tile-header" style="border-color:${meta.color};"><span>${ti(meta.key, meta.label)} ${i18i('labelProducts', 'Products')} (${products.length})</span></div>
+      <div class="om-category-tile-header" style="border-color:${meta.color};"><span>${i18i(meta.key, meta.label)} ${i18i('labelProducts', 'Products')} (${products.length})</span></div>
       ${products.length ? `
         <div class="om-table-wrap">
           <table class="om-table">
@@ -871,7 +871,7 @@ function componentsCategoryBlock(productLine, components) {
   const meta = CATEGORY_META[productLine];
   return `
     <div class="om-category-tile" style="margin-bottom:20px;">
-      <div class="om-category-tile-header" style="border-color:${meta.color};"><span>${ti(meta.key, meta.label)} ${i18i('labelComponents', 'Components')} (${components.length})</span></div>
+      <div class="om-category-tile-header" style="border-color:${meta.color};"><span>${i18i(meta.key, meta.label)} ${i18i('labelComponents', 'Components')} (${components.length})</span></div>
       ${components.length ? `
         <div class="om-table-wrap">
           <table class="om-table">
@@ -1365,7 +1365,7 @@ function renderAccessoriesTable(host, rows) {
     <table class="om-table">
       <thead>
         <tr>
-          <th>${i18i('thPartName', 'Part name')}</th><th>${i18i('thPoNumber', 'PO Number')}</th><th>${i18i('th2Specifications', 'Specifications')}</th><th>${i18i('thMaterial', 'Material')}</th><th>${i18i('th2Dimensions', 'Dimensions')}</th>
+          <th>${i18i('thPartName', 'Part name')}</th><th>${i18i('thPoNumber', 'PO Number')}</th><th>${i18i('thStatus', 'Status')}</th><th>${i18i('th2Dimensions', 'Dimensions')}</th>
           <th>${i18i('th2Qty', 'Qty')}</th><th>${i18i('thUnitPrice', 'Unit price')}</th><th>${i18i('th2Total', 'Total')}</th><th>${i18i('th2ExpectedDelivery', 'Expected delivery')}</th>
           <th>${i18i('thSupplier', 'Supplier')}</th><th>${i18i('fldSupplierContact', 'Supplier contact')}</th><th>${i18i('th2Waybill', 'Waybill #')}</th><th>${i18i('th2ShipmentQty', 'Shipment qty')}</th>
         </tr>
@@ -1375,9 +1375,8 @@ function renderAccessoriesTable(host, rows) {
           <tr data-id="${escapeHtml(order.id)}" data-accessory-id="${escapeHtml(a.id)}">
             <td><strong>${escapeHtml(a.partName || 'Unnamed part')}</strong></td>
             <td>${escapeHtml(order.poNumber)}</td>
-            <td>${escapeHtml(a.specifications || '—')}</td>
-            <td>${escapeHtml(a.material || '—')}</td>
-            <td>${escapeHtml(a.dimensions || '—')}</td>
+            <td><span class="om-pill om-pill-${statusSlug(a.status)}">${tStatusInline(a.status)}</span></td>
+            <td>${escapeHtml(formatAccessoryDimensions(a))}</td>
             <td>${escapeHtml(a.quantity ?? '—')}</td>
             <td>${fmtMoney(a.unitPrice)}</td>
             <td>${fmtMoney(a.totalPrice)}</td>
@@ -2136,7 +2135,7 @@ async function openDetailPanel(id, scope) {
       <thead><tr><th>${i18i('thComponent', 'Component')}</th><th>${i18i('thAmount', 'Amount')} (¥)</th><th>${i18i('thStatus', 'Status')}</th></tr></thead>
       <tbody id="omPaymentLineItems"></tbody>
     </table>
-    <div class="om-detail-row" style="margin-top:10px;"><span class="om-label"><strong>${i18('payOverallStatus', 'Overall Payment Status')}</strong></span><span class="om-value" id="omOverallPaymentStatus">${tStatusText(order.settlement.status)}</span></div>
+    <div class="om-detail-row" style="margin-top:10px;"><span class="om-label"><strong>${i18('payOverallStatus', 'Overall Payment Status')}</strong></span><span class="om-value"><span class="om-overall-pay" id="omOverallPaymentStatus" data-pay="${escapeHtml(String(order.settlement.status || '').toLowerCase())}">${tStatusText(order.settlement.status)}</span></span></div>
     ${order.settlement.paidDate ? `<div class="om-detail-row"><span class="om-label">${i18('payPaidInFullOn', 'Paid in full on')}</span><span class="om-value">${fmtDate(order.settlement.paidDate)}</span></div>` : ''}
     <div style="margin-top:14px;">
       <button type="button" class="btn btn-primary" id="omCompletePoBtn" style="flex:none;width:auto;padding:9px 18px;" ${(order.status === STATUSES[STATUSES.length - 1] && order.settlement.status === 'Paid') ? '' : 'disabled title="Available once the order has reached its final status and every component is marked Paid"'}>
@@ -2530,7 +2529,9 @@ async function openDetailPanel(id, scope) {
         paymentLineItemsState[e.target.dataset.paymentKey] = isPaid;
         const newStatus = computeOverallPaymentStatus(items);
         const allPaid = newStatus === 'Paid';
-        document.getElementById('omOverallPaymentStatus').textContent = tStatusText(newStatus);
+        const overallEl = document.getElementById('omOverallPaymentStatus');
+        overallEl.textContent = tStatusText(newStatus);
+        overallEl.setAttribute('data-pay', String(newStatus).toLowerCase());
         try {
           await api(`/api/order-management/orders/${encodeURIComponent(order.id)}`, {
             method: 'PATCH',
@@ -3183,65 +3184,149 @@ async function openAccessoryDetailPanel(orderId, accessoryId) {
     <div class="om-panel-header">
       <div>
         <div style="font-size:19px;font-weight:700;">${escapeHtml(accessory.partName || 'Unnamed part')}</div>
-        <div style="color:var(--jc-muted);font-size:13px;">Component of ${escapeHtml(order.poNumber)}</div>
-        <div style="margin-top:4px;font-size:12px;font-weight:700;color:var(--jc-teal-dark);text-transform:uppercase;">Component view</div>
+        <div style="color:var(--jc-muted);font-size:13px;">${i18('componentOf', 'Component of')} ${escapeHtml(order.poNumber)}</div>
+        <div style="margin-top:4px;font-size:12px;font-weight:700;color:var(--jc-teal-dark);text-transform:uppercase;">${i18('componentViewLabel', 'Component view')}</div>
       </div>
       <div style="display:flex;gap:10px;align-items:center;">
-        <button class="btn btn-secondary" id="omViewFullPoFromAccessory" style="flex:none;width:auto;padding:7px 14px;font-size:13px;">View main PO</button>
+        <button class="btn btn-primary" id="omSaveAccessoryStatus" style="flex:none;width:auto;padding:8px 18px;">${i18('btnSaveStatus', 'Save changes')}</button>
         <button class="om-panel-close" id="omClosePanel">&times;</button>
       </div>
     </div>
 
-    <div class="om-section-title">${i18('secStatus', 'Status')}</div>
+    <div class="om-panel-card">
+    <div class="om-section-title">${i18('secProductionStatus', 'Production Status')}</div>
     <div class="om-field-grid">
-      <div><label>${i18('fldStatusLc', 'Status')}</label>
-        <select id="accStatus">
-          ${ACCESSORY_STATUSES.map((s) => `<option value="${escapeHtml(s)}" ${s === accessory.status ? 'selected' : ''}>${tStatusText(s)}</option>`).join('')}
+      <div><label>${i18('fldProductComplexityRisk', 'Product Complexity/Risk')}</label>
+        <select id="accRisk" class="om-risk-select" data-risk="${escapeHtml(accessory.productRisk || 'low')}">
+          <option value="high" ${accessory.productRisk === 'high' ? 'selected' : ''}>${i18t('riskHigh', 'High')}</option>
+          <option value="medium" ${accessory.productRisk === 'medium' ? 'selected' : ''}>${i18t('riskMedium', 'Medium')}</option>
+          <option value="low" ${(accessory.productRisk || 'low') === 'low' ? 'selected' : ''}>${i18t('riskLow', 'Low')}</option>
+        </select>
+      </div>
+      <div><label>${i18('fldOrderStatus', 'Order Status')}</label>
+        <select id="accStatus" class="om-status-select" data-status="${escapeHtml(accessory.status || '')}">
+          ${ACCESSORY_STATUSES.map((st) => `<option value="${escapeHtml(st)}" ${st === accessory.status ? 'selected' : ''}>${tStatusText(st)}</option>`).join('')}
         </select>
       </div>
     </div>
+    </div>
 
-    <div class="om-section-title">${i18('secComponentDetailsCap', 'Component Details')}</div>
-    ${accessory.imageUrl ? `<img src="${escapeHtml(accessory.imageUrl)}" alt="" style="width:96px;height:96px;object-fit:cover;border-radius:8px;border:1px solid var(--jc-border);margin-bottom:12px;" />` : ''}
+    <div class="om-panel-card">
+    <div class="om-section-title">${i18('secOrderDetails', 'Order Details')}</div>
     <div class="om-detail-grid">
-      <div class="om-detail-row"><span class="om-label">Part name</span><span class="om-value">${escapeHtml(accessory.partName || '—')}</span></div>
-      <div class="om-detail-row"><span class="om-label">Dimensions</span><span class="om-value">${escapeHtml(accessory.dimensions || '—')}</span></div>
-      <div class="om-detail-row"><span class="om-label">Quantity</span><span class="om-value">${escapeHtml(accessory.quantity ?? '—')}</span></div>
-      <div class="om-detail-row"><span class="om-label">Unit price</span><span class="om-value">${fmtMoney(accessory.unitPrice)}</span></div>
-      <div class="om-detail-row"><span class="om-label">Total price</span><span class="om-value">${fmtMoney(accessory.totalPrice)}</span></div>
-      <div class="om-detail-row"><span class="om-label">Supplier name</span><span class="om-value">${escapeHtml(accessory.supplierName || '—')}</span></div>
-      <div class="om-detail-row"><span class="om-label">Supplier contact</span><span class="om-value">${escapeHtml(accessory.supplierContact || '—')}</span></div>
-      <div class="om-detail-row"><span class="om-label">Desired delivery date</span><span class="om-value">${fmtDate(accessory.expectedDeliveryDate)}</span></div>
-      <div class="om-detail-row"><span class="om-label">Delivery address</span><span class="om-value">${escapeHtml(accessory.deliveryAddress || '—')}</span></div>
-      ${accessory.designDocUrl ? `<div class="om-detail-row"><span class="om-label">Design document</span><span class="om-value"><a href="${escapeHtml(accessory.designDocUrl)}" target="_blank" rel="noopener">View file</a></span></div>` : ''}
-      <div class="om-detail-row"><span class="om-label">Remark</span><span class="om-value">${escapeHtml(accessory.remark || '—')}</span></div>
+      <div class="om-detail-row"><span class="om-label">${i18('fldParentPoNumber', 'Parent PO Number')}</span><span class="om-value">${escapeHtml(order.poNumber || '—')}</span></div>
+      <div class="om-detail-row"><span class="om-label">${i18('fldParentPoProductName', 'Parent PO Product Name')}</span><span class="om-value">${escapeHtml((order.mainComponent && order.mainComponent.name) || '—')}</span></div>
+    </div>
+    <div style="margin-top:12px;">
+      <button class="btn btn-secondary" id="omViewFullPoFromAccessoryBody" style="flex:none;width:auto;padding:9px 16px;">${i18('btnViewMainPo', 'View main PO')}</button>
+    </div>
     </div>
 
-    <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--jc-border);display:flex;justify-content:flex-end;">
-      <button class="btn btn-primary" id="omSaveAccessoryStatus" style="flex:none;width:auto;padding:10px 24px;">Save status</button>
+    <div class="om-panel-card">
+    <div class="om-section-title">${i18('secComponentDetailsCap', 'Component Details')}</div>
+    ${accessory.imageUrl ? (isPdfFile(accessory.imageUrl)
+      ? `<a href="${escapeHtml(accessory.imageUrl)}" target="_blank" rel="noopener" style="display:inline-block;margin-bottom:12px;font-size:13px;">${i18('btnViewFile', 'View file')}</a>`
+      : `<img src="${escapeHtml(accessory.imageUrl)}" alt="" style="width:96px;height:96px;object-fit:cover;border-radius:8px;border:1px solid var(--jc-border);margin-bottom:12px;cursor:zoom-in;" id="accImagePreview" title="Click to view larger" />`) : ''}
+    <div class="om-detail-grid">
+      <div class="om-detail-row"><span class="om-label">${i18('fldPartNameReq', 'Part name')}</span><span class="om-value">${escapeHtml(accessory.partName || '—')}</span></div>
+      <div class="om-detail-row"><span class="om-label">${i18('fldDimensions', 'Dimensions')}</span><span class="om-value">${escapeHtml(formatAccessoryDimensions(accessory))}</span></div>
+      <div class="om-detail-row"><span class="om-label">${i18('thQuantity', 'Quantity')}</span><span class="om-value">${escapeHtml(accessory.quantity ?? '—')}</span></div>
+      <div class="om-detail-row"><span class="om-label">${i18('fldUnitPriceLc', 'Unit price')}</span><span class="om-value">${fmtMoney(accessory.unitPrice)}</span></div>
+      <div class="om-detail-row"><span class="om-label">${i18('fldTotalPrice', 'Total price')}</span><span class="om-value">${fmtMoney(accessory.totalPrice)}</span></div>
+      <div class="om-detail-row"><span class="om-label">${i18('fldSupplierNameLc', 'Supplier name')}</span><span class="om-value">${escapeHtml(accessory.supplierName || '—')}</span></div>
+      <div class="om-detail-row"><span class="om-label">${i18('fldSupplierContactLc', 'Supplier contact')}</span><span class="om-value">${escapeHtml(accessory.supplierContact || '—')}</span></div>
+      <div class="om-detail-row"><span class="om-label">${i18('fldDesiredDeliveryDate', 'Desired delivery date')}</span><span class="om-value">${fmtDate(accessory.expectedDeliveryDate)}</span></div>
+      ${accessory.designDocUrl ? `<div class="om-detail-row"><span class="om-label">${i18('fldDesignDocument', 'Design document')}</span><span class="om-value"><a href="${escapeHtml(accessory.designDocUrl)}" target="_blank" rel="noopener">${i18('btnViewFile', 'View file')}</a></span></div>` : ''}
+      <div class="om-detail-row"><span class="om-label">${i18('fldRemark', 'Remark')}</span><span class="om-value">${escapeHtml(accessory.remark || '—')}</span></div>
     </div>
+    </div>
+
+    <div class="om-panel-card">
+    <div class="om-section-title">${i18('secWarehousingBreakdown', 'Warehousing Breakdown')}</div>
+    <div class="om-field-grid">
+      <div><label>${i18('fldWarehouseAddress', 'Warehouse Address')}</label>
+        <select id="accWarehouse" data-current="${escapeHtml(accessory.warehouseAddress || '')}">
+          <option value="${escapeHtml(accessory.warehouseAddress || '')}">${escapeHtml(accessory.warehouseAddress || '')}</option>
+        </select>
+      </div>
+      <div><label>${i18('fldShipToAddress', 'Ship to Address')}</label>
+        <input id="accShipTo" type="text" value="${val(accessory.shipToAddress || accessory.deliveryAddress || (order.supplier && order.supplier.address) || '')}" />
+      </div>
+      <div><label>${i18('fldTotalShippingCost', 'Total Shipping Cost')} (¥)</label><div class="om-money-wrap"><input id="accShippingCost" type="number" step="0.01" value="${val(accessory.shippingCost)}" /></div></div>
+      <div><label>${i18('fldWaybillNumber', 'Waybill Number')}</label><input id="accWaybill" type="text" value="${val(accessory.waybillNumber)}" /></div>
+    </div>
+    </div>
+
    </div>
   `;
 
   mountPanel(panel);
   bindPanelEscape();
   document.getElementById('omClosePanel').addEventListener('click', closePanel);
-  document.getElementById('omViewFullPoFromAccessory').addEventListener('click', () => {
-    closePanel();
-    openDetailPanel(order.id, 'full');
-  });
-  document.getElementById('omSaveAccessoryStatus').addEventListener('click', async () => {
-    const newStatus = document.getElementById('accStatus').value;
-    const accessories = order.accessories.map((a) => a.id === accessoryId ? { ...a, status: newStatus } : a);
+  const viewMainBtn = document.getElementById('omViewFullPoFromAccessoryBody');
+  if (viewMainBtn) {
+    viewMainBtn.addEventListener('click', () => {
+      closePanel();
+      openDetailPanel(order.id, 'full');
+    });
+  }
+  const accImg = document.getElementById('accImagePreview');
+  if (accImg) accImg.addEventListener('click', () => openImageLightbox(accImg.src));
+  const accRiskSel = document.getElementById('accRisk');
+  if (accRiskSel) accRiskSel.addEventListener('change', (e) => e.target.setAttribute('data-risk', e.target.value));
+  const accStatusSel = document.getElementById('accStatus');
+  if (accStatusSel) accStatusSel.addEventListener('change', (e) => e.target.setAttribute('data-status', e.target.value));
+
+  // Warehouse dropdown mirrors the main PO's: real Warehouse records.
+  (async () => {
     try {
-      await api(`/api/order-management/orders/${encodeURIComponent(order.id)}`, {
+      const whData = await api('/api/warehouses');
+      const sel = document.getElementById('accWarehouse');
+      if (!sel) return;
+      const current = sel.dataset.current || '';
+      const names = (whData.warehouses || []).map((w) => w.name);
+      const all = current && !names.includes(current) ? [current, ...names] : names;
+      sel.innerHTML = `<option value="">${i18t('btnSelect', '— Select —')}</option>` +
+        all.map((n) => `<option value="${escapeHtml(n)}" ${n === current ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('');
+    } catch (e) { /* dropdown is a convenience - panel works without it */ }
+  })();
+
+  document.getElementById('omSaveAccessoryStatus').addEventListener('click', async () => {
+    const saveBtn = document.getElementById('omSaveAccessoryStatus');
+    const scroller = panel;
+    const savedScrollTop = scroller.scrollTop;
+    const originalLabel = saveBtn.innerHTML;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = i18('btnSaving', 'Saving...');
+    const patchFields = {
+      status: document.getElementById('accStatus').value,
+      productRisk: document.getElementById('accRisk').value,
+      warehouseAddress: document.getElementById('accWarehouse').value,
+      shipToAddress: document.getElementById('accShipTo').value,
+      shippingCost: document.getElementById('accShippingCost').value || null,
+      waybillNumber: document.getElementById('accWaybill').value
+    };
+    const accessories = order.accessories.map((a) => a.id === accessoryId ? { ...a, ...patchFields } : a);
+    try {
+      const res = await api(`/api/order-management/orders/${encodeURIComponent(order.id)}`, {
         method: 'PATCH',
         body: JSON.stringify({ patch: { accessories }, actor: 'Web user' })
       });
-      showToast(i18t('toastStatusSaved', 'Status saved'));
-      closePanel();
+      // Save in place like the main PO panel - no teardown, no lost scroll.
+      if (res && res.order) {
+        order = res.order;
+        const fresh = (res.order.accessories || []).find((a) => a.id === accessoryId);
+        if (fresh) accessory = fresh;
+      }
+      showToast(i18t('toastChangesSaved', 'Changes saved'));
       refreshCurrentView();
-    } catch (e) { showToast(e.message, true); }
+    } catch (e) {
+      showToast(e.message, true);
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.innerHTML = originalLabel;
+      requestAnimationFrame(() => { scroller.scrollTop = savedScrollTop; });
+    }
   });
 }
 
@@ -3255,6 +3340,20 @@ async function setSettlement(id, status) {
     closePanel();
     refreshCurrentView();
   } catch (e) { showToast(e.message, true); }
+}
+
+/** Sub-component dimensions as "L x W x H", built from the individual
+ *  numbers captured on the main PO's Sub-Component Breakdown. Falls back to
+ *  the older free-text `dimensions` field for rows entered before those
+ *  separate inputs existed. */
+function formatAccessoryDimensions(a) {
+  if (!a) return '—';
+  const parts = [a.dimensionsLength, a.dimensionsWidth, a.dimensionsHeight]
+    .map((v) => (v === '' || v === null || v === undefined ? null : v));
+  if (parts.some((v) => v !== null)) {
+    return parts.map((v) => (v === null ? '?' : v)).join(' x ');
+  }
+  return a.dimensions || '—';
 }
 
 /** True when a URL/filename points at a PDF rather than an image. Upload

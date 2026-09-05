@@ -700,3 +700,92 @@ div.om-money-wrap input { padding-left: 28px; width: 100%; }
 .om-pd-status[data-pd-status="approved"] { background: #e9f9ee; color: #17794a; }
 .om-pd-status[data-pd-status="approvedWithIssues"] { background: #fff6e5; color: #9a6700; }
 .om-pd-status[data-pd-status="notApproved"] { background: #fdecea; color: var(--jc-fail); }
+
+/* ============================================================
+   PANEL UI CONSISTENCY
+   The detail panels grew field by field, so several controls ended up
+   inheriting the app's large default form styling instead of the compact
+   in-panel styling used by .om-field-grid. Audit found selects at 46px next
+   to inputs at 35px, labels at 16px next to labels at 12px, and five
+   different button sizes inside the same cards. These rules bring the
+   strays into line without touching the markup.
+   ============================================================ */
+
+/* Selects that sit outside .om-field-grid (report status, paid status, the
+   sizing-standard picker) were rendering at the full-page 46px/16px. */
+.om-panel select.om-report-status-select,
+.om-panel select.om-paid-select,
+.om-panel select#fDimensionsStandardSelect,
+.om-panel select#accWarehouse {
+  font-size: 14px;
+  height: 35px;
+  padding: 8px 32px 8px 10px;
+  border-radius: var(--radius-sm);
+}
+
+/* Same for labels outside the grid - the QA/QC report "Status" labels and
+   the Product Dimensions heading were full-size body text. */
+.om-panel .om-qa-report-col label,
+.om-panel .om-pd-approval-col label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--jc-muted);
+  margin-bottom: 5px;
+}
+
+/* Action buttons inside panel cards: one size instead of 15.5px/40px,
+   15.5px/38px and 13px/32px all sitting in adjacent sections. The tiny
+   in-table Upload and row-remove buttons keep their own smaller sizing. */
+.om-panel .om-panel-card .btn:not(.om-table-upload-btn):not(.om-row-remove) {
+  font-size: 13.5px !important;
+  font-weight: 700;
+  padding: 9px 16px !important;
+  min-height: 36px;
+  border-radius: var(--radius-sm);
+}
+
+/* The Product Dimensions heading is a <label> acting as a sub-heading, so
+   it kept full body sizing. Style it as the section sub-heading it is. */
+.om-panel .om-panel-card label[style*="margin:0"] {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--jc-text);
+}
+
+/* Section titles read as quiet headings; give the cards a touch more room
+   between the title and the first field so sections breathe evenly. */
+.om-panel .om-panel-card .om-section-title { margin-bottom: 14px; }
+
+/* A couple of buttons carry inline padding that beats the class rule, so
+   they end up shorter than their neighbours - pin the height instead. */
+.om-panel .om-panel-card #omCopyFromPoBtn,
+.om-panel .om-panel-card #omCompletePoBtn { min-height: 37px; }
+
+/* Overall payment status reads as a chip like the per-line dropdowns above
+   it, rather than as plain text that's easy to miss. */
+.om-overall-pay {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 700;
+  background: #fff6e5;
+  color: #9a6700;
+}
+.om-overall-pay[data-pay="paid"] { background: #e9f9ee; color: #17794a; }
+
+/* The paid-status table follows straight on from the cost fields above it;
+   give it the same breathing room the other sub-sections get. */
+.om-panel .om-panel-card .om-section-title + .om-table { margin-top: 4px; }
+
+/* A disabled Complete PO button was rendering as pale green, which reads as
+   "active but faded" rather than unavailable. Make the state unambiguous. */
+.om-panel .btn:disabled,
+.om-panel .btn[disabled] {
+  background: #eceeec !important;
+  color: var(--jc-muted) !important;
+  border-color: var(--jc-border) !important;
+  cursor: not-allowed;
+  opacity: 1;
+}
