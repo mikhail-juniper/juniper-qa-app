@@ -62,11 +62,21 @@ async function loadClients() {
   } catch (e) { showToast(e.message, true); }
 }
 
+// Search term is module-level so a re-render (after adding/removing a
+// client) keeps whatever the person had typed.
+let clientSearch = '';
+
 function render() {
   const root = document.getElementById('clRoot');
-  const rows = clientNames.slice().sort((a, b) => a.localeCompare(b));
+  const q = clientSearch.trim().toLowerCase();
+  const rows = clientNames.slice()
+    .filter((name) => !q || String(name).toLowerCase().includes(q))
+    .sort((a, b) => a.localeCompare(b));
   root.innerHTML = `
     <h2 class="om-view-title">${i18('cliClients', 'Clients')}</h2>
+    <input class="om-search om-directory-search" id="clSearch" type="text" autocomplete="off"
+      placeholder="${escapeHtml(i18t('searchClients', 'Search client / creator / brand...'))}"
+      value="${escapeHtml(clientSearch)}" />
     <div class="om-table-wrap">
       <table class="om-table">
         <thead><tr><th>${i18i('cliClientCreatorBrand', 'Client / Creator / Brand')}</th><th>${i18i('cliCreatorTier', 'Creator Tier')}</th><th></th></tr></thead>
@@ -95,6 +105,19 @@ function render() {
       <button class="btn btn-primary" id="clAddBtn" style="flex:none;width:auto;padding:8px 16px;">+ Add client</button>
     </div>
   `;
+
+  // Preserve caret position across the re-render this triggers, otherwise
+  // typing jumps to the end of the field after every keystroke.
+  const searchInput = document.getElementById('clSearch');
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      const pos = e.target.selectionStart;
+      clientSearch = e.target.value;
+      render();
+      const fresh = document.getElementById('clSearch');
+      if (fresh) { fresh.focus(); fresh.setSelectionRange(pos, pos); }
+    });
+  }
 
   root.querySelectorAll('[data-tier-for]').forEach((sel) => {
     sel.addEventListener('change', (e) => {

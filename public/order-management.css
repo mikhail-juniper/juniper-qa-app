@@ -789,3 +789,42 @@ div.om-money-wrap input { padding-left: 28px; width: 100%; }
   cursor: not-allowed;
   opacity: 1;
 }
+
+/* Directory search sits between the page title and its list, full width so
+   it reads as filtering everything below it. */
+.om-directory-search {
+  width: 100%;
+  margin-bottom: 16px;
+}
+
+/* Filter toolbar: three dropdowns plus a search box on one row. The search
+   takes the remaining space so it stays usable, and the whole row wraps to
+   stacked controls on narrow screens rather than squeezing. */
+.om-filter-toolbar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.om-filter-toolbar .om-filter-select {
+  flex: 0 1 190px;
+  min-width: 150px;
+  font-size: 13.5px;
+  height: 38px;
+  padding: 8px 30px 8px 10px;
+}
+.om-filter-toolbar .om-filter-search {
+  flex: 1 1 220px;
+  min-width: 180px;
+  /* Match the selects exactly - the base search input is a few px taller,
+     which left the row visibly misaligned. */
+  height: 38px;
+  font-size: 13.5px;
+  padding: 8px 10px;
+  box-sizing: border-box;
+}
+.om-filter-toolbar .om-filter-select { box-sizing: border-box; }
+@media (max-width: 720px) {
+  .om-filter-toolbar .om-filter-select,
+  .om-filter-toolbar .om-filter-search { flex: 1 1 100%; }
+}

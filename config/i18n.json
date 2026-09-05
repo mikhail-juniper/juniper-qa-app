@@ -3342,5 +3342,65 @@
   "btnSaveStatus": {
     "en": "Save changes",
     "zh": "保存更改"
+  },
+  "thViewPo": {
+    "en": "View PO",
+    "zh": "查看订单"
+  },
+  "btnViewPo": {
+    "en": "View PO",
+    "zh": "查看订单"
+  },
+  "viewPoSaveFirst": {
+    "en": "Save the PO first to open this component",
+    "zh": "请先保存订单后再打开此组件"
+  },
+  "searchProducts": {
+    "en": "Search name, SKU, supplier...",
+    "zh": "搜索名称、SKU、供应商..."
+  },
+  "searchComponents": {
+    "en": "Search part name, material, supplier...",
+    "zh": "搜索部件名称、材质、供应商..."
+  },
+  "searchFabrics": {
+    "en": "Search code, pantone, colour, book, blend...",
+    "zh": "搜索编号、潘通色号、颜色、色卡、成分..."
+  },
+  "searchSuppliers": {
+    "en": "Search name, code, contact, address...",
+    "zh": "搜索名称、编号、联系人、地址..."
+  },
+  "searchClients": {
+    "en": "Search client / creator / brand...",
+    "zh": "搜索客户 / 创作者 / 品牌..."
+  },
+  "searchNoMatches": {
+    "en": "No matches for",
+    "zh": "无匹配结果："
+  },
+  "filterAllSuppliers": {
+    "en": "All suppliers",
+    "zh": "全部供应商"
+  },
+  "filterAllSkus": {
+    "en": "All SKUs",
+    "zh": "全部 SKU"
+  },
+  "filterAllStatuses": {
+    "en": "All statuses",
+    "zh": "全部状态"
+  },
+  "catAll": {
+    "en": "All",
+    "zh": "全部"
+  },
+  "searchPoPlaceholder": {
+    "en": "Search PO number, supplier, SKU...",
+    "zh": "搜索订单号、供应商、SKU..."
+  },
+  "emptyNoOrdersIn": {
+    "en": "No orders yet.",
+    "zh": "暂无订单。"
   }
 }

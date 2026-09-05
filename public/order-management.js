@@ -153,11 +153,72 @@ function bindBackToHub() {
 
 // ---- Home / tile dashboard ----
 
+// Per-tile view state. 'all' is a fourth pseudo-category showing every PO
+// regardless of product line; it uses the same code path as the real ones,
+// with productLine left off the API query.
 const homeTileState = {
-  clothing: { subTab: 'orders', search: '' },
-  toys: { subTab: 'orders', search: '' },
-  other: { subTab: 'orders', search: '' }
+  clothing: { subTab: 'orders', search: '', supplier: '', sku: '', status: '' },
+  toys: { subTab: 'orders', search: '', supplier: '', sku: '', status: '' },
+  other: { subTab: 'orders', search: '', supplier: '', sku: '', status: '' },
+  all: { subTab: 'orders', search: '', supplier: '', sku: '', status: '' }
 };
+
+/* Shared filter toolbar for the category tiles and their "View all" views.
+ * Supplier and SKU options are derived from the orders actually loaded, so
+ * the dropdowns never offer a value that would return nothing. They're
+ * filled in by populateTileFilters once the data arrives.
+ */
+function tileToolbarHtml(scope, st, idPrefix) {
+  return `
+    <div class="om-tile-toolbar om-filter-toolbar">
+      <select class="om-filter-select" data-filter="supplier" data-scope="${scope}" id="${idPrefix}Supplier">
+        <option value="">${escapeHtml(i18t('filterAllSuppliers', 'All suppliers'))}</option>
+      </select>
+      <select class="om-filter-select" data-filter="sku" data-scope="${scope}" id="${idPrefix}Sku">
+        <option value="">${escapeHtml(i18t('filterAllSkus', 'All SKUs'))}</option>
+      </select>
+      <select class="om-filter-select" data-filter="status" data-scope="${scope}" id="${idPrefix}Status">
+        <option value="">${escapeHtml(i18t('filterAllStatuses', 'All statuses'))}</option>
+        ${STATUSES.map((x) => `<option value="${escapeHtml(x)}" ${x === st.status ? 'selected' : ''}>${escapeHtml(tStatusText(x))}</option>`).join('')}
+      </select>
+      <input type="text" class="om-tile-search om-filter-search" data-search-for="${scope}"
+        placeholder="${escapeHtml(i18t('searchPoPlaceholder', 'Search PO number, supplier, SKU...'))}"
+        value="${escapeHtml(st.search)}" />
+    </div>
+  `;
+}
+
+/** Fills the supplier/SKU dropdowns from the loaded orders, keeping the
+ *  current selection even if this render's data no longer contains it (so
+ *  narrowing by supplier doesn't wipe the SKU list out from under you). */
+function populateTileFilters(idPrefix, orders, st) {
+  const fill = (id, values, current) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const firstOpt = el.querySelector('option[value=""]');
+    const label = firstOpt ? firstOpt.outerHTML : '';
+    const list = [...new Set(values.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b)));
+    if (current && !list.includes(current)) list.unshift(current);
+    el.innerHTML = label + list.map((v) =>
+      `<option value="${escapeHtml(v)}" ${v === current ? 'selected' : ''}>${escapeHtml(v)}</option>`).join('');
+  };
+  fill(`${idPrefix}Supplier`, orders.map((o) => o.supplier && o.supplier.name), st.supplier);
+  fill(`${idPrefix}Sku`, orders.map((o) => o.mainComponent && o.mainComponent.sku), st.sku);
+}
+
+/** Applies the three dropdown filters plus the free-text search. */
+function applyTileFilters(orders, st) {
+  return orders.filter((o) => {
+    if (st.supplier && (!o.supplier || o.supplier.name !== st.supplier)) return false;
+    if (st.sku && (!o.mainComponent || o.mainComponent.sku !== st.sku)) return false;
+    if (st.status && o.status !== st.status) return false;
+    if (st.search) {
+      return matchesSearch(st.search, o.poNumber, o.supplier && o.supplier.name,
+        o.mainComponent && o.mainComponent.sku, o.mainComponent && o.mainComponent.name, o.buyer);
+    }
+    return true;
+  });
+}
 
 async function renderHome(root) {
   root.innerHTML = `<div class="om-empty">${i18('emptyLoading', 'Loading...')}</div>`;
@@ -170,22 +231,28 @@ async function renderHome(root) {
   } catch (e) { showToast(e.message, true); }
 
   const categoryTile = (productLine) => {
-    const meta = CATEGORY_META[productLine];
+    // 'all' is a synthetic category covering every product line, so its
+    // counts are the sum of the three real ones rather than a server field.
+    const meta = CATEGORY_META[productLine] || { label: 'All', key: 'catAll', color: 'var(--jc-muted)' };
     const st = homeTileState[productLine];
+    const lineCount = productLine === 'all'
+      ? (counts.clothing || 0) + (counts.toys || 0) + (counts.other || 0)
+      : (counts[productLine] || 0);
+    const accCount = productLine === 'all'
+      ? (counts.clothingAccessories || 0) + (counts.toysAccessories || 0) + (counts.otherAccessories || 0)
+      : (counts[productLine + 'Accessories'] || 0);
     return `
       <div class="om-category-tile" data-tab="${productLine}">
         <div class="om-category-tile-header" style="border-color:${meta.color};">
-          <span>${meta.label}</span>
+          <span>${i18i(meta.key, meta.label)}</span>
           <button class="btn btn-secondary om-view-all-btn" data-viewall="${productLine}">${i18('btnViewAll', 'View all')}</button>
         </div>
         <div class="om-category-tile-subtabs">
-          <div class="om-subtab-btn ${st.subTab === 'orders' ? 'active' : ''}" data-subtab="orders">${i18i('tabAllOrders', 'All Orders')} <span class="om-subtab-count">${counts[productLine] || 0}</span></div>
-          <div class="om-subtab-btn ${st.subTab === 'components' ? 'active' : ''}" data-subtab="components">${i18i('tabMainComponents', 'Main Components')} <span class="om-subtab-count">${counts[productLine] || 0}</span></div>
-          <div class="om-subtab-btn ${st.subTab === 'accessories' ? 'active' : ''}" data-subtab="accessories">Accessories <span class="om-subtab-count">${counts[productLine + 'Accessories'] || 0}</span></div>
+          <div class="om-subtab-btn ${st.subTab === 'orders' ? 'active' : ''}" data-subtab="orders">${i18i('tabAllOrders', 'All Orders')} <span class="om-subtab-count">${lineCount}</span></div>
+          <div class="om-subtab-btn ${st.subTab === 'components' ? 'active' : ''}" data-subtab="components">${i18i('tabMainComponents', 'Main Components')} <span class="om-subtab-count">${lineCount}</span></div>
+          <div class="om-subtab-btn ${st.subTab === 'accessories' ? 'active' : ''}" data-subtab="accessories">${i18i('tabAccessories', 'Accessories')} <span class="om-subtab-count">${accCount}</span></div>
         </div>
-        <div class="om-tile-toolbar">
-          <input type="text" class="om-tile-search" data-search-for="${productLine}" placeholder="Search PO number, supplier, SKU..." value="${escapeHtml(st.search)}" />
-        </div>
+        ${tileToolbarHtml(productLine, st, `omTileF-${productLine}-`)}
         <div class="om-tile-table-scroll" id="omTilePreview-${productLine}"><div class="om-empty">${i18('emptyLoading', 'Loading...')}</div></div>
       </div>
     `;
@@ -221,6 +288,7 @@ async function renderHome(root) {
     ${categoryTile('clothing')}
     ${categoryTile('toys')}
     ${categoryTile('other')}
+    ${categoryTile('all')}
   `;
 
   root.querySelectorAll('.om-category-tile[data-tab]').forEach((tile) => {
@@ -237,6 +305,12 @@ async function renderHome(root) {
       homeTileState[productLine].search = e.target.value;
       loadTilePreview(productLine);
     }, 300));
+    tile.querySelectorAll('.om-filter-select').forEach((sel) => {
+      sel.addEventListener('change', () => {
+        homeTileState[productLine][sel.dataset.filter] = sel.value;
+        loadTilePreview(productLine);
+      });
+    });
   });
   root.querySelectorAll('.om-view-all-btn').forEach((btn) => {
     btn.addEventListener('click', () => openCategoryFullScreen(btn.dataset.viewall));
@@ -245,7 +319,7 @@ async function renderHome(root) {
     tr.addEventListener('click', () => openDetailPanel(tr.dataset.id));
   });
 
-  ['clothing', 'toys', 'other'].forEach(loadTilePreview);
+  ['clothing', 'toys', 'other', 'all'].forEach(loadTilePreview);
 }
 
 async function loadTilePreview(productLine) {
@@ -253,10 +327,15 @@ async function loadTilePreview(productLine) {
   if (!host) return;
   const st = homeTileState[productLine];
   try {
-    const params = new URLSearchParams({ productLine });
-    if (st.search) params.set('search', st.search);
+    // Fetch this category unfiltered so the supplier/SKU dropdowns can list
+    // every real option; the filters themselves are applied client-side.
+    const params = new URLSearchParams();
+    if (productLine !== 'all') params.set('productLine', productLine);
     const data = await api(`/api/order-management/orders?${params.toString()}`);
-    const orders = (data.orders || []).slice(0, 10); // preview only - "View all" shows everything
+    const all = data.orders || [];
+    populateTileFilters(`omTileF-${productLine}-`, all, st);
+    const filtered = applyTileFilters(all, st);
+    const orders = filtered.slice(0, 10); // preview only - "View all" shows everything
     if (st.subTab === 'components') renderComponentsTable(host, orders);
     else if (st.subTab === 'accessories') renderAccessoriesTable(host, flattenAccessories(orders));
     else renderOrdersTableFull(host, orders, productLine);
@@ -267,14 +346,14 @@ async function loadTilePreview(productLine) {
 // full-screen modal (reusing the panel infrastructure from the PO detail
 // view) rather than navigating to a separate page.
 function openCategoryFullScreen(productLine) {
-  const meta = CATEGORY_META[productLine];
+  const meta = CATEGORY_META[productLine] || { label: 'All', key: 'catAll' };
   const st = homeTileState[productLine];
   const panel = document.createElement('div');
   panel.className = 'om-panel';
   panel.innerHTML = `
    <div class="om-panel-inner">
     <div class="om-panel-header">
-      <div style="font-size:19px;font-weight:700;">${meta.label}</div>
+      <div style="font-size:19px;font-weight:700;">${i18i(meta.key, meta.label)}</div>
       <button class="om-panel-close" id="omClosePanel">&times;</button>
     </div>
     <div class="om-subtabs-bar">
@@ -282,9 +361,7 @@ function openCategoryFullScreen(productLine) {
       <button class="om-subtab ${st.subTab === 'components' ? 'active' : ''}" data-subtab="components">${i18i('tabMainComponents', 'Main Components')}</button>
       <button class="om-subtab ${st.subTab === 'accessories' ? 'active' : ''}" data-subtab="accessories">${i18i('tabAccessories', 'Accessories')}</button>
     </div>
-    <div class="om-toolbar">
-      <input class="om-search" id="omFullSearch" type="text" placeholder="Search PO number, supplier, SKU..." value="${escapeHtml(st.search)}" />
-    </div>
+    ${tileToolbarHtml(productLine, st, 'omFullF-')}
     <div class="om-table-wrap"><div id="omFullTableHost"><div class="om-empty">${i18('emptyLoading', 'Loading...')}</div></div></div>
    </div>
   `;
@@ -294,10 +371,12 @@ function openCategoryFullScreen(productLine) {
 
   async function loadFull() {
     const host = document.getElementById('omFullTableHost');
-    const params = new URLSearchParams({ productLine });
-    if (st.search) params.set('search', st.search);
+    const params = new URLSearchParams();
+    if (productLine !== 'all') params.set('productLine', productLine);
     const data = await api(`/api/order-management/orders?${params.toString()}`);
-    const orders = data.orders || [];
+    const all = data.orders || [];
+    populateTileFilters('omFullF-', all, st);
+    const orders = applyTileFilters(all, st); // no 10-row cap here
     if (st.subTab === 'components') renderComponentsTable(host, orders);
     else if (st.subTab === 'accessories') renderAccessoriesTable(host, flattenAccessories(orders));
     else renderOrdersTableFull(host, orders, productLine);
@@ -310,22 +389,33 @@ function openCategoryFullScreen(productLine) {
       loadFull().catch((e) => showToast(e.message, true));
     });
   });
-  document.getElementById('omFullSearch').addEventListener('input', debounce((e) => {
+  panel.querySelector('.om-filter-search').addEventListener('input', debounce((e) => {
     st.search = e.target.value;
     loadFull().catch((err) => showToast(err.message, true));
   }, 300));
+  panel.querySelectorAll('.om-filter-select').forEach((sel) => {
+    sel.addEventListener('change', () => {
+      st[sel.dataset.filter] = sel.value;
+      loadFull().catch((err) => showToast(err.message, true));
+    });
+  });
   loadFull().catch((e) => showToast(e.message, true));
 }
 
 // ---- Suppliers view ----
 
 async function renderSuppliersShell(root) {
+  // Warehouses load after suppliers, so the search callback needs a handle
+  // on them once they arrive.
+  let warehousesCache = null;
+  let suppliersDraw = null;
   root.innerHTML = `
     ${backToHubHtml()}
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
       <h2 class="om-view-title" style="margin:0;">${i18('viewSuppliers', 'Suppliers')}</h2>
       <button class="btn btn-primary" id="omNewSupplierBtn" style="flex:none;width:auto;padding:10px 18px;">${i18('btnNewSupplier', '+ New supplier')}</button>
     </div>
+    ${directorySearchHtml('omSupplierSearch', 'searchSuppliers', 'Search name, code, contact, address...')}
     <div id="omSuppliersHost" class="om-table-wrap"><div class="om-empty">${i18('emptyLoading', 'Loading...')}</div></div>
 
     <div style="display:flex;justify-content:space-between;align-items:center;margin:32px 0 14px 0;">
@@ -339,11 +429,28 @@ async function renderSuppliersShell(root) {
   document.getElementById('omNewWarehouseBtn').addEventListener('click', () => openWarehouseForm(null));
   try {
     const data = await api('/api/suppliers');
-    renderSuppliersTable(data.suppliers || []);
+    const suppliers = data.suppliers || [];
+    // Search covers Warehouses too - they're on the same page, so filtering
+    // only half of it would be confusing.
+    const draw = (q) => {
+      renderSuppliersTable(suppliers.filter((sup) => matchesSearch(q,
+        sup.name, sup.vendorCode, sup.companyName, sup.contactName, sup.phoneNumber,
+        sup.additionalPhone, sup.shippingAddress, sup.mailingAddress, sup.additionalAddress,
+        sup.productType, sup.wechat)));
+      if (warehousesCache) renderWarehousesTable(warehousesCache.filter((w) => matchesSearch(q,
+        w.name, w.contactName, w.phoneNumber, w.shippingAddress, w.address)));
+    };
+    suppliersDraw = draw;
+    draw('');
+    wireDirectorySearch('omSupplierSearch', draw);
   } catch (e) { showToast(e.message, true); }
   try {
     const data = await api('/api/warehouses');
-    renderWarehousesTable(data.warehouses || []);
+    warehousesCache = data.warehouses || [];
+    // Re-run the current filter now that warehouses exist, so a query typed
+    // before they finished loading still applies to them.
+    const q = (document.getElementById('omSupplierSearch') || {}).value || '';
+    if (suppliersDraw) suppliersDraw(q); else renderWarehousesTable(warehousesCache);
   } catch (e) { showToast(e.message, true); }
 }
 
@@ -582,6 +689,39 @@ function openSupplierForm(supplier) {
 // is), so anything entered on a new PO shows up here automatically -
 // there's nothing separate to keep in sync.
 
+/* ---------- Directory search ----------
+ * Products, Components, Fabric Library and Suppliers are all "load a list,
+ * group it, render it" pages, so they share one search box rather than four
+ * near-identical implementations. Filtering happens client-side over the
+ * already-loaded records: these directories are small enough that a round
+ * trip per keystroke would be slower and no more accurate.
+ */
+function directorySearchHtml(inputId, placeholderKey, fallback) {
+  return `<input class="om-search om-directory-search" id="${inputId}" type="text"
+    placeholder="${escapeHtml(i18t(placeholderKey, fallback))}" autocomplete="off" />`;
+}
+
+/** True if any of the given field values contains the query (case- and
+ *  whitespace-insensitive). Nulls and numbers are handled so callers can
+ *  pass raw record fields straight in. */
+function matchesSearch(query, ...values) {
+  const q = String(query || '').trim().toLowerCase();
+  if (!q) return true;
+  return values.some((v) => v !== null && v !== undefined && String(v).toLowerCase().includes(q));
+}
+
+/** Wires a search box to a re-render callback, debounced so typing stays
+ *  smooth on the larger directories (the fabric library has ~600 rows). */
+function wireDirectorySearch(inputId, onSearch) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  let timer = null;
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => onSearch(input.value), 120);
+  });
+}
+
 async function renderProductsShell(root) {
   root.innerHTML = `
     ${backToHubHtml()}
@@ -589,6 +729,7 @@ async function renderProductsShell(root) {
       <h2 class="om-view-title" style="margin:0;">${i18('viewProducts', 'Products')}</h2>
       <button class="btn btn-primary" id="omNewProductBtn" style="flex:none;width:auto;padding:10px 18px;">${i18('btnAddProduct', '+ Add product')}</button>
     </div>
+    ${directorySearchHtml('omProductSearch', 'searchProducts', 'Search name, SKU, supplier...')}
     <div id="omProductsHost"></div>
   `;
   bindBackToHub();
@@ -602,12 +743,17 @@ async function renderProductsShell(root) {
     // separate PO-derived table.
     const data = await api('/api/catalog/products');
     const products = data.products || [];
-    host.innerHTML = ['clothing', 'toys', 'other']
-      .map((line) => productsCategoryBlock(line, products.filter((p) => p.productLine === line)))
-      .join('');
-    host.querySelectorAll('tbody tr[data-id]').forEach((tr) => {
-      tr.addEventListener('click', () => openProductProfile(tr.dataset.id));
-    });
+    const draw = (q) => {
+      const shown = products.filter((p) => matchesSearch(q, p.name, p.sku, p.supplierName, p.supplierCode, p.fabricCode, p.fabricType));
+      host.innerHTML = ['clothing', 'toys', 'other']
+        .map((line) => productsCategoryBlock(line, shown.filter((p) => p.productLine === line)))
+        .join('') || `<div class="om-empty">${i18('searchNoMatches', 'No matches for')} "${escapeHtml(q)}"</div>`;
+      host.querySelectorAll('tbody tr[data-id]').forEach((tr) => {
+        tr.addEventListener('click', () => openProductProfile(tr.dataset.id));
+      });
+    };
+    draw('');
+    wireDirectorySearch('omProductSearch', draw);
   } catch (e) { showToast(e.message, true); }
 }
 
@@ -849,6 +995,7 @@ async function renderComponentsShell(root) {
       <h2 class="om-view-title" style="margin:0;">${i18('viewComponents', 'Components')}</h2>
       <button class="btn btn-primary" id="omNewComponentBtn" style="flex:none;width:auto;padding:10px 18px;">${i18('btnAddComponent', '+ Add component')}</button>
     </div>
+    ${directorySearchHtml('omComponentSearch', 'searchComponents', 'Search part name, material, supplier...')}
     <div id="omComponentsHost"></div>
   `;
   bindBackToHub();
@@ -858,12 +1005,17 @@ async function renderComponentsShell(root) {
   try {
     const data = await api('/api/catalog/components');
     const components = data.components || [];
-    host.innerHTML = ['clothing', 'toys', 'other']
-      .map((line) => componentsCategoryBlock(line, components.filter((c) => c.productLine === line)))
-      .join('');
-    host.querySelectorAll('tbody tr[data-id]').forEach((tr) => {
-      tr.addEventListener('click', () => openComponentProfile(tr.dataset.id));
-    });
+    const draw = (q) => {
+      const shown = components.filter((c) => matchesSearch(q, c.partName, c.material, c.supplierName, c.unitPrice));
+      host.innerHTML = ['clothing', 'toys', 'other']
+        .map((line) => componentsCategoryBlock(line, shown.filter((c) => c.productLine === line)))
+        .join('') || `<div class="om-empty">${i18('searchNoMatches', 'No matches for')} "${escapeHtml(q)}"</div>`;
+      host.querySelectorAll('tbody tr[data-id]').forEach((tr) => {
+        tr.addEventListener('click', () => openComponentProfile(tr.dataset.id));
+      });
+    };
+    draw('');
+    wireDirectorySearch('omComponentSearch', draw);
   } catch (e) { showToast(e.message, true); }
 }
 
@@ -1065,6 +1217,7 @@ async function renderFabricLibraryShell(root) {
   root.innerHTML = `
     ${backToHubHtml()}
     <h2 class="om-view-title">${i18('viewFabricLibrary', 'Fabric Library')}</h2>
+    ${directorySearchHtml('omFabricSearch', 'searchFabrics', 'Search code, pantone, colour, book, blend...')}
     <div class="om-category-tile" style="margin-bottom:20px;">
       <div class="om-category-tile-header" style="border-color:var(--jc-teal);">
         <span>${i18('secFabricCodes', 'Fabric Codes')}</span>
@@ -1089,8 +1242,16 @@ async function renderFabricLibraryShell(root) {
       api('/api/fabric-library/codes'),
       api('/api/fabric-library/types')
     ]);
-    renderFabricTable('omFabricCodesHost', 'code', codesData.codes || [], true);
-    renderFabricTable('omFabricTypesHost', 'type', typesData.types || [], false);
+    const codes = codesData.codes || [];
+    const types = typesData.types || [];
+    const draw = (q) => {
+      renderFabricTable('omFabricCodesHost', 'code', codes.filter((c) =>
+        matchesSearch(q, c.value, c.pantone, c.hex, c.colorName, c.bookCode, c.materialBlend, c.fabricWeight, c.garmentType, c.companyName, c.notes)), true);
+      renderFabricTable('omFabricTypesHost', 'type', types.filter((t) =>
+        matchesSearch(q, t.value, t.notes)), false);
+    };
+    draw('');
+    wireDirectorySearch('omFabricSearch', draw);
   } catch (e) { showToast(e.message, true); }
 }
 
@@ -1630,7 +1791,7 @@ function flattenAccessories(orders) {
 function renderOrdersTableFull(host, orders, productLine) {
   productLine = productLine || currentTab;
   if (!orders.length) {
-    host.innerHTML = `<div class="om-empty">No orders yet for ${CATEGORY_META[productLine] ? CATEGORY_META[productLine].label : productLine}.</div>`;
+    host.innerHTML = `<div class="om-empty">${i18('emptyNoOrdersIn', 'No orders yet.')}</div>`;
     return;
   }
   const isClothing = productLine === 'clothing';
@@ -2093,7 +2254,7 @@ async function openDetailPanel(id, scope) {
         <table class="om-table om-table-editable">
           <thead>
             <tr>
-              <th>${i18i('thComponentName', 'Component Name')}</th><th>${i18i('thPhoto', 'Photo')}</th><th>${i18i('thLength', 'Length')}</th><th>${i18i('thWidth', 'Width')}</th><th>${i18i('thHeight', 'Height')}</th><th>${i18i('thQuantity', 'Quantity')}</th><th>${i18i('thSupplier', 'Supplier')}</th>
+              <th>${i18i('thComponentName', 'Component Name')}</th><th>${i18i('thPhoto', 'Photo')}</th><th>${i18i('thViewPo', 'View PO')}</th><th>${i18i('thLength', 'Length')}</th><th>${i18i('thWidth', 'Width')}</th><th>${i18i('thHeight', 'Height')}</th><th>${i18i('thQuantity', 'Quantity')}</th><th>${i18i('thSupplier', 'Supplier')}</th>
               <th>${i18i('thPrice', 'Price')} (¥)</th><th>${i18i('thShippingCost', 'Total Shipping Cost')} (¥)</th><th>${i18i('thSupplierContact', 'Supplier Contact')}</th><th>${i18i('thDeliveryDate', 'Delivery Date')}</th><th>${i18i('thComponentDeliveryAddress', 'Component Delivery Address')}</th>
               <th>${i18i('thManufacturingDrawing', 'Manufacturing Drawing')}</th><th></th>
             </tr>
@@ -2291,6 +2452,15 @@ async function openDetailPanel(id, scope) {
   }
 
   function wireAccessoryRowUploads(row) {
+    // "View PO" opens this component's own sub-PO panel. Only rows that
+    // have been saved have a real accessory id to open.
+    const viewPoBtn = row.querySelector('.om-acc-view-po-btn');
+    if (viewPoBtn) {
+      viewPoBtn.addEventListener('click', () => {
+        closePanel();
+        openAccessoryDetailPanel(order.id, viewPoBtn.dataset.viewAccessory);
+      });
+    }
     const imageInput = row.querySelector('.om-acc-image-file');
     row.querySelector('.om-acc-image-upload-btn').addEventListener('click', () => imageInput.click());
     imageInput.addEventListener('change', () => {
@@ -3350,10 +3520,16 @@ function formatAccessoryDimensions(a) {
   if (!a) return '—';
   const parts = [a.dimensionsLength, a.dimensionsWidth, a.dimensionsHeight]
     .map((v) => (v === '' || v === null || v === undefined ? null : v));
-  if (parts.some((v) => v !== null)) {
-    return parts.map((v) => (v === null ? '?' : v)).join(' x ');
-  }
-  return a.dimensions || '—';
+  // Plenty of parts are genuinely two-dimensional (a hang tag has no
+  // meaningful height), so a missing value is dropped rather than shown as
+  // a placeholder. Only trailing gaps are trimmed - a missing middle value
+  // still shows a gap, since "3 x 4" would otherwise misrepresent which two
+  // dimensions those are.
+  while (parts.length && parts[parts.length - 1] === null) parts.pop();
+  if (!parts.length) return a.dimensions || '—';
+  // An interior gap (length and height but no width) still needs a marker,
+  // or "3 x 9" would read as length x width and mean the wrong thing.
+  return parts.map((v) => (v === null ? '—' : v)).join(' x ');
 }
 
 /** True when a URL/filename points at a PDF rather than an image. Upload
@@ -3462,6 +3638,11 @@ function accessoryRowHtml(idx, data, mainAddress) {
         <input type="hidden" class="om-acc-image-url" value="${escapeHtml(data.imageUrl || '')}" />
         <input type="file" class="om-acc-image-file" accept="image/*,application/pdf" style="display:none;" />
         <button type="button" class="om-table-upload-btn om-acc-image-upload-btn">${i18('btnUpload', 'Upload')}</button>
+      </td>
+      <td class="om-acc-viewpo-cell">
+        ${data.id
+          ? `<button type="button" class="om-table-upload-btn om-acc-view-po-btn" data-view-accessory="${escapeHtml(data.id)}">${i18('btnViewPo', 'View PO')}</button>`
+          : `<span style="color:var(--jc-muted);font-size:11.5px;" title="${escapeHtml(i18t('viewPoSaveFirst', 'Save the PO first to open this component'))}">—</span>`}
       </td>
       <td><input type="number" step="0.01" class="om-acc-length" placeholder="L" value="${escapeHtml(data.dimensionsLength ?? '')}" style="min-width:56px;" /></td>
       <td><input type="number" step="0.01" class="om-acc-width" placeholder="W" value="${escapeHtml(data.dimensionsWidth ?? '')}" style="min-width:56px;" /></td>
