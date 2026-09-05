@@ -2504,8 +2504,8 @@
     "zh": "单件总价"
   },
   "fldShippingCost": {
-    "en": "Shipping cost",
-    "zh": "运费"
+    "en": "Total Shipping Cost",
+    "zh": "运费总额"
   },
   "fldSalesUnitPrice": {
     "en": "Sales unit price",
@@ -2948,8 +2948,8 @@
     "zh": "价格"
   },
   "thShippingCost": {
-    "en": "Shipping Cost",
-    "zh": "运费"
+    "en": "Total Shipping Cost",
+    "zh": "运费总额"
   },
   "thSupplierContact": {
     "en": "Supplier Contact",
@@ -3052,8 +3052,8 @@
     "zh": "采购总价"
   },
   "th2TransportFees": {
-    "en": "Transport fees",
-    "zh": "运输费"
+    "en": "Total Shipping Cost",
+    "zh": "运费总额"
   },
   "th2TransportWt": {
     "en": "Transport wt",
@@ -3140,8 +3140,8 @@
     "zh": "主料"
   },
   "payLineWarehousingShipping": {
-    "en": "Warehousing Shipping",
-    "zh": "仓储运输"
+    "en": "Total Shipping Cost (Warehousing)",
+    "zh": "运费总额（仓储）"
   },
   "payLineAdditionalFees": {
     "en": "Additional Fees (Assembly/Labor/Other)",
@@ -3214,5 +3214,77 @@
   "deletePoDone": {
     "en": "Purchase order deleted",
     "zh": "采购订单已删除"
+  },
+  "sourcer": {
+    "en": "Sourcer",
+    "zh": "采购负责人"
+  },
+  "sourcersPlural": {
+    "en": "Sourcers",
+    "zh": "采购负责人"
+  },
+  "fldSourcerOtherPlaceholder": {
+    "en": "Enter new sourcer name",
+    "zh": "输入新的采购负责人姓名"
+  },
+  "btnViewFile": {
+    "en": "View file",
+    "zh": "查看文件"
+  },
+  "statusNotApplicable": {
+    "en": "N/A",
+    "zh": "不适用"
+  },
+  "paidNaHint": {
+    "en": "No cost entered yet",
+    "zh": "尚未录入费用"
+  },
+  "btnSaving": {
+    "en": "Saving...",
+    "zh": "保存中..."
+  },
+  "pdStageGoldenSample": {
+    "en": "Golden Sample",
+    "zh": "金样"
+  },
+  "pdStagePreProductionSample": {
+    "en": "Pre-Production Sample",
+    "zh": "产前样"
+  },
+  "pdStageBulkSample": {
+    "en": "Bulk Sample",
+    "zh": "大货样"
+  },
+  "pdApprovalStatusLabel": {
+    "en": "PD Approval Status",
+    "zh": "产品开发审批状态"
+  },
+  "pdNotStarted": {
+    "en": "Not Started",
+    "zh": "未开始"
+  },
+  "pdWaitingOnProductDev": {
+    "en": "Waiting on Product Dev",
+    "zh": "等待产品开发确认"
+  },
+  "pdApproved": {
+    "en": "Approved",
+    "zh": "已批准"
+  },
+  "pdApprovedWithIssues": {
+    "en": "Approved with Issues Flagged",
+    "zh": "批准但有问题标记"
+  },
+  "pdNotApproved": {
+    "en": "Not Approved",
+    "zh": "未批准"
+  },
+  "pdNotApplicable": {
+    "en": "N/A",
+    "zh": "不适用"
+  },
+  "helpPdApproval": {
+    "en": "Share this link with PD and QA to run the three approval stages. Statuses below are set on that page - they're read-only here.",
+    "zh": "将此链接分享给产品开发和质检团队以完成三个审批阶段。以下状态在该页面设置，此处仅供查看。"
   }
 }

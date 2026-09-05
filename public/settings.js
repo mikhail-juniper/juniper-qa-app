@@ -1,7 +1,7 @@
 /* Juniper QA/QC Report - Settings page */
 
 let I18N = {};
-let currentOptions = { creators: [], factoryCodes: [], qaLeads: [], pointCheckRates: [] };
+let currentOptions = { creators: [], factoryCodes: [], qaLeads: [], pointCheckRates: [], sourcers: [] };
 let currentCreatorTiers = { defaultTier: 2, tiers: {} };
 let currentAqlRecommendation = null;
 let currentUnitCosts = null;
@@ -14,7 +14,8 @@ let restoreInProgress = false;
 
 const LISTS = [
   { key: 'qaLeads', labelKey: 'qaLead', pluralEn: 'QA/QC Leads', pluralZh: 'QA/QC 负责人' },
-  { key: 'productDevelopmentLeads', labelKey: 'productDevelopmentLead', pluralEn: 'Product Development Leads', pluralZh: '产品开发负责人' }
+  { key: 'productDevelopmentLeads', labelKey: 'productDevelopmentLead', pluralEn: 'Product Development Leads', pluralZh: '产品开发负责人' },
+  { key: 'sourcers', labelKey: 'sourcer', pluralEn: 'Sourcers', pluralZh: '采购负责人' }
 ];
 const RISKS = ['high', 'medium', 'low'];
 const BANDS = ['>20k', '5-20k', '<5k'];
@@ -393,7 +394,7 @@ async function saveSettings() {
     const results = await Promise.all([
       fetch('/api/options', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ creators: currentOptions.creators, factoryCodes: currentOptions.factoryCodes, qaLeads: currentOptions.qaLeads, productDevelopmentLeads: currentOptions.productDevelopmentLeads })
+        body: JSON.stringify({ creators: currentOptions.creators, factoryCodes: currentOptions.factoryCodes, qaLeads: currentOptions.qaLeads, productDevelopmentLeads: currentOptions.productDevelopmentLeads, sourcers: currentOptions.sourcers })
       }),
       fetch('/api/aql-recommendation', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },

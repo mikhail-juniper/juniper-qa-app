@@ -60,7 +60,7 @@ const CREATOR_TIERS_PATH = path.join(__dirname, 'config', 'creatorTiers.json');
 const AQL_RECOMMENDATION_PATH = path.join(__dirname, 'config', 'aqlRecommendation.json');
 const UNIT_COSTS_PATH = path.join(__dirname, 'config', 'unitCosts.json');
 const FITS_PATH = path.join(__dirname, 'config', 'fits.json');
-const EDITABLE_OPTION_LISTS = ['creators', 'factoryCodes', 'qaLeads', 'productDevelopmentLeads'];
+const EDITABLE_OPTION_LISTS = ['creators', 'factoryCodes', 'qaLeads', 'productDevelopmentLeads', 'sourcers'];
 
 function loadJson(p) { return JSON.parse(fs.readFileSync(p, 'utf8')); }
 function saveJson(p, data) { fs.writeFileSync(p, JSON.stringify(data, null, 2)); }
@@ -810,6 +810,8 @@ app.post('/api/purchase-orders', (req, res) => {
       return res.status(409).json({ error: 'A PO with this number already exists' });
     }
     addNewOptionIfMissing('productDevelopmentLeads', body.productDevelopmentLead);
+    // Sourcer often arrives from the Asana sync rather than being typed.
+    addNewOptionIfMissing('sourcers', body.sourcer);
     addNewOptionIfMissing('creators', body.creator);
     const id = uuidv4();
 
@@ -973,6 +975,9 @@ app.patch('/api/order-management/orders/:id', (req, res) => {
   // "+ Add new..." should stick around as a future suggestion, same as
   // Creator/PD Lead already do on the New PO form.
   if (body.patch && body.patch.buyer) addNewOptionIfMissing('qaLeads', body.patch.buyer);
+  // A sourcer typed via "+ Add new..." joins the managed list so it's there
+  // next time, same as the specialist field above.
+  if (body.patch && body.patch.sourcer) addNewOptionIfMissing('sourcers', body.patch.sourcer);
   // Same for a warehouse name typed via "+ Add new..." - it becomes a real
   // Warehouse record (manageable on the Suppliers page's Warehouses
   // section) so it shows up in the dropdown for every future PO.
@@ -1087,12 +1092,54 @@ app.post('/api/asana/pull-po', async (req, res) => {
   }
 });
 
+// Diagnostic: shows what this app is trying to write vs. what the Asana task
+// actually offers. Enum fields only accept an exact option-name match, so a
+// single renamed/mis-guessed option silently skips that field - this makes
+// which ones line up (and which don't) visible without digging in logs.
+app.get('/api/asana/inspect-po', async (req, res) => {
+  const poNumber = (req.query.poNumber || '').trim();
+  if (!poNumber) return res.status(400).json({ error: 'poNumber query param is required' });
+  const order = orderManagementStore.getOrderByPoNumber(poNumber);
+  if (!order) return res.status(404).json({ error: `No ERP order found for ${poNumber}` });
+  if (!order.asanaTaskGid) return res.status(400).json({ error: 'This order has no linked Asana task.' });
+  const task = await asanaClient.getTask(order.asanaTaskGid);
+  if (!task) return res.status(502).json({ error: 'Could not fetch the Asana task (token, permissions, or bad task id).' });
+
+  const payload = asanaPoSync.buildPushPayload(order, buildAsanaExtras(order, req));
+  const report = Object.entries(payload).map(([fieldName, value]) => {
+    const field = (task.custom_fields || []).find(
+      (f) => String(f.name || '').trim().toLowerCase() === fieldName.trim().toLowerCase());
+    if (!field) return { fieldName, wouldWrite: value, status: 'FIELD NOT FOUND on the Asana task' };
+    if (field.type !== 'enum') return { fieldName, wouldWrite: value, type: field.type, status: 'ok' };
+    const options = (field.enum_options || []).map((o) => o.name);
+    const matched = options.some((o) => String(o).trim().toLowerCase() === String(value).trim().toLowerCase());
+    return {
+      fieldName, wouldWrite: value, type: 'enum',
+      status: matched ? 'ok' : 'NO MATCHING OPTION - fix the name in config/asanaPoSync.json',
+      availableOptions: options
+    };
+  });
+  res.json({
+    ok: true, poNumber, erpStatus: order.status, asanaTaskGid: order.asanaTaskGid,
+    problems: report.filter((r) => r.status !== 'ok'),
+    all: report
+  });
+});
+
 // Push the ERP-owned fields for one order onto its Asana task on demand.
 app.post('/api/order-management/orders/:id/asana-push', async (req, res) => {
   const order = orderManagementStore.getOrderById(req.params.id);
   if (!order) return res.status(404).json({ error: 'Order not found' });
   const result = await asanaPoSync.pushToAsana(order, buildAsanaExtras(order, req));
   res.json({ ok: true, result });
+});
+
+// PD approval statuses for the three stages, shown read-only in the Order
+// Management panel's Product Development Approval section.
+app.get('/api/order-management/orders/:id/pd-approvals', (req, res) => {
+  const order = orderManagementStore.getOrderById(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  res.json({ ok: true, statuses: approvalStore.pdApprovalStatuses(order.poNumber) });
 });
 
 app.post('/api/order-management/orders/:id/qa-report-status', (req, res) => {
@@ -1547,6 +1594,15 @@ app.post('/api/approval/:poNumber/:stage/comment', upload.any(), (req, res) => {
     const photos = saveApprovalPhotos(req.files, `${req.params.poNumber}_${req.params.stage}_comment`);
     const entry = approvalStore.addPdComment(req.params.poNumber, stageKey, { text, author, approvalStatus, photos, reference });
     if (!entry) return res.status(404).json({ error: 'Purchase order not found' });
+
+    // Production only moves past an inspection stage once PD signs off, so
+    // a decision here (not the report being finished) is what advances the
+    // order. "Approved with issues flagged" still counts as approval.
+    if (approvalStatus && approvalStore.isPdApproved(approvalStore.pdApprovalStatusForStage(entry[stageKey]))) {
+      const advanced = orderManagementStore.advanceOnPdApproval(req.params.poNumber, stageKey, author || 'Product Development');
+      if (advanced) syncOrderToAsana(advanced, req);
+    }
+
     res.json({ ok: true, approval: entry });
 
     // Best-effort Asana sync: a formal decision (Approved, Approved with

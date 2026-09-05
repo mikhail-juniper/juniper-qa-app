@@ -1645,7 +1645,7 @@ function renderOrdersTableFull(host, orders, productLine) {
           ${isClothing ? `<th>${i18i('th2WashLabel', 'Wash label')}</th>` : ''}
           <th>${i18i('th2FactoryPrice', 'Factory price')}</th><th>${i18i('th2SalesUnitPrice', 'Sales unit price')}</th><th>${i18i('th2PurchaseQty', 'Purchase qty')}</th><th>${i18i('th2TotalPurchasePrice', 'Total purchase price')}</th>
           <th>${i18i('th2ActualWt', 'Actual wt')}</th><th>${i18i('th2TransportWt', 'Transport wt')}</th>
-          <th>${i18i('th2AssemblyFee', 'Assembly fee')}</th><th>${i18i('th2LaborCosts', 'Labor costs')}</th><th>${i18i('th2TransportFees', 'Transport fees')}</th><th>${i18i('th2OtherExpenses', 'Other expenses')}</th>
+          <th>${i18i('th2AssemblyFee', 'Assembly fee')}</th><th>${i18i('th2LaborCosts', 'Labor costs')}</th><th>${i18i('th2TransportFees', 'Total Shipping Cost')}</th><th>${i18i('th2OtherExpenses', 'Other expenses')}</th>
           <th>${i18i('th2Warehouse', 'Warehouse')}</th><th>${i18i('thTotalOwed', 'Total owed')}</th><th>${i18i('thSettlement', 'Settlement')}</th>
         </tr>
       </thead>
@@ -1936,9 +1936,13 @@ async function openDetailPanel(id, scope) {
       <div>
         <label>${i18('fldPhotoReference', 'Photo reference')}</label>
         <div style="display:flex;align-items:center;gap:10px;">
-          ${order.mainComponent.photoReference ? `<img id="fPhotoReferencePreview" class="om-table-thumb" style="width:52px;height:52px;cursor:pointer;" src="${escapeHtml(order.mainComponent.photoReference)}" alt="" title="Click to view larger" />` : `<img id="fPhotoReferencePreview" class="om-table-thumb" style="width:52px;height:52px;display:none;cursor:pointer;" alt="" title="Click to view larger" />`}
+          ${order.mainComponent.photoReference && isPdfFile(order.mainComponent.photoReference)
+            ? `<a id="fPhotoReferencePreview" href="${escapeHtml(order.mainComponent.photoReference)}" target="_blank" rel="noopener" style="font-size:12px;">${i18('btnViewFile', 'View file')}</a>`
+            : (order.mainComponent.photoReference
+              ? `<img id="fPhotoReferencePreview" class="om-table-thumb" style="width:52px;height:52px;cursor:pointer;" src="${escapeHtml(order.mainComponent.photoReference)}" alt="" title="Click to view larger" />`
+              : `<img id="fPhotoReferencePreview" class="om-table-thumb" style="width:52px;height:52px;display:none;cursor:pointer;" alt="" title="Click to view larger" />`)}
           <input type="hidden" id="fPhotoReference" value="${val(order.mainComponent.photoReference)}" />
-          <input type="file" id="fPhotoReferenceFile" accept="image/*" style="display:none;" />
+          <input type="file" id="fPhotoReferenceFile" accept="image/*,application/pdf" style="display:none;" />
           <button type="button" class="om-table-upload-btn" id="fPhotoReferenceUploadBtn">${i18('btnUploadPhoto', 'Upload photo')}</button>
         </div>
       </div>
@@ -1953,7 +1957,12 @@ async function openDetailPanel(id, scope) {
       <div><label>${i18('fldRequiredManufacturerDelivery', 'Required Manufacturer Delivery Date')}</label><input id="fManufDelivery" type="date" value="${val(order.manufacturerDeliveryDate)}" /></div>
       <div><label>${i18('fldOrderQuantity', 'Order Quantity')}</label><input id="fPurchaseQty" type="number" value="${val(order.mainComponent.purchaseQuantity)}" /></div>
       <div><label>${i18('fldQuantityReceived', 'Quantity received')}</label><input id="fFulfillQtyReceived" type="number" value="${val(order.fulfillment.quantityReceived)}" /></div>
-      <div><label>${i18('fldSourcer', 'Sourcer')}</label><input id="fSourcer" type="text" value="${val(order.sourcer)}" /></div>
+      <div><label>${i18('fldSourcer', 'Sourcer')}</label>
+        <select id="fSourcer" data-current="${escapeHtml(order.sourcer || '')}">
+          <option value="${escapeHtml(order.sourcer || '')}">${escapeHtml(order.sourcer || '')}</option>
+        </select>
+        <input type="text" id="fSourcerOther" placeholder="${i18t('fldSourcerOtherPlaceholder', 'Enter new sourcer name')}" style="margin-top:8px;display:none;" />
+      </div>
       <div><label>${i18('fldFulfillmentChannel', 'Fulfillment Channel')}</label><input id="fFulfillmentChannel" type="text" value="${val(order.fulfillmentChannel)}" disabled title="Set from Asana's Fulfillment Channel" /></div>
       <div><label>${i18('fldOrderManagementSpecialist', 'Order Management Specialist')}</label>
         <select id="fBuyer" data-current="${escapeHtml(order.buyer || '')}">
@@ -1966,9 +1975,23 @@ async function openDetailPanel(id, scope) {
 
     <div class="om-panel-card">
     <div class="om-section-title">${i18('secProductDevelopmentApproval', 'Product Development Approval')}</div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+    <div class="section-help" style="margin-bottom:14px;">${i18('helpPdApproval', 'Statuses below are set on the approval page - read-only here.')}</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
       <button type="button" class="btn btn-secondary om-copy-link-btn" style="flex:none;width:auto;padding:9px 16px;" data-copy-url="${escapeHtml(`${location.origin}/approval.html?po=${order.id}`)}">${i18('btnShareLink', 'Share Link')}</button>
       <a class="btn btn-primary" style="flex:none;width:auto;padding:9px 16px;text-decoration:none;" href="/approval.html?po=${encodeURIComponent(order.id)}" target="_blank" rel="noopener">${i18('btnOpenLink', 'Open Link')}</a>
+    </div>
+    <div class="om-pd-approval-grid">
+      ${[
+        { key: 'sample', title: i18('pdStageGoldenSample', 'Golden Sample') },
+        { key: 'preProduction', title: i18('pdStagePreProductionSample', 'Pre-Production Sample') },
+        { key: 'bulk', title: i18('pdStageBulkSample', 'Bulk Sample') }
+      ].map(({ key, title }) => `
+        <div class="om-pd-approval-col">
+          <div class="om-pd-approval-title">${title}</div>
+          <div class="om-pd-approval-label">${i18('pdApprovalStatusLabel', 'PD Approval Status')}</div>
+          <div class="om-pd-status" data-pd-stage="${key}" data-pd-status="notStarted">${i18('pdNotStarted', 'Not Started')}</div>
+        </div>
+      `).join('')}
     </div>
     </div>
 
@@ -2072,7 +2095,7 @@ async function openDetailPanel(id, scope) {
           <thead>
             <tr>
               <th>${i18i('thComponentName', 'Component Name')}</th><th>${i18i('thPhoto', 'Photo')}</th><th>${i18i('thLength', 'Length')}</th><th>${i18i('thWidth', 'Width')}</th><th>${i18i('thHeight', 'Height')}</th><th>${i18i('thQuantity', 'Quantity')}</th><th>${i18i('thSupplier', 'Supplier')}</th>
-              <th>${i18i('thPrice', 'Price')} (¥)</th><th>${i18i('thShippingCost', 'Shipping Cost')} (¥)</th><th>${i18i('thSupplierContact', 'Supplier Contact')}</th><th>${i18i('thDeliveryDate', 'Delivery Date')}</th><th>${i18i('thComponentDeliveryAddress', 'Component Delivery Address')}</th>
+              <th>${i18i('thPrice', 'Price')} (¥)</th><th>${i18i('thShippingCost', 'Total Shipping Cost')} (¥)</th><th>${i18i('thSupplierContact', 'Supplier Contact')}</th><th>${i18i('thDeliveryDate', 'Delivery Date')}</th><th>${i18i('thComponentDeliveryAddress', 'Component Delivery Address')}</th>
               <th>${i18i('thManufacturingDrawing', 'Manufacturing Drawing')}</th><th></th>
             </tr>
           </thead>
@@ -2091,7 +2114,7 @@ async function openDetailPanel(id, scope) {
         </select>
         <input type="text" id="fWarehouseOther" placeholder="Enter new warehouse name" style="margin-top:8px;display:none;" />
       </div>
-      <div><label>${i18('fldShippingCost', 'Shipping cost')} (¥)</label><div class="om-money-wrap"><input id="fTransportationFees" type="number" step="0.01" value="${val(order.costs.transportationFees)}" /></div></div>
+      <div><label>${i18('fldShippingCost', 'Total Shipping Cost')} (¥)</label><div class="om-money-wrap"><input id="fTransportationFees" type="number" step="0.01" value="${val(order.costs.transportationFees)}" /></div></div>
       <div><label>${i18('fldPackingListNumber', 'Packing List Number')}</label><input id="fFulfillPacking" type="text" value="${val(order.fulfillment.packingListNumber)}" /></div>
       <div><label>${i18('fldWaybillNumber', 'Waybill Number')}</label><input id="fFulfillWaybill" type="text" value="${val(order.fulfillment.waybillNumber)}" /></div>
     </div>
@@ -2185,8 +2208,9 @@ async function openDetailPanel(id, scope) {
     document.getElementById('fPhotoReferenceFile').click();
   });
   document.getElementById('fPhotoReferencePreview').addEventListener('click', () => {
-    const src = document.getElementById('fPhotoReferencePreview').src;
-    if (src) openImageLightbox(src);
+    // Only images zoom; a PDF preview is an <a> that should just follow.
+    const el = document.getElementById('fPhotoReferencePreview');
+    if (el.tagName === 'IMG' && el.src) openImageLightbox(el.src);
   });
   document.getElementById('fPhotoReferenceFile').addEventListener('change', async (e) => {
     const file = e.target.files[0];
@@ -2201,9 +2225,30 @@ async function openDetailPanel(id, scope) {
       if (!res.ok) throw new Error(body.error || 'Upload failed');
       document.getElementById('fPhotoReference').value = body.file.url;
       const preview = document.getElementById('fPhotoReferencePreview');
-      preview.src = body.file.url;
-      preview.style.display = 'block';
-      showToast(i18t('toastPhotoUploaded', 'Photo uploaded'));
+      const pdf = isPdfFile(body.file.url) || isPdfFile(file.name);
+      if (pdf) {
+        // Replace the thumbnail with a link - a PDF can't render as <img>.
+        const link = document.createElement('a');
+        link.id = 'fPhotoReferencePreview';
+        link.href = body.file.url;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.style.fontSize = '12px';
+        link.textContent = i18t('btnViewFile', 'View file');
+        preview.parentNode.replaceChild(link, preview);
+      } else if (preview.tagName === 'IMG') {
+        preview.src = body.file.url;
+        preview.style.display = 'block';
+      } else {
+        const img = document.createElement('img');
+        img.id = 'fPhotoReferencePreview';
+        img.className = 'om-table-thumb';
+        img.style.cssText = 'width:52px;height:52px;cursor:pointer;';
+        img.src = body.file.url;
+        img.addEventListener('click', () => openImageLightbox(body.file.url));
+        preview.parentNode.replaceChild(img, preview);
+      }
+      showToast(i18t('toastFileUploaded', 'File uploaded'));
     } catch (err) { showToast(err.message, true); }
   });
 
@@ -2253,6 +2298,26 @@ async function openDetailPanel(id, scope) {
       if (!imageInput.files[0]) return;
       uploadAccessoryFile(row, imageInput.files[0], 'Style picture', '.om-acc-image-url', (url) => {
         const cell = row.querySelector('.om-acc-image-cell');
+        if (isPdfFile(url) || isPdfFile(imageInput.files[0].name)) {
+          // PDFs get a link in place of the thumbnail, since this cell also
+          // accepts drawings/spec sheets that aren't images.
+          const oldImg = cell.querySelector('img');
+          if (oldImg) oldImg.remove();
+          let link = cell.querySelector('a.om-acc-image-link');
+          if (!link) {
+            link = document.createElement('a');
+            link.className = 'om-acc-image-link';
+            link.target = '_blank';
+            link.rel = 'noopener';
+            link.style.cssText = 'display:block;font-size:11.5px;margin-bottom:4px;';
+            link.textContent = i18t('btnViewFile', 'View file');
+            cell.insertBefore(link, cell.firstChild);
+          }
+          link.href = url;
+          return;
+        }
+        const oldLink = cell.querySelector('a.om-acc-image-link');
+        if (oldLink) oldLink.remove();
         let img = cell.querySelector('img');
         if (!img) {
           img = document.createElement('img');
@@ -2384,7 +2449,7 @@ async function openDetailPanel(id, scope) {
       const shipping = Number(row.querySelector('.om-acc-shipping-cost').value) || 0;
       items.push({ key: row.dataset.accessoryId, label: name, amount: unitPrice * orderQuantity + shipping });
     });
-    items.push({ key: 'warehousing-shipping', label: i18t('payLineWarehousingShipping', 'Warehousing Shipping'), amount: Number(document.getElementById('fTransportationFees').value) || 0 });
+    items.push({ key: 'warehousing-shipping', label: i18t('payLineWarehousingShipping', 'Total Shipping Cost (Warehousing)'), amount: Number(document.getElementById('fTransportationFees').value) || 0 });
     items.push({
       key: 'fees', label: i18t('payLineAdditionalFees', 'Additional Fees (Assembly/Labor/Other)'),
       amount: (Number(document.getElementById('fAssemblyFee').value) || 0) +
@@ -2394,12 +2459,57 @@ async function openDetailPanel(id, scope) {
     return items;
   }
 
+  /** A payment line only counts once it actually has a cost. Zero-value
+   *  lines render as N/A and are excluded from the "is everything paid?"
+   *  calculation - otherwise an unused fee would keep a PO from ever
+   *  reaching Paid (and so from being completed). */
+  function isPayableLine(item) {
+    return Number(item.amount) > 0;
+  }
+
+  /** Overall status from the payable lines only. With no payable lines at
+   *  all (nothing costed yet) this stays Pending rather than claiming the
+   *  PO is paid. */
+  function computeOverallPaymentStatus(items) {
+    const payable = items.filter(isPayableLine);
+    if (!payable.length) return 'Pending';
+    return payable.every((item) => paymentLineItemsState[item.key]) ? 'Paid' : 'Pending';
+  }
+
+  /** Re-renders just the change log list, so a save can show the new entry
+   *  without rebuilding the panel around it. */
+  function renderChangeLog(changeLog) {
+    const list = panel.querySelector('.om-changelog');
+    if (!list) return;
+    const entries = changeLog || [];
+    list.innerHTML = entries.length
+      ? entries.map((c) => `
+        <li>
+          <strong>${escapeHtml(c.action)}</strong>${c.details ? ' — ' + escapeHtml(c.details) : ''}
+          <div class="om-cl-meta">${escapeHtml(c.actor || 'Unknown')} · ${new Date(c.timestamp).toLocaleString()}</div>
+        </li>
+      `).join('')
+      : `<li class="om-cl-meta">${i18('emptyNoChanges', 'No changes logged yet.')}</li>`;
+  }
+
   function renderPaymentLineItems() {
     const items = buildPaymentLineItems();
     const tbody = document.getElementById('omPaymentLineItems');
     if (!tbody) return;
     tbody.innerHTML = items.map((item) => {
       const paid = !!paymentLineItemsState[item.key];
+      // A line with no cost yet isn't something anyone can pay, so it shows
+      // a non-interactive N/A instead of implying an outstanding balance.
+      // Enter a cost and it becomes a real Pending/Paid dropdown.
+      if (!isPayableLine(item)) {
+        return `
+      <tr>
+        <td>${escapeHtml(item.label)}</td>
+        <td>${fmtMoney(item.amount)}</td>
+        <td><span class="om-paid-na" title="${escapeHtml(i18t('paidNaHint', 'No cost entered yet'))}">${escapeHtml(i18t('statusNotApplicable', 'N/A'))}</span></td>
+      </tr>
+    `;
+      }
       return `
       <tr>
         <td>${escapeHtml(item.label)}</td>
@@ -2418,9 +2528,9 @@ async function openDetailPanel(id, scope) {
         const isPaid = e.target.value === 'paid';
         e.target.setAttribute('data-paid', isPaid ? 'paid' : 'pending');
         paymentLineItemsState[e.target.dataset.paymentKey] = isPaid;
-        const allPaid = items.length > 0 && items.every((item) => paymentLineItemsState[item.key]);
-        const newStatus = allPaid ? 'Paid' : 'Pending';
-        document.getElementById('omOverallPaymentStatus').textContent = newStatus;
+        const newStatus = computeOverallPaymentStatus(items);
+        const allPaid = newStatus === 'Paid';
+        document.getElementById('omOverallPaymentStatus').textContent = tStatusText(newStatus);
         try {
           await api(`/api/order-management/orders/${encodeURIComponent(order.id)}`, {
             method: 'PATCH',
@@ -2477,6 +2587,28 @@ async function openDetailPanel(id, scope) {
       } catch (err) { showToast(err.message, true); }
     });
   });
+
+  // PD approval statuses are owned by the approval page, so they're fetched
+  // and rendered read-only here rather than being editable in this panel.
+  (async () => {
+    try {
+      const res = await api(`/api/order-management/orders/${encodeURIComponent(order.id)}/pd-approvals`);
+      const labels = {
+        notStarted: i18('pdNotStarted', 'Not Started'),
+        waitingOnProductDev: i18('pdWaitingOnProductDev', 'Waiting on Product Dev'),
+        approved: i18('pdApproved', 'Approved'),
+        approvedWithIssues: i18('pdApprovedWithIssues', 'Approved with Issues Flagged'),
+        notApproved: i18('pdNotApproved', 'Not Approved'),
+        notApplicable: i18('pdNotApplicable', 'N/A')
+      };
+      Object.entries(res.statuses || {}).forEach(([stage, status]) => {
+        const el = panel.querySelector(`[data-pd-stage="${stage}"]`);
+        if (!el) return;
+        el.setAttribute('data-pd-status', status);
+        el.innerHTML = labels[status] || labels.notStarted;
+      });
+    } catch (e) { /* read-only extra - the panel is fine without it */ }
+  })();
 
   const deletePoBtn = document.getElementById('omDeletePoBtn');
   if (deletePoBtn) {
@@ -2844,6 +2976,26 @@ async function openDetailPanel(id, scope) {
         }
       });
 
+      // Sourcer - its own managed list (config/options.json -> sourcers),
+      // with "+ Add new..." like the specialist field. A value pulled from
+      // Asana that isn't on the list yet is kept as a selectable option so
+      // the sync never silently drops it.
+      const sourcerSelect = document.getElementById('fSourcer');
+      const sourcerOtherInput = document.getElementById('fSourcerOther');
+      if (sourcerSelect) {
+        const sourcers = optionsData.sourcers || [];
+        const current = sourcerSelect.dataset.current || '';
+        const names = current && !sourcers.includes(current) ? [current, ...sourcers] : sourcers;
+        sourcerSelect.innerHTML = `<option value="">${i18t('btnSelect', '— Select —')}</option>` +
+          `<option value="__other__">${i18t('btnAddNew', '+ Add new...')}</option>` +
+          names.map((n) => `<option value="${escapeHtml(n)}" ${n === current ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('');
+        sourcerSelect.addEventListener('change', (e) => {
+          const isOther = e.target.value === '__other__';
+          sourcerOtherInput.style.display = isOther ? '' : 'none';
+          if (isOther) sourcerOtherInput.focus();
+        });
+      }
+
       // Order Management Specialist - same list as QA/QC team names, with
       // an "Add other" option (like Creator/PD Lead on the New PO form)
       // since this is an open-ended list a team maintains, not a fixed set.
@@ -2905,7 +3057,10 @@ async function openDetailPanel(id, scope) {
       : warehouseSelectEl.value;
     const patch = {
       buyer: buyerValue,
-      sourcer: document.getElementById('fSourcer').value,
+      sourcer: (() => {
+        const sel = document.getElementById('fSourcer');
+        return sel.value === '__other__' ? document.getElementById('fSourcerOther').value.trim() : sel.value;
+      })(),
       orderPlacementDate: document.getElementById('fOrderDate').value || null,
       desiredEntryDate: document.getElementById('fDesiredEntry').value || null,
       manufacturerDeliveryDate: document.getElementById('fManufDelivery').value || null,
@@ -2957,16 +3112,49 @@ async function openDetailPanel(id, scope) {
         otherExpenses: document.getElementById('fOtherExpenses').value || 0
       }
     };
+    // Save in place rather than tearing the panel down and rebuilding it.
+    // The old flow (closePanel + openDetailPanel) flashed the whole panel,
+    // threw away the scroll position, and collapsed any section the person
+    // had scrolled to - jarring for a change as small as editing one field.
+    const saveBtn = document.getElementById('omSaveOrder');
+    const scroller = panel; // panel IS the .om-panel scroll container
+    // Disabling the focused button and re-rendering the change log both make
+    // the browser scroll the focused element back into view, which yanks the
+    // panel away from wherever the person was reading. Capture and restore.
+    const savedScrollTop = scroller.scrollTop;
+    const originalLabel = saveBtn.innerHTML;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = i18('btnSaving', 'Saving...');
     try {
-      await api(`/api/order-management/orders/${encodeURIComponent(order.id)}`, {
+      const res = await api(`/api/order-management/orders/${encodeURIComponent(order.id)}`, {
         method: 'PATCH',
         body: JSON.stringify({ patch, actor: 'Web user' })
       });
+      // Keep the in-memory order in sync with what the server stored, so
+      // later edits and derived UI (Complete PO eligibility, payment
+      // status) work off fresh values without a re-render.
+      if (res && res.order) {
+        Object.assign(order, res.order);
+        renderChangeLog(res.order.changeLog);
+        const statusSelect = document.getElementById('fOrderStatusSelect');
+        if (statusSelect && statusSelect.value !== res.order.status) {
+          statusSelect.value = res.order.status;
+          statusSelect.setAttribute('data-status', res.order.status);
+          renderStatusTracker(res.order.status);
+        }
+        updateCompletePoButtonState();
+      }
       showToast(i18t('toastChangesSaved', 'Changes saved'));
-      closePanel();
-      openDetailPanel(order.id);
-      refreshCurrentView();
-    } catch (e) { showToast(e.message, true); }
+      refreshCurrentView(); // background list only - the panel stays put
+    } catch (e) {
+      showToast(e.message, true);
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.innerHTML = originalLabel;
+      // Restore after the DOM settles, so the browser's own scroll-into-view
+      // has already run and won't immediately override this.
+      requestAnimationFrame(() => { scroller.scrollTop = savedScrollTop; });
+    }
   });
   } catch (e) {
     console.error('Failed to render order detail panel:', e);
@@ -3069,6 +3257,14 @@ async function setSettlement(id, status) {
   } catch (e) { showToast(e.message, true); }
 }
 
+/** True when a URL/filename points at a PDF rather than an image. Upload
+ *  fields that are "image" fields still accept PDFs (a washing tag or
+ *  manufacturing drawing often arrives as one), so every preview has to
+ *  decide per-file whether to render a thumbnail or a link. */
+function isPdfFile(nameOrUrl) {
+  return /\.pdf(\?|#|$)/i.test(String(nameOrUrl || ''));
+}
+
 // Generic upload-type field: label + (thumbnail or file link) + Upload
 // button, backed by the same order-management file-upload endpoint used
 // elsewhere. Used for the several Product Documentation fields that are
@@ -3076,8 +3272,11 @@ async function setSettlement(id, status) {
 // Packaging, etc).
 function uploadFieldHtml(fieldId, label, currentUrl, isImage) {
   let preview;
+  // An image-type field may still be holding a PDF, so decide from the file
+  // itself rather than the field's declared type.
+  const showAsImage = isImage && !isPdfFile(currentUrl);
   if (currentUrl) {
-    preview = isImage
+    preview = showAsImage
       ? `<img id="${fieldId}Preview" class="om-upload-preview" src="${escapeHtml(currentUrl)}" alt="" title="Click to view larger" />`
       : `<a id="${fieldId}Preview" href="${escapeHtml(currentUrl)}" target="_blank" rel="noopener" style="font-size:12px;">View file</a>`;
   } else if (isImage) {
@@ -3093,7 +3292,7 @@ function uploadFieldHtml(fieldId, label, currentUrl, isImage) {
       <div style="display:flex;align-items:center;gap:10px;">
         ${preview}
         <input type="hidden" id="${fieldId}" value="${escapeHtml(currentUrl || '')}" />
-        <input type="file" id="${fieldId}File" style="display:none;" ${isImage ? 'accept="image/*"' : ''} />
+        <input type="file" id="${fieldId}File" style="display:none;" accept="${isImage ? 'image/*,application/pdf' : 'image/*,application/pdf,.doc,.docx,.xls,.xlsx'}" />
         <button type="button" class="om-table-upload-btn" id="${fieldId}UploadBtn">${i18('btnUpload', 'Upload')}</button>
       </div>
     </div>
@@ -3107,9 +3306,9 @@ function wireUploadField(fieldId, orderId, category, isImage) {
   const fileInput = document.getElementById(`${fieldId}File`);
   if (!uploadBtn || !fileInput) return;
   uploadBtn.addEventListener('click', () => fileInput.click());
-  if (isImage) {
-    const img = document.getElementById(`${fieldId}Preview`);
-    if (img && img.tagName === 'IMG') img.addEventListener('click', () => openImageLightbox(img.src));
+  const existing = document.getElementById(`${fieldId}Preview`);
+  if (existing && existing.tagName === 'IMG') {
+    existing.addEventListener('click', () => openImageLightbox(existing.src));
   }
   fileInput.addEventListener('change', async (e) => {
     const file = e.target.files[0];
@@ -3126,7 +3325,9 @@ function wireUploadField(fieldId, orderId, category, isImage) {
       const container = document.getElementById(`${fieldId}Preview`).parentNode;
       const old = document.getElementById(`${fieldId}Preview`);
       let fresh;
-      if (isImage) {
+      // A PDF dropped into an image field renders as a link, not a broken
+      // <img> - same call the initial render makes.
+      if (isImage && !isPdfFile(body.file.url) && !isPdfFile(file.name)) {
         fresh = document.createElement('img');
         fresh.id = `${fieldId}Preview`;
         fresh.className = 'om-upload-preview';
@@ -3154,9 +3355,13 @@ function accessoryRowHtml(idx, data, mainAddress) {
     <tr data-accessory-row="${idx}" data-accessory-id="${escapeHtml(rowId)}">
       <td><input type="text" id="accName${idx}" class="om-acc-name" value="${escapeHtml(data.partName || '')}" /></td>
       <td class="om-acc-image-cell">
-        ${data.imageUrl ? `<img class="om-table-thumb" src="${escapeHtml(data.imageUrl)}" alt="" />` : ''}
+        ${data.imageUrl
+          ? (isPdfFile(data.imageUrl)
+            ? `<a class="om-acc-image-link" href="${escapeHtml(data.imageUrl)}" target="_blank" rel="noopener" style="display:block;font-size:11.5px;margin-bottom:4px;">${i18('btnViewFile', 'View file')}</a>`
+            : `<img class="om-table-thumb" src="${escapeHtml(data.imageUrl)}" alt="" />`)
+          : ''}
         <input type="hidden" class="om-acc-image-url" value="${escapeHtml(data.imageUrl || '')}" />
-        <input type="file" class="om-acc-image-file" accept="image/*" style="display:none;" />
+        <input type="file" class="om-acc-image-file" accept="image/*,application/pdf" style="display:none;" />
         <button type="button" class="om-table-upload-btn om-acc-image-upload-btn">${i18('btnUpload', 'Upload')}</button>
       </td>
       <td><input type="number" step="0.01" class="om-acc-length" placeholder="L" value="${escapeHtml(data.dimensionsLength ?? '')}" style="min-width:56px;" /></td>
