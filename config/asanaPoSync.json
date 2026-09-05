@@ -1,0 +1,70 @@
+{
+  "_readme": "Field mapping for the two-way Asana <-> ERP purchase order sync. Fields are matched by their NAME as shown in Asana (case-insensitive), not by GID, so nothing here breaks if Asana regenerates IDs - but the names must match Asana exactly. projectGid is the Purchase Orders project, used to look a task up from a PO number on the New PO form's 'Sync from Asana' button.",
+  "projectGid": "1204435953266941",
+  "fieldNames": {
+    "poNumber": "PO Number",
+    "poStatus": "PO Status",
+    "creator": "Creator",
+    "pd": "PD",
+    "sourcer": "Sourcer",
+    "productDevOwner": "Product Dev Owner",
+    "manufacturingPartner": "Manufacturing Partner",
+    "fulfillmentChannel": "Fulfillment Channel",
+    "fulfillBy": "Fulfill By",
+    "targetFulfillDate": "Target Fulfill Date",
+    "skuMain": "SKU (Main)",
+    "orderQuantity": "Order Quantity",
+    "qaqcDriveLink": "QA/QC Drive Link",
+    "estimatedFulfillDate": "Estimated Fulfill Date",
+    "poAdministrator": "PO Administrator",
+    "factoryCode": "Factory code",
+    "manufacturabilityRisk": "Manufacturability Risk",
+    "proposedInspectionPct": "Proposed Inspection %",
+    "qaCheckPercentage": "QA Check Percentage",
+    "inspectionResult": "Inspection Result",
+    "actualFulfillDate": "Actual Fulfill Date",
+    "completionDate": "Completion Date",
+    "unitCostRmb": "Unit Cost (RMB)",
+    "finalQuantity": "Final Quantity"
+  },
+  "_statusReadme": "ERP order status -> the Asana 'PO Status' dropdown option to select. The two lists aren't 1:1, so several ERP stages intentionally map onto the same Asana option. Any ERP status left out here simply doesn't change PO Status in Asana. Option names must match Asana's dropdown exactly.",
+  "poStatusMap": {
+    "New Request": "PO Requested",
+    "Order Placed": "PO Submitted To Factory",
+    "PP Quality Inspection": "In Production",
+    "In Production": "In Production",
+    "Bulk Quality Inspection": "In Production",
+    "Final Production": "In Production",
+    "In Transportation": "In Transit",
+    "Delivered": "Delivered",
+    "Completed": "Complete"
+  },
+  "_riskReadme": "ERP Product Complexity/Risk -> Asana 'Manufacturability Risk' option name.",
+  "riskMap": {
+    "high": "High",
+    "medium": "Medium",
+    "low": "Low"
+  },
+  "_channelReadme": "Asana 'Fulfillment Channel' option -> the warehouse this PO should default to in the ERP. Matched case-insensitively on the Asana option name; the warehouse name is created in the ERP's Warehouses list if it doesn't exist yet, with the address below.",
+  "fulfillmentChannelWarehouses": {
+    "China": {
+      "warehouseName": "Yuxuan Cloud Warehouse",
+      "address": "Yuxuan Cloud Warehouse, 2nd Floor, Building B4a, North Zone, Dalang Smart Valley, No. 1 Huangjingpu North Road, Dalang Town, Dongguan City, Guangdong Province",
+      "phone": "15382815676"
+    },
+    "US": {
+      "warehouseName": "Flexport",
+      "address": "",
+      "phone": ""
+    },
+    "FBA": {
+      "warehouseName": "Amazon",
+      "address": "",
+      "phone": ""
+    }
+  },
+  "_constantsReadme": "Values this app always writes as-is when it pushes to Asana.",
+  "constants": {
+    "manufacturingPartner": "JC"
+  }
+}

@@ -3158,5 +3158,61 @@
   "qaQcReportingTitle": {
     "en": "QA/QC Reporting",
     "zh": "质检报告"
+  },
+  "syncFromAsana": {
+    "en": "Sync from Asana",
+    "zh": "从 Asana 同步"
+  },
+  "syncFromAsanaHelp": {
+    "en": "Enter the PO number, then sync to pull the Creator, PD, Sourcer, SKU, quantity, fulfil date and warehouse straight from Asana.",
+    "zh": "输入采购订单号后点击同步，可直接从 Asana 拉取创作者、PD、采购负责人、SKU、数量、交付日期和仓库信息。"
+  },
+  "syncingFromAsana": {
+    "en": "Syncing...",
+    "zh": "同步中..."
+  },
+  "syncNeedPoNumber": {
+    "en": "Enter a PO number first",
+    "zh": "请先输入采购订单号"
+  },
+  "syncNotFound": {
+    "en": "No matching PO found in Asana",
+    "zh": "在 Asana 中未找到匹配的采购订单"
+  },
+  "syncPulled": {
+    "en": "Pulled from Asana",
+    "zh": "已从 Asana 拉取"
+  },
+  "fldSourcer": {
+    "en": "Sourcer",
+    "zh": "采购负责人"
+  },
+  "fldFulfillmentChannel": {
+    "en": "Fulfillment Channel",
+    "zh": "履约渠道"
+  },
+  "btnDeletePo": {
+    "en": "Delete PO",
+    "zh": "删除订单"
+  },
+  "deletePoTitle": {
+    "en": "Delete this purchase order?",
+    "zh": "确定删除此采购订单？"
+  },
+  "deletePoWarn": {
+    "en": "This permanently removes the order and its uploaded files. QA/QC reports already submitted for this PO are kept. This can't be undone.",
+    "zh": "此操作将永久删除该订单及其上传的文件。已提交的质检报告将保留。此操作无法撤销。"
+  },
+  "deletePoPrompt": {
+    "en": "Type the PO number to confirm:",
+    "zh": "请输入采购订单号以确认："
+  },
+  "deletePoMismatch": {
+    "en": "That doesn't match the PO number",
+    "zh": "与采购订单号不匹配"
+  },
+  "deletePoDone": {
+    "en": "Purchase order deleted",
+    "zh": "采购订单已删除"
   }
 }

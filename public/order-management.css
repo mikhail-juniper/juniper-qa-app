@@ -644,3 +644,17 @@ div.om-money-wrap input { padding-left: 28px; width: 100%; }
 .om-view-title .zh { font-size: 0.6em; font-weight: 600; }
 .om-sidebar-link .zh { font-size: 0.8em; margin-top: 1px; }
 .om-sidebar-group-label .zh { font-size: 0.85em; margin-top: 1px; }
+
+/* Delete PO sits in its own block at the very bottom of the panel, well
+   away from Save changes, and reads as destructive rather than routine. */
+.om-danger-zone { display: flex; justify-content: flex-end; }
+.om-delete-po-btn {
+  flex: 0 0 auto !important;
+  width: auto !important;
+  padding: 9px 18px !important;
+  color: var(--jc-fail);
+  border-color: #e9b8b8;
+  background: #fdf5f5;
+  font-weight: 700;
+}
+.om-delete-po-btn:hover { background: var(--jc-fail); border-color: var(--jc-fail); color: #fff; }

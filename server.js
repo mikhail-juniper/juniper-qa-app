@@ -35,6 +35,7 @@ const fabricLibraryStore = require('./lib/fabricLibraryStore');
 const approvalStore = require('./lib/approvalStore');
 const approvalPhotoSets = require('./config/approvalPhotoSets.json');
 const asanaClient = require('./lib/asanaClient');
+const asanaPoSync = require('./lib/asanaPoSync');
 const AdmZip = require('adm-zip');
 const ASANA_FIELD_MAP_PATH = path.join(__dirname, 'config', 'asanaFieldMap.json');
 function loadAsanaFieldMap() { return loadJson(ASANA_FIELD_MAP_PATH); }
@@ -659,6 +660,9 @@ app.post('/api/submit', upload.any(), async (req, res) => {
       submittedAt: new Date().toISOString(),
       poQuantity: payload.poQuantity ? parseInt(payload.poQuantity, 10) : null,
       actualUnitsChecked: payload.actualUnitsChecked ? parseInt(payload.actualUnitsChecked, 10) : null,
+      // The app's recommended sampling for this report, kept so Asana's
+      // "Proposed Inspection %" can sync from it after the fact.
+      recommendation: recommendation || null,
       overallResult: overallResult.overall,
       reasons: overallResult.reasons,
       recap: (overallResult.aql && overallResult.aql.recap) ? overallResult.aql.recap : null,
@@ -775,8 +779,25 @@ app.get('/api/analytics/category', (req, res) => {
  *  regardless of which exact URL format someone pastes in. */
 function extractAsanaTaskGid(link) {
   if (!link) return null;
-  const match = String(link).match(/\/task\/(\d+)/);
-  return match ? match[1] : null;
+  const str = String(link).trim();
+  // Asana task URLs come in several shapes depending on where they were
+  // copied from, and only the first was handled before:
+  //   .../task/1234                     (task permalink)
+  //   .../0/<project>/1234[/f]          (classic project view)
+  //   .../0/<project>/task/1234
+  //   .../inbox/<gid>/item/1234
+  // Fall back to a bare numeric id if someone pastes just the GID.
+  const patterns = [
+    /\/task\/(\d+)/,
+    /\/item\/(\d+)/,
+    /\/\d+\/\d+\/(\d+)/,
+    /\/(\d{6,})(?:\/f)?\/?(?:\?|#|$)/
+  ];
+  for (const re of patterns) {
+    const m = str.match(re);
+    if (m) return m[1];
+  }
+  return /^\d{6,}$/.test(str) ? str : null;
 }
 
 app.post('/api/purchase-orders', (req, res) => {
@@ -809,9 +830,14 @@ app.post('/api/purchase-orders', (req, res) => {
       status: 'New Request',
       orderPlacementDate: body.orderDate || null,
       fulfillmentRequestDate: body.fulfillmentRequestDate || null,
+      // Pulled from Asana by the New PO form's Sync button.
+      sourcer: body.sourcer || null,
+      fulfillmentChannel: body.fulfillmentChannel || null,
       mainComponent: {
         sku: body.sku,
         name: body.productTitle || '',
+        // Fulfillment Channel decides the warehouse (China / US / FBA).
+        warehouse: body.warehouse || '',
         purchaseQuantity: body.orderQuantity ? parseInt(body.orderQuantity, 10) : null,
         // Full size/variant distribution from the New PO setup step, if any
         // was entered. Each row can carry its own variant SKU; rows without
@@ -929,6 +955,17 @@ app.post('/api/order-management/orders', (req, res) => {
   }
 });
 
+
+/** Fire-and-forget push of ERP-owned fields to Asana after an order changes.
+ *  Deliberately not awaited: Asana latency should never slow down a save,
+ *  and a failure there is logged inside the client rather than surfaced. */
+function syncOrderToAsana(order, req) {
+  if (!order || !order.asanaTaskGid) return;
+  Promise.resolve()
+    .then(() => asanaPoSync.pushToAsana(order, buildAsanaExtras(order, req)))
+    .catch((err) => console.error('Background Asana sync failed:', err.message || err));
+}
+
 app.patch('/api/order-management/orders/:id', (req, res) => {
   const body = req.body || {};
   const actor = body.actor || req.get('X-Actor');
@@ -944,7 +981,23 @@ app.patch('/api/order-management/orders/:id', (req, res) => {
   }
   const updated = orderManagementStore.updateOrder(req.params.id, body.patch || {}, actor);
   if (!updated) return res.status(404).json({ error: 'Order not found' });
+  syncOrderToAsana(updated, req);
   res.json({ ok: true, order: updated });
+});
+
+// Permanently delete a PO. The client requires the user to type the PO
+// number before this fires, and it double-checks here so a stray API call
+// can't wipe the wrong order.
+app.delete('/api/order-management/orders/:id', (req, res) => {
+  const order = orderManagementStore.getOrderById(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  const confirmPo = (req.query.confirmPoNumber || (req.body && req.body.confirmPoNumber) || '').trim();
+  if (confirmPo.toLowerCase() !== String(order.poNumber || '').trim().toLowerCase()) {
+    return res.status(400).json({ error: 'confirmPoNumber must match the order\'s PO number' });
+  }
+  const removed = orderManagementStore.deleteOrder(req.params.id, req.body && req.body.actor || req.get('X-Actor'));
+  if (!removed) return res.status(404).json({ error: 'Order not found' });
+  res.json({ ok: true, deleted: { id: removed.id, poNumber: removed.poNumber } });
 });
 
 app.post('/api/order-management/orders/:id/status', (req, res) => {
@@ -952,17 +1005,102 @@ app.post('/api/order-management/orders/:id/status', (req, res) => {
   if (!body.status) return res.status(400).json({ error: 'status is required' });
   const updated = orderManagementStore.setStatus(req.params.id, body.status, body.actor || req.get('X-Actor'));
   if (!updated) return res.status(404).json({ error: 'Order not found' });
+  syncOrderToAsana(updated, req);
   res.json({ ok: true, order: updated });
 });
 
 // Set one QA/QC stage's report status (Pending / In Progress / Completed).
 // This also advances the main order status per the workflow mapping, so the
 // two never drift apart - see setQaReportStatus.
+
+/**
+ * Gathers the ERP -> Asana values that don't live directly on the order
+ * record: the PD approval doc link, and the bulk report's inspection
+ * numbers/result. Reads the most recent bulk submission for this PO.
+ */
+function buildAsanaExtras(order, req) {
+  const extras = {};
+  if (!order) return extras;
+  try {
+    const base = req ? `${req.protocol}://${req.get('host')}` : (process.env.PUBLIC_BASE_URL || '');
+    if (base) extras.approvalLink = `${base}/approval.html?po=${encodeURIComponent(order.id)}`;
+
+    // Most recent bulk ("production") report for this PO drives the
+    // inspection fields. Proposed % is what the app recommended; QA Check %
+    // is what the inspector actually checked.
+    const subs = (submissionLog.findPriorReportsByPoNumber(order.poNumber) || [])
+      .filter((sub) => sub.qaType === 'production')
+      .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+    const bulk = subs[0];
+    if (bulk) {
+      const poQty = Number(order.mainComponent && order.mainComponent.purchaseQuantity) || null;
+      const checked = Number(bulk.actualUnitsChecked) || null;
+      if (poQty && checked) extras.qaCheckPercentage = Math.round((checked / poQty) * 1000) / 10;
+      const rec = bulk.recommendation;
+      if (rec && rec.pointCheck != null) {
+        // pointCheck is the recommended sampling figure (e.g. "10%" or a
+        // number) - send the numeric part so Asana's number field accepts it.
+        const num = typeof rec.pointCheck === 'number'
+          ? rec.pointCheck
+          : parseFloat(String(rec.pointCheck).replace('%', ''));
+        if (!isNaN(num)) extras.proposedInspectionPct = num;
+      }
+      if (bulk.pdfFilename) {
+        extras.inspectionResult = base
+          ? `${base}/submissions/${encodeURIComponent(bulk.pdfFilename)}`
+          : bulk.pdfFilename;
+      }
+    }
+  } catch (err) {
+    // Best-effort: never let this block the caller.
+    console.error('buildAsanaExtras failed:', err.message || err);
+  }
+  return extras;
+}
+
+// "Sync from Asana" on the New PO form: given just a PO number, pull the
+// Asana-owned fields (Creator, PD, Sourcer, SKU, quantity, fulfil date,
+// fulfillment channel -> warehouse) so the requester doesn't retype them.
+app.post('/api/asana/pull-po', async (req, res) => {
+  const poNumber = (req.body && req.body.poNumber || '').trim();
+  if (!poNumber) return res.status(400).json({ error: 'poNumber is required' });
+  try {
+    const result = await asanaPoSync.pullFromAsana(poNumber);
+    if (!result.ok) return res.status(result.notFound ? 404 : 400).json(result);
+    // A channel can name a warehouse that doesn't exist in the ERP yet -
+    // create it (with the address from config) so the dropdown has it.
+    const wh = result.fields.warehouse;
+    if (wh && wh.warehouseName) {
+      const existing = warehouseStore.listWarehouses().find(
+        (w) => (w.name || '').trim().toLowerCase() === wh.warehouseName.trim().toLowerCase());
+      if (!existing) {
+        warehouseStore.createWarehouse({
+          id: uuidv4(), name: wh.warehouseName,
+          shippingAddress: wh.address || '', phoneNumber: wh.phone || ''
+        });
+      }
+    }
+    res.json(result);
+  } catch (err) {
+    console.error('Asana pull failed:', err);
+    res.status(500).json({ error: 'Asana lookup failed', detail: String(err.message || err) });
+  }
+});
+
+// Push the ERP-owned fields for one order onto its Asana task on demand.
+app.post('/api/order-management/orders/:id/asana-push', async (req, res) => {
+  const order = orderManagementStore.getOrderById(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  const result = await asanaPoSync.pushToAsana(order, buildAsanaExtras(order, req));
+  res.json({ ok: true, result });
+});
+
 app.post('/api/order-management/orders/:id/qa-report-status', (req, res) => {
   const body = req.body || {};
   if (!body.stage || !body.status) return res.status(400).json({ error: 'stage and status are required' });
   const updated = orderManagementStore.setQaReportStatus(req.params.id, body.stage, body.status, body.actor || req.get('X-Actor'));
   if (!updated) return res.status(400).json({ error: 'Order not found, or invalid stage/status' });
+  syncOrderToAsana(updated, req);
   res.json({ ok: true, order: updated });
 });
 

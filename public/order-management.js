@@ -1953,6 +1953,8 @@ async function openDetailPanel(id, scope) {
       <div><label>${i18('fldRequiredManufacturerDelivery', 'Required Manufacturer Delivery Date')}</label><input id="fManufDelivery" type="date" value="${val(order.manufacturerDeliveryDate)}" /></div>
       <div><label>${i18('fldOrderQuantity', 'Order Quantity')}</label><input id="fPurchaseQty" type="number" value="${val(order.mainComponent.purchaseQuantity)}" /></div>
       <div><label>${i18('fldQuantityReceived', 'Quantity received')}</label><input id="fFulfillQtyReceived" type="number" value="${val(order.fulfillment.quantityReceived)}" /></div>
+      <div><label>${i18('fldSourcer', 'Sourcer')}</label><input id="fSourcer" type="text" value="${val(order.sourcer)}" /></div>
+      <div><label>${i18('fldFulfillmentChannel', 'Fulfillment Channel')}</label><input id="fFulfillmentChannel" type="text" value="${val(order.fulfillmentChannel)}" disabled title="Set from Asana's Fulfillment Channel" /></div>
       <div><label>${i18('fldOrderManagementSpecialist', 'Order Management Specialist')}</label>
         <select id="fBuyer" data-current="${escapeHtml(order.buyer || '')}">
           <option value="${escapeHtml(order.buyer || '')}">${escapeHtml(order.buyer || '— Select —')}</option>
@@ -2130,6 +2132,10 @@ async function openDetailPanel(id, scope) {
         </li>
       `).join('') || `<li class="om-cl-meta">${i18('emptyNoChanges', 'No changes logged yet.')}</li>`}
     </ul>
+    </div>
+
+    <div class="om-panel-card om-danger-zone">
+      <button type="button" class="btn btn-secondary om-delete-po-btn" id="omDeletePoBtn">${i18('btnDeletePo', 'Delete PO')}</button>
     </div>
    </div>
   `;
@@ -2471,6 +2477,35 @@ async function openDetailPanel(id, scope) {
       } catch (err) { showToast(err.message, true); }
     });
   });
+
+  const deletePoBtn = document.getElementById('omDeletePoBtn');
+  if (deletePoBtn) {
+    deletePoBtn.addEventListener('click', () => {
+      // Deleting a PO is unrecoverable, so this asks the person to type the
+      // PO number rather than clicking through a yes/no - the same guard the
+      // API enforces server-side.
+      const typed = window.prompt(
+        `${i18t('deletePoTitle', 'Delete this purchase order?')}\n\n` +
+        `${i18t('deletePoWarn', 'This permanently removes the order and its uploaded files. This cannot be undone.')}\n\n` +
+        `${i18t('deletePoPrompt', 'Type the PO number to confirm:')} ${order.poNumber}`
+      );
+      if (typed === null) return; // cancelled
+      if (typed.trim().toLowerCase() !== String(order.poNumber).trim().toLowerCase()) {
+        return showToast(i18t('deletePoMismatch', "That doesn't match the PO number"), true);
+      }
+      (async () => {
+        try {
+          await api(`/api/order-management/orders/${encodeURIComponent(order.id)}`, {
+            method: 'DELETE',
+            body: JSON.stringify({ confirmPoNumber: typed.trim(), actor: 'Web user' })
+          });
+          showToast(i18t('deletePoDone', 'Purchase order deleted'));
+          closePanel();
+          refreshCurrentView();
+        } catch (err) { showToast(err.message, true); }
+      })();
+    });
+  }
 
   const completePoBtn = document.getElementById('omCompletePoBtn');
   if (completePoBtn) {
@@ -2870,6 +2905,7 @@ async function openDetailPanel(id, scope) {
       : warehouseSelectEl.value;
     const patch = {
       buyer: buyerValue,
+      sourcer: document.getElementById('fSourcer').value,
       orderPlacementDate: document.getElementById('fOrderDate').value || null,
       desiredEntryDate: document.getElementById('fDesiredEntry').value || null,
       manufacturerDeliveryDate: document.getElementById('fManufDelivery').value || null,

@@ -19,7 +19,11 @@ const newPoState = {
   pdLeadOtherMode: false,
   creatorOtherMode: false,
   asanaTaskLink: '',
-  productRisk: 'medium'
+  productRisk: 'medium',
+  // Pulled from Asana by the Sync button rather than typed here.
+  sourcer: '',
+  fulfillmentChannel: '',
+  warehouse: ''
 };
 
 let idCounter = 0;
@@ -788,6 +792,11 @@ function renderNewPoScreen() {
 
     <div class="card">
       ${textField2('newPoNumber', 'poNumber', newPoState.poNumber, { required: true, placeholderKey: 'poNumberPlaceholder' })}
+      <div class="section-help" style="margin-top:-4px;">${escapeHtml(bi('syncFromAsanaHelp', 'Enter the PO number, then sync to pull details from Asana.').en)}</div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0 14px 0;">
+        <button type="button" class="btn btn-secondary" id="btnSyncAsana" style="flex:none;width:auto;padding:9px 16px;">${escapeHtml(bi('syncFromAsana', 'Sync from Asana').en)}</button>
+        <span id="asanaSyncStatus" class="section-help" style="margin:0;"></span>
+      </div>
       ${textField2('newPoSku', 'productSku', newPoState.sku, { required: true, placeholderKey: 'productSkuPlaceholder' })}
       <div class="field-row">
         <div style="flex:1">${dateField2('newPoOrderDate', 'orderDateLabel', newPoState.orderDate, { required: true })}</div>
@@ -978,6 +987,75 @@ function attachNewPoHandlers() {
   bindText('newPoProductTitle', 'productTitle');
   bindText('newPoAsanaLink', 'asanaTaskLink');
 
+  // ---- "Sync from Asana": one lookup by PO number fills in everything
+  // Asana owns, so the requester only types the PO number. Values already
+  // typed here are overwritten deliberately - Asana is the source of truth
+  // for these particular fields. ----
+  const syncBtn = document.getElementById('btnSyncAsana');
+  if (syncBtn) {
+    syncBtn.addEventListener('click', async () => {
+      const poNumber = (newPoState.poNumber || '').trim();
+      const statusEl = document.getElementById('asanaSyncStatus');
+      const say = (msg, isError) => {
+        if (!statusEl) return;
+        statusEl.textContent = msg;
+        statusEl.style.color = isError ? 'var(--jc-fail)' : 'var(--jc-muted)';
+      };
+      if (!poNumber) return say(bi('syncNeedPoNumber', 'Enter a PO number first').en, true);
+      syncBtn.disabled = true;
+      say(bi('syncingFromAsana', 'Syncing...').en);
+      try {
+        const res = await fetch('/api/asana/pull-po', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ poNumber })
+        });
+        const body = await res.json();
+        if (!res.ok || !body.ok) {
+          return say(body.error || bi('syncNotFound', 'No matching PO found in Asana').en, true);
+        }
+        const f = body.fields || {};
+        const filled = [];
+        const setIf = (key, value, label) => {
+          if (value === null || value === undefined || value === '') return;
+          newPoState[key] = value;
+          filled.push(label);
+        };
+        setIf('sku', f.sku, 'SKU');
+        setIf('orderQuantity', f.orderQuantity, 'Quantity');
+        setIf('creator', f.creator, 'Creator');
+        setIf('productDevelopmentLead', f.productDevelopmentLead, 'PD');
+        setIf('sourcer', f.sourcer, 'Sourcer');
+        setIf('fulfillmentRequestDate', f.fulfillmentRequestDate, 'Fulfil date');
+        setIf('fulfillmentChannel', f.fulfillmentChannel, 'Channel');
+        if (f.warehouse && f.warehouse.warehouseName) {
+          newPoState.warehouse = f.warehouse.warehouseName;
+          filled.push('Warehouse');
+        }
+        if (body.taskGid && !newPoState.asanaTaskLink) {
+          newPoState.asanaTaskLink = `https://app.asana.com/0/0/${body.taskGid}`;
+          filled.push('Asana link');
+        }
+        // A creator or PD that Asana knows but this app doesn't would leave
+        // the dropdown blank, so switch those to free-text "other" mode.
+        if (newPoState.creator && !(OPTIONS.creators || []).includes(newPoState.creator)) newPoState.creatorOtherMode = true;
+        if (newPoState.productDevelopmentLead && !(OPTIONS.productDevelopmentLeads || []).includes(newPoState.productDevelopmentLead)) newPoState.pdLeadOtherMode = true;
+        render();
+        const el = document.getElementById('asanaSyncStatus');
+        if (el) {
+          el.textContent = filled.length
+            ? `${bi('syncPulled', 'Pulled from Asana').en}: ${filled.join(', ')}`
+            : bi('syncPulled', 'Pulled from Asana').en;
+          el.style.color = 'var(--jc-teal-dark)';
+        }
+      } catch (err) {
+        say(err.message || String(err), true);
+      } finally {
+        const b2 = document.getElementById('btnSyncAsana');
+        if (b2) b2.disabled = false;
+      }
+    });
+  }
+
   const pdLeadSelect = document.querySelector('[data-newpo-select-other="newPoPdLead"]');
   if (pdLeadSelect) {
     pdLeadSelect.addEventListener('change', (e) => {
@@ -1057,7 +1135,12 @@ async function submitNewPo() {
         fulfillmentRequestDate: newPoState.fulfillmentRequestDate || null,
         sizesIncluded: newPoState.sizesIncluded.map((x) => x.label).filter(Boolean),
         sizeDistribution: newPoState.sizesIncluded.filter((x) => x.label).map((x) => ({ size: x.label, quantity: x.quantity, sku: (x.sku || '').trim() || null })),
-        asanaTaskLink: newPoState.asanaTaskLink
+        asanaTaskLink: newPoState.asanaTaskLink,
+        // Pulled from Asana by the Sync button - carried through so the
+        // order record keeps them without anyone retyping.
+        sourcer: newPoState.sourcer || null,
+        fulfillmentChannel: newPoState.fulfillmentChannel || null,
+        warehouse: newPoState.warehouse || null
       })
     });
     const data = await res.json();
