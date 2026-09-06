@@ -135,6 +135,116 @@ function renderBackupCard() {
   `;
 }
 
+/* ---- Message templates ----
+ * Each template carries a hand-written English and Chinese version; the app
+ * never translates one into the other, because a mistranslated quantity or
+ * delivery date in a PO is a real commercial problem.
+ */
+let messageTemplates = [];
+let templatePlaceholders = [];
+
+function renderTemplatesCard() {
+  const host = document.getElementById('tplCard');
+  if (!host) return;
+  host.innerHTML = `
+    <div class="card">
+      <div class="section-title">${escapeHtml(bi('secMessageTemplates', 'Message Templates').en)}</div>
+      <div class="section-help" style="margin-bottom:14px;">${escapeHtml(bi('helpMessageTemplates', 'Templates used when sending a purchase order to a supplier.').en)}</div>
+      <div class="section-help" style="margin-bottom:16px;">
+        <strong>${escapeHtml(bi('tplPlaceholders', 'Available placeholders').en)}:</strong>
+        ${templatePlaceholders.map((ph) => `<code>{{${escapeHtml(ph)}}}</code>`).join(' ')}
+      </div>
+      ${messageTemplates.map((t, i) => `
+        <div class="card" style="background:#fff;margin-bottom:14px;" data-tpl="${escapeHtml(t.id)}">
+          <div class="field">
+            <label>${escapeHtml(bi('tplName', 'Template name').en)}</label>
+            <input type="text" data-tpl-field="name" value="${escapeHtml(t.name)}" />
+          </div>
+          <div class="field">
+            <label><strong>${escapeHtml(bi('tplEnglish', 'English version').en)}</strong></label>
+            <input type="text" data-tpl-field="en.subject" placeholder="${escapeHtml(bi('tplSubject', 'Subject').en)}" value="${escapeHtml(t.en.subject)}" />
+            <textarea rows="9" data-tpl-field="en.body" style="width:100%;margin-top:8px;font-family:inherit;font-size:13px;">${escapeHtml(t.en.body)}</textarea>
+          </div>
+          <div class="field">
+            <label><strong>${escapeHtml(bi('tplChinese', 'Chinese version').en)}</strong></label>
+            <input type="text" data-tpl-field="zh.subject" placeholder="${escapeHtml(bi('tplSubject', 'Subject').en)}" value="${escapeHtml(t.zh.subject)}" />
+            <textarea rows="9" data-tpl-field="zh.body" style="width:100%;margin-top:8px;font-family:inherit;font-size:13px;">${escapeHtml(t.zh.body)}</textarea>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <button type="button" class="btn btn-primary" data-tpl-save="${escapeHtml(t.id)}" style="flex:none;width:auto;padding:9px 16px;">${escapeHtml(bi('saveChanges', 'Save changes').en)}</button>
+            <button type="button" class="btn btn-secondary" data-tpl-delete="${escapeHtml(t.id)}" style="flex:none;width:auto;padding:9px 16px;color:var(--jc-fail);">${escapeHtml(bi('btnDelete', 'Delete').en)}</button>
+          </div>
+        </div>
+      `).join('')}
+      <button type="button" class="btn btn-secondary" id="tplAdd" style="flex:none;width:auto;padding:9px 16px;">${escapeHtml(bi('btnAddTemplate', '+ Add template').en)}</button>
+    </div>
+  `;
+  wireTemplatesCard();
+}
+
+function wireTemplatesCard() {
+  const readCard = (id) => {
+    const card = document.querySelector(`[data-tpl="${id}"]`);
+    const val = (f) => {
+      const el = card.querySelector(`[data-tpl-field="${f}"]`);
+      return el ? el.value : '';
+    };
+    return {
+      name: val('name'),
+      en: { subject: val('en.subject'), body: val('en.body') },
+      zh: { subject: val('zh.subject'), body: val('zh.body') }
+    };
+  };
+  document.querySelectorAll('[data-tpl-save]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.tplSave;
+      try {
+        const res = await fetch(`/api/message-templates/${encodeURIComponent(id)}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(readCard(id))
+        });
+        if (!res.ok) throw new Error((await res.json()).error || 'Save failed');
+        showToast(bi('tplSaved', 'Template saved').en);
+        await loadTemplates();
+      } catch (e) { showToast(e.message, true); }
+    });
+  });
+  document.querySelectorAll('[data-tpl-delete]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      if (!confirm(bi('tplConfirmDelete', 'Delete this template?').en)) return;
+      try {
+        const res = await fetch(`/api/message-templates/${encodeURIComponent(btn.dataset.tplDelete)}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error((await res.json()).error || 'Delete failed');
+        showToast(bi('tplDeleted', 'Template deleted').en);
+        await loadTemplates();
+      } catch (e) { showToast(e.message, true); }
+    });
+  });
+  const addBtn = document.getElementById('tplAdd');
+  if (addBtn) {
+    addBtn.addEventListener('click', async () => {
+      try {
+        const res = await fetch('/api/message-templates', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: 'New template', en: { subject: '', body: '' }, zh: { subject: '', body: '' } })
+        });
+        if (!res.ok) throw new Error((await res.json()).error || 'Create failed');
+        await loadTemplates();
+      } catch (e) { showToast(e.message, true); }
+    });
+  }
+}
+
+async function loadTemplates() {
+  try {
+    const res = await fetch('/api/message-templates');
+    const data = await res.json();
+    messageTemplates = data.templates || [];
+    templatePlaceholders = data.placeholders || [];
+    renderTemplatesCard();
+  } catch (e) { /* settings page still works without templates */ }
+}
+
 function render() {
   const root = document.getElementById('settingsRoot');
   root.innerHTML = `
@@ -146,6 +256,7 @@ function render() {
     ${renderBackupCard()}
     ${LISTS.map(renderListCard).join('')}
 
+    <div id="tplCard"></div>
     ${renderAqlTableCard()}
     ${renderUnitCostsCard()}
     <div class="card">
@@ -425,4 +536,5 @@ window.addEventListener('beforeunload', (e) => {
 (async function init() {
   await loadEverything();
   render();
+  loadTemplates();
 })();

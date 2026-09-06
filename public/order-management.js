@@ -3436,8 +3436,11 @@ async function openDetailPanel(id, scope) {
  */
 async function openDispatchDialog(orderId, targetKey, onSent) {
   let data;
+  let templates = [];
   try {
     data = await api(`/api/order-management/orders/${encodeURIComponent(orderId)}/dispatch-message/${encodeURIComponent(targetKey)}`);
+    const tplRes = await api('/api/message-templates');
+    templates = tplRes.templates || [];
   } catch (e) { return showToast(e.message, true); }
   const t = data.target;
   const msg = data.message;
@@ -3479,6 +3482,21 @@ async function openDispatchDialog(orderId, targetKey, onSent) {
     </div>
     <div class="om-panel-card">
       <div class="om-section-title">${i18('messagePreview', 'Message')}</div>
+      <div class="om-field-grid" style="margin-bottom:12px;">
+        <div>
+          <label>${i18('tplUseTemplate', 'Template')}</label>
+          <select id="dispTemplate">
+            ${templates.map((t) => `<option value="${escapeHtml(t.id)}">${escapeHtml(t.name)}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label>${i18('tplLanguage', 'Language')}</label>
+          <select id="dispTplLang">
+            <option value="zh">中文</option>
+            <option value="en">English</option>
+          </select>
+        </div>
+      </div>
       <input type="text" id="dispSubject" value="${escapeHtml(msg.subject)}" style="margin-bottom:10px;" />
       <textarea id="dispBody" rows="16" style="width:100%;font-family:inherit;font-size:13px;line-height:1.5;">${escapeHtml(msg.body)}</textarea>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
@@ -3499,6 +3517,26 @@ async function openDispatchDialog(orderId, targetKey, onSent) {
   };
   document.getElementById('dispClose').addEventListener('click', closeSelf);
   ownBackdrop.addEventListener('click', (e) => { if (e.target === ownBackdrop) closeSelf(); });
+
+  // Template + language: the two versions are authored separately, so
+  // switching language swaps to the other hand-written version rather than
+  // translating what's on screen.
+  async function applyTemplate() {
+    const tplId = document.getElementById('dispTemplate').value;
+    const lang = document.getElementById('dispTplLang').value;
+    if (!tplId) return;
+    try {
+      const res = await api(`/api/order-management/orders/${encodeURIComponent(orderId)}/dispatch-message/${encodeURIComponent(targetKey)}/template/${encodeURIComponent(tplId)}?lang=${lang}`);
+      document.getElementById('dispSubject').value = res.message.subject;
+      document.getElementById('dispBody').value = res.message.body;
+    } catch (e) { showToast(e.message, true); }
+  }
+  const tplSelect = document.getElementById('dispTemplate');
+  if (tplSelect && templates.length) {
+    tplSelect.addEventListener('change', applyTemplate);
+    document.getElementById('dispTplLang').addEventListener('change', applyTemplate);
+    applyTemplate(); // start from the first template rather than the built-in text
+  }
 
   const recipientInput = document.getElementById('dispRecipient');
   document.getElementById('dispChannel').addEventListener('change', (e) => {

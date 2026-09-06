@@ -3470,5 +3470,61 @@
   "thComponent2": {
     "en": "Component",
     "zh": "组件"
+  },
+  "secMessageTemplates": {
+    "en": "Message Templates",
+    "zh": "消息模板"
+  },
+  "helpMessageTemplates": {
+    "en": "Templates used when sending a purchase order to a supplier. The English and Chinese versions are written separately - neither is translated from the other. Use the placeholders below and they'll be filled in from the PO when you send.",
+    "zh": "发送采购订单给供应商时使用的模板。中英文版本分别独立撰写，互不翻译。可使用下方占位符，发送时会自动填入订单信息。"
+  },
+  "tplName": {
+    "en": "Template name",
+    "zh": "模板名称"
+  },
+  "tplEnglish": {
+    "en": "English version",
+    "zh": "英文版本"
+  },
+  "tplChinese": {
+    "en": "Chinese version",
+    "zh": "中文版本"
+  },
+  "tplSubject": {
+    "en": "Subject",
+    "zh": "主题"
+  },
+  "tplBody": {
+    "en": "Message",
+    "zh": "正文"
+  },
+  "tplPlaceholders": {
+    "en": "Available placeholders",
+    "zh": "可用占位符"
+  },
+  "btnAddTemplate": {
+    "en": "+ Add template",
+    "zh": "+ 添加模板"
+  },
+  "tplSaved": {
+    "en": "Template saved",
+    "zh": "模板已保存"
+  },
+  "tplDeleted": {
+    "en": "Template deleted",
+    "zh": "模板已删除"
+  },
+  "tplConfirmDelete": {
+    "en": "Delete this template?",
+    "zh": "确定删除此模板？"
+  },
+  "tplUseTemplate": {
+    "en": "Template",
+    "zh": "模板"
+  },
+  "tplLanguage": {
+    "en": "Language",
+    "zh": "语言"
   }
 }

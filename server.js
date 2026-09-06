@@ -37,6 +37,7 @@ const approvalPhotoSets = require('./config/approvalPhotoSets.json');
 const asanaClient = require('./lib/asanaClient');
 const asanaPoSync = require('./lib/asanaPoSync');
 const poDispatch = require('./lib/poDispatch');
+const messageTemplateStore = require('./lib/messageTemplateStore');
 const AdmZip = require('adm-zip');
 const ASANA_FIELD_MAP_PATH = path.join(__dirname, 'config', 'asanaFieldMap.json');
 function loadAsanaFieldMap() { return loadJson(ASANA_FIELD_MAP_PATH); }
@@ -1143,6 +1144,25 @@ app.get('/api/order-management/orders/:id/pd-approvals', (req, res) => {
   res.json({ ok: true, statuses: approvalStore.pdApprovalStatuses(order.poNumber) });
 });
 
+// ---- Message templates (Settings > Message Templates) ----
+app.get('/api/message-templates', (req, res) => {
+  res.json({ ok: true, templates: messageTemplateStore.listTemplates(), placeholders: messageTemplateStore.PLACEHOLDERS });
+});
+app.post('/api/message-templates', (req, res) => {
+  const body = req.body || {};
+  if (!body.name || !String(body.name).trim()) return res.status(400).json({ error: 'name is required' });
+  res.json({ ok: true, template: messageTemplateStore.createTemplate(body) });
+});
+app.patch('/api/message-templates/:id', (req, res) => {
+  const updated = messageTemplateStore.updateTemplate(req.params.id, req.body || {});
+  if (!updated) return res.status(404).json({ error: 'Template not found' });
+  res.json({ ok: true, template: updated });
+});
+app.delete('/api/message-templates/:id', (req, res) => {
+  if (!messageTemplateStore.deleteTemplate(req.params.id)) return res.status(404).json({ error: 'Template not found' });
+  res.json({ ok: true });
+});
+
 // Everyone who should receive part of this PO, with the contact details on
 // file for each - drives the "Send Purchase Order to Supplier" section.
 app.get('/api/order-management/orders/:id/dispatch-targets', (req, res) => {
@@ -1158,6 +1178,20 @@ app.get('/api/order-management/orders/:id/dispatch-message/:targetKey', (req, re
   const target = poDispatch.buildTargets(order).find((t) => String(t.key) === String(req.params.targetKey));
   if (!target) return res.status(404).json({ error: 'Component not found on this order' });
   res.json({ ok: true, target, message: poDispatch.buildMessage(order, target) });
+});
+
+// Render a template against one component's PO details, in the requested
+// language. Templates hold separate en/zh versions - never translated.
+app.get('/api/order-management/orders/:id/dispatch-message/:targetKey/template/:templateId', (req, res) => {
+  const order = orderManagementStore.getOrderById(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  const target = poDispatch.buildTargets(order).find((t) => String(t.key) === String(req.params.targetKey));
+  if (!target) return res.status(404).json({ error: 'Component not found on this order' });
+  const template = messageTemplateStore.getTemplate(req.params.templateId);
+  if (!template) return res.status(404).json({ error: 'Template not found' });
+  const lang = req.query.lang === 'en' ? 'en' : 'zh';
+  const message = messageTemplateStore.render(template, lang, poDispatch.templateValues(order, target));
+  res.json({ ok: true, message, target });
 });
 
 // Record a dispatch, and optionally save a newly-entered contact back onto
@@ -1191,10 +1225,14 @@ app.post('/api/order-management/orders/:id/dispatch', async (req, res) => {
     `PO sent to ${target.supplierName || 'supplier'} (${target.componentName}) via ${channel}`
   );
 
-  // Sending the MAIN component's PO is what places the order. Sub-component
-  // dispatches don't move the main status - see advanceOnMainPoDispatch.
+  // Sending a PO places that component's order. The main component's send
+  // moves the parent PO to Order Placed; a sub-component's send moves only
+  // that component's own status.
   if (target.kind === 'main') {
     const advanced = orderManagementStore.advanceOnMainPoDispatch(order.id, body.actor || 'Web user');
+    if (advanced) updated = advanced;
+  } else {
+    const advanced = orderManagementStore.advanceAccessoryOnDispatch(order.id, target.key, body.actor || 'Web user');
     if (advanced) updated = advanced;
   }
   syncOrderToAsana(updated, req);
