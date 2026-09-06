@@ -3402,5 +3402,73 @@
   "emptyNoOrdersIn": {
     "en": "No orders yet.",
     "zh": "暂无订单。"
+  },
+  "secSendPo": {
+    "en": "Send Purchase Order to Supplier",
+    "zh": "发送采购订单给供应商"
+  },
+  "helpSendPo": {
+    "en": "Send each factory the part of this PO they're making. Contact details come from the supplier record; anything new you enter can be saved back to it.",
+    "zh": "将本订单中各自负责的部分发送给相应工厂。联系方式来自供应商档案，新填写的信息可保存回档案。"
+  },
+  "btnOpenSendPo": {
+    "en": "Send purchase order",
+    "zh": "发送采购订单"
+  },
+  "btnSend": {
+    "en": "Send",
+    "zh": "发送"
+  },
+  "sendViaEmail": {
+    "en": "Email",
+    "zh": "邮件"
+  },
+  "sendViaWechat": {
+    "en": "WeChat",
+    "zh": "微信"
+  },
+  "fldRecipient": {
+    "en": "Recipient",
+    "zh": "收件人"
+  },
+  "saveToSupplierRecord": {
+    "en": "Save this contact to the supplier record",
+    "zh": "将此联系方式保存到供应商档案"
+  },
+  "messagePreview": {
+    "en": "Message",
+    "zh": "消息内容"
+  },
+  "btnCopyMessage": {
+    "en": "Copy message",
+    "zh": "复制消息"
+  },
+  "btnOpenEmail": {
+    "en": "Open in email",
+    "zh": "在邮件中打开"
+  },
+  "sentAlready": {
+    "en": "Last sent",
+    "zh": "上次发送"
+  },
+  "neverSent": {
+    "en": "Not sent yet",
+    "zh": "尚未发送"
+  },
+  "noRecipientOnFile": {
+    "en": "No contact on file - enter one below",
+    "zh": "档案中无联系方式，请在下方填写"
+  },
+  "dispatchRecorded": {
+    "en": "Dispatch recorded",
+    "zh": "已记录发送"
+  },
+  "wechatNoApi": {
+    "en": "WeChat can't be sent automatically - copy the message and paste it to this contact.",
+    "zh": "微信无法自动发送，请复制消息后发送给该联系人。"
+  },
+  "thComponent2": {
+    "en": "Component",
+    "zh": "组件"
   }
 }

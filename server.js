@@ -36,6 +36,7 @@ const approvalStore = require('./lib/approvalStore');
 const approvalPhotoSets = require('./config/approvalPhotoSets.json');
 const asanaClient = require('./lib/asanaClient');
 const asanaPoSync = require('./lib/asanaPoSync');
+const poDispatch = require('./lib/poDispatch');
 const AdmZip = require('adm-zip');
 const ASANA_FIELD_MAP_PATH = path.join(__dirname, 'config', 'asanaFieldMap.json');
 function loadAsanaFieldMap() { return loadJson(ASANA_FIELD_MAP_PATH); }
@@ -1140,6 +1141,64 @@ app.get('/api/order-management/orders/:id/pd-approvals', (req, res) => {
   const order = orderManagementStore.getOrderById(req.params.id);
   if (!order) return res.status(404).json({ error: 'Order not found' });
   res.json({ ok: true, statuses: approvalStore.pdApprovalStatuses(order.poNumber) });
+});
+
+// Everyone who should receive part of this PO, with the contact details on
+// file for each - drives the "Send Purchase Order to Supplier" section.
+app.get('/api/order-management/orders/:id/dispatch-targets', (req, res) => {
+  const order = orderManagementStore.getOrderById(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  res.json({ ok: true, poNumber: order.poNumber, targets: poDispatch.buildTargets(order) });
+});
+
+// The composed message for one component's supplier.
+app.get('/api/order-management/orders/:id/dispatch-message/:targetKey', (req, res) => {
+  const order = orderManagementStore.getOrderById(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  const target = poDispatch.buildTargets(order).find((t) => String(t.key) === String(req.params.targetKey));
+  if (!target) return res.status(404).json({ error: 'Component not found on this order' });
+  res.json({ ok: true, target, message: poDispatch.buildMessage(order, target) });
+});
+
+// Record a dispatch, and optionally save a newly-entered contact back onto
+// the supplier record so it's on file for next time.
+app.post('/api/order-management/orders/:id/dispatch', async (req, res) => {
+  const order = orderManagementStore.getOrderById(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  const body = req.body || {};
+  const { targetKey, channel, recipient, saveToSupplier } = body;
+  if (!targetKey || !channel || !recipient) {
+    return res.status(400).json({ error: 'targetKey, channel and recipient are required' });
+  }
+  if (channel !== 'email' && channel !== 'wechat') {
+    return res.status(400).json({ error: "channel must be 'email' or 'wechat'" });
+  }
+  const target = poDispatch.buildTargets(order).find((t) => String(t.key) === String(targetKey));
+  if (!target) return res.status(404).json({ error: 'Component not found on this order' });
+
+  // Persist a new contact against the factory so it's reusable.
+  if (saveToSupplier && target.supplierId) {
+    const patch = channel === 'email' ? { email: recipient } : { wechat: recipient };
+    supplierStore.updateSupplier(target.supplierId, patch);
+  }
+
+  const delivery = await poDispatch.deliver();
+  const entry = poDispatch.buildLogEntry(target, channel, recipient, body.actor || req.get('X-Actor'));
+  let updated = orderManagementStore.updateOrder(
+    order.id,
+    { dispatchLog: [...(order.dispatchLog || []), entry] },
+    body.actor || 'Web user',
+    `PO sent to ${target.supplierName || 'supplier'} (${target.componentName}) via ${channel}`
+  );
+
+  // Sending the MAIN component's PO is what places the order. Sub-component
+  // dispatches don't move the main status - see advanceOnMainPoDispatch.
+  if (target.kind === 'main') {
+    const advanced = orderManagementStore.advanceOnMainPoDispatch(order.id, body.actor || 'Web user');
+    if (advanced) updated = advanced;
+  }
+  syncOrderToAsana(updated, req);
+  res.json({ ok: true, entry, delivery, order: updated });
 });
 
 app.post('/api/order-management/orders/:id/qa-report-status', (req, res) => {

@@ -2266,6 +2266,13 @@ async function openDetailPanel(id, scope) {
     </div>
 
     <div class="om-panel-card">
+    <div class="om-section-title">${i18('secSendPo', 'Send Purchase Order to Supplier')}</div>
+    <div class="section-help" style="margin-bottom:12px;">${i18('helpSendPo', 'Send each factory the part of this PO they are making.')}</div>
+    <button type="button" class="btn btn-secondary" id="omOpenSendPoBtn" style="flex:none;width:auto;">${i18('btnOpenSendPo', 'Send purchase order')}</button>
+    <div id="omSendPoHost" style="margin-top:14px;display:none;"></div>
+    </div>
+
+    <div class="om-panel-card">
     <div class="om-section-title">${i18('secWarehousingBreakdown', 'Warehousing Breakdown')}</div>
     <div class="om-field-grid">
       <div><label>${i18('fldWarehouseAddress', 'Warehouse Address')}</label>
@@ -2780,6 +2787,89 @@ async function openDetailPanel(id, scope) {
       });
     } catch (e) { /* read-only extra - the panel is fine without it */ }
   })();
+
+  // ---- Send Purchase Order to Supplier ----
+  // One button reveals every component on this PO (main + sub-components)
+  // with the supplier behind each, so you can send each factory only the
+  // part they're making.
+  const openSendPoBtn = document.getElementById('omOpenSendPoBtn');
+  if (openSendPoBtn) {
+    openSendPoBtn.addEventListener('click', async () => {
+      const host = document.getElementById('omSendPoHost');
+      if (host.style.display !== 'none') { host.style.display = 'none'; return; }
+      host.style.display = '';
+      host.innerHTML = `<div class="om-empty">${i18('emptyLoading', 'Loading...')}</div>`;
+      try {
+        const data = await api(`/api/order-management/orders/${encodeURIComponent(order.id)}/dispatch-targets`);
+        renderDispatchTargets(host, data.targets || []);
+      } catch (e) { showToast(e.message, true); host.style.display = 'none'; }
+    });
+  }
+
+  /** Re-fetch and redraw the recipient list so "Last sent" reflects the
+   *  dispatch that just happened. No-op if the section is closed. */
+  async function refreshDispatchList(updatedOrder) {
+    // Sending the main component's PO places the order, so the status
+    // controls behind this dialog need to catch up without a full rebuild.
+    if (updatedOrder && updatedOrder.status && updatedOrder.status !== order.status) {
+      Object.assign(order, updatedOrder);
+      const statusSelect = document.getElementById('fOrderStatusSelect');
+      if (statusSelect) {
+        statusSelect.value = updatedOrder.status;
+        statusSelect.setAttribute('data-status', updatedOrder.status);
+      }
+      renderStatusTracker(updatedOrder.status);
+      const placedInput = document.getElementById('fOrderDate');
+      if (placedInput && updatedOrder.orderPlacementDate && !placedInput.value) {
+        placedInput.value = String(updatedOrder.orderPlacementDate).slice(0, 10);
+        placedInput.disabled = true;
+      }
+      updateCompletePoButtonState();
+      refreshCurrentView();
+    }
+    const host = document.getElementById('omSendPoHost');
+    if (!host || host.style.display === 'none') return;
+    try {
+      const data = await api(`/api/order-management/orders/${encodeURIComponent(order.id)}/dispatch-targets`);
+      renderDispatchTargets(host, data.targets || []);
+    } catch (e) { /* leave the stale list rather than blanking it */ }
+  }
+
+  function renderDispatchTargets(host, targets) {
+    host.innerHTML = `
+      <div class="om-table-wrap">
+        <table class="om-table" style="min-width:0;">
+          <thead><tr>
+            <th>${i18i('thComponent2', 'Component')}</th>
+            <th>${i18i('thSupplier', 'Supplier')}</th>
+            <th>${i18i('fldRecipient', 'Recipient')}</th>
+            <th>${i18i('sentAlready', 'Last sent')}</th>
+            <th></th>
+          </tr></thead>
+          <tbody>
+            ${targets.map((t) => {
+              const onFile = [t.email, t.wechat].filter(Boolean).join(' · ');
+              return `
+              <tr>
+                <td><strong>${escapeHtml(t.componentName)}</strong></td>
+                <td>${escapeHtml(t.supplierName || '—')}</td>
+                <td>${onFile
+                  ? escapeHtml(onFile)
+                  : `<span style="color:var(--jc-muted);">${i18('noRecipientOnFile', 'No contact on file')}</span>`}</td>
+                <td>${t.lastSentAt
+                  ? `${fmtDate(t.lastSentAt)} · ${escapeHtml(t.lastChannel || '')}`
+                  : `<span style="color:var(--jc-muted);">${i18('neverSent', 'Not sent yet')}</span>`}</td>
+                <td><button type="button" class="om-table-upload-btn om-dispatch-btn" data-target-key="${escapeHtml(t.key)}">${i18('btnSend', 'Send')}</button></td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+    host.querySelectorAll('.om-dispatch-btn').forEach((btn) => {
+      btn.addEventListener('click', () => openDispatchDialog(order.id, btn.dataset.targetKey, refreshDispatchList));
+    });
+  }
 
   const deletePoBtn = document.getElementById('omDeletePoBtn');
   if (deletePoBtn) {
@@ -3336,6 +3426,124 @@ async function openDetailPanel(id, scope) {
 // Lightweight, mostly-read-only view scoped to a single accessory/sub-PO -
 // reachable only from the Accessories sub-tab, since that's the only place
 // a bare accessory (rather than a full order) is the thing being clicked.
+/**
+ * Send dialog for one component's supplier: pick a channel, confirm or add
+ * the recipient, review the message, send.
+ *
+ * Email opens the user's own mail client (no SMTP on this server yet), and
+ * WeChat is copy-and-paste since personal WeChat has no send API. Either
+ * way the dispatch is recorded against the PO.
+ */
+async function openDispatchDialog(orderId, targetKey, onSent) {
+  let data;
+  try {
+    data = await api(`/api/order-management/orders/${encodeURIComponent(orderId)}/dispatch-message/${encodeURIComponent(targetKey)}`);
+  } catch (e) { return showToast(e.message, true); }
+  const t = data.target;
+  const msg = data.message;
+  // Default to whichever channel already has a contact on file.
+  let channel = t.email ? 'email' : (t.wechat ? 'wechat' : 'email');
+
+  const panel = document.createElement('div');
+  panel.className = 'om-panel';
+  panel.innerHTML = `
+   <div class="om-panel-inner">
+    <div class="om-panel-header">
+      <div>
+        <div style="font-size:19px;font-weight:700;">${escapeHtml(t.componentName)}</div>
+        <div style="color:var(--jc-muted);font-size:13px;">${escapeHtml(t.supplierName || '')}</div>
+      </div>
+      <button class="om-panel-close" id="dispClose">&times;</button>
+    </div>
+    <div class="om-panel-card">
+      <div class="om-field-grid">
+        <div>
+          <label>${i18('fldType', 'Type')}</label>
+          <select id="dispChannel">
+            <option value="email" ${channel === 'email' ? 'selected' : ''}>${i18t('sendViaEmail', 'Email')}</option>
+            <option value="wechat" ${channel === 'wechat' ? 'selected' : ''}>${i18t('sendViaWechat', 'WeChat')}</option>
+          </select>
+        </div>
+        <div>
+          <label>${i18('fldRecipient', 'Recipient')}</label>
+          <input type="text" id="dispRecipient" value="${escapeHtml(channel === 'email' ? (t.email || '') : (t.wechat || ''))}" />
+        </div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-weight:500;">
+        <input type="checkbox" id="dispSave" style="width:auto;margin:0;" />
+        <span>${i18('saveToSupplierRecord', 'Save this contact to the supplier record')}</span>
+      </label>
+      <div id="dispWechatNote" class="section-help" style="margin-top:8px;display:${channel === 'wechat' ? '' : 'none'};">
+        ${i18('wechatNoApi', 'WeChat cannot be sent automatically - copy the message and paste it to this contact.')}
+      </div>
+    </div>
+    <div class="om-panel-card">
+      <div class="om-section-title">${i18('messagePreview', 'Message')}</div>
+      <input type="text" id="dispSubject" value="${escapeHtml(msg.subject)}" style="margin-bottom:10px;" />
+      <textarea id="dispBody" rows="16" style="width:100%;font-family:inherit;font-size:13px;line-height:1.5;">${escapeHtml(msg.body)}</textarea>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+        <button type="button" class="btn btn-secondary" id="dispCopy" style="flex:none;width:auto;">${i18('btnCopyMessage', 'Copy message')}</button>
+        <button type="button" class="btn btn-primary" id="dispSend" style="flex:none;width:auto;">${i18('btnSend', 'Send')}</button>
+      </div>
+    </div>
+   </div>
+  `;
+  // This dialog stacks on top of the PO panel, so it must close only its
+  // own backdrop - closePanel() removes every panel and would take the PO
+  // panel down with it.
+  mountPanel(panel);
+  const ownBackdrop = panel.closest('.om-panel-backdrop');
+  const closeSelf = () => {
+    if (ownBackdrop) ownBackdrop.remove();
+    document.querySelectorAll('body > .om-typeahead-menu').forEach((el) => el.remove());
+  };
+  document.getElementById('dispClose').addEventListener('click', closeSelf);
+  ownBackdrop.addEventListener('click', (e) => { if (e.target === ownBackdrop) closeSelf(); });
+
+  const recipientInput = document.getElementById('dispRecipient');
+  document.getElementById('dispChannel').addEventListener('change', (e) => {
+    channel = e.target.value;
+    // Swap in whatever is on file for the newly-chosen channel.
+    recipientInput.value = channel === 'email' ? (t.email || '') : (t.wechat || '');
+    document.getElementById('dispWechatNote').style.display = channel === 'wechat' ? '' : 'none';
+  });
+
+  document.getElementById('dispCopy').addEventListener('click', async () => {
+    const text = `${document.getElementById('dispSubject').value}\n\n${document.getElementById('dispBody').value}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast(i18t('toastLinkCopied', 'Copied'));
+    } catch (e) { showToast(e.message, true); }
+  });
+
+  document.getElementById('dispSend').addEventListener('click', async () => {
+    const recipient = recipientInput.value.trim();
+    if (!recipient) return showToast(i18t('noRecipientOnFile', 'Enter a recipient'), true);
+    const subject = document.getElementById('dispSubject').value;
+    const body = document.getElementById('dispBody').value;
+    try {
+      const res = await api(`/api/order-management/orders/${encodeURIComponent(orderId)}/dispatch`, {
+        method: 'POST',
+        body: JSON.stringify({
+          targetKey, channel, recipient,
+          saveToSupplier: document.getElementById('dispSave').checked,
+          actor: 'Web user'
+        })
+      });
+      if (channel === 'email') {
+        // No SMTP on the server, so hand off to the user's mail client with
+        // everything pre-filled.
+        window.open(`mailto:${encodeURIComponent(recipient)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank');
+      } else {
+        try { await navigator.clipboard.writeText(`${subject}\n\n${body}`); } catch (e) { /* clipboard may be blocked */ }
+      }
+      showToast(i18t('dispatchRecorded', 'Dispatch recorded'));
+      closeSelf();
+      if (onSent) onSent(res && res.order);
+    } catch (e) { showToast(e.message, true); }
+  });
+}
+
 async function openAccessoryDetailPanel(orderId, accessoryId) {
   let order, accessory;
   try {
