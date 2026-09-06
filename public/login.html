@@ -36,14 +36,71 @@
   <form class="card" id="loginForm">
     <div class="logo">J</div>
     <h1>Juniper Creates</h1>
-    <p class="sub">Enter the site password to continue</p>
+    <p class="sub" id="subText">Enter the site password to continue</p>
+    <input type="email" id="emailInput" placeholder="Email" autocomplete="username" style="display:none;" />
     <input type="password" id="passwordInput" placeholder="Password" autofocus autocomplete="current-password" />
+    <div id="viewAsWrap" style="text-align:left;margin-top:12px;">
+      <label style="display:block;font-size:12px;font-weight:600;color:#666;margin-bottom:5px;">View the site as</label>
+      <select id="viewRoleSelect"></select>
+      <select id="viewSupplierSelect" style="display:none;margin-top:8px;"></select>
+    </div>
     <button type="submit" id="submitBtn">Continue</button>
     <div class="error" id="errorMsg">Incorrect password</div>
+    <button type="button" id="toggleMode"
+      style="background:none;border:none;color:var(--jc-teal-dark,#1F8570);font-size:13px;font-weight:600;cursor:pointer;margin-top:14px;padding:0;">
+      Sign in with an account instead
+    </button>
   </form>
   <script>
     const form = document.getElementById('loginForm');
     const input = document.getElementById('passwordInput');
+    const emailInput = document.getElementById('emailInput');
+    const toggleBtn = document.getElementById('toggleMode');
+    const subText = document.getElementById('subText');
+
+    // Two modes: the original shared site password, and per-user accounts.
+    // Shared stays the default so nothing changes for existing users; the
+    // account mode is what Google/WeChat sign-in will slot into later.
+    // Account-type picker. Until real per-user sign-in exists, the shared
+    // password lets you choose which role's view of the site to load. It's a
+    // preview mechanism rather than a restriction - but the choice is stored
+    // in the session and enforced server-side, so supplier scoping behaves
+    // exactly as it will for a real supplier account.
+    const viewAsWrap = document.getElementById('viewAsWrap');
+    const roleSelect = document.getElementById('viewRoleSelect');
+    const supplierSelect = document.getElementById('viewSupplierSelect');
+    const ROLE_LABELS = {
+      admin: 'Juniper admin - full access',
+      internal: 'Juniper team - orders and QA',
+      qa: 'QA/QC - reporting and approvals',
+      supplier: 'Supplier - their own POs only'
+    };
+    (async () => {
+      try {
+        const opts = await (await fetch('/api/login-options')).json();
+        roleSelect.innerHTML = (opts.roles || []).map((r) =>
+          `<option value="${r}">${ROLE_LABELS[r] || r}</option>`).join('');
+        supplierSelect.innerHTML = '<option value="">Select a supplier...</option>' +
+          (opts.suppliers || []).map((sp) => `<option value="${sp.replace(/"/g, '&quot;')}">${sp}</option>`).join('');
+      } catch (e) { viewAsWrap.style.display = 'none'; }
+    })();
+    roleSelect.addEventListener('change', () => {
+      // A supplier view needs to know which supplier, or it would scope to
+      // nothing and look broken.
+      supplierSelect.style.display = roleSelect.value === 'supplier' ? '' : 'none';
+    });
+
+    let accountMode = false;
+    toggleBtn.addEventListener('click', () => {
+      accountMode = !accountMode;
+      emailInput.style.display = accountMode ? '' : 'none';
+      // A real account carries its own role, so the picker is irrelevant.
+      viewAsWrap.style.display = accountMode ? 'none' : '';
+      subText.textContent = accountMode ? 'Sign in with your account' : 'Enter the site password to continue';
+      toggleBtn.textContent = accountMode ? 'Use the shared site password instead' : 'Sign in with an account instead';
+      errorMsg.style.display = 'none';
+      (accountMode ? emailInput : input).focus();
+    });
     const btn = document.getElementById('submitBtn');
     const errorMsg = document.getElementById('errorMsg');
 
@@ -55,15 +112,25 @@
         const res = await fetch('/api/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password: input.value })
+          body: JSON.stringify(accountMode
+            ? { email: emailInput.value, password: input.value }
+            : {
+              password: input.value,
+              viewRole: roleSelect.value,
+              viewSupplierName: roleSelect.value === 'supplier' ? supplierSelect.value : ''
+            })
         });
         if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          errorMsg.textContent = body.error || 'Incorrect password';
           errorMsg.style.display = 'block';
           btn.disabled = false;
           return;
         }
+        const body = await res.json().catch(() => ({}));
         const params = new URLSearchParams(location.search);
-        location.href = params.get('next') || '/order-management.html';
+        // Land each role on a page it's actually allowed to open.
+        location.href = params.get('next') || body.landing || '/order-management.html';
       } catch (err) {
         errorMsg.textContent = 'Something went wrong - try again';
         errorMsg.style.display = 'block';

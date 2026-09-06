@@ -38,6 +38,7 @@ const asanaClient = require('./lib/asanaClient');
 const asanaPoSync = require('./lib/asanaPoSync');
 const poDispatch = require('./lib/poDispatch');
 const messageTemplateStore = require('./lib/messageTemplateStore');
+const userStore = require('./lib/userStore');
 const AdmZip = require('adm-zip');
 const ASANA_FIELD_MAP_PATH = path.join(__dirname, 'config', 'asanaFieldMap.json');
 function loadAsanaFieldMap() { return loadJson(ASANA_FIELD_MAP_PATH); }
@@ -124,14 +125,42 @@ const uploadBackup = multer({
 
 app.use(express.json({ limit: '5mb' }));
 
-// ---- Simple site-wide password gate ----
-// Not meant to be robust security - just enough to keep this off of casual
-///accidental access (crawlers, stray links, etc.) so the Asana integration
-// and everything else isn't sitting wide open. A stateless cookie check,
-// no session store, no user accounts.
+// ---- Authentication & sessions ----
+// Two ways in, deliberately:
+//
+//  1. The original shared site password. Still works, and still grants full
+//     access, so deploying this change never locks anybody out. It maps to a
+//     synthetic "shared access" admin identity.
+//  2. Per-user accounts (lib/userStore) with roles and permissions. These
+//     are what Google and WeChat sign-in will attach to later - each of
+//     those just resolves to a user record and issues the same session.
+//
+// The session cookie carries a signed payload rather than a bare token, so
+// the server knows *who* is logged in, not merely *that* someone is.
 const SITE_PASSWORD = process.env.SITE_PASSWORD || 'JuniperTO';
 const AUTH_COOKIE_NAME = 'juniper_auth';
-const AUTH_TOKEN = crypto.createHash('sha256').update(`${SITE_PASSWORD}::juniper-site-gate`).digest('hex');
+const SESSION_SECRET = process.env.SESSION_SECRET || `${SITE_PASSWORD}::juniper-site-gate`;
+
+function signSession(payload) {
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const sig = crypto.createHmac('sha256', SESSION_SECRET).update(body).digest('base64url');
+  return `${body}.${sig}`;
+}
+
+function readSession(token) {
+  if (!token || !token.includes('.')) return null;
+  const [body, sig] = token.split('.');
+  const expected = crypto.createHmac('sha256', SESSION_SECRET).update(body).digest('base64url');
+  // Constant-time compare so the signature can't be brute-forced by timing.
+  const a = Buffer.from(sig || '');
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  try {
+    return JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
+  } catch (err) {
+    return null;
+  }
+}
 
 function parseCookies(req) {
   const header = req.headers.cookie;
@@ -145,33 +174,189 @@ function parseCookies(req) {
   return out;
 }
 
-// Paths that must stay reachable without being logged in yet, so the login
-// page itself can load and submit.
-const AUTH_ALLOWLIST = new Set(['/login.html', '/api/login', '/favicon.ico']);
-
-app.post('/api/login', (req, res) => {
-  const { password } = req.body || {};
-  if (password !== SITE_PASSWORD) {
-    return res.status(401).json({ error: 'Incorrect password' });
-  }
-  res.cookie(AUTH_COOKIE_NAME, AUTH_TOKEN, {
+function issueSession(res, session) {
+  res.cookie(AUTH_COOKIE_NAME, signSession(session), {
     httpOnly: true,
     sameSite: 'lax',
     maxAge: 90 * 24 * 60 * 60 * 1000 // 90 days
   });
+}
+
+/** The shared-password identity: full access, but not a real user record. */
+const SHARED_SESSION = { kind: 'shared', role: 'admin', name: 'Shared access' };
+
+/**
+ * Resolve the current request's user. Returns a user-shaped object for both
+ * session kinds so downstream permission checks don't care which was used.
+ *
+ * Shared sessions carry a chosen "view as" role. That is a PREVIEW
+ * MECHANISM, not access control - anyone holding the site password can pick
+ * any role, including admin. Its value is that the choice lives in the
+ * signed session and is enforced server-side, so supplier scoping and
+ * permission checks are genuinely exercised while the role-based views get
+ * built. Real per-user accounts (and later Google/WeChat) are what actually
+ * restrict anyone.
+ */
+function currentUser(req) {
+  const session = readSession(parseCookies(req)[AUTH_COOKIE_NAME]);
+  if (!session) return null;
+  if (session.kind === 'shared') {
+    const role = userStore.ROLES.includes(session.viewRole) ? session.viewRole : 'admin';
+    return {
+      ...SHARED_SESSION,
+      id: null,
+      active: true,
+      role,
+      isSharedSession: true,
+      supplierName: session.viewSupplierName || '',
+      name: role === 'admin' ? 'Shared access' : `Shared access (${role})`
+    };
+  }
+  const user = userStore.getUser(session.userId);
+  if (!user || !user.active) return null;
+  return user;
+}
+
+// Paths that must stay reachable without being logged in yet, so the login
+// page itself can load and submit.
+const AUTH_ALLOWLIST = new Set(['/login.html', '/api/login', '/api/login-options', '/favicon.ico']);
+
+app.post('/api/login', (req, res) => {
+  const { password, email } = req.body || {};
+
+  // Per-user login when an email is supplied; shared password otherwise.
+  if (email) {
+    const user = userStore.authenticate(email, password);
+    if (!user) return res.status(401).json({ error: 'Incorrect email or password' });
+    issueSession(res, { kind: 'user', userId: user.id });
+    return res.json({ ok: true, user: userStore.publicView(user), landing: userStore.landingPageFor(user) });
+  }
+
+  if (password !== SITE_PASSWORD) {
+    return res.status(401).json({ error: 'Incorrect password' });
+  }
+  const body = req.body || {};
+  const viewRole = userStore.ROLES.includes(body.viewRole) ? body.viewRole : 'admin';
+  issueSession(res, {
+    ...SHARED_SESSION,
+    viewRole,
+    viewSupplierName: viewRole === 'supplier' ? (body.viewSupplierName || '') : ''
+  });
+  res.json({
+    ok: true,
+    user: { name: SHARED_SESSION.name, role: viewRole },
+    landing: userStore.landingPageFor({ role: viewRole })
+  });
+});
+
+// Switch which account type the shared session is viewing the site as.
+// Only meaningful for shared sessions - a real user's role comes from their
+// account and can't be self-selected.
+app.post('/api/session/view', (req, res) => {
+  const session = readSession(parseCookies(req)[AUTH_COOKIE_NAME]);
+  if (!session || session.kind !== 'shared') {
+    return res.status(400).json({ error: 'View switching is only available on the shared site login' });
+  }
+  const body = req.body || {};
+  if (!userStore.ROLES.includes(body.viewRole)) {
+    return res.status(400).json({ error: 'Unknown account type' });
+  }
+  issueSession(res, {
+    ...SHARED_SESSION,
+    viewRole: body.viewRole,
+    viewSupplierName: body.viewRole === 'supplier' ? (body.viewSupplierName || '') : ''
+  });
+  res.json({
+    ok: true,
+    viewRole: body.viewRole,
+    viewSupplierName: body.viewSupplierName || '',
+    landing: userStore.landingPageFor({ role: body.viewRole })
+  });
+});
+
+app.post('/api/logout', (req, res) => {
+  res.clearCookie(AUTH_COOKIE_NAME);
   res.json({ ok: true });
 });
 
 app.use((req, res, next) => {
   if (AUTH_ALLOWLIST.has(req.path)) return next();
-  const cookies = parseCookies(req);
-  if (cookies[AUTH_COOKIE_NAME] === AUTH_TOKEN) return next();
+  const user = currentUser(req);
+  if (user) {
+    req.user = user; // downstream routes read this for permissions/scoping
+    return next();
+  }
   // API/asset requests get a plain 401 rather than a redirect, so fetch()
   // calls fail cleanly instead of receiving an HTML login page as "data".
   if (req.path.startsWith('/api/') || req.headers.accept && !req.headers.accept.includes('text/html')) {
     return res.status(401).json({ error: 'Not authenticated' });
   }
   return res.redirect(`/login.html?next=${encodeURIComponent(req.originalUrl)}`);
+});
+
+// Page-level access. A role that can't open a page is redirected to its own
+// landing page rather than shown an error - a supplier following an old link
+// to the internal order page just ends up on their own order list.
+app.use((req, res, next) => {
+  if (!req.user) return next();
+  const isPage = req.path === '/' || req.path.endsWith('.html');
+  if (!isPage) return next();
+  const pageName = req.path === '/' ? 'index.html' : req.path.replace(/^\//, '');
+  if (userStore.canOpenPage(req.user, pageName)) return next();
+  const landing = userStore.landingPageFor(req.user);
+  if (req.path === landing) return next(); // never redirect a page to itself
+  return res.redirect(landing);
+});
+
+/** Route guard: require a permission, else 403. */
+function requirePermission(permission) {
+  return (req, res, next) => {
+    if (userStore.can(req.user, permission)) return next();
+    return res.status(403).json({ error: 'You do not have permission to do that' });
+  };
+}
+
+// Who am I - drives what the front end shows.
+app.get('/api/me', (req, res) => {
+  res.json({
+    ok: true,
+    user: userStore.publicView(req.user),
+    permissions: userStore.permissionsFor(req.user && req.user.role),
+    roles: userStore.ROLES,
+    pages: userStore.ROLE_PAGES[(req.user && req.user.role) || ''] || [],
+    landing: userStore.landingPageFor(req.user),
+    canSwitchView: !!(req.user && req.user.isSharedSession)
+  });
+});
+
+// Roles + supplier names for the login page's account-type picker. Reachable
+// before login, since the picker is shown on the login form itself.
+app.get('/api/login-options', (req, res) => {
+  res.json({
+    ok: true,
+    roles: userStore.ROLES,
+    suppliers: supplierStore.listSuppliers().map((s2) => s2.name).filter(Boolean).sort()
+  });
+});
+
+// ---- User administration (admin only) ----
+app.get('/api/users', requirePermission('users:manage'), (req, res) => {
+  res.json({ ok: true, users: userStore.listUsers().map(userStore.publicView), roles: userStore.ROLES });
+});
+app.post('/api/users', requirePermission('users:manage'), (req, res) => {
+  const body = req.body || {};
+  if (!body.email) return res.status(400).json({ error: 'email is required' });
+  if (userStore.findByEmail(body.email)) return res.status(409).json({ error: 'A user with that email already exists' });
+  res.json({ ok: true, user: userStore.publicView(userStore.createUser(body)) });
+});
+app.patch('/api/users/:id', requirePermission('users:manage'), (req, res) => {
+  const updated = userStore.updateUser(req.params.id, req.body || {});
+  if (!updated) return res.status(404).json({ error: 'User not found' });
+  res.json({ ok: true, user: userStore.publicView(updated) });
+});
+app.delete('/api/users/:id', requirePermission('users:manage'), (req, res) => {
+  if (!userStore.deleteUser(req.params.id)) return res.status(404).json({ error: 'User not found' });
+  res.json({ ok: true });
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
@@ -537,7 +722,7 @@ app.get('/api/options', (req, res) => {
   res.json(loadOptions());
 });
 
-app.post('/api/options', (req, res) => {
+app.post('/api/options', requirePermission('settings:write'), (req, res) => {
   try {
     const current = loadOptions();
     const body = req.body || {};
@@ -802,7 +987,7 @@ function extractAsanaTaskGid(link) {
   return /^\d{6,}$/.test(str) ? str : null;
 }
 
-app.post('/api/purchase-orders', (req, res) => {
+app.post('/api/purchase-orders', requirePermission('orders:write'), (req, res) => {
   try {
     const body = req.body || {};
     if (!body.poNumber || !body.sku) {
@@ -918,7 +1103,9 @@ app.get('/api/order-management/accessory-statuses', (req, res) => {
 
 app.get('/api/order-management/orders', (req, res) => {
   const { productLine, status, search } = req.query;
-  res.json({ orders: orderManagementStore.listOrders({ productLine, status, search }) });
+  const orders = orderManagementStore.listOrders({ productLine, status, search });
+  // Supplier accounts only ever see POs they're actually making a part of.
+  res.json({ orders: userStore.scopeOrdersForUser(req.user, orders) });
 });
 
 // Placed before the generic :id route below, since Express would otherwise
@@ -926,6 +1113,9 @@ app.get('/api/order-management/orders', (req, res) => {
 app.get('/api/order-management/orders/by-po-number/:poNumber', (req, res) => {
   const order = orderManagementStore.getOrderByPoNumber(req.params.poNumber);
   if (!order) return res.status(404).json({ error: 'No PO found with that number' });
+  // 404 rather than 403 for out-of-scope orders, so a supplier can't probe
+  // which PO numbers exist.
+  if (!userStore.canSeeOrder(req.user, order)) return res.status(404).json({ error: 'No PO found with that number' });
   res.json({ order });
 });
 
@@ -937,10 +1127,11 @@ app.get('/api/order-management/orders/by-sku/:sku', (req, res) => {
 app.get('/api/order-management/orders/:id', (req, res) => {
   const order = orderManagementStore.getOrderById(req.params.id);
   if (!order) return res.status(404).json({ error: 'Order not found' });
+  if (!userStore.canSeeOrder(req.user, order)) return res.status(404).json({ error: 'Order not found' });
   res.json({ order });
 });
 
-app.post('/api/order-management/orders', (req, res) => {
+app.post('/api/order-management/orders', requirePermission('orders:write'), (req, res) => {
   try {
     const body = req.body || {};
     if (!body.poNumber) return res.status(400).json({ error: 'poNumber is required' });
@@ -970,7 +1161,7 @@ function syncOrderToAsana(order, req) {
     .catch((err) => console.error('Background Asana sync failed:', err.message || err));
 }
 
-app.patch('/api/order-management/orders/:id', (req, res) => {
+app.patch('/api/order-management/orders/:id', requirePermission('orders:write'), (req, res) => {
   const body = req.body || {};
   const actor = body.actor || req.get('X-Actor');
   // Order Management Specialist reuses the qaLeads list; a name typed via
@@ -995,7 +1186,7 @@ app.patch('/api/order-management/orders/:id', (req, res) => {
 // Permanently delete a PO. The client requires the user to type the PO
 // number before this fires, and it double-checks here so a stray API call
 // can't wipe the wrong order.
-app.delete('/api/order-management/orders/:id', (req, res) => {
+app.delete('/api/order-management/orders/:id', requirePermission('orders:delete'), (req, res) => {
   const order = orderManagementStore.getOrderById(req.params.id);
   if (!order) return res.status(404).json({ error: 'Order not found' });
   const confirmPo = (req.query.confirmPoNumber || (req.body && req.body.confirmPoNumber) || '').trim();
@@ -1007,7 +1198,7 @@ app.delete('/api/order-management/orders/:id', (req, res) => {
   res.json({ ok: true, deleted: { id: removed.id, poNumber: removed.poNumber } });
 });
 
-app.post('/api/order-management/orders/:id/status', (req, res) => {
+app.post('/api/order-management/orders/:id/status', requirePermission('orders:write'), (req, res) => {
   const body = req.body || {};
   if (!body.status) return res.status(400).json({ error: 'status is required' });
   const updated = orderManagementStore.setStatus(req.params.id, body.status, body.actor || req.get('X-Actor'));
@@ -1148,17 +1339,17 @@ app.get('/api/order-management/orders/:id/pd-approvals', (req, res) => {
 app.get('/api/message-templates', (req, res) => {
   res.json({ ok: true, templates: messageTemplateStore.listTemplates(), placeholders: messageTemplateStore.PLACEHOLDERS });
 });
-app.post('/api/message-templates', (req, res) => {
+app.post('/api/message-templates', requirePermission('settings:write'), (req, res) => {
   const body = req.body || {};
   if (!body.name || !String(body.name).trim()) return res.status(400).json({ error: 'name is required' });
   res.json({ ok: true, template: messageTemplateStore.createTemplate(body) });
 });
-app.patch('/api/message-templates/:id', (req, res) => {
+app.patch('/api/message-templates/:id', requirePermission('settings:write'), (req, res) => {
   const updated = messageTemplateStore.updateTemplate(req.params.id, req.body || {});
   if (!updated) return res.status(404).json({ error: 'Template not found' });
   res.json({ ok: true, template: updated });
 });
-app.delete('/api/message-templates/:id', (req, res) => {
+app.delete('/api/message-templates/:id', requirePermission('settings:write'), (req, res) => {
   if (!messageTemplateStore.deleteTemplate(req.params.id)) return res.status(404).json({ error: 'Template not found' });
   res.json({ ok: true });
 });
@@ -1196,7 +1387,7 @@ app.get('/api/order-management/orders/:id/dispatch-message/:targetKey/template/:
 
 // Record a dispatch, and optionally save a newly-entered contact back onto
 // the supplier record so it's on file for next time.
-app.post('/api/order-management/orders/:id/dispatch', async (req, res) => {
+app.post('/api/order-management/orders/:id/dispatch', requirePermission('dispatch:send'), async (req, res) => {
   const order = orderManagementStore.getOrderById(req.params.id);
   if (!order) return res.status(404).json({ error: 'Order not found' });
   const body = req.body || {};

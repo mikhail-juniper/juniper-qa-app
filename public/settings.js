@@ -135,6 +135,199 @@ function renderBackupCard() {
   `;
 }
 
+/* ---- View as (shared session only) ----
+ * Switches which account type the site renders as, without logging out.
+ * A preview tool for building and checking the role-based views: it's not a
+ * restriction, since anyone on the shared password can switch back.
+ */
+function renderViewAsCard(me) {
+  const host = document.getElementById('viewAsCard');
+  if (!host) return;
+  if (!me.canSwitchView) { host.innerHTML = ''; return; } // real accounts can't self-select
+  const labels = {
+    admin: 'Juniper admin - full access',
+    internal: 'Juniper team - orders and QA',
+    qa: 'QA/QC - reporting and approvals',
+    supplier: 'Supplier - their own POs only'
+  };
+  const current = (me.user && me.user.role) || 'admin';
+  const currentSupplier = (me.user && me.user.supplierName) || '';
+  host.innerHTML = `
+    <div class="card">
+      <div class="section-title">Viewing As</div>
+      <div class="section-help" style="margin-bottom:14px;">
+        Switch which account type the site renders as. This is for previewing and testing the
+        role-based views - it isn't access control, since anyone with the site password can
+        switch back. Real restrictions come from per-user accounts below.
+      </div>
+      <div class="field-row" style="gap:10px;flex-wrap:wrap;align-items:flex-end;">
+        <div style="flex:1 1 220px;"><label>Account type</label>
+          <select id="viewAsRole">
+            ${(me.roles || []).map((r) => `<option value="${r}" ${r === current ? 'selected' : ''}>${labels[r] || r}</option>`).join('')}
+          </select>
+        </div>
+        <div style="flex:1 1 200px;" id="viewAsSupplierWrap">
+          <label>Supplier</label>
+          <select id="viewAsSupplier">
+            <option value="">Select a supplier...</option>
+            ${appSuppliers.map((sp) => `<option value="${escapeHtml(sp)}" ${sp === currentSupplier ? 'selected' : ''}>${escapeHtml(sp)}</option>`).join('')}
+          </select>
+        </div>
+        <button type="button" class="btn btn-primary" id="viewAsApply" style="flex:none;width:auto;padding:9px 16px;">Apply</button>
+      </div>
+    </div>
+  `;
+  const roleSel = document.getElementById('viewAsRole');
+  const supWrap = document.getElementById('viewAsSupplierWrap');
+  const syncSupplier = () => { supWrap.style.display = roleSel.value === 'supplier' ? '' : 'none'; };
+  roleSel.addEventListener('change', syncSupplier);
+  syncSupplier();
+  document.getElementById('viewAsApply').addEventListener('click', async () => {
+    try {
+      const res = await fetch('/api/session/view', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ viewRole: roleSel.value, viewSupplierName: document.getElementById('viewAsSupplier').value })
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || 'Could not switch view');
+      // Go to the new role's landing page - it may not be allowed to open
+      // Settings at all (only admins are).
+      location.href = body.landing || location.pathname;
+    } catch (e) { showToast(e.message, true); }
+  });
+}
+
+/* ---- Users, roles and permissions ----
+ * Only rendered for admins. The shared site password still works and grants
+ * admin, so this section is reachable on day one without any accounts
+ * existing yet.
+ */
+let appUsers = [];
+let appRoles = [];
+let appSuppliers = [];
+
+function renderUsersCard() {
+  const host = document.getElementById('usersCard');
+  if (!host) return;
+  host.innerHTML = `
+    <div class="card">
+      <div class="section-title">Users &amp; Access</div>
+      <div class="section-help" style="margin-bottom:14px;">
+        Accounts, roles and permissions. The shared site password still works and grants full access,
+        so adding accounts here is additive - nobody gets locked out.
+        Supplier accounts only ever see purchase orders they supply a part of.
+      </div>
+      ${appUsers.length ? `
+      <div class="om-table-wrap" style="margin-bottom:14px;">
+        <table class="om-table" style="min-width:0;">
+          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Supplier</th><th>Last login</th><th></th></tr></thead>
+          <tbody>
+            ${appUsers.map((u) => `
+              <tr data-user="${escapeHtml(u.id)}">
+                <td><input type="text" data-u-field="name" value="${escapeHtml(u.name)}" /></td>
+                <td>${escapeHtml(u.email)}</td>
+                <td>
+                  <select data-u-field="role">
+                    ${appRoles.map((r) => `<option value="${r}" ${r === u.role ? 'selected' : ''}>${r}</option>`).join('')}
+                  </select>
+                </td>
+                <td>
+                  <select data-u-field="supplierName">
+                    <option value="">—</option>
+                    ${appSuppliers.map((sp) => `<option value="${escapeHtml(sp)}" ${sp === u.supplierName ? 'selected' : ''}>${escapeHtml(sp)}</option>`).join('')}
+                  </select>
+                </td>
+                <td style="font-size:12px;color:var(--jc-muted);">${u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : 'never'}</td>
+                <td style="white-space:nowrap;">
+                  <button type="button" class="om-table-upload-btn" data-u-save="${escapeHtml(u.id)}">Save</button>
+                  <button type="button" class="om-table-upload-btn" data-u-pw="${escapeHtml(u.id)}">Password</button>
+                  <button type="button" class="om-table-upload-btn" data-u-del="${escapeHtml(u.id)}">Delete</button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>` : '<div class="section-help" style="margin-bottom:14px;">No accounts yet.</div>'}
+
+      <div class="field-row" style="gap:10px;flex-wrap:wrap;align-items:flex-end;">
+        <div style="flex:1 1 160px;"><label>Name</label><input type="text" id="newUserName" /></div>
+        <div style="flex:1 1 180px;"><label>Email</label><input type="email" id="newUserEmail" /></div>
+        <div style="flex:0 1 130px;"><label>Role</label>
+          <select id="newUserRole">${appRoles.map((r) => `<option value="${r}">${r}</option>`).join('')}</select>
+        </div>
+        <div style="flex:0 1 170px;"><label>Supplier (supplier role)</label>
+          <select id="newUserSupplier"><option value="">—</option>${appSuppliers.map((sp) => `<option value="${escapeHtml(sp)}">${escapeHtml(sp)}</option>`).join('')}</select>
+        </div>
+        <div style="flex:1 1 150px;"><label>Password</label><input type="text" id="newUserPassword" /></div>
+        <button type="button" class="btn btn-primary" id="newUserAdd" style="flex:none;width:auto;padding:9px 16px;">+ Add user</button>
+      </div>
+    </div>
+  `;
+  wireUsersCard();
+}
+
+function wireUsersCard() {
+  const readRow = (id) => {
+    const row = document.querySelector(`[data-user="${id}"]`);
+    const v = (f) => { const el = row.querySelector(`[data-u-field="${f}"]`); return el ? el.value : undefined; };
+    return { name: v('name'), role: v('role'), supplierName: v('supplierName') };
+  };
+  const call = async (url, opts) => {
+    const res = await fetch(url, { headers: { 'Content-Type': 'application/json' }, ...opts });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Request failed');
+    return res.json();
+  };
+  document.querySelectorAll('[data-u-save]').forEach((b) => b.addEventListener('click', async () => {
+    try { await call(`/api/users/${b.dataset.uSave}`, { method: 'PATCH', body: JSON.stringify(readRow(b.dataset.uSave)) });
+      showToast('User saved'); await loadUsers(); } catch (e) { showToast(e.message, true); }
+  }));
+  document.querySelectorAll('[data-u-pw]').forEach((b) => b.addEventListener('click', async () => {
+    const pw = prompt('New password for this user:');
+    if (!pw) return;
+    try { await call(`/api/users/${b.dataset.uPw}`, { method: 'PATCH', body: JSON.stringify({ password: pw }) });
+      showToast('Password set'); } catch (e) { showToast(e.message, true); }
+  }));
+  document.querySelectorAll('[data-u-del]').forEach((b) => b.addEventListener('click', async () => {
+    if (!confirm('Delete this user?')) return;
+    try { await call(`/api/users/${b.dataset.uDel}`, { method: 'DELETE' });
+      showToast('User deleted'); await loadUsers(); } catch (e) { showToast(e.message, true); }
+  }));
+  const add = document.getElementById('newUserAdd');
+  if (add) add.addEventListener('click', async () => {
+    const payload = {
+      name: document.getElementById('newUserName').value,
+      email: document.getElementById('newUserEmail').value,
+      role: document.getElementById('newUserRole').value,
+      supplierName: document.getElementById('newUserSupplier').value,
+      password: document.getElementById('newUserPassword').value
+    };
+    if (!payload.email) return showToast('Email is required', true);
+    try { await call('/api/users', { method: 'POST', body: JSON.stringify(payload) });
+      showToast('User created'); await loadUsers(); } catch (e) { showToast(e.message, true); }
+  });
+}
+
+async function loadUsers() {
+  try {
+    const me = await (await fetch('/api/me')).json();
+    // Supplier names feed both the view switcher and the user rows, so load
+    // them before rendering either.
+    const sRes = await fetch('/api/suppliers');
+    const sData = sRes.ok ? await sRes.json() : { suppliers: [] };
+    appSuppliers = (sData.suppliers || []).map((x) => x.name).filter(Boolean).sort();
+    appRoles = me.roles || [];
+    renderViewAsCard(me);
+    // User administration is admin-only; the view switcher above is not.
+    if (!me.permissions || !me.permissions.includes('users:manage')) return;
+    const uRes = await fetch('/api/users');
+    if (!uRes.ok) return;
+    const data = await uRes.json();
+    appUsers = data.users || [];
+    appRoles = data.roles || appRoles;
+    renderUsersCard();
+  } catch (e) { /* settings page still works without this section */ }
+}
+
 /* ---- Message templates ----
  * Each template carries a hand-written English and Chinese version; the app
  * never translates one into the other, because a mistranslated quantity or
@@ -256,6 +449,8 @@ function render() {
     ${renderBackupCard()}
     ${LISTS.map(renderListCard).join('')}
 
+    <div id="viewAsCard"></div>
+    <div id="usersCard"></div>
     <div id="tplCard"></div>
     ${renderAqlTableCard()}
     ${renderUnitCostsCard()}
@@ -537,4 +732,5 @@ window.addEventListener('beforeunload', (e) => {
   await loadEverything();
   render();
   loadTemplates();
+  loadUsers();
 })();

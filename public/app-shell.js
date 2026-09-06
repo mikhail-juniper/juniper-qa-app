@@ -78,10 +78,25 @@ function buildSidebar() {
  *  QA/QC reporting screens. The i18n table loads asynchronously, so this is
  *  called once immediately (English-only fallback, so the nav is never
  *  blank) and again once translations arrive. */
+/** Pages this role may open, from /api/me. Null until it loads, in which
+ *  case everything renders (then gets filtered on the second pass) so the
+ *  nav is never briefly empty. */
+let allowedPages = null;
+
+function navItemAllowed(item) {
+  if (!allowedPages) return true;
+  if (allowedPages.includes('*')) return true;
+  const page = String(item.href || '').split('?')[0];
+  return allowedPages.includes(page);
+}
+
 function sidebarInnerHtml() {
   const i18n = window.JuniperI18n;
   const label = (key, fallback) => (i18n ? i18n.t(key, fallback) : fallback);
-  return `<div class="app-sidebar-inner">${APP_NAV.map((section, idx) => `
+  return `<div class="app-sidebar-inner">${APP_NAV
+    .map((section) => ({ ...section, items: section.items.filter(navItemAllowed) }))
+    .filter((section) => section.items.length)
+    .map((section, idx) => `
     <div class="app-sidebar-section ${idx > 0 ? 'app-sidebar-section-divided' : ''}">
       <div class="app-sidebar-group">${label(section.groupKey, section.group)}</div>
       ${section.items.map((item) => `
@@ -106,9 +121,45 @@ function sidebarInnerHtml() {
   appRoot.insertBefore(flexWrap, main);
   const sidebar = buildSidebar();
   flexWrap.appendChild(sidebar);
-  if (window.JuniperI18n) {
-    window.JuniperI18n.loadI18n().then(() => { sidebar.innerHTML = sidebarInnerHtml(); });
+
+  const redraw = () => { sidebar.innerHTML = sidebarInnerHtml(); wireSidebarLinks(sidebar); };
+  if (window.JuniperI18n) window.JuniperI18n.loadI18n().then(redraw);
+  // Role decides which nav entries exist at all - a supplier shouldn't see
+  // links to pages the server will just redirect them away from.
+  fetch('/api/me')
+    .then((r) => (r.ok ? r.json() : null))
+    .then((me) => { if (me && me.pages) { allowedPages = me.pages; redraw(); } })
+    .catch(() => { /* nav stays unfiltered rather than empty */ });
+
+  // ---- Mobile: collapse the sidebar behind a hamburger ----
+  // On a phone the sidebar was stacking above the page content, so every
+  // view started with a screenful of navigation. It's now an off-canvas
+  // drawer toggled from the header.
+  const menuBtn = document.createElement('button');
+  menuBtn.className = 'app-menu-toggle';
+  menuBtn.setAttribute('aria-label', 'Menu');
+  menuBtn.setAttribute('aria-expanded', 'false');
+  menuBtn.innerHTML = '<span></span><span></span><span></span>';
+  header.insertBefore(menuBtn, header.firstChild);
+
+  const scrim = document.createElement('div');
+  scrim.className = 'app-sidebar-scrim';
+  document.body.appendChild(scrim);
+
+  const setOpen = (open) => {
+    document.body.classList.toggle('app-nav-open', open);
+    menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
+  menuBtn.addEventListener('click', () => setOpen(!document.body.classList.contains('app-nav-open')));
+  scrim.addEventListener('click', () => setOpen(false));
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setOpen(false); });
+
+  /** Tapping a link should close the drawer - otherwise the new page loads
+   *  behind an open menu. */
+  function wireSidebarLinks(nav) {
+    nav.querySelectorAll('a').forEach((a) => a.addEventListener('click', () => setOpen(false)));
   }
+  wireSidebarLinks(sidebar);
   flexWrap.appendChild(main);
 
   // Sticky table headers (order-management.css) and the sidebar itself

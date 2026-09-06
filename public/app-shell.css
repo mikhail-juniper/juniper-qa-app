@@ -89,9 +89,74 @@
   box-sizing: border-box;
 }
 
+/* Hamburger button - only shown on narrow screens (see the media query
+   below). Three bars that become an X while the drawer is open. */
+.app-menu-toggle {
+  display: none;
+  flex: none;
+  width: 38px; height: 38px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.16);
+  cursor: pointer;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.app-menu-toggle span {
+  display: block;
+  width: 18px; height: 2px;
+  background: #fff;
+  border-radius: 2px;
+  transition: transform 0.18s ease, opacity 0.18s ease;
+}
+.app-sidebar-scrim { display: none; }
+
 @media (max-width: 860px) {
-  .app-body-flex { flex-direction: column; }
-  .app-sidebar { width: 100%; flex: none; position: static; max-height: none; padding: 12px 0; }
+  .app-menu-toggle { display: flex; }
+
+  /* The sidebar used to stack above the content, so every page opened with
+     a full screen of navigation before any actual content. It's now an
+     off-canvas drawer that slides in over the page. */
+  .app-body-flex { flex-direction: row; }
+  .app-sidebar {
+    position: fixed;
+    top: var(--app-header-height, 64px);
+    left: 0;
+    bottom: 0;
+    width: 264px;
+    max-width: 82vw;
+    flex: none;
+    max-height: none;
+    z-index: 60;
+    overflow-y: auto;
+    background: var(--jc-panel, #eef0ee);
+    box-shadow: 2px 0 14px rgba(0, 0, 0, 0.18);
+    transform: translateX(-102%);
+    transition: transform 0.22s ease;
+  }
+  body.app-nav-open .app-sidebar { transform: translateX(0); }
+
+  .app-sidebar-scrim {
+    display: block;
+    position: fixed;
+    inset: var(--app-header-height, 64px) 0 0 0;
+    background: rgba(0, 0, 0, 0.4);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.22s ease;
+    z-index: 55;
+  }
+  body.app-nav-open .app-sidebar-scrim { opacity: 1; pointer-events: auto; }
+
+  /* Drawer is an overlay, so the content keeps the full width. */
+  .app-main { width: 100%; min-width: 0; }
+
+  body.app-nav-open .app-menu-toggle span:nth-child(1) { transform: translateY(6px) rotate(45deg); }
+  body.app-nav-open .app-menu-toggle span:nth-child(2) { opacity: 0; }
+  body.app-nav-open .app-menu-toggle span:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
 }
 
 /* Chinese-first nav labels: the English second line sits tighter and
