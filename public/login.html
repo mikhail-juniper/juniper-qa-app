@@ -20,15 +20,58 @@
   }
   h1 { font-size: 18px; margin: 0 0 4px 0; color: #1a1a1a; }
   p.sub { font-size: 13px; color: #666; margin: 0 0 24px 0; }
-  input[type="password"] {
+  /* Inputs and selects share one look so the account-type picker doesn't
+     read as a stray native control next to the styled password field. */
+  input[type="password"],
+  input[type="email"],
+  select {
     width: 100%; padding: 12px 14px; border-radius: 8px; border: 1.5px solid #d5d5d5;
-    font-size: 15px; margin-bottom: 14px;
+    font-size: 15px; font-family: inherit; color: #1a1a1a; background-color: #fff;
+    margin-bottom: 14px; -webkit-appearance: none; appearance: none;
   }
-  button {
-    width: 100%; padding: 12px 14px; border-radius: 8px; border: none; background: #2AAC8D;
-    color: #fff; font-size: 15px; font-weight: 700; cursor: pointer;
+  input[type="password"]:focus,
+  input[type="email"]:focus,
+  select:focus { outline: none; border-color: #2AAC8D; }
+
+  /* Same chevron the rest of the app uses on selects. */
+  select {
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23666666' stroke-width='2'%3e%3cpolyline points='6 9 12 15 18 9'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 18px;
+    padding-right: 38px;
+    cursor: pointer;
   }
-  button:disabled { opacity: 0.6; cursor: default; }
+
+  /* Only the submit button is the big green one - scoping this stops the
+     "sign in with an account" text link inheriting it. */
+  button[type="submit"] {
+    width: 100%; padding: 13px 14px; border-radius: 8px; border: none; background: #2AAC8D;
+    color: #fff; font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit;
+    margin-top: 4px;
+  }
+  button[type="submit"]:hover { background: #229176; }
+  button[type="submit"]:disabled { opacity: 0.6; cursor: default; }
+
+  /* The account-type picker is a distinct decision from the password, so it
+     gets its own separated block rather than being crowded against it. */
+  .view-as {
+    text-align: left;
+    margin: 4px 0 20px 0;
+    padding-top: 18px;
+    border-top: 1px solid #ececec;
+  }
+  .view-as label {
+    display: block; font-size: 12px; font-weight: 700; color: #666;
+    text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px;
+  }
+  .view-as select:last-child { margin-bottom: 0; }
+
+  .link-btn {
+    background: none; border: none; color: #1F8570; font-size: 13px; font-weight: 600;
+    cursor: pointer; margin-top: 16px; padding: 0; font-family: inherit;
+  }
+  .link-btn:hover { text-decoration: underline; }
   .error { color: #C0362C; font-size: 13px; margin-top: 12px; display: none; }
 </style>
 </head>
@@ -39,17 +82,14 @@
     <p class="sub" id="subText">Enter the site password to continue</p>
     <input type="email" id="emailInput" placeholder="Email" autocomplete="username" style="display:none;" />
     <input type="password" id="passwordInput" placeholder="Password" autofocus autocomplete="current-password" />
-    <div id="viewAsWrap" style="text-align:left;margin-top:12px;">
-      <label style="display:block;font-size:12px;font-weight:600;color:#666;margin-bottom:5px;">View the site as</label>
+    <div class="view-as" id="viewAsWrap">
+      <label for="viewRoleSelect">View the site as</label>
       <select id="viewRoleSelect"></select>
-      <select id="viewSupplierSelect" style="display:none;margin-top:8px;"></select>
+      <select id="viewSupplierSelect" style="display:none;"></select>
     </div>
     <button type="submit" id="submitBtn">Continue</button>
     <div class="error" id="errorMsg">Incorrect password</div>
-    <button type="button" id="toggleMode"
-      style="background:none;border:none;color:var(--jc-teal-dark,#1F8570);font-size:13px;font-weight:600;cursor:pointer;margin-top:14px;padding:0;">
-      Sign in with an account instead
-    </button>
+    <button type="button" id="toggleMode" class="link-btn">Sign in with an account instead</button>
   </form>
   <script>
     const form = document.getElementById('loginForm');
@@ -70,10 +110,10 @@
     const roleSelect = document.getElementById('viewRoleSelect');
     const supplierSelect = document.getElementById('viewSupplierSelect');
     const ROLE_LABELS = {
-      admin: 'Juniper admin - full access',
-      internal: 'Juniper team - orders and QA',
-      qa: 'QA/QC - reporting and approvals',
-      supplier: 'Supplier - their own POs only'
+      admin: 'Juniper Admin',
+      internal: 'Juniper Team',
+      qa: 'QA/QC',
+      supplier: 'Supplier'
     };
     (async () => {
       try {

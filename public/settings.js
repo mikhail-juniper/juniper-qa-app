@@ -145,10 +145,10 @@ function renderViewAsCard(me) {
   if (!host) return;
   if (!me.canSwitchView) { host.innerHTML = ''; return; } // real accounts can't self-select
   const labels = {
-    admin: 'Juniper admin - full access',
-    internal: 'Juniper team - orders and QA',
-    qa: 'QA/QC - reporting and approvals',
-    supplier: 'Supplier - their own POs only'
+    admin: 'Juniper Admin',
+    internal: 'Juniper Team',
+    qa: 'QA/QC',
+    supplier: 'Supplier'
   };
   const current = (me.user && me.user.role) || 'admin';
   const currentSupplier = (me.user && me.user.supplierName) || '';

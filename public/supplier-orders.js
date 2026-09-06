@@ -152,19 +152,36 @@ async function openSupplierOrder(id) {
   const mc = order.mainComponent || {};
   const variants = mc.sizeDistribution || [];
 
+  // Every document row is always listed, empty or not, so a supplier can
+  // see at a glance which drawings are still outstanding rather than
+  // wondering whether a missing row means "none" or "not applicable".
   const fileRow = (labelKey, fallback, url) => {
-    if (!url) return '';
-    const link = isPdfFile(url)
-      ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${i18('btnViewFile', 'View file')}</a>`
-      : `<a href="${escapeHtml(url)}" target="_blank" rel="noopener"><img src="${escapeHtml(url)}" alt="" class="om-table-thumb" style="cursor:pointer;" /></a>`;
-    return `<div class="om-detail-row"><span class="om-label">${i18(labelKey, fallback)}</span><span class="om-value">${link}</span></div>`;
+    let value;
+    if (!url) {
+      value = `<span style="color:var(--jc-muted);">${i18('supNoFile', 'Not uploaded')}</span>`;
+    } else if (isPdfFile(url)) {
+      value = `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${i18('btnViewFile', 'View file')}</a>`;
+    } else {
+      value = `<a href="${escapeHtml(url)}" target="_blank" rel="noopener"><img src="${escapeHtml(url)}" alt="" class="om-table-thumb" style="cursor:pointer;" /></a>`;
+    }
+    return `<div class="om-detail-row"><span class="om-label">${i18(labelKey, fallback)}</span><span class="om-value">${value}</span></div>`;
   };
   const docs = [
     fileRow('fldManufacturingDrawing', 'Manufacturing Drawing', mc.manufacturingDrawing),
     fileRow('fldWashingTag', 'Washing Tag', mc.washingTagUrl),
-    fileRow('fldPackaging', 'Packaging', mc.packagingUrl),
-    fileRow('fldProductDimensions', 'Product Dimensions', mc.dimensionsUrl)
-  ].filter(Boolean).join('');
+    fileRow('fldPackaging', 'Packaging', mc.packagingUrl)
+  ].join('');
+
+  const num = (v) => (v === null || v === undefined || v === '' ? '—' : v);
+  const measures = `
+    <div class="om-detail-row"><span class="om-label">${i18('fldLengthCm', 'Length (cm)')}</span><span class="om-value">${num(mc.dimensionsLength)}</span></div>
+    <div class="om-detail-row"><span class="om-label">${i18('fldWidthCm', 'Width (cm)')}</span><span class="om-value">${num(mc.dimensionsWidth)}</span></div>
+    <div class="om-detail-row"><span class="om-label">${i18('fldHeightCm', 'Height (cm)')}</span><span class="om-value">${num(mc.dimensionsHeight)}</span></div>
+    <div class="om-detail-row"><span class="om-label">${i18('fldWeightG', 'Weight (g)')}</span><span class="om-value">${num(mc.weightGrams)}</span></div>
+    <div class="om-detail-row"><span class="om-label">${i18('fldShippingWeightG', 'Shipping Weight (g)')}</span><span class="om-value">${num(mc.shippingWeightGrams)}</span></div>
+    <div class="om-detail-row"><span class="om-label">${i18('fldVolumeWeightG', 'Volume Weight (g)')}</span><span class="om-value">${num(mc.volumeWeightGrams)}</span></div>
+  `;
+  const log = order.supplierLog || [];
 
   const panel = document.createElement('div');
   panel.className = 'om-panel';
@@ -185,6 +202,7 @@ async function openSupplierOrder(id) {
         <div class="om-detail-row"><span class="om-label">${i18('fldPurchaseOrderNumber', 'Purchase Order Number')}</span><span class="om-value">${escapeHtml(order.poNumber || '—')}</span></div>
         <div class="om-detail-row"><span class="om-label">${i18('fldSku', 'SKU')}</span><span class="om-value">${escapeHtml(mc.sku || '—')}</span></div>
         <div class="om-detail-row"><span class="om-label">${i18('fldOrderQuantity', 'Order Quantity')}</span><span class="om-value">${mc.purchaseQuantity ?? '—'}</span></div>
+        <div class="om-detail-row"><span class="om-label">${i18('fldOrderPlacementDate', 'Order placement date')}</span><span class="om-value">${fmtDate(order.orderPlacementDate)}</span></div>
         <div class="om-detail-row"><span class="om-label">${i18('fldRequiredManufacturerDelivery', 'Required Manufacturer Delivery Date')}</span><span class="om-value">${fmtDate(order.manufacturerDeliveryDate)}</span></div>
         <div class="om-detail-row"><span class="om-label">${i18('fldStatusLc', 'Status')}</span><span class="om-value">${escapeHtml(order.status || '—')}</span></div>
       </div>
@@ -223,8 +241,23 @@ async function openSupplierOrder(id) {
 
     <div class="om-panel-card">
       <div class="om-section-title">${i18('secProductDocumentation', 'Product Documentation')}</div>
-      ${docs ? `<div class="om-detail-grid">${docs}</div>`
-        : `<div class="om-empty">${i18('supNoDocs', 'No documents attached yet.')}</div>`}
+      <div class="om-detail-grid">${docs}</div>
+      <div class="om-section-title" style="margin-top:18px;">${i18('secWeightsDimensions', 'Weights & Dimensions')}</div>
+      <div class="om-detail-grid">${measures}</div>
+    </div>
+
+    <div class="om-panel-card">
+      <div class="om-section-title">${i18('supActivityLog', 'Activity Log')}</div>
+      ${log.length ? `
+        <ul class="om-changelog">
+          ${log.map((l) => `
+            <li>
+              <strong>${escapeHtml(l.text)}</strong>
+              <div class="om-cl-meta">${new Date(l.at).toLocaleString()}</div>
+            </li>
+          `).join('')}
+        </ul>
+      ` : `<div class="om-empty">${i18('supNoLog', 'Nothing recorded yet.')}</div>`}
     </div>
    </div>
   `;

@@ -1104,8 +1104,11 @@ app.get('/api/order-management/accessory-statuses', (req, res) => {
 app.get('/api/order-management/orders', (req, res) => {
   const { productLine, status, search } = req.query;
   const orders = orderManagementStore.listOrders({ productLine, status, search });
-  // Supplier accounts only ever see POs they're actually making a part of.
-  res.json({ orders: userStore.scopeOrdersForUser(req.user, orders) });
+  // Supplier accounts only ever see POs they're making a part of, and only
+  // the redacted shape - redaction is server-side so the full record never
+  // reaches their browser.
+  const scoped = userStore.scopeOrdersForUser(req.user, orders);
+  res.json({ orders: scoped.map((o) => userStore.redactOrderForSupplier(req.user, o)) });
 });
 
 // Placed before the generic :id route below, since Express would otherwise
@@ -1116,6 +1119,9 @@ app.get('/api/order-management/orders/by-po-number/:poNumber', (req, res) => {
   // 404 rather than 403 for out-of-scope orders, so a supplier can't probe
   // which PO numbers exist.
   if (!userStore.canSeeOrder(req.user, order)) return res.status(404).json({ error: 'No PO found with that number' });
+  if (req.user && req.user.role === 'supplier') {
+    return res.json({ order: userStore.redactOrderForSupplier(req.user, order) });
+  }
   res.json({ order });
 });
 
@@ -1128,7 +1134,7 @@ app.get('/api/order-management/orders/:id', (req, res) => {
   const order = orderManagementStore.getOrderById(req.params.id);
   if (!order) return res.status(404).json({ error: 'Order not found' });
   if (!userStore.canSeeOrder(req.user, order)) return res.status(404).json({ error: 'Order not found' });
-  res.json({ order });
+  res.json({ order: userStore.redactOrderForSupplier(req.user, order) });
 });
 
 app.post('/api/order-management/orders', requirePermission('orders:write'), (req, res) => {

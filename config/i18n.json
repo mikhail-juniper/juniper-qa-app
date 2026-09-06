@@ -3546,5 +3546,21 @@
   "supNoDocs": {
     "en": "No documents attached yet.",
     "zh": "暂无附件文件。"
+  },
+  "supActivityLog": {
+    "en": "Activity Log",
+    "zh": "活动记录"
+  },
+  "supNoLog": {
+    "en": "Nothing recorded yet.",
+    "zh": "暂无记录。"
+  },
+  "supNoFile": {
+    "en": "Not uploaded",
+    "zh": "未上传"
+  },
+  "secWeightsDimensions": {
+    "en": "Weights & Dimensions",
+    "zh": "重量与尺寸"
   }
 }
