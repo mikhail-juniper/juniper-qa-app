@@ -564,7 +564,7 @@ function renderSuppliersTable(suppliers) {
       <thead>
         <tr>
           <th>${i18i('thSupplierName', 'Supplier name')}</th><th>${i18i('thShippingAddress', 'Shipping address')}</th><th>${i18i('thAdditionalAddress', 'Additional address')}</th><th>${i18i('thVendorCode', 'Vendor code')}</th><th>${i18i('thProductType', 'Product type')}</th>
-          <th>${i18i('thCompanyName', 'Company name')}</th><th>${i18i('thContactName', 'Contact name')}</th><th>${i18i('thPhoneNumber', 'Phone number')}</th><th>${i18i('thAdditionalPhone', 'Additional phone')}</th><th>${i18i('thBusinessLicense', 'Business license')}</th>
+          <th>${i18i('thCompanyName', 'Company name')}</th><th>${i18i('thContactName', 'Contact name')}</th><th>${i18i('thPhoneNumber', 'Phone number')}</th><th>${i18i('thAdditionalPhone', 'Additional phone')}</th><th>${i18i('thBusinessLicense', 'Business license')}</th><th>${i18i('thAccessLink', 'Access link')}</th>
         </tr>
       </thead>
       <tbody>
@@ -580,11 +580,39 @@ function renderSuppliersTable(suppliers) {
             <td>${escapeHtml(s.phoneNumber || '—')}</td>
             <td>${escapeHtml(s.additionalPhoneNumber || '—')}</td>
             <td>${escapeHtml(s.businessLicense || '—')}</td>
+            <td class="om-access-cell" style="white-space:nowrap;">
+              ${s.accessLink ? `
+                <button type="button" class="om-table-upload-btn om-share-link-btn" data-link="${escapeHtml(s.accessLink)}">${i18('btnShareAccess', 'Share')}</button>
+                <a class="om-table-upload-btn" href="${escapeHtml(s.accessLink)}" target="_blank" rel="noopener" style="text-decoration:none;">${i18('btnOpenAccess', 'Open')}</a>
+              ` : `<button type="button" class="om-table-upload-btn om-make-link-btn" data-supplier="${escapeHtml(s.id)}">${i18('btnCreateAccessLink', 'Create link')}</button>`}
+            </td>
           </tr>
         `).join('')}
       </tbody>
     </table>
   `;
+  // Link buttons act on the row without opening the supplier editor.
+  host.querySelectorAll('.om-share-link-btn').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try {
+        await navigator.clipboard.writeText(btn.dataset.link);
+        showToast(i18t('toastAccessLinkCopied', 'Supplier link copied'));
+      } catch (err) { showToast(err.message, true); }
+    });
+  });
+  host.querySelectorAll('.om-make-link-btn').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try {
+        await api(`/api/suppliers/${encodeURIComponent(btn.dataset.supplier)}/access-link`, { method: 'POST' });
+        showToast(i18t('toastAccessLinkCopied', 'Supplier link created'));
+        refreshCurrentView();
+      } catch (err) { showToast(err.message, true); }
+    });
+  });
+  host.querySelectorAll('.om-access-cell a').forEach((a) => a.addEventListener('click', (e) => e.stopPropagation()));
+
   host.querySelectorAll('tbody tr').forEach((tr) => {
     tr.addEventListener('click', async () => {
       try {
@@ -2844,6 +2872,7 @@ async function openDetailPanel(id, scope) {
             <th>${i18i('thSupplier', 'Supplier')}</th>
             <th>${i18i('fldRecipient', 'Recipient')}</th>
             <th>${i18i('sentAlready', 'Last sent')}</th>
+            <th>${i18i('thAccessLink', 'Access link')}</th>
             <th></th>
           </tr></thead>
           <tbody>
@@ -2859,6 +2888,14 @@ async function openDetailPanel(id, scope) {
                 <td>${t.lastSentAt
                   ? `${fmtDate(t.lastSentAt)} · ${escapeHtml(t.lastChannel || '')}`
                   : `<span style="color:var(--jc-muted);">${i18('neverSent', 'Not sent yet')}</span>`}</td>
+                <td style="white-space:nowrap;">
+                  ${t.accessLink ? `
+                    <button type="button" class="om-table-upload-btn om-po-share-link" data-link="${escapeHtml(t.accessLink)}">${i18('btnShareAccess', 'Share')}</button>
+                    <a class="om-table-upload-btn" href="${escapeHtml(t.accessLink)}" target="_blank" rel="noopener" style="text-decoration:none;">${i18('btnOpenAccess', 'Open')}</a>
+                  ` : (t.supplierId
+                    ? `<button type="button" class="om-table-upload-btn om-po-make-link" data-supplier="${escapeHtml(t.supplierId)}">${i18('btnCreateAccessLink', 'Create link')}</button>`
+                    : `<span style="color:var(--jc-muted);font-size:11.5px;">—</span>`)}
+                </td>
                 <td><button type="button" class="om-table-upload-btn om-dispatch-btn" data-target-key="${escapeHtml(t.key)}">${i18('btnSend', 'Send')}</button></td>
               </tr>`;
             }).join('')}
@@ -2866,6 +2903,27 @@ async function openDetailPanel(id, scope) {
         </table>
       </div>
     `;
+    // The supplier's link stays reachable here after the PO has gone out,
+    // so you can re-share it without hunting through the Suppliers page.
+    host.querySelectorAll('.om-po-share-link').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(btn.dataset.link);
+          showToast(i18t('toastAccessLinkCopied', 'Supplier link copied'));
+        } catch (err) { showToast(err.message, true); }
+      });
+    });
+    // A supplier with no link yet can get one right here, rather than
+    // having to go find them on the Suppliers page first.
+    host.querySelectorAll('.om-po-make-link').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        try {
+          await api(`/api/suppliers/${encodeURIComponent(btn.dataset.supplier)}/access-link`, { method: 'POST' });
+          showToast(i18t('toastAccessLinkCopied', 'Supplier link created'));
+          refreshDispatchList();
+        } catch (err) { showToast(err.message, true); }
+      });
+    });
     host.querySelectorAll('.om-dispatch-btn').forEach((btn) => {
       btn.addEventListener('click', () => openDispatchDialog(order.id, btn.dataset.targetKey, refreshDispatchList));
     });

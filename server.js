@@ -39,6 +39,8 @@ const asanaPoSync = require('./lib/asanaPoSync');
 const poDispatch = require('./lib/poDispatch');
 const messageTemplateStore = require('./lib/messageTemplateStore');
 const userStore = require('./lib/userStore');
+const supplierAccess = require('./lib/supplierAccess');
+const googleAuth = require('./lib/googleAuth');
 const AdmZip = require('adm-zip');
 const ASANA_FIELD_MAP_PATH = path.join(__dirname, 'config', 'asanaFieldMap.json');
 function loadAsanaFieldMap() { return loadJson(ASANA_FIELD_MAP_PATH); }
@@ -212,6 +214,22 @@ function currentUser(req) {
       name: role === 'admin' ? 'Shared access' : `Shared access (${role})`
     };
   }
+  if (session.kind === 'supplierLink') {
+    // A link-based visitor is a supplier with no account behind them. Read
+    // scope only, resolved fresh each request so revoking the token or
+    // renaming the supplier takes effect immediately.
+    const supplier = supplierStore.getSupplier(session.supplierId);
+    if (!supplier || !supplier.accessToken) return null;
+    return {
+      id: null,
+      name: supplier.name,
+      role: 'supplier',
+      active: true,
+      supplierId: supplier.id,
+      supplierName: supplier.name,
+      viaAccessLink: true
+    };
+  }
   const user = userStore.getUser(session.userId);
   if (!user || !user.active) return null;
   return user;
@@ -219,7 +237,96 @@ function currentUser(req) {
 
 // Paths that must stay reachable without being logged in yet, so the login
 // page itself can load and submit.
-const AUTH_ALLOWLIST = new Set(['/login.html', '/api/login', '/api/login-options', '/favicon.ico']);
+const AUTH_ALLOWLIST = new Set([
+  '/login.html', '/api/login', '/api/login-options', '/favicon.ico',
+  '/auth/google', '/auth/google/callback'
+]);
+
+/**
+ * Supplier access link: /s/<token>. Exchanges the token for a read-only,
+ * supplier-scoped session and forwards to their order page. Deliberately
+ * outside the auth gate - this IS the way in.
+ */
+// ---- Google sign-in (Juniper staff) ----
+// Dormant unless GOOGLE_CLIENT_ID/SECRET are set; the login page hides the
+// button in that case.
+const GOOGLE_STATE_COOKIE = 'juniper_gstate';
+
+app.get('/auth/google', (req, res) => {
+  if (!googleAuth.isConfigured()) return res.redirect('/login.html?error=google_not_configured');
+  const state = googleAuth.makeState();
+  // Short-lived cookie ties the callback to this browser (CSRF protection).
+  res.cookie(GOOGLE_STATE_COOKIE, state, { httpOnly: true, sameSite: 'lax', maxAge: 10 * 60 * 1000 });
+  res.redirect(googleAuth.authUrl(req, state));
+});
+
+app.get('/auth/google/callback', async (req, res) => {
+  const fail = (msg) => res.redirect(`/login.html?error=${encodeURIComponent(msg)}`);
+  if (!googleAuth.isConfigured()) return fail('Google sign-in is not configured.');
+  const expected = parseCookies(req)[GOOGLE_STATE_COOKIE];
+  res.clearCookie(GOOGLE_STATE_COOKIE);
+  if (!req.query.state || !expected || req.query.state !== expected) {
+    return fail('Sign-in expired or was interrupted. Please try again.');
+  }
+  if (req.query.error) return fail('Google sign-in was cancelled.');
+  if (!req.query.code) return fail('Google did not return an authorization code.');
+
+  try {
+    const profile = await googleAuth.completeSignIn(req, req.query.code);
+
+    // Match an existing account by Google id first, then by email so an
+    // account created by hand picks up its Google link on first sign-in.
+    let user = userStore.findByIdentity('googleSub', profile.sub) || userStore.findByEmail(profile.email);
+    if (user) {
+      if (!user.googleSub) userStore.updateUser(user.id, { googleSub: profile.sub });
+      if (!user.active) return fail('That account has been deactivated.');
+      // The owner address is restored to admin if it ever isn't - an account
+      // created before this rule existed would otherwise be stuck as team.
+      if (googleAuth.shouldForceAdmin(user.email) && user.role !== 'admin') {
+        user = userStore.updateUser(user.id, { role: 'admin' }) || user;
+        console.log(`Restored admin role for ${user.email}`);
+      }
+    } else {
+      // Auto-provision only when a Workspace domain is enforced - otherwise
+      // any Google account in the world could create itself an account.
+      if (!googleAuth.allowedDomains().length) {
+        return fail('No account exists for that email. Ask an admin to add you.');
+      }
+      // Anyone on an allowed Juniper domain becomes Juniper Team; emails
+      // listed in GOOGLE_ADMIN_EMAILS come in as admin so there's a way to
+      // reach admin without the shared password.
+      user = userStore.createUser({
+        name: profile.name,
+        email: profile.email,
+        role: googleAuth.defaultRoleFor(profile.email),
+        googleSub: profile.sub
+      });
+      console.log(`Provisioned Google account ${profile.email} as ${user.role}`);
+    }
+    userStore.recordLogin(user.id);
+    issueSession(res, { kind: 'user', userId: user.id });
+    return res.redirect(userStore.landingPageFor(user));
+  } catch (err) {
+    console.error('Google sign-in failed:', err);
+    return fail(err.message || 'Google sign-in failed.');
+  }
+});
+
+app.get('/s/:token', (req, res) => {
+  const supplier = supplierAccess.supplierForToken(req.params.token);
+  if (!supplier) {
+    // Same response for an unknown, revoked or malformed token, so a bad
+    // link can't be used to probe which tokens are live.
+    return res.status(404).send(
+      '<html><body style="font-family:system-ui;padding:40px;text-align:center;">' +
+      '<h2>This link is no longer valid</h2>' +
+      '<p>Please ask your Juniper contact for an up-to-date link.</p>' +
+      '</body></html>'
+    );
+  }
+  issueSession(res, { kind: 'supplierLink', supplierId: supplier.id });
+  res.redirect('/supplier-orders.html');
+});
 
 app.post('/api/login', (req, res) => {
   const { password, email } = req.body || {};
@@ -323,6 +430,8 @@ app.get('/api/me', (req, res) => {
     user: userStore.publicView(req.user),
     permissions: userStore.permissionsFor(req.user && req.user.role),
     roles: userStore.ROLES,
+    rolePermissions: userStore.ROLE_PERMISSIONS,
+    googleDomains: googleAuth.allowedDomains(),
     pages: userStore.ROLE_PAGES[(req.user && req.user.role) || ''] || [],
     landing: userStore.landingPageFor(req.user),
     canSwitchView: !!(req.user && req.user.isSharedSession)
@@ -335,8 +444,37 @@ app.get('/api/login-options', (req, res) => {
   res.json({
     ok: true,
     roles: userStore.ROLES,
-    suppliers: supplierStore.listSuppliers().map((s2) => s2.name).filter(Boolean).sort()
+    suppliers: supplierStore.listSuppliers().map((s2) => s2.name).filter(Boolean).sort(),
+    google: {
+      enabled: googleAuth.isConfigured(),
+      domain: googleAuth.allowedDomain() || null,
+      domains: googleAuth.allowedDomains()
+    }
   });
+});
+
+// ---- Supplier access links (admin only) ----
+app.get('/api/suppliers/:id/access-link', requirePermission('dispatch:send'), (req, res) => {
+  const supplier = supplierStore.getSupplier(req.params.id);
+  if (!supplier) return res.status(404).json({ error: 'Supplier not found' });
+  const base = `${req.protocol}://${req.get('host')}`;
+  res.json({
+    ok: true,
+    hasToken: !!supplier.accessToken,
+    issuedAt: supplier.accessTokenIssuedAt || null,
+    link: supplierAccess.linkFor(base, supplier)
+  });
+});
+app.post('/api/suppliers/:id/access-link', requirePermission('dispatch:send'), (req, res) => {
+  const updated = supplierAccess.rotateToken(req.params.id);
+  if (!updated) return res.status(404).json({ error: 'Supplier not found' });
+  const base = `${req.protocol}://${req.get('host')}`;
+  res.json({ ok: true, link: supplierAccess.linkFor(base, updated), issuedAt: updated.accessTokenIssuedAt });
+});
+app.delete('/api/suppliers/:id/access-link', requirePermission('dispatch:send'), (req, res) => {
+  const updated = supplierAccess.revokeToken(req.params.id);
+  if (!updated) return res.status(404).json({ error: 'Supplier not found' });
+  res.json({ ok: true });
 });
 
 // ---- User administration (admin only) ----
@@ -1365,7 +1503,13 @@ app.delete('/api/message-templates/:id', requirePermission('settings:write'), (r
 app.get('/api/order-management/orders/:id/dispatch-targets', (req, res) => {
   const order = orderManagementStore.getOrderById(req.params.id);
   if (!order) return res.status(404).json({ error: 'Order not found' });
-  res.json({ ok: true, poNumber: order.poNumber, targets: poDispatch.buildTargets(order) });
+  const base = `${req.protocol}://${req.get('host')}`;
+  const targets = poDispatch.buildTargets(order).map((t) => {
+    if (!t.supplierId) return t;
+    const sup = supplierStore.getSupplier(t.supplierId);
+    return { ...t, accessLink: (sup && sup.accessToken) ? supplierAccess.linkFor(base, sup) : null };
+  });
+  res.json({ ok: true, poNumber: order.poNumber, targets });
 });
 
 // The composed message for one component's supplier.
@@ -1387,7 +1531,14 @@ app.get('/api/order-management/orders/:id/dispatch-message/:targetKey/template/:
   const template = messageTemplateStore.getTemplate(req.params.templateId);
   if (!template) return res.status(404).json({ error: 'Template not found' });
   const lang = req.query.lang === 'en' ? 'en' : 'zh';
-  const message = messageTemplateStore.render(template, lang, poDispatch.templateValues(order, target));
+  // Make sure this supplier has an access link, and include it - the point
+  // is that the PO message itself is how they get in.
+  let portalLink = '';
+  if (target.supplierId) {
+    const supplier = supplierAccess.ensureToken(target.supplierId);
+    portalLink = supplierAccess.linkFor(`${req.protocol}://${req.get('host')}`, supplier);
+  }
+  const message = messageTemplateStore.render(template, lang, poDispatch.templateValues(order, target, portalLink));
   res.json({ ok: true, message, target });
 });
 
@@ -1476,7 +1627,20 @@ app.get('/api/order-management/field-history', (req, res) => {
 
 // ---- Suppliers (real master data, per Product Information) ----
 app.get('/api/suppliers', (req, res) => {
-  res.json({ suppliers: supplierStore.listSuppliers() });
+  // The raw access token is a credential, so it never goes out in the
+  // general list. Anyone allowed to send a PO gets the usable link instead;
+  // everyone else just learns whether one exists.
+  const mayShare = userStore.can(req.user, 'dispatch:send');
+  const base = `${req.protocol}://${req.get('host')}`;
+  const suppliers = supplierStore.listSuppliers().map((sup) => {
+    const { accessToken, ...rest } = sup;
+    return {
+      ...rest,
+      hasAccessLink: !!accessToken,
+      accessLink: mayShare && accessToken ? supplierAccess.linkFor(base, sup) : null
+    };
+  });
+  res.json({ suppliers });
 });
 app.get('/api/suppliers/:id', (req, res) => {
   const supplier = supplierStore.getSupplier(req.params.id);

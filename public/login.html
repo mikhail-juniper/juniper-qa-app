@@ -73,6 +73,23 @@
   }
   .link-btn:hover { text-decoration: underline; }
   .error { color: #C0362C; font-size: 13px; margin-top: 12px; display: none; }
+
+  /* Google sign-in, separated from the password form by a labelled rule so
+     the two routes in don't read as one control stack. */
+  .or-divider {
+    display: flex; align-items: center; gap: 12px;
+    margin: 18px 0 16px 0; color: #999; font-size: 12px;
+  }
+  .or-divider::before, .or-divider::after {
+    content: ''; flex: 1; height: 1px; background: #ececec;
+  }
+  .google-btn {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    width: 100%; padding: 12px 14px; border-radius: 8px;
+    border: 1.5px solid #d5d5d5; background: #fff; color: #1a1a1a;
+    font-size: 14.5px; font-weight: 600; text-decoration: none; cursor: pointer;
+  }
+  .google-btn:hover { background: #f7f7f7; }
 </style>
 </head>
 <body>
@@ -89,6 +106,13 @@
     </div>
     <button type="submit" id="submitBtn">Continue</button>
     <div class="error" id="errorMsg">Incorrect password</div>
+    <div id="googleWrap" style="display:none;">
+      <div class="or-divider"><span>or</span></div>
+      <a href="/auth/google" class="google-btn" id="googleBtn">
+        <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#4285F4" d="M45.1 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h11.8c-.5 2.7-2 5-4.4 6.6v5.500h7.1c4.1-3.8 6.6-9.4 6.6-16.1z"/><path fill="#34A853" d="M24 46c5.9 0 10.9-2 14.5-5.4l-7.1-5.5c-2 1.3-4.5 2.1-7.4 2.1-5.7 0-10.5-3.8-12.2-9H4.5v5.7C8.1 41.1 15.4 46 24 46z"/><path fill="#FBBC05" d="M11.8 28.2c-.4-1.3-.7-2.7-.7-4.2s.2-2.9.7-4.2v-5.7H4.5C2.9 17.3 2 20.5 2 24s.9 6.7 2.5 9.9l7.3-5.7z"/><path fill="#EA4335" d="M24 10.4c3.2 0 6.1 1.1 8.4 3.3l6.3-6.3C34.9 3.9 29.9 2 24 2 15.4 2 8.1 6.9 4.5 14.1l7.3 5.7c1.7-5.2 6.5-9.4 12.2-9.4z"/></svg>
+        <span id="googleBtnText">Sign in with Google</span>
+      </a>
+    </div>
     <button type="button" id="toggleMode" class="link-btn">Sign in with an account instead</button>
   </form>
   <script>
@@ -115,9 +139,24 @@
       qa: 'QA/QC',
       supplier: 'Supplier'
     };
+    // Surface any message the OAuth callback redirected back with.
+    (() => {
+      const err = new URLSearchParams(location.search).get('error');
+      if (err) { errorMsg.textContent = err; errorMsg.style.display = 'block'; }
+    })();
+
     (async () => {
       try {
         const opts = await (await fetch('/api/login-options')).json();
+        // Only offer Google when the server actually has credentials.
+        if (opts.google && opts.google.enabled) {
+          document.getElementById('googleWrap').style.display = '';
+          // With several domains allowed, naming one would be misleading.
+          const doms = opts.google.domains || [];
+          if (doms.length === 1) {
+            document.getElementById('googleBtnText').textContent = `Sign in with Google (${doms[0]})`;
+          }
+        }
         roleSelect.innerHTML = (opts.roles || []).map((r) =>
           `<option value="${r}">${ROLE_LABELS[r] || r}</option>`).join('');
         supplierSelect.innerHTML = '<option value="">Select a supplier...</option>' +

@@ -3562,5 +3562,145 @@
   "secWeightsDimensions": {
     "en": "Weights & Dimensions",
     "zh": "重量与尺寸"
+  },
+  "thAccessLink": {
+    "en": "Access link",
+    "zh": "访问链接"
+  },
+  "btnShareAccess": {
+    "en": "Share",
+    "zh": "分享"
+  },
+  "btnOpenAccess": {
+    "en": "Open",
+    "zh": "打开"
+  },
+  "btnCreateAccessLink": {
+    "en": "Create link",
+    "zh": "生成链接"
+  },
+  "toastAccessLinkCopied": {
+    "en": "Supplier link copied",
+    "zh": "供应商链接已复制"
+  },
+  "supplierAccessLink": {
+    "en": "Supplier access link",
+    "zh": "供应商访问链接"
+  },
+  "navUsers": {
+    "en": "Users",
+    "zh": "用户"
+  },
+  "usersHelp": {
+    "en": "Accounts and what each one can do. The shared site password still works and grants full access, so accounts here are additive.",
+    "zh": "账户及其权限。共享站点密码仍然有效并拥有完全访问权限，此处的账户为附加设置。"
+  },
+  "usersAccounts": {
+    "en": "Accounts",
+    "zh": "账户"
+  },
+  "usersAddNew": {
+    "en": "Add a user",
+    "zh": "添加用户"
+  },
+  "usersAddBtn": {
+    "en": "+ Add user",
+    "zh": "+ 添加用户"
+  },
+  "usersEmail": {
+    "en": "Email",
+    "zh": "邮箱"
+  },
+  "usersRole": {
+    "en": "Role",
+    "zh": "角色"
+  },
+  "usersPassword": {
+    "en": "Password",
+    "zh": "密码"
+  },
+  "usersPasswordHint": {
+    "en": "Optional if they sign in with Google",
+    "zh": "如使用 Google 登录则可留空"
+  },
+  "usersSignIn": {
+    "en": "Sign-in",
+    "zh": "登录方式"
+  },
+  "usersActive": {
+    "en": "Active",
+    "zh": "启用"
+  },
+  "usersLastLogin": {
+    "en": "Last login",
+    "zh": "上次登录"
+  },
+  "usersNever": {
+    "en": "never",
+    "zh": "从未"
+  },
+  "usersNoMethod": {
+    "en": "None yet",
+    "zh": "尚未设置"
+  },
+  "usersPwLabel": {
+    "en": "Password",
+    "zh": "密码"
+  },
+  "usersSetPassword": {
+    "en": "Password",
+    "zh": "设置密码"
+  },
+  "usersNewPasswordPrompt": {
+    "en": "New password for this user:",
+    "zh": "该用户的新密码："
+  },
+  "usersPasswordSet": {
+    "en": "Password set",
+    "zh": "密码已设置"
+  },
+  "usersSaved": {
+    "en": "User saved",
+    "zh": "用户已保存"
+  },
+  "usersDeleted": {
+    "en": "User deleted",
+    "zh": "用户已删除"
+  },
+  "usersCreated": {
+    "en": "User created",
+    "zh": "用户已创建"
+  },
+  "usersConfirmDelete": {
+    "en": "Delete this account?",
+    "zh": "确定删除此账户？"
+  },
+  "usersEmailRequired": {
+    "en": "Email is required",
+    "zh": "请填写邮箱"
+  },
+  "usersSupplierRequired": {
+    "en": "Pick which supplier this account belongs to",
+    "zh": "请选择该账户所属的供应商"
+  },
+  "usersNone": {
+    "en": "No accounts yet. The shared site password is still in use.",
+    "zh": "暂无账户。目前仍使用共享站点密码。"
+  },
+  "usersWhatRolesDo": {
+    "en": "What each role can do",
+    "zh": "各角色权限说明"
+  },
+  "usersAccess": {
+    "en": "Access",
+    "zh": "访问范围"
+  },
+  "usersPermissions": {
+    "en": "Permissions",
+    "zh": "权限"
+  },
+  "usersAutoProvision": {
+    "en": "Anyone signing in with a Google account on an approved Juniper domain is added automatically as Juniper Team. Change their role below if they need more or less access.",
+    "zh": "使用已批准的 Juniper 域名 Google 账户登录的人员会自动添加为「Juniper 团队」。如需调整权限，请在下方修改其角色。"
   }
 }

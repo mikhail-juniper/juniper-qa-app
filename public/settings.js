@@ -197,6 +197,78 @@ function renderViewAsCard(me) {
   });
 }
 
+/* ---- Supplier access links ----
+ * Each factory gets one link that opens their own PO page with no account
+ * and no password. The link IS the credential, so rotating it is how you
+ * revoke access.
+ */
+function renderSupplierLinksCard() {
+  const host = document.getElementById('supplierLinksCard');
+  if (!host) return;
+  host.innerHTML = `
+    <div class="card">
+      <div class="section-title">Supplier Access Links</div>
+      <div class="section-help" style="margin-bottom:14px;">
+        A per-supplier link that opens their own purchase orders - no account, no password.
+        It's included automatically in the PO messages you send them.
+        Anyone holding a link can view that supplier's POs, so regenerate one to revoke it
+        (which immediately invalidates every link previously shared with that factory).
+      </div>
+      <div class="field" style="max-width:420px;">
+        <label>Supplier</label>
+        <select id="slSupplier">
+          <option value="">Select a supplier...</option>
+          ${appSupplierRecords.map((sp) => `<option value="${escapeHtml(sp.id)}">${escapeHtml(sp.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div id="slResult" style="margin-top:6px;"></div>
+    </div>
+  `;
+  const sel = document.getElementById('slSupplier');
+  sel.addEventListener('change', () => showSupplierLink(sel.value));
+}
+
+async function showSupplierLink(supplierId) {
+  const out = document.getElementById('slResult');
+  if (!supplierId) { out.innerHTML = ''; return; }
+  out.innerHTML = '<div class="section-help">Loading...</div>';
+  try {
+    const data = await (await fetch(`/api/suppliers/${encodeURIComponent(supplierId)}/access-link`)).json();
+    out.innerHTML = `
+      ${data.hasToken ? `
+        <div class="field" style="max-width:640px;">
+          <label>Link${data.issuedAt ? ` (issued ${new Date(data.issuedAt).toLocaleDateString()})` : ''}</label>
+          <input type="text" id="slLink" readonly value="${escapeHtml(data.link)}" />
+        </div>` : '<div class="section-help">No link yet for this supplier.</div>'}
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;">
+        ${data.hasToken ? '<button type="button" class="btn btn-secondary" id="slCopy" style="flex:none;width:auto;padding:9px 16px;">Copy link</button>' : ''}
+        <button type="button" class="btn btn-primary" id="slRotate" style="flex:none;width:auto;padding:9px 16px;">
+          ${data.hasToken ? 'Regenerate (revokes the old link)' : 'Generate link'}
+        </button>
+        ${data.hasToken ? '<button type="button" class="btn btn-secondary" id="slRevoke" style="flex:none;width:auto;padding:9px 16px;color:var(--jc-fail);">Revoke</button>' : ''}
+      </div>
+    `;
+    const copy = document.getElementById('slCopy');
+    if (copy) copy.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(document.getElementById('slLink').value); showToast('Link copied'); }
+      catch (e) { showToast(e.message, true); }
+    });
+    document.getElementById('slRotate').addEventListener('click', async () => {
+      if (data.hasToken && !confirm('Regenerate this link? Any link already sent to this supplier will stop working.')) return;
+      await fetch(`/api/suppliers/${encodeURIComponent(supplierId)}/access-link`, { method: 'POST' });
+      showToast('Link generated');
+      showSupplierLink(supplierId);
+    });
+    const rev = document.getElementById('slRevoke');
+    if (rev) rev.addEventListener('click', async () => {
+      if (!confirm('Revoke this link? The supplier will lose access immediately.')) return;
+      await fetch(`/api/suppliers/${encodeURIComponent(supplierId)}/access-link`, { method: 'DELETE' });
+      showToast('Link revoked');
+      showSupplierLink(supplierId);
+    });
+  } catch (e) { out.innerHTML = `<div class="section-help">${escapeHtml(e.message)}</div>`; }
+}
+
 /* ---- Users, roles and permissions ----
  * Only rendered for admins. The shared site password still works and grants
  * admin, so this section is reachable on day one without any accounts
@@ -205,106 +277,23 @@ function renderViewAsCard(me) {
 let appUsers = [];
 let appRoles = [];
 let appSuppliers = [];
+let appSupplierRecords = [];
 
 function renderUsersCard() {
   const host = document.getElementById('usersCard');
   if (!host) return;
+  // User administration lives on its own page now - keeping a second copy
+  // here would mean two places to keep in step.
   host.innerHTML = `
     <div class="card">
       <div class="section-title">Users &amp; Access</div>
       <div class="section-help" style="margin-bottom:14px;">
-        Accounts, roles and permissions. The shared site password still works and grants full access,
-        so adding accounts here is additive - nobody gets locked out.
-        Supplier accounts only ever see purchase orders they supply a part of.
+        Accounts, roles and permissions are managed on their own page.
       </div>
-      ${appUsers.length ? `
-      <div class="om-table-wrap" style="margin-bottom:14px;">
-        <table class="om-table" style="min-width:0;">
-          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Supplier</th><th>Last login</th><th></th></tr></thead>
-          <tbody>
-            ${appUsers.map((u) => `
-              <tr data-user="${escapeHtml(u.id)}">
-                <td><input type="text" data-u-field="name" value="${escapeHtml(u.name)}" /></td>
-                <td>${escapeHtml(u.email)}</td>
-                <td>
-                  <select data-u-field="role">
-                    ${appRoles.map((r) => `<option value="${r}" ${r === u.role ? 'selected' : ''}>${r}</option>`).join('')}
-                  </select>
-                </td>
-                <td>
-                  <select data-u-field="supplierName">
-                    <option value="">—</option>
-                    ${appSuppliers.map((sp) => `<option value="${escapeHtml(sp)}" ${sp === u.supplierName ? 'selected' : ''}>${escapeHtml(sp)}</option>`).join('')}
-                  </select>
-                </td>
-                <td style="font-size:12px;color:var(--jc-muted);">${u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : 'never'}</td>
-                <td style="white-space:nowrap;">
-                  <button type="button" class="om-table-upload-btn" data-u-save="${escapeHtml(u.id)}">Save</button>
-                  <button type="button" class="om-table-upload-btn" data-u-pw="${escapeHtml(u.id)}">Password</button>
-                  <button type="button" class="om-table-upload-btn" data-u-del="${escapeHtml(u.id)}">Delete</button>
-                </td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      </div>` : '<div class="section-help" style="margin-bottom:14px;">No accounts yet.</div>'}
-
-      <div class="field-row" style="gap:10px;flex-wrap:wrap;align-items:flex-end;">
-        <div style="flex:1 1 160px;"><label>Name</label><input type="text" id="newUserName" /></div>
-        <div style="flex:1 1 180px;"><label>Email</label><input type="email" id="newUserEmail" /></div>
-        <div style="flex:0 1 130px;"><label>Role</label>
-          <select id="newUserRole">${appRoles.map((r) => `<option value="${r}">${r}</option>`).join('')}</select>
-        </div>
-        <div style="flex:0 1 170px;"><label>Supplier (supplier role)</label>
-          <select id="newUserSupplier"><option value="">—</option>${appSuppliers.map((sp) => `<option value="${escapeHtml(sp)}">${escapeHtml(sp)}</option>`).join('')}</select>
-        </div>
-        <div style="flex:1 1 150px;"><label>Password</label><input type="text" id="newUserPassword" /></div>
-        <button type="button" class="btn btn-primary" id="newUserAdd" style="flex:none;width:auto;padding:9px 16px;">+ Add user</button>
-      </div>
+      <a class="btn btn-secondary" href="users.html"
+         style="display:inline-block;width:auto;padding:9px 16px;text-decoration:none;">Open Users</a>
     </div>
   `;
-  wireUsersCard();
-}
-
-function wireUsersCard() {
-  const readRow = (id) => {
-    const row = document.querySelector(`[data-user="${id}"]`);
-    const v = (f) => { const el = row.querySelector(`[data-u-field="${f}"]`); return el ? el.value : undefined; };
-    return { name: v('name'), role: v('role'), supplierName: v('supplierName') };
-  };
-  const call = async (url, opts) => {
-    const res = await fetch(url, { headers: { 'Content-Type': 'application/json' }, ...opts });
-    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Request failed');
-    return res.json();
-  };
-  document.querySelectorAll('[data-u-save]').forEach((b) => b.addEventListener('click', async () => {
-    try { await call(`/api/users/${b.dataset.uSave}`, { method: 'PATCH', body: JSON.stringify(readRow(b.dataset.uSave)) });
-      showToast('User saved'); await loadUsers(); } catch (e) { showToast(e.message, true); }
-  }));
-  document.querySelectorAll('[data-u-pw]').forEach((b) => b.addEventListener('click', async () => {
-    const pw = prompt('New password for this user:');
-    if (!pw) return;
-    try { await call(`/api/users/${b.dataset.uPw}`, { method: 'PATCH', body: JSON.stringify({ password: pw }) });
-      showToast('Password set'); } catch (e) { showToast(e.message, true); }
-  }));
-  document.querySelectorAll('[data-u-del]').forEach((b) => b.addEventListener('click', async () => {
-    if (!confirm('Delete this user?')) return;
-    try { await call(`/api/users/${b.dataset.uDel}`, { method: 'DELETE' });
-      showToast('User deleted'); await loadUsers(); } catch (e) { showToast(e.message, true); }
-  }));
-  const add = document.getElementById('newUserAdd');
-  if (add) add.addEventListener('click', async () => {
-    const payload = {
-      name: document.getElementById('newUserName').value,
-      email: document.getElementById('newUserEmail').value,
-      role: document.getElementById('newUserRole').value,
-      supplierName: document.getElementById('newUserSupplier').value,
-      password: document.getElementById('newUserPassword').value
-    };
-    if (!payload.email) return showToast('Email is required', true);
-    try { await call('/api/users', { method: 'POST', body: JSON.stringify(payload) });
-      showToast('User created'); await loadUsers(); } catch (e) { showToast(e.message, true); }
-  });
 }
 
 async function loadUsers() {
@@ -314,16 +303,14 @@ async function loadUsers() {
     // them before rendering either.
     const sRes = await fetch('/api/suppliers');
     const sData = sRes.ok ? await sRes.json() : { suppliers: [] };
-    appSuppliers = (sData.suppliers || []).map((x) => x.name).filter(Boolean).sort();
+    appSupplierRecords = (sData.suppliers || [])
+      .filter((x) => x.name).sort((a, b) => a.name.localeCompare(b.name));
+    appSuppliers = appSupplierRecords.map((x) => x.name);
     appRoles = me.roles || [];
     renderViewAsCard(me);
+    if (me.permissions && me.permissions.includes('users:manage')) renderSupplierLinksCard();
     // User administration is admin-only; the view switcher above is not.
     if (!me.permissions || !me.permissions.includes('users:manage')) return;
-    const uRes = await fetch('/api/users');
-    if (!uRes.ok) return;
-    const data = await uRes.json();
-    appUsers = data.users || [];
-    appRoles = data.roles || appRoles;
     renderUsersCard();
   } catch (e) { /* settings page still works without this section */ }
 }
@@ -450,6 +437,7 @@ function render() {
     ${LISTS.map(renderListCard).join('')}
 
     <div id="viewAsCard"></div>
+    <div id="supplierLinksCard"></div>
     <div id="usersCard"></div>
     <div id="tplCard"></div>
     ${renderAqlTableCard()}

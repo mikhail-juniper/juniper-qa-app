@@ -38,7 +38,8 @@ const APP_NAV = [
     group: 'Other', groupKey: 'navOther',
     items: [
       { label: 'Analytics', key: 'navAnalytics', href: 'analytics.html' },
-      { label: 'Settings', key: 'navSettings', href: 'settings.html' }
+      { label: 'Settings', key: 'navSettings', href: 'settings.html' },
+      { label: 'Users', key: 'navUsers', href: 'users.html' }
     ]
   }
 ];
