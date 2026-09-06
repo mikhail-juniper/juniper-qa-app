@@ -40,6 +40,42 @@
     location.reload();
   }
 
+  /** The right-hand cluster in the header. Both the language toggle and the
+   *  log-out button live in here so they sit together and stay in a fixed
+   *  order regardless of which page mounts them first. */
+  function headerActions(header) {
+    let box = header.querySelector('.header-actions');
+    if (!box) {
+      box = document.createElement('div');
+      box.className = 'header-actions';
+      header.appendChild(box);
+    }
+    return box;
+  }
+
+  /** Log out and return to the login page. Mounted to the right of the
+   *  language toggle. */
+  function mountLogout(header) {
+    if (!header) return;
+    const box = headerActions(header);
+    if (box.querySelector('.logout-btn')) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'logout-btn';
+    btn.textContent = get() === 'en' ? 'Log out' : '退出登录';
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        await fetch('/api/logout', { method: 'POST' });
+      } catch (e) {
+        // Even if the request fails, sending them to the login page is the
+        // right outcome - the cookie is httpOnly so we can't clear it here.
+      }
+      location.href = '/login.html';
+    });
+    box.appendChild(btn);
+  }
+
   /** Injects the 中文 / EN toggle into the page header. Called by app-shell
    *  once the header exists, so it appears on every page. */
   function mountToggle(header) {
@@ -55,10 +91,16 @@
         if (btn.dataset.lang !== get()) set(btn.dataset.lang);
       });
     });
-    header.appendChild(wrap);
+    // Prepend so the toggle sits to the LEFT of the log-out button, whichever
+    // order the two get mounted in.
+    const box = headerActions(header);
+    box.insertBefore(wrap, box.firstChild);
   }
 
-  global.JuniperLang = { get: get, set: set, mountToggle: mountToggle, STORAGE_KEY: STORAGE_KEY };
+  global.JuniperLang = {
+    get: get, set: set, mountToggle: mountToggle, mountLogout: mountLogout,
+    STORAGE_KEY: STORAGE_KEY
+  };
 
   // ---- Shared translation helpers ----
   let I18N = {};

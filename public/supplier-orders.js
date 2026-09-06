@@ -277,6 +277,7 @@ async function openSupplierOrder(id) {
   if (window.JuniperLang) {
     const header = document.querySelector('.app-header');
     window.JuniperLang.mountToggle(header);
+    window.JuniperLang.mountLogout(header);
   }
   render();
 }());

@@ -114,7 +114,10 @@ function sidebarInnerHtml() {
   if (!header || !main) return;
 
   // Language toggle lives in the header so it's reachable from every page.
-  if (window.JuniperLang) window.JuniperLang.mountToggle(header);
+  if (window.JuniperLang) {
+    window.JuniperLang.mountToggle(header);
+    window.JuniperLang.mountLogout(header);
+  }
 
   const flexWrap = document.createElement('div');
   flexWrap.className = 'app-body-flex';
