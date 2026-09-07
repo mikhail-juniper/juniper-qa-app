@@ -2163,9 +2163,9 @@ async function openDetailPanel(id, scope) {
 
     <div class="om-panel-card">
     <div class="om-section-title">${i18('secProductDevelopmentApproval', 'Product Development Approval')}</div>
-    <div class="section-help" style="margin-bottom:14px;">${i18('helpPdApproval', 'Statuses below are set on the approval page - read-only here.')}</div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
-      <button type="button" class="btn btn-secondary om-copy-link-btn" style="flex:none;width:auto;padding:9px 16px;" data-copy-url="${escapeHtml(`${location.origin}/approval.html?po=${order.id}`)}">${i18('btnShareLink', 'Share Link')}</button>
+    <div class="section-help" style="margin-bottom:6px;">${i18('helpPdApproval', 'Statuses below are set on the approval page - read-only here.')}</div>
+    <div class="section-help" style="margin-bottom:14px;">${i18('helpPdApprovalLink', 'Share the link below to let PD or QA open this PO with no login.')}</div>
+    <div id="omApprovalLinkHost" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center;">
       <a class="btn btn-primary" style="flex:none;width:auto;padding:9px 16px;text-decoration:none;" href="/approval.html?po=${encodeURIComponent(order.id)}" target="_blank" rel="noopener">${i18('btnOpenLink', 'Open Link')}</a>
     </div>
     <div class="om-pd-approval-grid">
@@ -2793,6 +2793,51 @@ async function openDetailPanel(id, scope) {
       } catch (err) { showToast(err.message, true); }
     });
   });
+
+  // The shareable approval link is tokenised, so it works without a login.
+  // Loaded separately from the statuses below.
+  (async () => {
+    const host = document.getElementById('omApprovalLinkHost');
+    if (!host) return;
+    const draw = (data) => {
+      const openBtn = `<a class="btn btn-primary" style="flex:none;width:auto;padding:9px 16px;text-decoration:none;" href="/approval.html?po=${encodeURIComponent(order.id)}" target="_blank" rel="noopener">${i18('btnOpenLink', 'Open Link')}</a>`;
+      if (data && data.hasToken) {
+        host.innerHTML = `
+          <button type="button" class="btn btn-secondary om-copy-link-btn" style="flex:none;width:auto;padding:9px 16px;" data-copy-url="${escapeHtml(data.link)}">${i18('btnShareLink', 'Share Link')}</button>
+          ${openBtn}
+          <button type="button" class="btn btn-secondary" id="omApprovalLinkRotate" style="flex:none;width:auto;padding:9px 16px;">${i18('btnRegenerateLink', 'Regenerate')}</button>
+        `;
+      } else {
+        host.innerHTML = `
+          <button type="button" class="btn btn-secondary" id="omApprovalLinkRotate" style="flex:none;width:auto;padding:9px 16px;">${i18('btnGenerateApprovalLink', 'Generate share link')}</button>
+          ${openBtn}
+        `;
+      }
+      const copyBtn = host.querySelector('.om-copy-link-btn');
+      if (copyBtn) {
+        copyBtn.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(copyBtn.dataset.copyUrl);
+            showToast(i18t('toastLinkCopied', 'Link copied'));
+          } catch (e) { showToast(e.message, true); }
+        });
+      }
+      const rotate = document.getElementById('omApprovalLinkRotate');
+      if (rotate) {
+        rotate.addEventListener('click', async () => {
+          if (data && data.hasToken && !confirm(i18t('tplConfirmDelete', 'Regenerate? Any link already shared will stop working.'))) return;
+          try {
+            const res = await api(`/api/order-management/orders/${encodeURIComponent(order.id)}/approval-link`, { method: 'POST' });
+            draw({ hasToken: true, link: res.link });
+            showToast(i18t('toastLinkCopied', 'Link generated'));
+          } catch (e) { showToast(e.message, true); }
+        });
+      }
+    };
+    try {
+      draw(await api(`/api/order-management/orders/${encodeURIComponent(order.id)}/approval-link`));
+    } catch (e) { /* keep the plain Open Link if this fails */ }
+  })();
 
   // PD approval statuses are owned by the approval page, so they're fetched
   // and rendered read-only here rather than being editable in this panel.
@@ -3495,10 +3540,13 @@ async function openDetailPanel(id, scope) {
 async function openDispatchDialog(orderId, targetKey, onSent) {
   let data;
   let templates = [];
+  let sender = { name: '', email: '' };
   try {
     data = await api(`/api/order-management/orders/${encodeURIComponent(orderId)}/dispatch-message/${encodeURIComponent(targetKey)}`);
     const tplRes = await api('/api/message-templates');
     templates = tplRes.templates || [];
+    const tgtRes = await api(`/api/order-management/orders/${encodeURIComponent(orderId)}/dispatch-targets`);
+    sender = tgtRes.sender || { name: '', email: '' };
   } catch (e) { return showToast(e.message, true); }
   const t = data.target;
   const msg = data.message;
@@ -3529,11 +3577,20 @@ async function openDispatchDialog(orderId, targetKey, onSent) {
           <label>${i18('fldRecipient', 'Recipient')}</label>
           <input type="text" id="dispRecipient" value="${escapeHtml(channel === 'email' ? (t.email || '') : (t.wechat || ''))}" />
         </div>
+        <div>
+          <label>${i18('dispatchFrom', 'Send from')}</label>
+          <input type="text" id="dispFromName" value="${escapeHtml(sender.name || '')}" placeholder="Name" />
+        </div>
+        <div>
+          <label>&nbsp;</label>
+          <input type="text" id="dispFromEmail" value="${escapeHtml(sender.email || '')}" placeholder="you@junipercreates.com" />
+        </div>
       </div>
       <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-weight:500;">
         <input type="checkbox" id="dispSave" style="width:auto;margin:0;" />
         <span>${i18('saveToSupplierRecord', 'Save this contact to the supplier record')}</span>
       </label>
+      <div class="section-help" style="margin-top:8px;">${i18('dispatchFromHelp', 'Email opens in your own mail client so it sends from your address.')}</div>
       <div id="dispWechatNote" class="section-help" style="margin-top:8px;display:${channel === 'wechat' ? '' : 'none'};">
         ${i18('wechatNoApi', 'WeChat cannot be sent automatically - copy the message and paste it to this contact.')}
       </div>
@@ -3584,7 +3641,9 @@ async function openDispatchDialog(orderId, targetKey, onSent) {
     const lang = document.getElementById('dispTplLang').value;
     if (!tplId) return;
     try {
-      const res = await api(`/api/order-management/orders/${encodeURIComponent(orderId)}/dispatch-message/${encodeURIComponent(targetKey)}/template/${encodeURIComponent(tplId)}?lang=${lang}`);
+      const fromName = encodeURIComponent(document.getElementById('dispFromName').value || '');
+      const fromEmail = encodeURIComponent(document.getElementById('dispFromEmail').value || '');
+      const res = await api(`/api/order-management/orders/${encodeURIComponent(orderId)}/dispatch-message/${encodeURIComponent(targetKey)}/template/${encodeURIComponent(tplId)}?lang=${lang}&fromName=${fromName}&fromEmail=${fromEmail}`);
       document.getElementById('dispSubject').value = res.message.subject;
       document.getElementById('dispBody').value = res.message.body;
     } catch (e) { showToast(e.message, true); }
@@ -3593,6 +3652,8 @@ async function openDispatchDialog(orderId, targetKey, onSent) {
   if (tplSelect && templates.length) {
     tplSelect.addEventListener('change', applyTemplate);
     document.getElementById('dispTplLang').addEventListener('change', applyTemplate);
+    // Changing who it's from should update the signature in the message.
+    document.getElementById('dispFromName').addEventListener('change', applyTemplate);
     applyTemplate(); // start from the first template rather than the built-in text
   }
 
@@ -3623,7 +3684,9 @@ async function openDispatchDialog(orderId, targetKey, onSent) {
         body: JSON.stringify({
           targetKey, channel, recipient,
           saveToSupplier: document.getElementById('dispSave').checked,
-          actor: 'Web user'
+          fromName: document.getElementById('dispFromName').value,
+          fromEmail: document.getElementById('dispFromEmail').value,
+          actor: document.getElementById('dispFromName').value || 'Web user'
         })
       });
       if (channel === 'email') {

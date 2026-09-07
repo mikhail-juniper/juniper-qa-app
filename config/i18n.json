@@ -3702,5 +3702,29 @@
   "usersAutoProvision": {
     "en": "Anyone signing in with a Google account on an approved Juniper domain is added automatically as Juniper Team. Change their role below if they need more or less access.",
     "zh": "使用已批准的 Juniper 域名 Google 账户登录的人员会自动添加为「Juniper 团队」。如需调整权限，请在下方修改其角色。"
+  },
+  "helpPdApprovalLink": {
+    "en": "Share this link with PD, QA or a creator - it opens the approval page for this PO with no login required. Regenerate to revoke a link you've already shared.",
+    "zh": "将此链接分享给产品开发、质检或创作者 - 无需登录即可打开此订单的审批页面。重新生成可撤销已分享的链接。"
+  },
+  "btnGenerateApprovalLink": {
+    "en": "Generate share link",
+    "zh": "生成分享链接"
+  },
+  "btnRegenerateLink": {
+    "en": "Regenerate",
+    "zh": "重新生成"
+  },
+  "dispatchFrom": {
+    "en": "Send from",
+    "zh": "发件人"
+  },
+  "dispatchFromHelp": {
+    "en": "Who this is coming from. Email opens in your own mail client so it sends from your address; for WeChat you send it from your own account.",
+    "zh": "此消息的发送人。邮件将在您自己的邮箱客户端中打开并从您的地址发出；微信则由您本人的账号发送。"
+  },
+  "dispatchSentBy": {
+    "en": "Sent by",
+    "zh": "发送人"
   }
 }

@@ -141,6 +141,12 @@ app.use(express.json({ limit: '5mb' }));
 // the server knows *who* is logged in, not merely *that* someone is.
 const SITE_PASSWORD = process.env.SITE_PASSWORD || 'JuniperTO';
 const AUTH_COOKIE_NAME = 'juniper_auth';
+// Supplier access links use their OWN cookie. Sharing one cookie meant an
+// internal user who opened a supplier link (to check it, or via the Open
+// button) had their admin session silently replaced by a supplier session -
+// after which every other link in the app redirected them to the supplier
+// page. Separate cookies let both coexist, with the staff session winning.
+const SUPPLIER_COOKIE_NAME = 'juniper_supplier_auth';
 const SESSION_SECRET = process.env.SESSION_SECRET || `${SITE_PASSWORD}::juniper-site-gate`;
 
 function signSession(payload) {
@@ -176,8 +182,8 @@ function parseCookies(req) {
   return out;
 }
 
-function issueSession(res, session) {
-  res.cookie(AUTH_COOKIE_NAME, signSession(session), {
+function issueSession(res, session, cookieName) {
+  res.cookie(cookieName || AUTH_COOKIE_NAME, signSession(session), {
     httpOnly: true,
     sameSite: 'lax',
     maxAge: 90 * 24 * 60 * 60 * 1000 // 90 days
@@ -200,7 +206,11 @@ const SHARED_SESSION = { kind: 'shared', role: 'admin', name: 'Shared access' };
  * restrict anyone.
  */
 function currentUser(req) {
-  const session = readSession(parseCookies(req)[AUTH_COOKIE_NAME]);
+  const cookies = parseCookies(req);
+  // A staff session always takes precedence, so following a supplier link
+  // doesn't downgrade a signed-in employee.
+  const session = readSession(cookies[AUTH_COOKIE_NAME])
+    || readSession(cookies[SUPPLIER_COOKIE_NAME]);
   if (!session) return null;
   if (session.kind === 'shared') {
     const role = userStore.ROLES.includes(session.viewRole) ? session.viewRole : 'admin';
@@ -212,6 +222,19 @@ function currentUser(req) {
       isSharedSession: true,
       supplierName: session.viewSupplierName || '',
       name: role === 'admin' ? 'Shared access' : `Shared access (${role})`
+    };
+  }
+  if (session.kind === 'approvalLink') {
+    // Scoped to exactly one order: approval read/write, nothing else.
+    const order = orderManagementStore.getOrderById(session.orderId);
+    if (!order || !order.approvalAccessToken) return null;
+    return {
+      id: null,
+      name: 'Approval link',
+      role: 'qa',
+      active: true,
+      approvalOrderId: order.id,
+      viaAccessLink: true
     };
   }
   if (session.kind === 'supplierLink') {
@@ -312,6 +335,29 @@ app.get('/auth/google/callback', async (req, res) => {
   }
 });
 
+/**
+ * PD approval link: /a/<token>. Opens the approval page for one PO with no
+ * account. Grants approval access to that order only.
+ */
+app.get('/a/:token', (req, res) => {
+  const order = supplierAccess.orderForApprovalToken(orderManagementStore, req.params.token);
+  if (!order) {
+    return res.status(404).send(
+      '<html><body style="font-family:system-ui;padding:40px;text-align:center;">' +
+      '<h2>This link is no longer valid</h2>' +
+      '<p>Please ask your Juniper contact for an up-to-date link.</p>' +
+      '</body></html>'
+    );
+  }
+  // A signed-in Juniper user keeps their own session - checking a link
+  // shouldn't downgrade them (same reasoning as /s/:token).
+  const existing = currentUser(req);
+  if (!existing || existing.role === 'supplier') {
+    issueSession(res, { kind: 'approvalLink', orderId: order.id });
+  }
+  res.redirect(`/approval.html?po=${encodeURIComponent(order.id)}`);
+});
+
 app.get('/s/:token', (req, res) => {
   const supplier = supplierAccess.supplierForToken(req.params.token);
   if (!supplier) {
@@ -324,7 +370,15 @@ app.get('/s/:token', (req, res) => {
       '</body></html>'
     );
   }
-  issueSession(res, { kind: 'supplierLink', supplierId: supplier.id });
+  // If a Juniper user is already signed in, DON'T swap their session for a
+  // supplier one - clicking "Open" to check a link would silently demote
+  // them to supplier and bounce them out of every internal page. Send them
+  // to a preview instead, which uses their own permissions.
+  const existing = currentUser(req);
+  if (existing && existing.role !== 'supplier') {
+    return res.redirect(`/supplier-orders.html?preview=${encodeURIComponent(supplier.name)}`);
+  }
+  issueSession(res, { kind: 'supplierLink', supplierId: supplier.id }, SUPPLIER_COOKIE_NAME);
   res.redirect('/supplier-orders.html');
 });
 
@@ -383,6 +437,7 @@ app.post('/api/session/view', (req, res) => {
 
 app.post('/api/logout', (req, res) => {
   res.clearCookie(AUTH_COOKIE_NAME);
+  res.clearCookie(SUPPLIER_COOKIE_NAME);
   res.json({ ok: true });
 });
 
@@ -401,6 +456,52 @@ app.use((req, res, next) => {
   return res.redirect(`/login.html?next=${encodeURIComponent(req.originalUrl)}`);
 });
 
+/**
+ * An approval-link visitor is confined to their one order. Enforced centrally
+ * rather than per-route, so a new approval endpoint can't accidentally be
+ * left open to every PO.
+ */
+app.use((req, res, next) => {
+  const scopeId = req.user && req.user.approvalOrderId;
+  if (!scopeId) return next();
+
+  // Their own order, by id or PO number, is fine; anything else is not.
+  // NOTE: req.params is empty in app.use middleware (it's populated by route
+  // matching), so the id has to come from the path itself - relying on
+  // req.params here silently let other orders through.
+  const orderPath = req.path.match(/^\/api\/order-management\/orders\/([^/]+)/);
+  const idInPath = orderPath ? decodeURIComponent(orderPath[1]) : null;
+  const poInPath = req.path.match(/\/api\/approval\/([^/]+)/);
+  const idInQuery = req.query && req.query.po;
+  const own = orderManagementStore.getOrderById(scopeId);
+  const ownPo = own ? String(own.poNumber || '').toLowerCase() : '';
+
+  if (poInPath) {
+    const asked = decodeURIComponent(poInPath[1]).toLowerCase();
+    if (asked !== ownPo && asked !== String(scopeId).toLowerCase()) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+  }
+  if (idInQuery && String(idInQuery) !== String(scopeId)) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  // Block the broad list endpoints outright - an approval visitor has no
+  // business enumerating orders.
+  if (req.path === '/api/order-management/orders' && req.method === 'GET') {
+    return res.status(403).json({ error: 'Not permitted on an approval link' });
+  }
+  if (idInPath) {
+    // "by-po-number/<po>" is handled as a PO lookup, everything else as an id.
+    if (idInPath === 'by-po-number') {
+      const asked = decodeURIComponent(req.path.split('/by-po-number/')[1] || '').toLowerCase();
+      if (asked !== ownPo) return res.status(404).json({ error: 'Not found' });
+    } else if (idInPath !== String(scopeId)) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+  }
+  return next();
+});
+
 // Page-level access. A role that can't open a page is redirected to its own
 // landing page rather than shown an error - a supplier following an old link
 // to the internal order page just ends up on their own order list.
@@ -410,6 +511,13 @@ app.use((req, res, next) => {
   if (!isPage) return next();
   const pageName = req.path === '/' ? 'index.html' : req.path.replace(/^\//, '');
   if (userStore.canOpenPage(req.user, pageName)) return next();
+  // An approval-link visitor may only open the approval page itself.
+  if (req.user.approvalOrderId) {
+    return pageName === 'approval.html' ? next() : res.redirect(`/approval.html?po=${encodeURIComponent(req.user.approvalOrderId)}`);
+  }
+  // Staff previewing a supplier's view are allowed on the supplier page.
+  if (pageName === 'supplier-orders.html' && req.query.preview
+      && userStore.can(req.user, 'dispatch:send')) return next();
   const landing = userStore.landingPageFor(req.user);
   if (req.path === landing) return next(); // never redirect a page to itself
   return res.redirect(landing);
@@ -474,6 +582,30 @@ app.get('/api/auth/google/debug', requirePermission('users:manage'), (req, res) 
       publicBaseUrlEnv: process.env.PUBLIC_BASE_URL || null
     }
   });
+});
+
+// ---- PD approval links (per order) ----
+app.get('/api/order-management/orders/:id/approval-link', requirePermission('dispatch:send'), (req, res) => {
+  const order = orderManagementStore.getOrderById(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  const base = `${req.protocol}://${req.get('host')}`;
+  res.json({
+    ok: true,
+    hasToken: !!order.approvalAccessToken,
+    issuedAt: order.approvalAccessTokenIssuedAt || null,
+    link: supplierAccess.approvalLinkFor(base, order)
+  });
+});
+app.post('/api/order-management/orders/:id/approval-link', requirePermission('dispatch:send'), (req, res) => {
+  const updated = supplierAccess.rotateApprovalToken(orderManagementStore, req.params.id, req.user && req.user.name);
+  if (!updated) return res.status(404).json({ error: 'Order not found' });
+  const base = `${req.protocol}://${req.get('host')}`;
+  res.json({ ok: true, link: supplierAccess.approvalLinkFor(base, updated), issuedAt: updated.approvalAccessTokenIssuedAt });
+});
+app.delete('/api/order-management/orders/:id/approval-link', requirePermission('dispatch:send'), (req, res) => {
+  const updated = supplierAccess.revokeApprovalToken(orderManagementStore, req.params.id, req.user && req.user.name);
+  if (!updated) return res.status(404).json({ error: 'Order not found' });
+  res.json({ ok: true });
 });
 
 // ---- Supplier access links (admin only) ----
@@ -1265,11 +1397,15 @@ app.get('/api/order-management/accessory-statuses', (req, res) => {
 app.get('/api/order-management/orders', (req, res) => {
   const { productLine, status, search } = req.query;
   const orders = orderManagementStore.listOrders({ productLine, status, search });
-  // Supplier accounts only ever see POs they're making a part of, and only
-  // the redacted shape - redaction is server-side so the full record never
-  // reaches their browser.
-  const scoped = userStore.scopeOrdersForUser(req.user, orders);
-  res.json({ orders: scoped.map((o) => userStore.redactOrderForSupplier(req.user, o)) });
+  // Staff can preview exactly what one supplier sees, without swapping
+  // sessions. Only honoured for people who could send that supplier a PO
+  // anyway, so it grants no access they didn't already have.
+  const previewAs = req.query.asSupplier;
+  const viewer = (previewAs && userStore.can(req.user, 'dispatch:send'))
+    ? { role: 'supplier', supplierName: String(previewAs) }
+    : req.user;
+  const scoped = userStore.scopeOrdersForUser(viewer, orders);
+  res.json({ orders: scoped.map((o) => userStore.redactOrderForSupplier(viewer, o)) });
 });
 
 // Placed before the generic :id route below, since Express would otherwise
@@ -1295,7 +1431,11 @@ app.get('/api/order-management/orders/:id', (req, res) => {
   const order = orderManagementStore.getOrderById(req.params.id);
   if (!order) return res.status(404).json({ error: 'Order not found' });
   if (!userStore.canSeeOrder(req.user, order)) return res.status(404).json({ error: 'Order not found' });
-  res.json({ order: userStore.redactOrderForSupplier(req.user, order) });
+  const previewAs = req.query.asSupplier;
+  const viewer = (previewAs && userStore.can(req.user, 'dispatch:send'))
+    ? { role: 'supplier', supplierName: String(previewAs) }
+    : req.user;
+  res.json({ order: userStore.redactOrderForSupplier(viewer, order) });
 });
 
 app.post('/api/order-management/orders', requirePermission('orders:write'), (req, res) => {
@@ -1317,6 +1457,20 @@ app.post('/api/order-management/orders', requirePermission('orders:write'), (req
   }
 });
 
+
+/**
+ * Who a PO dispatch is going out as. Defaults to the signed-in user so
+ * Chloe's messages come from Chloe, with an explicit override for the case
+ * where someone sends on a colleague's behalf.
+ */
+function resolveSender(req, body) {
+  const user = req.user || {};
+  return {
+    name: (body && body.fromName) || user.name || '',
+    email: (body && body.fromEmail) || user.email || '',
+    address: (body && body.fromEmail) || user.email || ''
+  };
+}
 
 /** Fire-and-forget push of ERP-owned fields to Asana after an order changes.
  *  Deliberately not awaited: Asana latency should never slow down a save,
@@ -1527,12 +1681,13 @@ app.get('/api/order-management/orders/:id/dispatch-targets', (req, res) => {
   const order = orderManagementStore.getOrderById(req.params.id);
   if (!order) return res.status(404).json({ error: 'Order not found' });
   const base = `${req.protocol}://${req.get('host')}`;
+  const me = resolveSender(req, null);
   const targets = poDispatch.buildTargets(order).map((t) => {
     if (!t.supplierId) return t;
     const sup = supplierStore.getSupplier(t.supplierId);
     return { ...t, accessLink: (sup && sup.accessToken) ? supplierAccess.linkFor(base, sup) : null };
   });
-  res.json({ ok: true, poNumber: order.poNumber, targets });
+  res.json({ ok: true, poNumber: order.poNumber, targets, sender: me });
 });
 
 // The composed message for one component's supplier.
@@ -1561,7 +1716,8 @@ app.get('/api/order-management/orders/:id/dispatch-message/:targetKey/template/:
     const supplier = supplierAccess.ensureToken(target.supplierId);
     portalLink = supplierAccess.linkFor(`${req.protocol}://${req.get('host')}`, supplier);
   }
-  const message = messageTemplateStore.render(template, lang, poDispatch.templateValues(order, target, portalLink));
+  const message = messageTemplateStore.render(
+    template, lang, poDispatch.templateValues(order, target, portalLink, resolveSender(req, req.query)));
   res.json({ ok: true, message, target });
 });
 
@@ -1588,7 +1744,8 @@ app.post('/api/order-management/orders/:id/dispatch', requirePermission('dispatc
   }
 
   const delivery = await poDispatch.deliver();
-  const entry = poDispatch.buildLogEntry(target, channel, recipient, body.actor || req.get('X-Actor'));
+  const sender = resolveSender(req, body);
+  const entry = poDispatch.buildLogEntry(target, channel, recipient, body.actor || sender.name || req.get('X-Actor'), sender);
   let updated = orderManagementStore.updateOrder(
     order.id,
     { dispatchLog: [...(order.dispatchLog || []), entry] },

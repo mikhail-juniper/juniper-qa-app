@@ -22,13 +22,18 @@
   width: 220px;
   background: #ececec;
   box-sizing: border-box;
+  /* The sidebar itself is the sticky viewport-height column. Previously only
+     .app-sidebar-inner was sticky, so the sidebar's own box was only as tall
+     as the nav - which meant its grey background ran out partway down any
+     page longer than one screen. */
+  position: sticky;
+  top: var(--app-header-height);
+  height: calc(100vh - var(--app-header-height));
+  overflow-y: auto;
+  align-self: flex-start;
 }
 
 .app-sidebar-inner {
-  position: sticky;
-  top: var(--app-header-height);
-  max-height: calc(100vh - var(--app-header-height));
-  overflow-y: auto;
   padding: 24px 0;
 }
 
@@ -141,6 +146,8 @@
     top: var(--app-header-height, 64px);
     left: 0;
     bottom: 0;
+    height: auto;
+    align-self: auto;
     width: 264px;
     max-width: 82vw;
     flex: none;
@@ -187,6 +194,27 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+/* App shell is a full-height column: header, then the body row taking the
+   remaining space. Without this the body row could end short of the document
+   bottom, which clipped the sticky sidebar and left its background running
+   out partway down long pages. */
+#app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  /* styles.css puts 40px of padding here for the single-column QA/QC pages.
+     On a shell page that padding sits *below* the sidebar's containing
+     block, which clamps the sticky sidebar 40px short of the viewport and
+     leaves its background ending early. The main column carries the bottom
+     spacing instead. */
+  padding-bottom: 0;
+}
+.app-main { padding-bottom: 40px; }
+.app-body-flex {
+  flex: 1 1 auto;
+  align-items: stretch;
 }
 
 /* Right-hand header cluster: language toggle, then log out. */

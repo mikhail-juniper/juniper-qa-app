@@ -58,10 +58,20 @@ function isPdfFile(nameOrUrl) {
 }
 
 let allOrders = [];
+// Set when a Juniper user is previewing a supplier's view. Everything the
+// page fetches is scoped as that supplier, but the visitor keeps their own
+// session and permissions.
+const previewSupplier = new URLSearchParams(location.search).get('preview') || '';
+const scopeParam = previewSupplier ? `?asSupplier=${encodeURIComponent(previewSupplier)}` : '';
 
 async function render() {
   const root = document.getElementById('supRoot');
   root.innerHTML = `
+    ${previewSupplier ? `
+      <div class="section-help" style="margin-bottom:14px;padding:10px 14px;background:#fff6e5;border-radius:8px;color:#9a6700;">
+        <strong>Preview</strong> - this is what ${escapeHtml(previewSupplier)} sees. You're still signed in as yourself.
+        <a href="/order-management.html" style="margin-left:8px;">Back to Order Management</a>
+      </div>` : ''}
     <h2 class="om-view-title">${i18('supYourPos', 'Your Purchase Orders')}</h2>
     <input class="om-search om-directory-search" id="supSearch" type="text" autocomplete="off"
       placeholder="${escapeHtml(i18t('supSearchPlaceholder', 'Search PO number, product, SKU...'))}" />
@@ -70,9 +80,10 @@ async function render() {
   try {
     const me = await api('/api/me');
     const sub = document.getElementById('supplierBrandSub');
-    if (sub && me.user && me.user.supplierName) sub.textContent = me.user.supplierName;
+    const label = previewSupplier || (me.user && me.user.supplierName);
+    if (sub && label) sub.textContent = label;
 
-    const data = await api('/api/order-management/orders');
+    const data = await api(`/api/order-management/orders${scopeParam}`);
     allOrders = data.orders || [];
     drawList('');
     const search = document.getElementById('supSearch');
@@ -145,7 +156,7 @@ function closePanel() {
 async function openSupplierOrder(id) {
   let order;
   try {
-    const data = await api(`/api/order-management/orders/${encodeURIComponent(id)}`);
+    const data = await api(`/api/order-management/orders/${encodeURIComponent(id)}${scopeParam}`);
     order = data.order;
   } catch (e) { return showToast(e.message, true); }
 
