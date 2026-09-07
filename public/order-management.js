@@ -332,7 +332,10 @@ async function loadTilePreview(productLine) {
     const params = new URLSearchParams();
     if (productLine !== 'all') params.set('productLine', productLine);
     const data = await api(`/api/order-management/orders?${params.toString()}`);
-    const all = data.orders || [];
+    // A PO that hasn't been sent to the factory yet lives in the PO
+    // Requests section above, not in the category tiles - otherwise every
+    // new request appears twice on the same screen.
+    const all = (data.orders || []).filter((o) => o.status !== 'New Request');
     populateTileFilters(`omTileF-${productLine}-`, all, st);
     const filtered = applyTileFilters(all, st);
     const orders = filtered.slice(0, 10); // preview only - "View all" shows everything
@@ -374,7 +377,8 @@ function openCategoryFullScreen(productLine) {
     const params = new URLSearchParams();
     if (productLine !== 'all') params.set('productLine', productLine);
     const data = await api(`/api/order-management/orders?${params.toString()}`);
-    const all = data.orders || [];
+    // Same exclusion as the tiles - new requests live in PO Requests only.
+    const all = (data.orders || []).filter((o) => o.status !== 'New Request');
     populateTileFilters('omFullF-', all, st);
     const orders = applyTileFilters(all, st); // no 10-row cap here
     if (st.subTab === 'components') renderComponentsTable(host, orders);
@@ -3033,6 +3037,18 @@ async function openDetailPanel(id, scope) {
   // used to make the Size column a dropdown instead of free text.
   let universalSizes = [];
 
+  /**
+   * The sizes this PO is actually for, taken from its size distribution.
+   * A sizing chart offering Youth XS through Adult 5XL when the order only
+   * covers S/M/L invites measurements being entered against sizes nobody is
+   * making. Falls back to the full list when the PO has no distribution.
+   */
+  function poSizes() {
+    const dist = (order.mainComponent && order.mainComponent.sizeDistribution) || [];
+    const labels = dist.map((d) => d.size).filter(Boolean);
+    return labels.length ? labels : universalSizes;
+  }
+
   function renderDimensionsTable() {
     const wrap = document.getElementById('fDimensionsTableWrap');
     if (!wrap) return;
@@ -3046,7 +3062,8 @@ async function openDetailPanel(id, scope) {
     // list (e.g. a standard loaded from fits.json with its own naming),
     // so picking a standard never "loses" a size the dropdown doesn't know.
     const sizeOptionsHtml = (current) => {
-      const options = current && !universalSizes.includes(current) ? [current, ...universalSizes] : universalSizes;
+      const allowed = poSizes();
+      const options = current && !allowed.includes(current) ? [current, ...allowed] : allowed;
       return options.map((s) => `<option value="${escapeHtml(s)}" ${s === current ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('');
     };
     wrap.innerHTML = `
@@ -3128,11 +3145,21 @@ async function openDetailPanel(id, scope) {
       dimStandardSelect.addEventListener('change', (e) => {
         const chosen = fits[e.target.value];
         if (!chosen) return;
+        // Load only the sizes this PO actually covers. A standard carries
+        // Youth XS through Adult 3XL; copying all of them in means QA is
+        // asked to measure sizes nobody is producing. If the PO has no size
+        // distribution, fall back to the whole standard.
+        const allSizes = JSON.parse(JSON.stringify(chosen.sizes || {}));
+        const wanted = poSizes();
+        const scoped = {};
+        wanted.forEach((sizeName) => {
+          if (allSizes[sizeName]) scoped[sizeName] = allSizes[sizeName];
+        });
         dimensionsTableState = {
           standardKey: e.target.value,
           points: [...(chosen.points || [])],
           pointLabels: JSON.parse(JSON.stringify(chosen.pointLabels || {})),
-          sizes: JSON.parse(JSON.stringify(chosen.sizes || {}))
+          sizes: Object.keys(scoped).length ? scoped : allSizes
         };
         renderDimensionsTable();
       });
@@ -3143,7 +3170,10 @@ async function openDetailPanel(id, scope) {
       // Pick the first canonical size not already in the table, so the new
       // row shows up as a real, already-valid size selected in the
       // dropdown - never a "New Size" placeholder to type over.
-      const nextSize = universalSizes.find((s) => !dimensionsTableState.sizes[s])
+      // Offer the PO's own sizes first, falling back to the canonical list
+      // once they're all present.
+      const nextSize = poSizes().find((s) => !dimensionsTableState.sizes[s])
+        || universalSizes.find((s) => !dimensionsTableState.sizes[s])
         || `New Size ${Object.keys(dimensionsTableState.sizes).length + 1}`;
       dimensionsTableState.sizes[nextSize] = {};
       renderDimensionsTable();

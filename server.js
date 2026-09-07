@@ -42,6 +42,7 @@ const userStore = require('./lib/userStore');
 const supplierAccess = require('./lib/supplierAccess');
 const googleAuth = require('./lib/googleAuth');
 const gmailSend = require('./lib/gmailSend');
+const wechatAuth = require('./lib/wechatAuth');
 const AdmZip = require('adm-zip');
 const ASANA_FIELD_MAP_PATH = path.join(__dirname, 'config', 'asanaFieldMap.json');
 function loadAsanaFieldMap() { return loadJson(ASANA_FIELD_MAP_PATH); }
@@ -263,7 +264,8 @@ function currentUser(req) {
 // page itself can load and submit.
 const AUTH_ALLOWLIST = new Set([
   '/login.html', '/api/login', '/api/login-options', '/favicon.ico',
-  '/auth/google', '/auth/google/callback'
+  '/auth/google', '/auth/google/callback',
+  '/auth/wechat', '/auth/wechat/callback'
 ]);
 
 /**
@@ -382,6 +384,55 @@ app.get('/a/:token', (req, res) => {
     issueSession(res, { kind: 'approvalLink', orderId: order.id });
   }
   res.redirect(`/approval.html?po=${encodeURIComponent(order.id)}`);
+});
+
+// ---- WeChat sign-in ----
+// Dormant unless WECHAT_APP_ID/SECRET are set. Official Account mode only
+// works inside WeChat's browser; the login page hides the button elsewhere.
+const WECHAT_STATE_COOKIE = 'juniper_wxstate';
+
+app.get('/auth/wechat', (req, res) => {
+  if (!wechatAuth.isConfigured()) return res.redirect('/login.html?error=wechat_not_configured');
+  const state = wechatAuth.makeState();
+  res.cookie(WECHAT_STATE_COOKIE, state, { httpOnly: true, sameSite: 'lax', maxAge: 10 * 60 * 1000 });
+  res.redirect(wechatAuth.authUrl(req, state));
+});
+
+app.get('/auth/wechat/callback', async (req, res) => {
+  const fail = (msg) => res.redirect(`/login.html?error=${encodeURIComponent(msg)}`);
+  if (!wechatAuth.isConfigured()) return fail('WeChat sign-in is not configured.');
+  const expected = parseCookies(req)[WECHAT_STATE_COOKIE];
+  res.clearCookie(WECHAT_STATE_COOKIE);
+  if (!req.query.state || !expected || req.query.state !== expected) {
+    return fail('Sign-in expired or was interrupted. Please try again.');
+  }
+  if (!req.query.code) return fail('WeChat did not return an authorization code.');
+
+  try {
+    const identity = await wechatAuth.completeSignIn(req.query.code);
+    // Match on unionId first (stable across apps), then openId.
+    const user = (identity.unionId && userStore.findByIdentity('wechatUnionId', identity.unionId))
+      || userStore.findByIdentity('wechatOpenId', identity.openId);
+    if (!user) {
+      // No auto-provisioning: a WeChat identity carries no verifiable
+      // company domain, so an admin has to link it deliberately. The
+      // OpenID is shown so they can paste it into the Users page.
+      return fail(`No Juniper account is linked to that WeChat yet. Ask an admin to link it (ID: ${identity.openId}).`);
+    }
+    if (!user.active) return fail('That account has been deactivated.');
+    // Backfill whichever identifier we didn't match on.
+    const patch = {};
+    if (!user.wechatOpenId) patch.wechatOpenId = identity.openId;
+    if (identity.unionId && !user.wechatUnionId) patch.wechatUnionId = identity.unionId;
+    if (Object.keys(patch).length) userStore.updateUser(user.id, patch);
+
+    userStore.recordLogin(user.id);
+    issueSession(res, { kind: 'user', userId: user.id });
+    return res.redirect(userStore.landingPageFor(user));
+  } catch (err) {
+    console.error('WeChat sign-in failed:', err);
+    return fail(err.message || 'WeChat sign-in failed.');
+  }
 });
 
 app.get('/s/:token', (req, res) => {
@@ -583,6 +634,14 @@ app.get('/api/login-options', (req, res) => {
     ok: true,
     roles: userStore.ROLES,
     suppliers: supplierStore.listSuppliers().map((s2) => s2.name).filter(Boolean).sort(),
+    wechat: {
+      enabled: wechatAuth.isConfigured(),
+      mode: wechatAuth.mode(),
+      // Official Account auth only works in WeChat's own browser, so the
+      // button is pointless (and confusing) anywhere else.
+      usable: wechatAuth.isConfigured()
+        && (wechatAuth.mode() === 'qr' || wechatAuth.isWeChatBrowser(req))
+    },
     google: {
       enabled: googleAuth.isConfigured(),
       domain: googleAuth.allowedDomain() || null,

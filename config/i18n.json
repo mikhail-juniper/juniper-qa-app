@@ -3774,5 +3774,13 @@
   "gmailClientBlocked": {
     "en": "Your browser blocked the mail window. Use Copy message instead.",
     "zh": "浏览器阻止了邮件窗口，请改用「复制消息」。"
+  },
+  "usersLinkWechat": {
+    "en": "WeChat",
+    "zh": "微信"
+  },
+  "usersWechatPrompt": {
+    "en": "WeChat OpenID for this user (blank to unlink):",
+    "zh": "该用户的微信 OpenID（留空则解除绑定）："
   }
 }

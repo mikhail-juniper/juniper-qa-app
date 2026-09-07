@@ -160,6 +160,7 @@ function renderTable() {
               <td style="white-space:nowrap;">
                 <button type="button" class="om-table-upload-btn" data-save="${escapeHtml(u.id)}">${i18('btnSaveChanges', 'Save')}</button>
                 <button type="button" class="om-table-upload-btn" data-pw="${escapeHtml(u.id)}">${i18('usersSetPassword', 'Password')}</button>
+                <button type="button" class="om-table-upload-btn" data-wx="${escapeHtml(u.id)}">${i18('usersLinkWechat', 'WeChat')}</button>
                 <button type="button" class="om-table-upload-btn" data-del="${escapeHtml(u.id)}">${i18('btnDelete', 'Delete')}</button>
               </td>
             </tr>
@@ -205,6 +206,20 @@ function wireTable() {
     try {
       await api(`/api/users/${encodeURIComponent(b.dataset.pw)}`, { method: 'PATCH', body: JSON.stringify({ password: pw }) });
       showToast(i18t('usersPasswordSet', 'Password set'));
+      await load();
+    } catch (e) { showToast(e.message, true); }
+  }));
+  // WeChat identities can't be auto-provisioned (no verifiable company
+  // domain), so an admin pastes the OpenID from the failed sign-in message.
+  document.querySelectorAll('[data-wx]').forEach((b) => b.addEventListener('click', async () => {
+    const current = (users.find((u) => u.id === b.dataset.wx) || {}).wechatOpenId || '';
+    const id = prompt(i18t('usersWechatPrompt', 'WeChat OpenID for this user (blank to unlink):'), current);
+    if (id === null) return;
+    try {
+      await api(`/api/users/${encodeURIComponent(b.dataset.wx)}`, {
+        method: 'PATCH', body: JSON.stringify({ wechatOpenId: id.trim() || null })
+      });
+      showToast(i18t('usersSaved', 'User saved'));
       await load();
     } catch (e) { showToast(e.message, true); }
   }));

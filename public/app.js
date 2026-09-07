@@ -725,7 +725,35 @@ function attachChooserHandlers() {
   });
 }
 
+/**
+ * Variant SKUs follow the parent, with the final digit as the size index:
+ * JTST03HOO1 is the smallest size, JTST03HOO2 the next, and so on. So the
+ * parent's trailing number is replaced by the row's position.
+ *
+ * Returns '' when the parent SKU doesn't end in a digit, rather than
+ * guessing at a format we don't recognise.
+ */
+function variantSkuFor(parentSku, index) {
+  const sku = String(parentSku || '').trim();
+  const m = sku.match(/^(.*?)(\d+)$/);
+  if (!m) return '';
+  return `${m[1]}${index + 1}`;
+}
+
+/** Fill in any variant SKU the user hasn't typed themselves. Existing
+ *  values are left alone - a manual override should stick. */
+function autoFillVariantSkus() {
+  newPoState.sizesIncluded.forEach((row, i) => {
+    if (!row.sku || row.autoSku) {
+      const next = variantSkuFor(newPoState.sku, i);
+      if (next) { row.sku = next; row.autoSku = true; }
+    }
+  });
+}
+
 function renderNewPoSizesBlock() {
+  // Keep generated SKUs in step with the parent SKU and row order.
+  autoFillVariantSkus();
   const isApparel = newPoState.category === 'apparel';
   if (!newPoState.category) return '';
   const universalSizes = (CONFIG.fits && CONFIG.fits.universalSizes) || [];
@@ -918,6 +946,8 @@ function attachNewPoSizeHandlers() {
     el.addEventListener('input', (e) => {
       const i = parseInt(el.getAttribute('data-po-variant-sku'), 10);
       newPoState.sizesIncluded[i].sku = e.target.value;
+      // Typed by hand - stop regenerating it.
+      newPoState.sizesIncluded[i].autoSku = false;
     });
   });
   document.querySelectorAll('[data-po-variant-label]').forEach((el) => {
@@ -1120,6 +1150,24 @@ async function submitNewPo() {
   if (missing.length) {
     showToast('Please fill in: ' + missing.join(', '), true);
     return;
+  }
+
+  // Size quantities must add up to the PO quantity. Catching this here
+  // rather than downstream avoids a PO whose variant split silently
+  // disagrees with the quantity the factory is told to make.
+  const rows = newPoState.sizesIncluded.filter((x) => x.label);
+  if (rows.length) {
+    const sized = rows.reduce((sum, r) => sum + (Number(r.quantity) || 0), 0);
+    const total = Number(newPoState.orderQuantity) || 0;
+    if (sized !== total) {
+      const diff = sized - total;
+      showToast(
+        `Size quantities total ${sized.toLocaleString()}, but the PO quantity is ${total.toLocaleString()} ` +
+        `(${diff > 0 ? diff.toLocaleString() + ' too many' : Math.abs(diff).toLocaleString() + ' short'}).`,
+        true
+      );
+      return;
+    }
   }
 
   const btn = document.getElementById('btnNewPoSubmit');
