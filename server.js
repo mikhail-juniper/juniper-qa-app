@@ -453,6 +453,29 @@ app.get('/api/login-options', (req, res) => {
   });
 });
 
+// Diagnostic: prints the EXACT redirect URI this server will send to Google.
+// redirect_uri_mismatch is nearly always a character-level difference (http
+// vs https, a trailing slash, www, or a stale host), so guessing is a waste
+// of time - copy this value into the Google Cloud console verbatim.
+app.get('/api/auth/google/debug', requirePermission('users:manage'), (req, res) => {
+  res.json({
+    ok: true,
+    configured: googleAuth.isConfigured(),
+    clientIdSet: !!process.env.GOOGLE_CLIENT_ID,
+    clientSecretSet: !!process.env.GOOGLE_CLIENT_SECRET,
+    allowedDomains: googleAuth.allowedDomains(),
+    adminEmails: googleAuth.adminEmails(),
+    // The value that must be registered under "Authorised redirect URIs".
+    redirectUriToRegister: googleAuth.callbackUrl(req),
+    detected: {
+      protocol: req.protocol,
+      host: req.get('host'),
+      xForwardedProto: req.get('x-forwarded-proto') || null,
+      publicBaseUrlEnv: process.env.PUBLIC_BASE_URL || null
+    }
+  });
+});
+
 // ---- Supplier access links (admin only) ----
 app.get('/api/suppliers/:id/access-link', requirePermission('dispatch:send'), (req, res) => {
   const supplier = supplierStore.getSupplier(req.params.id);
@@ -2339,6 +2362,18 @@ function seedFabricSwatchesFromFile() {
   }
 }
 seedFabricSwatchesFromFile();
+
+// Surface the Google callback config at boot so a mismatch is visible in the
+// Render logs without having to hit an endpoint.
+if (googleAuth.isConfigured()) {
+  const base = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
+  console.log(
+    'Google sign-in enabled. Redirect URI must be registered in Google Cloud as: ' +
+    (base ? `${base}/auth/google/callback`
+          : '<your-public-url>/auth/google/callback  (set PUBLIC_BASE_URL to pin this exactly)')
+  );
+  console.log(`Google allowed domains: ${googleAuth.allowedDomains().join(', ') || '(none - restriction off)'}`);
+}
 
 // Runs after the vendor seed on purpose: several factory codes are also
 // real vendor codes in that seed, and this migration only checks by name
