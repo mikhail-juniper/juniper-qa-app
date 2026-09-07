@@ -657,6 +657,26 @@ app.post('/api/gmail/disconnect', (req, res) => {
   res.json({ ok: true });
 });
 
+// Why didn't the last email send? Answers the common causes in one place.
+app.get('/api/gmail/debug', (req, res) => {
+  const user = req.user && req.user.id ? userStore.getUser(req.user.id) : null;
+  const token = user && gmailSend.decryptToken(user.gmailRefreshToken);
+  const problems = [];
+  if (!googleAuth.isConfigured()) problems.push('GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are not set on the server.');
+  if (!user) problems.push('You are signed in with the shared site password, which has no user account. Gmail sending needs a personal account - sign in with Google instead.');
+  else if (!user.gmailRefreshToken) problems.push('This account has not connected Gmail yet. Use the "Connect Gmail" link in the send dialog.');
+  else if (!token) problems.push('A Gmail token is stored but cannot be decrypted (SESSION_SECRET changed). Reconnect Gmail.');
+  res.json({
+    ok: true,
+    sessionKind: req.user ? (req.user.isSharedSession ? 'shared-password' : 'user-account') : 'none',
+    signedInAs: (user && user.email) || (req.user && req.user.name) || null,
+    googleConfigured: googleAuth.isConfigured(),
+    gmailConnected: !!token,
+    willSendFromApp: !!token,
+    problems
+  });
+});
+
 // ---- Supplier access links (admin only) ----
 app.get('/api/suppliers/:id/access-link', requirePermission('dispatch:send'), (req, res) => {
   const supplier = supplierStore.getSupplier(req.params.id);
@@ -1795,11 +1815,21 @@ app.post('/api/order-management/orders/:id/dispatch', requirePermission('dispatc
   // Actually send, when the sender has connected Gmail and this is email.
   // Anything else falls back to "composed locally" and the client hands off
   // to the user's mail client or clipboard, exactly as before.
-  let delivery = { delivered: false, reason: 'no-server-transport' };
-  if (channel === 'email' && body.subject && body.body) {
+  let delivery = { delivered: false, reason: 'not-email-channel' };
+  if (channel === 'email') {
     const senderUser = req.user && req.user.id ? userStore.getUser(req.user.id) : null;
     const refresh = senderUser && gmailSend.decryptToken(senderUser.gmailRefreshToken);
-    if (refresh) {
+    // Be specific about why a send fell back, so "it didn't send" is
+    // diagnosable instead of silent.
+    if (!googleAuth.isConfigured()) delivery = { delivered: false, reason: 'google-not-configured' };
+    else if (!senderUser) delivery = { delivered: false, reason: 'shared-session-no-user-account' };
+    else if (!senderUser.gmailRefreshToken) delivery = { delivered: false, reason: 'gmail-not-connected' };
+    else if (!refresh) delivery = { delivered: false, reason: 'stored-token-unreadable' };
+    else if (!body.subject || !body.body) delivery = { delivered: false, reason: 'missing-subject-or-body' };
+    if (delivery.reason && delivery.reason !== 'not-email-channel') {
+      console.log(`PO dispatch not sent server-side: ${delivery.reason}`);
+    }
+    if (refresh && body.subject && body.body) {
       try {
         const messageId = await gmailSend.sendAs(refresh, {
           to: recipient,

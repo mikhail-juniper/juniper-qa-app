@@ -3671,6 +3671,12 @@ async function openDispatchDialog(orderId, targetKey, onSent) {
     } else if (gmail.canConnect) {
       el.innerHTML = `${i18('gmailNotConnected', 'This will open your mail client.')} ` +
         `<a href="/auth/google/gmail">${i18('gmailConnect', 'Connect Gmail to send from here instead')}</a>`;
+    } else if (gmail.available) {
+      // Shared-password session: there's no user record to attach a Gmail
+      // grant to, so explain the actual fix rather than leaving them
+      // wondering why nothing sent.
+      el.innerHTML = `${i18('gmailNotConnected', 'This will open your mail client.')} ` +
+        `${i18('gmailSignInToSend', 'Sign in with Google to send from inside the app.')}`;
     } else {
       el.innerHTML = i18('gmailNotConnected', 'This will open your mail client.');
     }
@@ -3714,9 +3720,16 @@ async function openDispatchDialog(orderId, targetKey, onSent) {
       const sentByServer = res && res.delivery && res.delivery.delivered;
       if (channel === 'email' && !sentByServer) {
         // Gmail isn't connected for this user, so hand off to their own mail
-        // client with everything pre-filled.
+        // client with everything pre-filled. Say so plainly - previously this
+        // showed the same "Dispatch recorded" as a real send, which made a
+        // fallback look identical to success.
         window.open(`mailto:${encodeURIComponent(recipient)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank');
-      } else if (channel === 'email') {
+        showToast(i18t('gmailFellBack', 'Recorded. Gmail is not connected, so this opened your mail client - you still need to press send there.'), true);
+        closeSelf();
+        if (onSent) onSent(res && res.order);
+        return;
+      }
+      if (channel === 'email') {
         showToast(i18t('gmailSent', 'Email sent from your Gmail'));
       } else {
         try { await navigator.clipboard.writeText(`${subject}\n\n${body}`); } catch (e) { /* clipboard may be blocked */ }

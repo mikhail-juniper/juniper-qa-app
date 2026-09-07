@@ -73,8 +73,16 @@ async function render() {
         <a href="/order-management.html" style="margin-left:8px;">Back to Order Management</a>
       </div>` : ''}
     <h2 class="om-view-title">${i18('supYourPos', 'Your Purchase Orders')}</h2>
-    <input class="om-search om-directory-search" id="supSearch" type="text" autocomplete="off"
-      placeholder="${escapeHtml(i18t('supSearchPlaceholder', 'Search PO number, product, SKU...'))}" />
+    <div class="om-tile-toolbar om-filter-toolbar" style="margin-bottom:16px;">
+      <select class="om-filter-select" id="supSku">
+        <option value="">${escapeHtml(i18t('filterAllSkus', 'All SKUs'))}</option>
+      </select>
+      <select class="om-filter-select" id="supStatus">
+        <option value="">${escapeHtml(i18t('filterAllStatuses', 'All statuses'))}</option>
+      </select>
+      <input class="om-search om-filter-search" id="supSearch" type="text" autocomplete="off"
+        placeholder="${escapeHtml(i18t('supSearchPlaceholder', 'Search PO number, product, SKU...'))}" />
+    </div>
     <div id="supListHost"><div class="om-empty">${i18('emptyLoading', 'Loading...')}</div></div>
   `;
   try {
@@ -85,12 +93,26 @@ async function render() {
 
     const data = await api(`/api/order-management/orders${scopeParam}`);
     allOrders = data.orders || [];
-    drawList('');
-    const search = document.getElementById('supSearch');
+    // Filter options come from this supplier's own orders, so a dropdown
+    // never offers a value that returns nothing.
+    const fill = (id, values) => {
+      const el = document.getElementById(id);
+      const first = el.querySelector('option').outerHTML;
+      const list = [...new Set(values.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b)));
+      el.innerHTML = first + list.map((v) =>
+        `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+    };
+    fill('supSku', allOrders.map((o) => o.mainComponent && o.mainComponent.sku));
+    fill('supStatus', allOrders.map((o) => o.status));
+
+    drawList();
     let timer = null;
-    search.addEventListener('input', () => {
+    document.getElementById('supSearch').addEventListener('input', () => {
       clearTimeout(timer);
-      timer = setTimeout(() => drawList(search.value), 120);
+      timer = setTimeout(drawList, 120);
+    });
+    ['supSku', 'supStatus'].forEach((id) => {
+      document.getElementById(id).addEventListener('change', drawList);
     });
   } catch (e) {
     document.getElementById('supListHost').innerHTML =
@@ -98,16 +120,27 @@ async function render() {
   }
 }
 
-function drawList(query) {
+function drawList() {
   const host = document.getElementById('supListHost');
-  const q = String(query || '').trim().toLowerCase();
+  const val = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
+  const q = String(val('supSearch')).trim().toLowerCase();
+  const sku = val('supSku');
+  const status = val('supStatus');
+  const filtering = !!(q || sku || status);
+
   const shown = allOrders.filter((o) => {
+    const mc = o.mainComponent || {};
+    if (sku && mc.sku !== sku) return false;
+    if (status && o.status !== status) return false;
     if (!q) return true;
-    return [o.poNumber, o.mainComponent && o.mainComponent.name, o.mainComponent && o.mainComponent.sku]
+    return [o.poNumber, mc.name, mc.sku]
       .some((v) => v && String(v).toLowerCase().includes(q));
   });
   if (!shown.length) {
-    host.innerHTML = `<div class="om-empty">${i18('supNoOrders', 'No purchase orders yet.')}</div>`;
+    // Distinguish "you have no orders" from "your filters excluded them all".
+    host.innerHTML = `<div class="om-empty">${filtering
+      ? i18('supNoMatches', 'No purchase orders match those filters.')
+      : i18('supNoOrders', 'No purchase orders yet.')}</div>`;
     return;
   }
   host.innerHTML = `

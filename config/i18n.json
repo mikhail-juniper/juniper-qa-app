@@ -3750,5 +3750,29 @@
   "gmailFailed": {
     "en": "Gmail could not be connected",
     "zh": "Gmail 连接失败"
+  },
+  "supNoMatches": {
+    "en": "No purchase orders match those filters.",
+    "zh": "没有符合筛选条件的采购订单。"
+  },
+  "gmailFellBack": {
+    "en": "Recorded. Gmail is not connected, so this opened your mail client - you still need to press send there.",
+    "zh": "已记录。Gmail 未连接，已打开您的邮件客户端，请在其中点击发送。"
+  },
+  "gmailOpenedClient": {
+    "en": "Opened in your mail client - send it from there",
+    "zh": "已在您的邮件客户端中打开，请从那里发送"
+  },
+  "gmailCopiedForWechat": {
+    "en": "Message copied - paste it into WeChat",
+    "zh": "消息已复制，请粘贴到微信"
+  },
+  "gmailSignInToSend": {
+    "en": "Sign in with Google to send email from inside the app.",
+    "zh": "使用 Google 登录后即可在应用内直接发送邮件。"
+  },
+  "gmailClientBlocked": {
+    "en": "Your browser blocked the mail window. Use Copy message instead.",
+    "zh": "浏览器阻止了邮件窗口，请改用「复制消息」。"
   }
 }
