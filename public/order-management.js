@@ -3541,12 +3541,14 @@ async function openDispatchDialog(orderId, targetKey, onSent) {
   let data;
   let templates = [];
   let sender = { name: '', email: '' };
+  let gmail = { available: false, connected: false, canConnect: false };
   try {
     data = await api(`/api/order-management/orders/${encodeURIComponent(orderId)}/dispatch-message/${encodeURIComponent(targetKey)}`);
     const tplRes = await api('/api/message-templates');
     templates = tplRes.templates || [];
     const tgtRes = await api(`/api/order-management/orders/${encodeURIComponent(orderId)}/dispatch-targets`);
     sender = tgtRes.sender || { name: '', email: '' };
+    gmail = await api('/api/gmail/status');
   } catch (e) { return showToast(e.message, true); }
   const t = data.target;
   const msg = data.message;
@@ -3590,7 +3592,7 @@ async function openDispatchDialog(orderId, targetKey, onSent) {
         <input type="checkbox" id="dispSave" style="width:auto;margin:0;" />
         <span>${i18('saveToSupplierRecord', 'Save this contact to the supplier record')}</span>
       </label>
-      <div class="section-help" style="margin-top:8px;">${i18('dispatchFromHelp', 'Email opens in your own mail client so it sends from your address.')}</div>
+      <div class="section-help" style="margin-top:8px;" id="dispSendModeNote"></div>
       <div id="dispWechatNote" class="section-help" style="margin-top:8px;display:${channel === 'wechat' ? '' : 'none'};">
         ${i18('wechatNoApi', 'WeChat cannot be sent automatically - copy the message and paste it to this contact.')}
       </div>
@@ -3657,12 +3659,31 @@ async function openDispatchDialog(orderId, targetKey, onSent) {
     applyTemplate(); // start from the first template rather than the built-in text
   }
 
+  /** Tell the person exactly what pressing Send will do - sending straight
+   *  from their Gmail is very different from opening a draft, and they
+   *  should know which one they're about to get. */
+  function updateSendModeNote() {
+    const el = document.getElementById('dispSendModeNote');
+    if (!el) return;
+    if (channel === 'wechat') { el.innerHTML = ''; return; }
+    if (gmail.connected) {
+      el.innerHTML = `${i18('gmailWillSend', 'Sends directly from your Gmail')} (${escapeHtml(gmail.email || '')}).`;
+    } else if (gmail.canConnect) {
+      el.innerHTML = `${i18('gmailNotConnected', 'This will open your mail client.')} ` +
+        `<a href="/auth/google/gmail">${i18('gmailConnect', 'Connect Gmail to send from here instead')}</a>`;
+    } else {
+      el.innerHTML = i18('gmailNotConnected', 'This will open your mail client.');
+    }
+  }
+  updateSendModeNote();
+
   const recipientInput = document.getElementById('dispRecipient');
   document.getElementById('dispChannel').addEventListener('change', (e) => {
     channel = e.target.value;
     // Swap in whatever is on file for the newly-chosen channel.
     recipientInput.value = channel === 'email' ? (t.email || '') : (t.wechat || '');
     document.getElementById('dispWechatNote').style.display = channel === 'wechat' ? '' : 'none';
+    updateSendModeNote();
   });
 
   document.getElementById('dispCopy').addEventListener('click', async () => {
@@ -3686,13 +3707,17 @@ async function openDispatchDialog(orderId, targetKey, onSent) {
           saveToSupplier: document.getElementById('dispSave').checked,
           fromName: document.getElementById('dispFromName').value,
           fromEmail: document.getElementById('dispFromEmail').value,
+          subject, body,
           actor: document.getElementById('dispFromName').value || 'Web user'
         })
       });
-      if (channel === 'email') {
-        // No SMTP on the server, so hand off to the user's mail client with
-        // everything pre-filled.
+      const sentByServer = res && res.delivery && res.delivery.delivered;
+      if (channel === 'email' && !sentByServer) {
+        // Gmail isn't connected for this user, so hand off to their own mail
+        // client with everything pre-filled.
         window.open(`mailto:${encodeURIComponent(recipient)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank');
+      } else if (channel === 'email') {
+        showToast(i18t('gmailSent', 'Email sent from your Gmail'));
       } else {
         try { await navigator.clipboard.writeText(`${subject}\n\n${body}`); } catch (e) { /* clipboard may be blocked */ }
       }
@@ -4056,6 +4081,20 @@ function collectAccessoryRows(container) {
   })).filter((a) => a.partName || a.supplierName);
 }
 
+
+// Feedback after returning from the Connect Gmail consent screen.
+(function gmailConnectBanner() {
+  const params = new URLSearchParams(location.search);
+  const state = params.get('gmail');
+  if (!state) return;
+  setTimeout(() => {
+    showToast(state === 'connected'
+      ? i18t('gmailConnected', 'Gmail connected')
+      : i18t('gmailFailed', 'Gmail could not be connected'), state !== 'connected');
+  }, 600);
+  // Clean the URL so a refresh doesn't repeat the message.
+  window.history.replaceState({}, '', location.pathname);
+}());
 
 (async function init() {
   const params = new URLSearchParams(location.search);

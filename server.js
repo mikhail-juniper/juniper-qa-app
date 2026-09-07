@@ -41,6 +41,7 @@ const messageTemplateStore = require('./lib/messageTemplateStore');
 const userStore = require('./lib/userStore');
 const supplierAccess = require('./lib/supplierAccess');
 const googleAuth = require('./lib/googleAuth');
+const gmailSend = require('./lib/gmailSend');
 const AdmZip = require('adm-zip');
 const ASANA_FIELD_MAP_PATH = path.join(__dirname, 'config', 'asanaFieldMap.json');
 function loadAsanaFieldMap() { return loadJson(ASANA_FIELD_MAP_PATH); }
@@ -274,6 +275,9 @@ const AUTH_ALLOWLIST = new Set([
 // Dormant unless GOOGLE_CLIENT_ID/SECRET are set; the login page hides the
 // button in that case.
 const GOOGLE_STATE_COOKIE = 'juniper_gstate';
+// Marks a callback as coming from the "Connect Gmail" flow rather than a
+// plain sign-in, so we know to keep the refresh token and where to return.
+const GMAIL_INTENT_COOKIE = 'juniper_gmail_intent';
 
 app.get('/auth/google', (req, res) => {
   if (!googleAuth.isConfigured()) return res.redirect('/login.html?error=google_not_configured');
@@ -281,6 +285,17 @@ app.get('/auth/google', (req, res) => {
   // Short-lived cookie ties the callback to this browser (CSRF protection).
   res.cookie(GOOGLE_STATE_COOKIE, state, { httpOnly: true, sameSite: 'lax', maxAge: 10 * 60 * 1000 });
   res.redirect(googleAuth.authUrl(req, state));
+});
+
+// Connect Gmail: same OAuth flow, but additionally asking for send access.
+// Kept separate from sign-in so nobody is prompted for send permission just
+// to log in.
+app.get('/auth/google/gmail', (req, res) => {
+  if (!googleAuth.isConfigured()) return res.redirect('/login.html?error=google_not_configured');
+  const state = googleAuth.makeState();
+  res.cookie(GOOGLE_STATE_COOKIE, state, { httpOnly: true, sameSite: 'lax', maxAge: 10 * 60 * 1000 });
+  res.cookie(GMAIL_INTENT_COOKIE, '1', { httpOnly: true, sameSite: 'lax', maxAge: 10 * 60 * 1000 });
+  res.redirect(googleAuth.authUrl(req, state, [gmailSend.GMAIL_SEND_SCOPE]));
 });
 
 app.get('/auth/google/callback', async (req, res) => {
@@ -294,8 +309,10 @@ app.get('/auth/google/callback', async (req, res) => {
   if (req.query.error) return fail('Google sign-in was cancelled.');
   if (!req.query.code) return fail('Google did not return an authorization code.');
 
+  const gmailIntent = parseCookies(req)[GMAIL_INTENT_COOKIE] === '1';
+  res.clearCookie(GMAIL_INTENT_COOKIE);
   try {
-    const profile = await googleAuth.completeSignIn(req, req.query.code);
+    const { profile, tokens } = await googleAuth.completeSignIn(req, req.query.code);
 
     // Match an existing account by Google id first, then by email so an
     // account created by hand picks up its Google link on first sign-in.
@@ -326,8 +343,17 @@ app.get('/auth/google/callback', async (req, res) => {
       });
       console.log(`Provisioned Google account ${profile.email} as ${user.role}`);
     }
+    // Store the refresh token if Google issued one (only happens on the
+    // offline/consent flow). Encrypted at rest - see lib/gmailSend.
+    if (tokens && tokens.refresh_token) {
+      userStore.updateUser(user.id, { gmailRefreshToken: gmailSend.encryptToken(tokens.refresh_token) });
+    }
     userStore.recordLogin(user.id);
     issueSession(res, { kind: 'user', userId: user.id });
+    if (gmailIntent) {
+      const ok = !!(tokens && tokens.refresh_token);
+      return res.redirect(`/order-management.html?gmail=${ok ? 'connected' : 'failed'}`);
+    }
     return res.redirect(userStore.landingPageFor(user));
   } catch (err) {
     console.error('Google sign-in failed:', err);
@@ -379,7 +405,11 @@ app.get('/s/:token', (req, res) => {
     return res.redirect(`/supplier-orders.html?preview=${encodeURIComponent(supplier.name)}`);
   }
   issueSession(res, { kind: 'supplierLink', supplierId: supplier.id }, SUPPLIER_COOKIE_NAME);
-  res.redirect('/supplier-orders.html');
+  // Serve the page AT this URL rather than redirecting to a generic one, so
+  // the address stays unique to the supplier. They can bookmark it, and it
+  // keeps working later even after the session cookie expires - revisiting
+  // re-establishes the session from the token in the path.
+  res.sendFile(path.join(__dirname, 'public', 'supplier-orders.html'));
 });
 
 app.post('/api/login', (req, res) => {
@@ -605,6 +635,25 @@ app.post('/api/order-management/orders/:id/approval-link', requirePermission('di
 app.delete('/api/order-management/orders/:id/approval-link', requirePermission('dispatch:send'), (req, res) => {
   const updated = supplierAccess.revokeApprovalToken(orderManagementStore, req.params.id, req.user && req.user.name);
   if (!updated) return res.status(404).json({ error: 'Order not found' });
+  res.json({ ok: true });
+});
+
+// Whether the signed-in user can send email from inside the app.
+app.get('/api/gmail/status', (req, res) => {
+  const user = req.user && req.user.id ? userStore.getUser(req.user.id) : null;
+  res.json({
+    ok: true,
+    available: googleAuth.isConfigured(),
+    connected: !!(user && user.gmailRefreshToken),
+    // Shared-password sessions have no user record to hang a grant on.
+    canConnect: !!(user && googleAuth.isConfigured()),
+    email: (user && user.email) || null
+  });
+});
+
+app.post('/api/gmail/disconnect', (req, res) => {
+  if (!req.user || !req.user.id) return res.status(400).json({ error: 'No account to disconnect' });
+  userStore.updateUser(req.user.id, { gmailRefreshToken: null });
   res.json({ ok: true });
 });
 
@@ -1743,7 +1792,34 @@ app.post('/api/order-management/orders/:id/dispatch', requirePermission('dispatc
     supplierStore.updateSupplier(target.supplierId, patch);
   }
 
-  const delivery = await poDispatch.deliver();
+  // Actually send, when the sender has connected Gmail and this is email.
+  // Anything else falls back to "composed locally" and the client hands off
+  // to the user's mail client or clipboard, exactly as before.
+  let delivery = { delivered: false, reason: 'no-server-transport' };
+  if (channel === 'email' && body.subject && body.body) {
+    const senderUser = req.user && req.user.id ? userStore.getUser(req.user.id) : null;
+    const refresh = senderUser && gmailSend.decryptToken(senderUser.gmailRefreshToken);
+    if (refresh) {
+      try {
+        const messageId = await gmailSend.sendAs(refresh, {
+          to: recipient,
+          from: senderUser.email,
+          fromName: senderUser.name,
+          replyTo: senderUser.email,
+          subject: body.subject,
+          body: body.body
+        });
+        delivery = { delivered: true, via: 'gmail', messageId };
+      } catch (err) {
+        console.error('Gmail send failed:', err.message || err);
+        // Report rather than silently logging a dispatch that never went.
+        return res.status(502).json({
+          error: err.message || 'Could not send the email.',
+          needsReconnect: !!err.needsReconnect
+        });
+      }
+    }
+  }
   const sender = resolveSender(req, body);
   const entry = poDispatch.buildLogEntry(target, channel, recipient, body.actor || sender.name || req.get('X-Actor'), sender);
   let updated = orderManagementStore.updateOrder(

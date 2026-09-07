@@ -3726,5 +3726,29 @@
   "dispatchSentBy": {
     "en": "Sent by",
     "zh": "发送人"
+  },
+  "gmailWillSend": {
+    "en": "Sends directly from your Gmail",
+    "zh": "将直接从您的 Gmail 发送"
+  },
+  "gmailNotConnected": {
+    "en": "This will open your mail client.",
+    "zh": "将打开您的邮件客户端。"
+  },
+  "gmailConnect": {
+    "en": "Connect Gmail to send from here instead",
+    "zh": "连接 Gmail 以直接在此发送"
+  },
+  "gmailSent": {
+    "en": "Email sent from your Gmail",
+    "zh": "邮件已从您的 Gmail 发出"
+  },
+  "gmailConnected": {
+    "en": "Gmail connected",
+    "zh": "Gmail 已连接"
+  },
+  "gmailFailed": {
+    "en": "Gmail could not be connected",
+    "zh": "Gmail 连接失败"
   }
 }

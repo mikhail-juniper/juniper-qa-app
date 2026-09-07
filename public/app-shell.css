@@ -94,6 +94,15 @@
   box-sizing: border-box;
 }
 
+/* Pages without a sidebar (the supplier portal) must not carry the 220px
+   offset above, or their content sits hard against the left edge. They get
+   ordinary centring and a narrower measure instead. */
+.form-root.no-sidebar {
+  max-width: 1100px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
 /* Hamburger button - only shown on narrow screens (see the media query
    below). Three bars that become an X while the drawer is open. */
 .app-menu-toggle {
