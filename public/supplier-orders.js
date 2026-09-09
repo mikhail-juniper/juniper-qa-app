@@ -120,6 +120,57 @@ async function render() {
   }
 }
 
+/** A thumbnail, or a link when the file is a PDF, or a dash. */
+function thumb(url, alt) {
+  if (!url) return '<span style="color:var(--jc-muted);">—</span>';
+  if (isPdfFile(url)) {
+    return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener" style="font-size:11.5px;">${i18('btnViewFile', 'View')}</a>`;
+  }
+  return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">` +
+    `<img src="${escapeHtml(url)}" alt="${escapeHtml(alt || '')}" class="sup-thumb" /></a>`;
+}
+
+/**
+ * One PO row. Mirrors the columns the factory is used to seeing in the
+ * shared KingDocs sheet, so the move over doesn't change how they read it.
+ *
+ * Three cells are editable by the factory - the two sample dates and bulk
+ * progress. They save on change through the narrow supplier endpoint; the
+ * rest of the row is ours and read-only.
+ */
+function rowHtml(o) {
+  const mc = o.mainComponent || {};
+  const f = o.factoryUpdates || {};
+  const dash = '<span style="color:var(--jc-muted);">—</span>';
+  const comps = (o.componentPhotos || []).filter((c) => c.partName || c.imageUrl);
+  return `
+    <tr data-id="${escapeHtml(o.id)}">
+      <td>${thumb(mc.photoReference, mc.name)}</td>
+      <td><strong>${escapeHtml(mc.name || '—')}</strong></td>
+      <td>${escapeHtml(mc.sku || '—')}</td>
+      <td><strong>${escapeHtml(o.poNumber || '—')}</strong></td>
+      <td><span class="om-pill om-pill-${statusSlug(o.status)}">${escapeHtml(o.status || '—')}</span></td>
+      <td>${mc.purchaseQuantity ?? '—'}</td>
+      <td>${fmtDate(o.orderDate)}</td>
+      <td>${fmtDate(o.manufacturerDeliveryDate)}</td>
+      <td>${o.inTransportationAt ? fmtDate(o.inTransportationAt) : dash}</td>
+      <td><input type="date" class="sup-edit" data-field="preProductionSampleDate"
+        data-order="${escapeHtml(o.id)}" value="${escapeHtml((f.preProductionSampleDate || '').slice(0, 10))}" /></td>
+      <td><input type="date" class="sup-edit" data-field="bulkSampleDate"
+        data-order="${escapeHtml(o.id)}" value="${escapeHtml((f.bulkSampleDate || '').slice(0, 10))}" /></td>
+      <td class="sup-notes">${o.productionNotes ? escapeHtml(o.productionNotes) : dash}</td>
+      <td><input type="text" class="sup-edit" data-field="bulkShipmentProgress"
+        data-order="${escapeHtml(o.id)}" value="${escapeHtml(f.bulkShipmentProgress || '')}" style="min-width:150px;" /></td>
+      <td>${escapeHtml(o.warehouseAddress || '—')}</td>
+      <td>${comps.length ? `<div class="sup-comps">${comps.map((c) => `
+        <span class="sup-comp">${c.imageUrl ? thumb(c.imageUrl, c.partName) : ''}
+        <span class="sup-comp-name">${escapeHtml(c.partName)}</span></span>`).join('')}</div>` : dash}</td>
+      <td>${thumb(mc.washingTagUrl, 'Washing tag')}</td>
+      <td>${escapeHtml(o.packingListNumber || '—')}</td>
+    </tr>
+  `;
+}
+
 function drawList() {
   const host = document.getElementById('supListHost');
   const val = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
@@ -143,36 +194,68 @@ function drawList() {
       : i18('supNoOrders', 'No purchase orders yet.')}</div>`;
     return;
   }
+
   host.innerHTML = `
     <div class="om-category-tile">
       <div class="om-table-wrap">
-        <table class="om-table">
+        <table class="om-table sup-table">
           <thead><tr>
-            <th>${i18('thPoNumber', 'PO Number')}</th>
+            <th>${i18('supPhoto', 'Photo')}</th>
             <th>${i18('fldProductName', 'Product Name')}</th>
             <th>${i18('fldSku', 'SKU')}</th>
+            <th>${i18('thPoNumber', 'PO Number')}</th>
             <th>${i18('thStatus', 'Status')}</th>
+            <th>${i18('supQuantity', 'Quantity')}</th>
+            <th>${i18('supOrderDate', 'Order Date')}</th>
             <th>${i18('fldRequiredManufacturerDelivery', 'Required Manufacturer Delivery Date')}</th>
-            <th>${i18('fldOrderQuantity', 'Order Quantity')}</th>
+            <th>${i18('supActualShipDate', 'Actual Ship Date')}</th>
+            <th>${i18('supPreProdSample', 'Pre-Production Sample')}</th>
+            <th>${i18('supBulkSample', 'Bulk Sample')}</th>
+            <th>${i18('fldProductionNotes', 'Production Notes')}</th>
+            <th>${i18('supBulkProgress', 'Bulk Shipment Progress')}</th>
+            <th>${i18('fldWarehouseAddress', 'Warehouse Address')}</th>
+            <th>${i18('supComponents', 'Components')}</th>
+            <th>${i18('supWashingTag', 'Washing Tag')}</th>
+            <th>${i18('supPackingList', 'Packing List Number')}</th>
           </tr></thead>
           <tbody>
-            ${shown.map((o) => `
-              <tr data-id="${escapeHtml(o.id)}">
-                <td><strong>${escapeHtml(o.poNumber || '—')}</strong></td>
-                <td>${escapeHtml((o.mainComponent && o.mainComponent.name) || '—')}</td>
-                <td>${escapeHtml((o.mainComponent && o.mainComponent.sku) || '—')}</td>
-                <td><span class="om-pill om-pill-${statusSlug(o.status)}">${escapeHtml(o.status || '—')}</span></td>
-                <td>${fmtDate(o.manufacturerDeliveryDate)}</td>
-                <td>${(o.mainComponent && o.mainComponent.purchaseQuantity) ?? '—'}</td>
-              </tr>
-            `).join('')}
+            ${shown.map((o) => rowHtml(o)).join('')}
           </tbody>
         </table>
       </div>
     </div>
   `;
   host.querySelectorAll('tbody tr[data-id]').forEach((tr) => {
-    tr.addEventListener('click', () => openSupplierOrder(tr.dataset.id));
+    tr.addEventListener('click', (e) => {
+      // Editing a cell shouldn't also open the detail panel over the top.
+      if (e.target.closest('.sup-edit') || e.target.closest('a')) return;
+      openSupplierOrder(tr.dataset.id);
+    });
+  });
+
+  // The factory's own fields save as soon as they're changed - no separate
+  // save button, since a factory updating a date shouldn't have to hunt for
+  // one. Only these three keys are accepted by the server.
+  host.querySelectorAll('.sup-edit').forEach((el) => {
+    el.addEventListener('change', async () => {
+      const body = {};
+      body[el.dataset.field] = el.value;
+      el.disabled = true;
+      try {
+        const res = await api(`/api/supplier/orders/${encodeURIComponent(el.dataset.order)}/factory-updates`, {
+          method: 'POST', body: JSON.stringify(body)
+        });
+        // Keep the local copy in step so a redraw doesn't revert the value.
+        const idx = allOrders.findIndex((o) => o.id === el.dataset.order);
+        if (idx > -1 && res.order) allOrders[idx] = res.order;
+        showToast(i18t('supSaved', 'Saved'));
+      } catch (err) {
+        showToast(err.message, true);
+      } finally {
+        el.disabled = false;
+      }
+    });
+    el.addEventListener('click', (e) => e.stopPropagation());
   });
 }
 

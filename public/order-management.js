@@ -3571,6 +3571,7 @@ async function openDispatchDialog(orderId, targetKey, onSent) {
   let data;
   let templates = [];
   let sender = { name: '', email: '' };
+  let productionNotes = '';
   let gmail = { available: false, connected: false, canConnect: false };
   try {
     data = await api(`/api/order-management/orders/${encodeURIComponent(orderId)}/dispatch-message/${encodeURIComponent(targetKey)}`);
@@ -3578,6 +3579,7 @@ async function openDispatchDialog(orderId, targetKey, onSent) {
     templates = tplRes.templates || [];
     const tgtRes = await api(`/api/order-management/orders/${encodeURIComponent(orderId)}/dispatch-targets`);
     sender = tgtRes.sender || { name: '', email: '' };
+    productionNotes = tgtRes.productionNotes || '';
     gmail = await api('/api/gmail/status');
   } catch (e) { return showToast(e.message, true); }
   const t = data.target;
@@ -3617,6 +3619,11 @@ async function openDispatchDialog(orderId, targetKey, onSent) {
           <label>&nbsp;</label>
           <input type="text" id="dispFromEmail" value="${escapeHtml(sender.email || '')}" placeholder="you@junipercreates.com" />
         </div>
+      </div>
+      <div style="margin-top:12px;">
+        <label>${i18('fldProductionNotes', 'Production Notes')}</label>
+        <div class="section-help" style="margin:2px 0 6px 0;">${i18('helpProductionNotes', 'Notes for the factory. Shown on their order page.')}</div>
+        <textarea id="dispProductionNotes" rows="3" style="width:100%;font-family:inherit;font-size:13px;">${escapeHtml(productionNotes)}</textarea>
       </div>
       <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-weight:500;">
         <input type="checkbox" id="dispSave" style="width:auto;margin:0;" />
@@ -3743,6 +3750,7 @@ async function openDispatchDialog(orderId, targetKey, onSent) {
           saveToSupplier: document.getElementById('dispSave').checked,
           fromName: document.getElementById('dispFromName').value,
           fromEmail: document.getElementById('dispFromEmail').value,
+          productionNotes: document.getElementById('dispProductionNotes').value,
           subject, body,
           actor: document.getElementById('dispFromName').value || 'Web user'
         })

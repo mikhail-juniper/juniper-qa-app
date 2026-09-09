@@ -43,6 +43,7 @@ const supplierAccess = require('./lib/supplierAccess');
 const googleAuth = require('./lib/googleAuth');
 const gmailSend = require('./lib/gmailSend');
 const wechatAuth = require('./lib/wechatAuth');
+const wecomAuth = require('./lib/wecomAuth');
 const AdmZip = require('adm-zip');
 const ASANA_FIELD_MAP_PATH = path.join(__dirname, 'config', 'asanaFieldMap.json');
 function loadAsanaFieldMap() { return loadJson(ASANA_FIELD_MAP_PATH); }
@@ -265,7 +266,8 @@ function currentUser(req) {
 const AUTH_ALLOWLIST = new Set([
   '/login.html', '/api/login', '/api/login-options', '/favicon.ico',
   '/auth/google', '/auth/google/callback',
-  '/auth/wechat', '/auth/wechat/callback'
+  '/auth/wechat', '/auth/wechat/callback',
+  '/auth/wecom', '/auth/wecom/callback'
 ]);
 
 /**
@@ -432,6 +434,56 @@ app.get('/auth/wechat/callback', async (req, res) => {
   } catch (err) {
     console.error('WeChat sign-in failed:', err);
     return fail(err.message || 'WeChat sign-in failed.');
+  }
+});
+
+// ---- WeCom (企业微信) sign-in ----
+const WECOM_STATE_COOKIE = 'juniper_wcstate';
+
+app.get('/auth/wecom', (req, res) => {
+  if (!wecomAuth.isConfigured()) return res.redirect('/login.html?error=wecom_not_configured');
+  const state = wecomAuth.makeState();
+  res.cookie(WECOM_STATE_COOKIE, state, { httpOnly: true, sameSite: 'lax', maxAge: 10 * 60 * 1000 });
+  res.redirect(wecomAuth.authUrl(req, state));
+});
+
+app.get('/auth/wecom/callback', async (req, res) => {
+  const fail = (msg) => res.redirect(`/login.html?error=${encodeURIComponent(msg)}`);
+  if (!wecomAuth.isConfigured()) return fail('WeCom sign-in is not configured.');
+  const expected = parseCookies(req)[WECOM_STATE_COOKIE];
+  res.clearCookie(WECOM_STATE_COOKIE);
+  if (!req.query.state || !expected || req.query.state !== expected) {
+    return fail('Sign-in expired or was interrupted. Please try again.');
+  }
+  if (!req.query.code) return fail('WeCom did not return an authorization code.');
+
+  try {
+    const identity = await wecomAuth.completeSignIn(req.query.code);
+
+    let user = userStore.findByIdentity('wecomUserId', identity.userId)
+      || (identity.email ? userStore.findByEmail(identity.email) : null);
+
+    if (user) {
+      if (!user.wecomUserId) userStore.updateUser(user.id, { wecomUserId: identity.userId });
+      if (!user.active) return fail('That account has been deactivated.');
+    } else {
+      // Safe to auto-provision: WeCom only issues a userid to a member of
+      // this company's own organisation, so membership is already verified
+      // by WeCom itself - the same reasoning as a Workspace domain.
+      user = userStore.createUser({
+        name: identity.name || identity.userId,
+        email: identity.email || `${identity.userId}@wecom.local`,
+        role: 'internal',
+        wecomUserId: identity.userId
+      });
+      console.log(`Provisioned WeCom member ${identity.userId} as ${user.role}`);
+    }
+    userStore.recordLogin(user.id);
+    issueSession(res, { kind: 'user', userId: user.id });
+    return res.redirect(userStore.landingPageFor(user));
+  } catch (err) {
+    console.error('WeCom sign-in failed:', err);
+    return fail(err.message || 'WeCom sign-in failed.');
   }
 });
 
@@ -634,6 +686,12 @@ app.get('/api/login-options', (req, res) => {
     ok: true,
     roles: userStore.ROLES,
     suppliers: supplierStore.listSuppliers().map((s2) => s2.name).filter(Boolean).sort(),
+    wecom: {
+      enabled: wecomAuth.isConfigured(),
+      // Unlike consumer WeChat, this works everywhere - in the WeCom app
+      // it's silent, on desktop it's a QR scan.
+      inApp: wecomAuth.isWeComBrowser(req)
+    },
     wechat: {
       enabled: wechatAuth.isConfigured(),
       mode: wechatAuth.mode(),
@@ -695,6 +753,27 @@ app.delete('/api/order-management/orders/:id/approval-link', requirePermission('
   const updated = supplierAccess.revokeApprovalToken(orderManagementStore, req.params.id, req.user && req.user.name);
   if (!updated) return res.status(404).json({ error: 'Order not found' });
   res.json({ ok: true });
+});
+
+/**
+ * The one write a supplier may perform: their own sample dates and bulk
+ * progress. Separate from the general order PATCH (which requires
+ * orders:write) and hard-limited to three keys by the store, so this can be
+ * exposed to a link-based session safely.
+ */
+app.post('/api/supplier/orders/:id/factory-updates', (req, res) => {
+  if (!req.user || req.user.role !== 'supplier') {
+    return res.status(403).json({ error: 'Only supplier accounts can update these fields' });
+  }
+  const order = orderManagementStore.getOrderById(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  // Same 404-not-403 treatment as elsewhere, so PO ids can't be probed.
+  if (!userStore.canSeeOrder(req.user, order)) return res.status(404).json({ error: 'Order not found' });
+
+  const updated = orderManagementStore.setFactoryUpdates(
+    req.params.id, req.body || {}, req.user.supplierName || 'Supplier');
+  if (!updated) return res.status(404).json({ error: 'Order not found' });
+  res.json({ ok: true, order: userStore.redactOrderForSupplier(req.user, updated) });
 });
 
 // Whether the signed-in user can send email from inside the app.
@@ -1815,7 +1894,10 @@ app.get('/api/order-management/orders/:id/dispatch-targets', (req, res) => {
     const sup = supplierStore.getSupplier(t.supplierId);
     return { ...t, accessLink: (sup && sup.accessToken) ? supplierAccess.linkFor(base, sup) : null };
   });
-  res.json({ ok: true, poNumber: order.poNumber, targets, sender: me });
+  res.json({
+    ok: true, poNumber: order.poNumber, targets, sender: me,
+    productionNotes: order.productionNotes || ''
+  });
 });
 
 // The composed message for one component's supplier.
@@ -1913,7 +1995,12 @@ app.post('/api/order-management/orders/:id/dispatch', requirePermission('dispatc
   const entry = poDispatch.buildLogEntry(target, channel, recipient, body.actor || sender.name || req.get('X-Actor'), sender);
   let updated = orderManagementStore.updateOrder(
     order.id,
-    { dispatchLog: [...(order.dispatchLog || []), entry] },
+    {
+      dispatchLog: [...(order.dispatchLog || []), entry],
+      // Notes written in the send dialog become the factory's production
+      // notes. Only overwrite when something was actually typed.
+      ...(typeof body.productionNotes === 'string' ? { productionNotes: body.productionNotes } : {})
+    },
     body.actor || 'Web user',
     `PO sent to ${target.supplierName || 'supplier'} (${target.componentName}) via ${channel}`
   );

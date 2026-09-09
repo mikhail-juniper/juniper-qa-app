@@ -3782,5 +3782,57 @@
   "usersWechatPrompt": {
     "en": "WeChat OpenID for this user (blank to unlink):",
     "zh": "该用户的微信 OpenID（留空则解除绑定）："
+  },
+  "fldProductionNotes": {
+    "en": "Production Notes",
+    "zh": "生产备注"
+  },
+  "helpProductionNotes": {
+    "en": "Notes for the factory - compression, packing, anything to watch. Shown on their order page.",
+    "zh": "给工厂的备注：压缩、包装、需要注意的事项。将显示在其订单页面。"
+  },
+  "supPhoto": {
+    "en": "Photo",
+    "zh": "款式"
+  },
+  "supActualShipDate": {
+    "en": "Actual Ship Date",
+    "zh": "实际发货时间"
+  },
+  "supPreProdSample": {
+    "en": "Pre-Production Sample",
+    "zh": "产前样"
+  },
+  "supBulkSample": {
+    "en": "Bulk Sample",
+    "zh": "大货样"
+  },
+  "supBulkProgress": {
+    "en": "Bulk Shipment Progress",
+    "zh": "大货进度"
+  },
+  "supComponents": {
+    "en": "Components",
+    "zh": "配件"
+  },
+  "supWashingTag": {
+    "en": "Washing Tag",
+    "zh": "水洗标"
+  },
+  "supPackingList": {
+    "en": "Packing List Number",
+    "zh": "装箱单号"
+  },
+  "supSaved": {
+    "en": "Saved",
+    "zh": "已保存"
+  },
+  "supQuantity": {
+    "en": "Quantity",
+    "zh": "数量"
+  },
+  "supOrderDate": {
+    "en": "Order Date",
+    "zh": "下单日期"
   }
 }

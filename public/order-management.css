@@ -853,3 +853,32 @@ div.om-money-wrap input { padding-left: 28px; width: 100%; }
   .om-table-wrap { overflow-x: auto; }
   .om-tracker { overflow-x: auto; padding-bottom: 6px; }
 }
+
+/* ---- Supplier PO table ----
+   Wide by design: it mirrors the shared spreadsheet the factories already
+   read, so it scrolls horizontally rather than dropping columns. */
+.sup-table { min-width: 1900px; }
+.sup-table th, .sup-table td { vertical-align: middle; }
+.sup-thumb {
+  width: 46px; height: 46px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--jc-border);
+  display: block;
+}
+/* Notes can be long - cap the column and let it wrap rather than pushing
+   every other column off screen. */
+.sup-notes { max-width: 240px; white-space: normal; font-size: 12.5px; line-height: 1.45; }
+.sup-comps { display: flex; gap: 10px; flex-wrap: wrap; }
+.sup-comp { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 58px; }
+.sup-comp-name { font-size: 10.5px; line-height: 1.2; text-align: center; color: var(--jc-muted); }
+/* The three factory-editable cells read as inputs, not as our data. */
+.sup-edit {
+  font-size: 12.5px;
+  height: 32px;
+  padding: 4px 8px;
+  background: #fffdf5;
+  border: 1px solid #e6d9a8;
+}
+.sup-edit:focus { border-color: var(--jc-teal); background: #fff; }
+.sup-edit:disabled { opacity: 0.6; }
