@@ -1563,8 +1563,7 @@ function progressCellHtml(order) {
   return `<td class="om-progress-cell" data-order="${escapeHtml(order.id)}"
     title="${escapeHtml(i18t('clickToAddNote', 'Click to add a note'))}">
     ${latest
-      ? `<div class="om-progress-cell-text">${escapeHtml(latest.text)}</div>
-         <div class="om-progress-cell-when">${fmtDate(latest.at)}${latest.by ? ' · ' + escapeHtml(latest.by) : ''}</div>`
+      ? `<div class="om-progress-cell-text">${escapeHtml(latest.text)}</div>`
       : `<span class="om-progress-cell-empty">+ ${escapeHtml(i18t('btnAddNote', 'Add note'))}</span>`}
   </td>`;
 }
@@ -1593,15 +1592,21 @@ function wireProgressCells(host) {
         ev.stopPropagation();
         const text = box.value.trim();
         if (!text) return restore();
+        const saveBtn = cell.querySelector('.om-progress-save');
+        saveBtn.disabled = true;
         try {
-          await api(`/api/order-management/orders/${encodeURIComponent(cell.dataset.order)}/progress-note`, {
+          const res = await api(`/api/order-management/orders/${encodeURIComponent(cell.dataset.order)}/progress-note`, {
             method: 'POST', body: JSON.stringify({ text, actor: 'Web user' })
           });
+          // Update just this cell. Re-rendering the whole view would lose
+          // the reader's place in a long list, which matters when the team
+          // is working down every PO in turn.
+          cell.classList.remove('om-progress-editing');
+          cell.innerHTML = `<div class="om-progress-cell-text">${escapeHtml(text)}</div>`;
           showToast(i18t('noteAdded', 'Note added'));
-          refreshCurrentView();
         } catch (err) {
           showToast(err.message, true);
-          restore();
+          saveBtn.disabled = false;
         }
       });
     });
@@ -3079,16 +3084,34 @@ async function openDetailPanel(id, scope) {
       if (!text) return;
       progressAdd.disabled = true;
       try {
-        await api(`/api/order-management/orders/${encodeURIComponent(order.id)}/progress-note`, {
+        const res = await api(`/api/order-management/orders/${encodeURIComponent(order.id)}/progress-note`, {
           method: 'POST', body: JSON.stringify({ text, actor: 'Web user' })
         });
         showToast(i18t('noteAdded', 'Note added'));
-        // Reopen so the new entry shows in the history, and refresh the
-        // list behind the panel.
-        const id = order.id;
-        closePanel();
-        refreshCurrentView();
-        openDetailPanel(id, 'full');
+        // Prepend the new entry rather than reopening the panel - closing
+        // and rebuilding it threw away the scroll position.
+        const added = ((res.order.factoryUpdates || {}).bulkProgressLog || []).slice(-1)[0];
+        let list = panel.querySelector('.om-progress-log');
+        if (!list) {
+          // First note on this PO: replace the empty-state with a list.
+          const empty = progressAdd.parentElement.querySelector('.om-empty');
+          list = document.createElement('ul');
+          list.className = 'om-changelog om-progress-log';
+          list.style.marginTop = '14px';
+          if (empty) empty.replaceWith(list); else progressAdd.after(list);
+        }
+        const li = document.createElement('li');
+        li.innerHTML = `<strong style="font-weight:500;">${escapeHtml(added.text)}</strong>` +
+          `<div class="om-cl-meta">${new Date(added.at).toLocaleString()}` +
+          `${added.by ? ' · ' + escapeHtml(added.by) : ''}</div>`;
+        list.prepend(li);
+        box.value = '';
+        progressAdd.disabled = false;
+        // Reflect the new latest note in the table behind the panel.
+        const cell = document.querySelector(`.om-progress-cell[data-order="${order.id}"]`);
+        if (cell && !cell.querySelector('textarea')) {
+          cell.innerHTML = `<div class="om-progress-cell-text">${escapeHtml(added.text)}</div>`;
+        }
       } catch (e) {
         showToast(e.message, true);
         progressAdd.disabled = false;
