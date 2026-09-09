@@ -1549,6 +1549,65 @@ function openFabricEntryForm(kind, entry) {
 // "Accessories" sub-tab: flattened parts/accessories across every order in
 // this category, with richer columns matching QingFlow's Accessory
 // Confirmation Form.
+/**
+ * Production Progress cell for the list tables.
+ *
+ * Shows the latest note. Clicking turns the cell into a small editor so a
+ * note can be added without opening the PO - this click-to-edit behaviour
+ * belongs to the tables only; the detail panel has a permanent text box.
+ */
+function progressCellHtml(order) {
+  const log = ((order.factoryUpdates || {}).bulkProgressLog || [])
+    .slice().sort((a, b) => new Date(b.at) - new Date(a.at));
+  const latest = log[0];
+  return `<td class="om-progress-cell" data-order="${escapeHtml(order.id)}"
+    title="${escapeHtml(i18t('clickToAddNote', 'Click to add a note'))}">
+    ${latest
+      ? `<div class="om-progress-cell-text">${escapeHtml(latest.text)}</div>
+         <div class="om-progress-cell-when">${fmtDate(latest.at)}${latest.by ? ' · ' + escapeHtml(latest.by) : ''}</div>`
+      : `<span class="om-progress-cell-empty">+ ${escapeHtml(i18t('btnAddNote', 'Add note'))}</span>`}
+  </td>`;
+}
+
+/** Turn each progress cell into an inline editor on click. */
+function wireProgressCells(host) {
+  host.querySelectorAll('.om-progress-cell').forEach((cell) => {
+    cell.addEventListener('click', (e) => {
+      e.stopPropagation(); // don't also open the PO panel
+      if (cell.querySelector('textarea')) return; // already editing
+      const original = cell.innerHTML;
+      cell.classList.add('om-progress-editing');
+      cell.innerHTML = `
+        <textarea class="om-progress-input" rows="2"></textarea>
+        <div class="om-progress-actions">
+          <button type="button" class="om-table-upload-btn om-progress-save">${i18('btnAddNote', 'Add note')}</button>
+          <button type="button" class="om-table-upload-btn om-progress-cancel">${i18('btnCancel', 'Cancel')}</button>
+        </div>`;
+      const box = cell.querySelector('textarea');
+      box.focus();
+      const restore = () => { cell.classList.remove('om-progress-editing'); cell.innerHTML = original; };
+      cell.querySelector('.om-progress-cancel').addEventListener('click', (ev) => {
+        ev.stopPropagation(); restore();
+      });
+      cell.querySelector('.om-progress-save').addEventListener('click', async (ev) => {
+        ev.stopPropagation();
+        const text = box.value.trim();
+        if (!text) return restore();
+        try {
+          await api(`/api/order-management/orders/${encodeURIComponent(cell.dataset.order)}/progress-note`, {
+            method: 'POST', body: JSON.stringify({ text, actor: 'Web user' })
+          });
+          showToast(i18t('noteAdded', 'Note added'));
+          refreshCurrentView();
+        } catch (err) {
+          showToast(err.message, true);
+          restore();
+        }
+      });
+    });
+  });
+}
+
 function renderAccessoriesTable(host, rows) {
   if (!rows.length) {
     host.innerHTML = `<div class="om-empty">${i18('emptyNoAccessories', 'No accessories/parts recorded yet.')}</div>`;
@@ -1558,32 +1617,35 @@ function renderAccessoriesTable(host, rows) {
     <table class="om-table">
       <thead>
         <tr>
-          <th>${i18i('thPartName', 'Part name')}</th><th>${i18i('thPoNumber', 'PO Number')}</th><th>${i18i('thStatus', 'Status')}</th><th>${i18i('th2Dimensions', 'Dimensions')}</th>
-          <th>${i18i('th2Qty', 'Qty')}</th><th>${i18i('thUnitPrice', 'Unit price')}</th><th>${i18i('th2Total', 'Total')}</th><th>${i18i('th2ExpectedDelivery', 'Expected delivery')}</th>
-          <th>${i18i('thSupplier', 'Supplier')}</th><th>${i18i('fldSupplierContact', 'Supplier contact')}</th><th>${i18i('th2Waybill', 'Waybill #')}</th><th>${i18i('th2ShipmentQty', 'Shipment qty')}</th>
+          <th>${i18i('thPartName', 'Part Name')}</th>
+          <th>${i18i('thPoNumber', 'PO Number')}</th>
+          <th>${i18i('thPoStatus', 'PO Status')}</th>
+          <th>${i18i('thOrderDate', 'Order Date')}</th>
+          <th>${i18i('thDeliveryDate', 'Delivery Date')}</th>
+          <th>${i18i('thSupplier', 'Supplier')}</th>
+          <th>${i18i('th2PurchaseQty', 'Purchase Quantity')}</th>
+          <th>${i18i('thUnitPrice', 'Unit Price')}</th>
+          <th>${i18i('thPayment', 'Payment')}</th>
         </tr>
       </thead>
       <tbody>
         ${rows.map(({ order, accessory: a }) => `
           <tr data-id="${escapeHtml(order.id)}" data-accessory-id="${escapeHtml(a.id)}">
-            <td><strong>${escapeHtml(a.partName || 'Unnamed part')}</strong></td>
+            <td><strong>${escapeHtml(a.partName || '\u2014')}</strong></td>
             <td>${escapeHtml(order.poNumber)}</td>
             <td><span class="om-pill om-pill-${statusSlug(a.status)}">${tStatusInline(a.status)}</span></td>
-            <td>${escapeHtml(formatAccessoryDimensions(a))}</td>
-            <td>${escapeHtml(a.quantity ?? '—')}</td>
-            <td>${fmtMoney(a.unitPrice)}</td>
-            <td>${fmtMoney(a.totalPrice)}</td>
+            <td>${fmtDate(order.orderPlacementDate)}</td>
             <td>${fmtDate(a.expectedDeliveryDate)}</td>
-            <td>${escapeHtml(a.supplierName || '—')}</td>
-            <td>${escapeHtml(a.supplierContact || '—')}</td>
-            <td>${escapeHtml(a.waybillNumber || '—')}</td>
-            <td>${escapeHtml(a.shipmentQuantity ?? '—')}</td>
+            <td>${escapeHtml(a.supplierName || '\u2014')}</td>
+            <td>${escapeHtml(a.quantity ?? '\u2014')}</td>
+            <td>${fmtMoney(a.unitPrice)}</td>
+            <td>${escapeHtml(tStatusText((order.settlement && order.settlement.status) || 'Pending'))}</td>
           </tr>
         `).join('')}
       </tbody>
     </table>
   `;
-  host.querySelectorAll('tbody tr').forEach((tr) => {
+  host.querySelectorAll('tbody tr[data-id]').forEach((tr) => {
     tr.addEventListener('click', () => openAccessoryDetailPanel(tr.dataset.id, tr.dataset.accessoryId));
   });
 }
@@ -1826,62 +1888,57 @@ function renderOrdersTableFull(host, orders, productLine) {
     host.innerHTML = `<div class="om-empty">${i18('emptyNoOrdersIn', 'No orders yet.')}</div>`;
     return;
   }
-  const isClothing = productLine === 'clothing';
   host.innerHTML = `
     <table class="om-table">
       <thead>
         <tr>
-          <th>${i18i('thPoNumber', 'PO Number')}</th><th>${i18i('thStatus', 'Status')}</th><th>${i18i('thBuyer', 'Buyer')}</th><th>${i18i('thOrderDate', 'Order date')}</th><th>${i18i('thDesiredEntry', 'Desired entry')}</th>
-          <th>${i18i('th2ManufacturerDelivery', 'Manufacturer delivery')}</th><th>${i18i('thSupplier', 'Supplier')}</th><th>${i18i('fldSupplierContact', 'Supplier contact')}</th><th>${i18i('th2SupplierCode', 'Supplier code')}</th>
-          <th>${i18i('th2MainComponent', 'Main component')}</th><th>${i18i('th2MainSku', 'Main SKU')}</th><th>${i18i('th2Model', 'Model #')}</th>
-          ${isClothing ? `<th>${i18i('th2WashLabel', 'Wash label')}</th>` : ''}
-          <th>${i18i('th2FactoryPrice', 'Factory price')}</th><th>${i18i('th2SalesUnitPrice', 'Sales unit price')}</th><th>${i18i('th2PurchaseQty', 'Purchase qty')}</th><th>${i18i('th2TotalPurchasePrice', 'Total purchase price')}</th>
-          <th>${i18i('th2ActualWt', 'Actual wt')}</th><th>${i18i('th2TransportWt', 'Transport wt')}</th>
-          <th>${i18i('th2AssemblyFee', 'Assembly fee')}</th><th>${i18i('th2LaborCosts', 'Labor costs')}</th><th>${i18i('th2TransportFees', 'Total Shipping Cost')}</th><th>${i18i('th2OtherExpenses', 'Other expenses')}</th>
-          <th>${i18i('th2Warehouse', 'Warehouse')}</th><th>${i18i('thTotalOwed', 'Total owed')}</th><th>${i18i('thSettlement', 'Settlement')}</th>
+          <th>${i18i('fldProductName', 'Product Name')}</th>
+          <th>${i18i('thPoNumber', 'PO Number')}</th>
+          <th>${i18i('thStatus', 'Status')}</th>
+          <th>${i18i('thOrderDate', 'Order Date')}</th>
+          <th>${i18i('thFulfillmentRequest', 'Fulfillment Request Date')}</th>
+          <th>${i18i('thDeliveryDate', 'Delivery Date')}</th>
+          <th>${i18i('thProductionProgress', 'Production Progress Notes')}</th>
+          <th>${i18i('thSupplier', 'Supplier')}</th>
+          <th>${i18i('th2MainComponent', 'Main Component')}</th>
+          <th>${i18i('th2PurchaseQty', 'Purchase Quantity')}</th>
+          <th>${i18i('thUnitPrice', 'Unit Price')}</th>
+          <th>${i18i('th2Warehouse', 'Warehouse')}</th>
+          <th>${i18i('thPayment', 'Payment')}</th>
         </tr>
       </thead>
       <tbody>
         ${orders.map((o) => {
           const mc = o.mainComponent || {};
-          const c = o.costs || {};
           return `
           <tr data-id="${escapeHtml(o.id)}">
+            <td><strong>${escapeHtml(mc.name || '\u2014')}</strong></td>
             <td><strong>${escapeHtml(o.poNumber)}</strong></td>
             <td><span class="om-pill om-pill-${statusSlug(o.status)}">${tStatusInline(o.status)}</span></td>
-            <td>${escapeHtml(o.buyer || '—')}</td>
             <td>${fmtDate(o.orderPlacementDate)}</td>
-            <td>${fmtDate(o.desiredEntryDate)}</td>
+            <td>${fmtDate(o.fulfillmentRequestDate)}</td>
             <td>${fmtDate(o.manufacturerDeliveryDate)}</td>
-            <td>${escapeHtml(o.supplier.name || '—')}</td>
-            <td>${escapeHtml(o.supplier.contact || '—')}</td>
-            <td>${escapeHtml(o.supplier.code || '—')}</td>
-            <td>${escapeHtml(mc.name || '—')}</td>
-            <td>${escapeHtml(mc.sku || '—')}</td>
-            <td>${escapeHtml(mc.modelNumber || '—')}</td>
-            ${isClothing ? `<td>${escapeHtml(mc.washLabel || '—')}</td>` : ''}
+            ${progressCellHtml(o)}
+            <td>${escapeHtml((o.supplier && o.supplier.name) || '\u2014')}</td>
+            <td>${escapeHtml(mc.name || '\u2014')}</td>
+            <td>${escapeHtml(mc.purchaseQuantity ?? '\u2014')}</td>
             <td>${fmtMoney(mc.factoryPrice)}</td>
-            <td>${fmtMoney(mc.salesUnitPrice)}</td>
-            <td>${escapeHtml(mc.purchaseQuantity ?? '—')}</td>
-            <td>${fmtMoney(mc.totalPurchasePrice)}</td>
-            <td>${escapeHtml(mc.actualWeight ?? '—')}</td>
-            <td>${escapeHtml(mc.transportWeight ?? '—')}</td>
-            <td>${fmtMoney(c.assemblyFee)}</td>
-            <td>${fmtMoney(c.laborCosts)}</td>
-            <td>${fmtMoney(c.transportationFees)}</td>
-            <td>${fmtMoney(c.otherExpenses)}</td>
-            <td>${escapeHtml(mc.warehouse || '—')}</td>
-            <td>${fmtMoney(computeOrderTotal(o))}</td>
-            <td>${escapeHtml(o.settlement.status || 'Pending')}</td>
+            <td>${escapeHtml(mc.warehouse || '\u2014')}</td>
+            <td>${escapeHtml(tStatusText((o.settlement && o.settlement.status) || 'Pending'))}</td>
           </tr>
         `;
         }).join('')}
       </tbody>
     </table>
   `;
-  host.querySelectorAll('tbody tr').forEach((tr) => {
-    tr.addEventListener('click', () => openDetailPanel(tr.dataset.id));
+  host.querySelectorAll('tbody tr[data-id]').forEach((tr) => {
+    tr.addEventListener('click', (e) => {
+      // The progress cell handles its own clicks (add a note in place).
+      if (e.target.closest('.om-progress-cell')) return;
+      openDetailPanel(tr.dataset.id, 'full');
+    });
   });
+  wireProgressCells(host);
 }
 
 // "Main Components" sub-tab: same underlying order records, but the
@@ -1889,47 +1946,55 @@ function renderOrdersTableFull(host, orders, productLine) {
 // QingFlow's separate "Main Component Supplier Confirmation" app showed.
 function renderComponentsTable(host, orders) {
   if (!orders.length) {
-    host.innerHTML = `<div class="om-empty">No orders yet.</div>`;
+    host.innerHTML = `<div class="om-empty">${i18('emptyNoOrdersIn', 'No orders yet.')}</div>`;
     return;
   }
   host.innerHTML = `
     <table class="om-table">
       <thead>
         <tr>
-          <th>${i18i('thPoNumber', 'PO Number')}</th><th>${i18i('th2MainComponent', 'Main component')}</th><th>${i18i('th2MainSku', 'Main SKU')}</th><th>${i18i('th2Model', 'Model #')}</th>
-          <th>${i18i('thSupplier', 'Supplier')}</th><th>${i18i('fldSupplierContact', 'Supplier contact')}</th><th>${i18i('th2SupplierCode', 'Supplier code')}</th>
-          <th>${i18i('th2FactoryPrice', 'Factory price')}</th><th>${i18i('th2PurchaseQty', 'Purchase qty')}</th><th>${i18i('th2TotalPurchasePrice', 'Total purchase price')}</th>
-          <th>${i18i('th2WarehouseEntryDate', 'Warehouse entry date')}</th><th>${i18i('th2WaybillNumber', 'Waybill number')}</th><th>${i18i('th2QtyReceived', 'Qty received')}</th>
+          <th>${i18i('fldProductName', 'Product Name')}</th>
+          <th>${i18i('thPoNumber', 'PO Number')}</th>
+          <th>${i18i('thMainPoStatus', 'Main PO Status')}</th>
+          <th>${i18i('thOrderDate', 'Order Date')}</th>
+          <th>${i18i('thFulfillmentRequest', 'Fulfillment Request Date')}</th>
+          <th>${i18i('thDeliveryDate', 'Delivery Date')}</th>
+          <th>${i18i('thProductionProgress', 'Production Progress Notes')}</th>
+          <th>${i18i('thSupplier', 'Supplier')}</th>
+          <th>${i18i('th2PurchaseQty', 'Purchase Quantity')}</th>
+          <th>${i18i('thUnitPrice', 'Unit Price')}</th>
+          <th>${i18i('thPayment', 'Payment')}</th>
         </tr>
       </thead>
       <tbody>
         ${orders.map((o) => {
           const mc = o.mainComponent || {};
-          const f = o.fulfillment || {};
           return `
           <tr data-id="${escapeHtml(o.id)}">
+            <td><strong>${escapeHtml(mc.name || '\u2014')}</strong></td>
             <td><strong>${escapeHtml(o.poNumber)}</strong></td>
-            <td>${escapeHtml(mc.name || '—')}</td>
-            <td>${escapeHtml(mc.sku || '—')}</td>
-            <td>${escapeHtml(mc.modelNumber || '—')}</td>
-            <td>${escapeHtml(o.supplier.name || '—')}</td>
-            <td>${escapeHtml(o.supplier.contact || '—')}</td>
-            <td>${escapeHtml(o.supplier.code || '—')}</td>
+            <td><span class="om-pill om-pill-${statusSlug(o.status)}">${tStatusInline(o.status)}</span></td>
+            <td>${fmtDate(o.orderPlacementDate)}</td>
+            <td>${fmtDate(o.fulfillmentRequestDate)}</td>
+            <td>${fmtDate(o.manufacturerDeliveryDate)}</td>
+            ${progressCellHtml(o)}
+            <td>${escapeHtml((o.supplier && o.supplier.name) || '\u2014')}</td>
+            <td>${escapeHtml(mc.purchaseQuantity ?? '\u2014')}</td>
             <td>${fmtMoney(mc.factoryPrice)}</td>
-            <td>${escapeHtml(mc.purchaseQuantity ?? '—')}</td>
-            <td>${fmtMoney(mc.totalPurchasePrice)}</td>
-            <td>${fmtDate(f.warehouseEntryDate)}</td>
-            <td>${escapeHtml(f.waybillNumber || '—')}</td>
-            <td>${escapeHtml(f.quantityReceived ?? '—')}</td>
+            <td>${escapeHtml(tStatusText((o.settlement && o.settlement.status) || 'Pending'))}</td>
           </tr>
         `;
         }).join('')}
       </tbody>
     </table>
   `;
-  host.querySelectorAll('tbody tr').forEach((tr) => {
-    tr.addEventListener('click', () => openDetailPanel(tr.dataset.id, 'main-component'));
+  host.querySelectorAll('tbody tr[data-id]').forEach((tr) => {
+    tr.addEventListener('click', (e) => {
+      if (e.target.closest('.om-progress-cell')) return;
+      openDetailPanel(tr.dataset.id, 'full');
+    });
   });
+  wireProgressCells(host);
 }
 
 function closePanel() {
@@ -2168,29 +2233,23 @@ async function openDetailPanel(id, scope) {
     </div>
 
     <div class="om-panel-card">
-    <div class="om-section-title">${i18('secBulkShipmentProgress', 'Bulk Shipment Progress')}</div>
-    <div class="section-help" style="margin-bottom:12px;">${i18('helpBulkProgress', 'Each note is saved with the date and who added it.')}</div>
-    <!-- Collapsed by default: the latest note is what matters day to day,
-         and clicking opens the editor plus the full history. -->
-    <div id="omProgressSummary" class="om-progress-summary" role="button" tabindex="0">
-      ${progressLog.length ? `
-        <div class="om-progress-latest">${escapeHtml(progressLog[0].text)}</div>
-        <div class="om-cl-meta">${new Date(progressLog[0].at).toLocaleString()}${progressLog[0].by ? ' · ' + escapeHtml(progressLog[0].by) : ''}</div>
-      ` : `<div class="om-progress-empty">${i18('noNotesYet', 'No notes yet - click to add one.')}</div>`}
-    </div>
-    <div id="omProgressEditor" style="display:none;margin-top:12px;">
-      <textarea id="omProgressNote" rows="3" style="width:100%;font-family:inherit;font-size:13px;"></textarea>
-      <button type="button" class="btn btn-primary" id="omProgressAdd" style="flex:none;width:auto;margin-top:8px;">${i18('btnAddNote', 'Add note')}</button>
-      ${progressLog.length ? `
-        <ul class="om-changelog" style="margin-top:14px;">
-          ${progressLog.map((e) => `
-            <li>
-              <strong style="font-weight:500;">${escapeHtml(e.text)}</strong>
-              <div class="om-cl-meta">${new Date(e.at).toLocaleString()}${e.by ? ' · ' + escapeHtml(e.by) : ''}</div>
-            </li>
-          `).join('')}
-        </ul>` : ''}
-    </div>
+    <div class="om-section-title">${i18('secProductionProgress', 'Production Progress')}</div>
+    <div class="section-help" style="margin-bottom:12px;">${i18('helpProductionProgress', 'Each note is saved with the date and who added it.')}</div>
+    <!-- Always open here: on the full PO view there's room for the editor
+         and the history. The click-to-edit behaviour is for the list
+         tables, where space is tight. -->
+    <textarea id="omProgressNote" rows="3" style="width:100%;font-family:inherit;font-size:13px;"
+      placeholder="${escapeHtml(i18t('clickToAddNote', 'Add a note'))}"></textarea>
+    <button type="button" class="btn btn-primary" id="omProgressAdd" style="flex:none;width:auto;margin-top:8px;">${i18('btnAddNote', 'Add note')}</button>
+    ${progressLog.length ? `
+      <ul class="om-changelog om-progress-log" style="margin-top:14px;">
+        ${progressLog.map((e) => `
+          <li>
+            <strong style="font-weight:500;">${escapeHtml(e.text)}</strong>
+            <div class="om-cl-meta">${new Date(e.at).toLocaleString()}${e.by ? ' · ' + escapeHtml(e.by) : ''}</div>
+          </li>
+        `).join('')}
+      </ul>` : `<div class="om-empty" style="padding:14px 0;">${i18('noNotesYet', 'No notes yet.')}</div>`}
     </div>
 
     <div class="om-panel-card">
@@ -3012,23 +3071,6 @@ async function openDetailPanel(id, scope) {
     });
   }
 
-  // Bulk shipment progress: click the summary to reveal the editor and the
-  // full history. Notes append - they're a record, so nothing is editable
-  // after the fact.
-  const progressSummary = document.getElementById('omProgressSummary');
-  const progressEditor = document.getElementById('omProgressEditor');
-  if (progressSummary && progressEditor) {
-    const toggle = () => {
-      const open = progressEditor.style.display !== 'none';
-      progressEditor.style.display = open ? 'none' : '';
-      progressSummary.classList.toggle('om-progress-open', !open);
-      if (!open) document.getElementById('omProgressNote').focus();
-    };
-    progressSummary.addEventListener('click', toggle);
-    progressSummary.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
-    });
-  }
   const progressAdd = document.getElementById('omProgressAdd');
   if (progressAdd) {
     progressAdd.addEventListener('click', async () => {

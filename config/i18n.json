@@ -2364,7 +2364,7 @@
     "zh": "名称"
   },
   "thUnitPrice": {
-    "en": "Unit price",
+    "en": "Unit Price",
     "zh": "单价"
   },
   "thNumPos": {
@@ -2372,7 +2372,7 @@
     "zh": "订单数"
   },
   "thOrderDate": {
-    "en": "Order date",
+    "en": "Order Date",
     "zh": "下单日期"
   },
   "thQuantity": {
@@ -2380,7 +2380,7 @@
     "zh": "数量"
   },
   "thPartName": {
-    "en": "Part name",
+    "en": "Part Name",
     "zh": "部件名称"
   },
   "thMaterial": {
@@ -2996,7 +2996,7 @@
     "zh": "主 SKU"
   },
   "th2MainComponent": {
-    "en": "Main component",
+    "en": "Main Component",
     "zh": "主料"
   },
   "th2ManufacturerDelivery": {
@@ -3012,7 +3012,7 @@
     "zh": "其他费用"
   },
   "th2PurchaseQty": {
-    "en": "Purchase qty",
+    "en": "Purchase Quantity",
     "zh": "采购数量"
   },
   "th2Qty": {
@@ -3902,5 +3902,37 @@
   "supManufacturingProgress": {
     "en": "Manufacturing Progress",
     "zh": "生产进度"
+  },
+  "secProductionProgress": {
+    "en": "Production Progress",
+    "zh": "生产进度"
+  },
+  "thProductionProgress": {
+    "en": "Production Progress Notes",
+    "zh": "生产进度备注"
+  },
+  "thPayment": {
+    "en": "Payment",
+    "zh": "付款"
+  },
+  "thFulfillmentRequest": {
+    "en": "Fulfillment Request Date",
+    "zh": "履约要求日期"
+  },
+  "thMainPoStatus": {
+    "en": "Main PO Status",
+    "zh": "主订单状态"
+  },
+  "helpProductionProgress": {
+    "en": "Add a progress note. Each one is saved with the date and who added it, and shows on the supplier's order page.",
+    "zh": "添加进度备注。每条记录会保存日期和填写人，并显示在供应商的订单页面。"
+  },
+  "clickToAddNote": {
+    "en": "Click to add a note",
+    "zh": "点击添加备注"
+  },
+  "thPoStatus": {
+    "en": "PO Status",
+    "zh": "订单状态"
   }
 }
