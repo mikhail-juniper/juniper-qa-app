@@ -2684,6 +2684,31 @@ function seedFabricSwatchesFromFile() {
       return;
     }
     const seed = JSON.parse(fs.readFileSync(seedJson, 'utf8'));
+
+    /* A seed marked `replacesAll` supersedes every previously seeded entry
+     * rather than merging with it - the older import carried no factory
+     * codes, so those records can't identify a colour to a factory and
+     * would sit alongside the new ones as duplicates.
+     *
+     * Only auto-imported records (those with a seedKey) are removed;
+     * anything the team added by hand is left alone. Guarded by a marker
+     * file so it happens exactly once, not on every restart.
+     */
+    if (seed.replacesAll) {
+      const marker = path.join(submissionLog.DATA_DIR,
+        `.fabric-seed-purged-${seed.purgeVersion || 'v1'}`);
+      if (!fs.existsSync(marker)) {
+        const stale = fabricLibraryStore.listFabricCodes()
+          .filter((c) => c.seedKey && !String(c.seedKey).startsWith('sw3_'));
+        stale.forEach((c) => fabricLibraryStore.deleteFabricCode(c.id));
+        fs.mkdirSync(submissionLog.DATA_DIR, { recursive: true });
+        fs.writeFileSync(marker, new Date().toISOString());
+        if (stale.length) {
+          console.log(`Fabric library: removed ${stale.length} previously seeded swatches, replaced by ${(seed.entries || []).length} with factory codes.`);
+        }
+      }
+    }
+
     const existing = fabricLibraryStore.listFabricCodes();
     const seededKeys = new Set(existing.map((c) => c.seedKey).filter(Boolean));
     // Old-format tab-1 entries from the previous import, matchable by
@@ -2739,6 +2764,11 @@ function seedFabricSwatchesFromFile() {
     // "NNN gsm" (one tab lists several) stay in the Fabric Weight column
     // only, since embedding their commas here would garble the format.
     const displayValue = (e) => {
+      // A swatch is identified by its full code - Pantone, factory book and
+      // colour number - so that leads. Anything else is secondary.
+      if (e.factoryCode) {
+        return [e.pantone, e.factoryCode, e.bookCode].filter(Boolean).join(' - ');
+      }
       const gsmMatch = String(e.fabricWeight || '').match(/^(\d+)\s*gsm$/i);
       const gsm = gsmMatch ? `${gsmMatch[1]}gsm` : '';
       const color = hexToGeneralColor(e.hex);
@@ -2774,6 +2804,7 @@ function seedFabricSwatchesFromFile() {
         pantone: e.pantone || '',
         hex: e.hex || '',
         cmyk: e.cmyk || '',
+        factoryCode: e.factoryCode || '',
         bookCode: e.bookCode || '',
         fabricWeight: e.fabricWeight || '',
         garmentType: e.garmentType || '',

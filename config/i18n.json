@@ -3934,5 +3934,13 @@
   "thPoStatus": {
     "en": "PO Status",
     "zh": "订单状态"
+  },
+  "fldFactoryCode": {
+    "en": "Factory Code",
+    "zh": "工厂色号"
+  },
+  "fldColorCode": {
+    "en": "Color Code",
+    "zh": "颜色编号"
   }
 }

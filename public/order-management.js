@@ -1278,7 +1278,7 @@ async function renderFabricLibraryShell(root) {
     const types = typesData.types || [];
     const draw = (q) => {
       renderFabricTable('omFabricCodesHost', 'code', codes.filter((c) =>
-        matchesSearch(q, c.value, c.pantone, c.hex, c.colorName, c.bookCode, c.materialBlend, c.fabricWeight, c.garmentType, c.companyName, c.notes)), true);
+        matchesSearch(q, c.value, c.pantone, c.hex, c.colorName, c.factoryCode, c.bookCode, c.materialBlend, c.fabricWeight, c.garmentType, c.companyName, c.notes)), true);
       renderFabricTable('omFabricTypesHost', 'type', types.filter((t) =>
         matchesSearch(q, t.value, t.notes)), false);
     };
@@ -1305,7 +1305,7 @@ function renderFabricTable(hostId, kind, entries, withSwatch) {
       <table class="om-table">
         <thead><tr>
           <th>${i18i('thFabricCode', 'Fabric Code')}</th><th>${i18i('fldMaterialBlend', 'Material Blend')}</th><th>${i18i('fldType', 'Type')}</th><th>${i18i('fldFabricSwatch', 'Fabric Swatch')}</th><th>${i18i('fldDigitalColorReference', 'Digital Color Reference')}</th>
-          <th>${i18i('fldPantoneColor', 'Pantone Color')}</th><th>${i18i('fldHexColor', 'Hex Color')}</th><th>${i18i('fldCmykColor', 'CMYK Color')}</th><th>${i18i('fldBookCode', 'Book Code')}</th><th>${i18i('fldFabricWeight', 'Fabric Weight')}</th><th>${i18i('thNotes', 'Notes')}</th>
+          <th>${i18i('fldPantoneColor', 'Pantone Color')}</th><th>${i18i('fldFactoryCode', 'Factory Code')}</th><th>${i18i('fldColorCode', 'Color Code')}</th><th>${i18i('fldHexColor', 'Hex Color')}</th><th>${i18i('fldCmykColor', 'CMYK Color')}</th><th>${i18i('fldFabricWeight', 'Fabric Weight')}</th><th>${i18i('thNotes', 'Notes')}</th>
         </tr></thead>
         <tbody>
           ${entries.map((e) => `
@@ -1316,9 +1316,10 @@ function renderFabricTable(hostId, kind, entries, withSwatch) {
               <td>${imgCell(e.swatchUrl)}</td>
               <td>${e.digitalColorUrl ? imgCell(e.digitalColorUrl) : hexChip(e.hex)}</td>
               <td>${escapeHtml(e.pantone || '—')}</td>
+              <td>${escapeHtml(e.factoryCode || '—')}</td>
+              <td>${escapeHtml(e.bookCode || '—')}</td>
               <td>${hexChip(e.hex)}</td>
               <td style="font-size:12px;white-space:nowrap;">${escapeHtml(e.cmyk || '—')}</td>
-              <td>${escapeHtml(e.bookCode || '—')}</td>
               <td>${escapeHtml(e.fabricWeight || '—')}</td>
               <td>${escapeHtml(e.notes || '—')}</td>
             </tr>
@@ -1406,7 +1407,8 @@ function openFabricEntryForm(kind, entry) {
         <div><label>${i18('fldPantoneColor', 'Pantone Color')}</label><input id="fabPantone" type="text" placeholder="e.g. 206C" value="${val(entry && entry.pantone)}" /></div>
         <div><label>${i18('fldHexColor', 'Hex Color')}</label><input id="fabHex" type="text" placeholder="e.g. ce0037" value="${val(entry && entry.hex)}" /></div>
         <div><label>${i18('fldCmykColor', 'CMYK Color')}</label><input id="fabCmyk" type="text" placeholder="e.g. C: 11% M: 100% Y: 81% K: 3%" value="${val(entry && entry.cmyk)}" /></div>
-        <div><label>${i18('fldBookCode', 'Book Code')}</label><input id="fabBookCode" type="text" value="${val(entry && entry.bookCode)}" /></div>
+        <div><label>${i18('fldFactoryCode', 'Factory Code')}</label><input id="fabFactoryCode" type="text" value="${val(entry && entry.factoryCode)}" /></div>
+        <div><label>${i18('fldColorCode', 'Color Code')}</label><input id="fabBookCode" type="text" value="${val(entry && entry.bookCode)}" /></div>
         <div><label>${i18('fldFabricWeight', 'Fabric Weight')}</label><input id="fabFabricWeight" type="text" placeholder="e.g. 340gsm" value="${val(entry && entry.fabricWeight)}" /></div>
       ` : ''}
       <div style="grid-column:1/-1;"><label>${i18('fldNotes', 'Notes')}</label><input id="fabNotes" type="text" value="${val(entry && entry.notes)}" /></div>
@@ -1532,6 +1534,7 @@ function openFabricEntryForm(kind, entry) {
       payload.pantone = document.getElementById('fabPantone').value;
       payload.hex = document.getElementById('fabHex').value.trim().replace('#', '');
       payload.cmyk = document.getElementById('fabCmyk').value;
+      payload.factoryCode = document.getElementById('fabFactoryCode').value;
       payload.bookCode = document.getElementById('fabBookCode').value;
       payload.fabricWeight = document.getElementById('fabFabricWeight').value;
       payload.garmentType = document.getElementById('fabGarmentType').value;
