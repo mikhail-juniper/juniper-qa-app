@@ -857,8 +857,29 @@ div.om-money-wrap input { padding-left: 28px; width: 100%; }
 /* ---- Supplier PO table ----
    Wide by design: it mirrors the shared spreadsheet the factories already
    read, so it scrolls horizontally rather than dropping columns. */
-.sup-table { min-width: 1900px; }
+/* No fixed min-width: the header cells wrap now, so the table sizes to its
+   content instead of being forced wide by one long column title. */
 .sup-table th, .sup-table td { vertical-align: middle; }
+
+/* Long titles like "Required Manufacturer Delivery Date" were forcing the
+   table far wider than the data needed. Let headers wrap over two or three
+   lines and cap their width. */
+.sup-table thead th {
+  white-space: normal;
+  line-height: 1.25;
+  vertical-align: bottom;
+  padding-top: 12px;
+  padding-bottom: 10px;
+}
+/* The span is what actually gets constrained - a max-width on the <th>
+   itself is only a hint the table layout algorithm may ignore. */
+.sup-table thead th .sup-th {
+  display: inline-block;
+  max-width: 104px;
+  white-space: normal;
+}
+/* Data cells stay on one line, except the ones that hold prose. */
+.sup-table td { white-space: nowrap; }
 .sup-thumb {
   width: 46px; height: 46px;
   object-fit: cover;
@@ -869,16 +890,58 @@ div.om-money-wrap input { padding-left: 28px; width: 100%; }
 /* Notes can be long - cap the column and let it wrap rather than pushing
    every other column off screen. */
 .sup-notes { max-width: 240px; white-space: normal; font-size: 12.5px; line-height: 1.45; }
-.sup-comps { display: flex; gap: 10px; flex-wrap: wrap; }
-.sup-comp { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 58px; }
-.sup-comp-name { font-size: 10.5px; line-height: 1.2; text-align: center; color: var(--jc-muted); }
+/* Each component is its own column now, so the cell just holds a thumbnail. */
+.sup-comp-none { font-size: 10.5px; color: var(--jc-muted); }
+.sup-zoom { cursor: zoom-in; }
 /* The three factory-editable cells read as inputs, not as our data. */
 .sup-edit {
   font-size: 12.5px;
   height: 32px;
-  padding: 4px 8px;
+  padding: 4px 6px;
   background: #fffdf5;
   border: 1px solid #e6d9a8;
+  min-width: 0;
+  box-sizing: border-box;
+}
+/* styles.css sets `input[type="date"] { width: 100% }`, which has higher
+   specificity than a bare class - so these need the element+class form to
+   win. Without it the date cells stayed ~170px and set the column width. */
+.sup-table input.sup-edit[type="date"] { width: 142px; } /* fits the full mm/dd/yyyy placeholder */
+.sup-table input.sup-edit[type="text"] { width: 132px; }
+
+/* Address and notes are prose - let them wrap instead of forcing the
+   column as wide as the longest line. */
+.sup-table td.sup-wrap {
+  white-space: normal;
+  max-width: 150px;
+  line-height: 1.35;
+  font-size: 12.5px;
 }
 .sup-edit:focus { border-color: var(--jc-teal); background: #fff; }
 .sup-edit:disabled { opacity: 0.6; }
+
+/* Supplier panel: component grid and the editable factory fields. */
+.sup-panel-comps { display: flex; gap: 14px; flex-wrap: wrap; }
+.sup-panel-comp { width: 96px; text-align: center; }
+.sup-panel-comp-img {
+  width: 96px; height: 96px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--jc-border);
+  display: block;
+  cursor: zoom-in;
+}
+.sup-panel-comp-empty {
+  display: flex; align-items: center; justify-content: center;
+  background: #f2f3f2; color: var(--jc-muted);
+  font-size: 11px; cursor: default;
+}
+.sup-panel-comp-name { font-size: 12px; margin-top: 6px; line-height: 1.3; }
+/* Same treatment as the table cells, so it's obvious which fields the
+   factory owns versus which are ours. */
+.om-panel input.sup-panel-edit {
+  background: #fffdf5;
+  border-color: #e6d9a8;
+}
+.om-panel input.sup-panel-edit:focus { border-color: var(--jc-teal); background: #fff; }
+.om-panel input.sup-panel-edit:disabled { opacity: 0.6; }

@@ -3834,5 +3834,25 @@
   "supOrderDate": {
     "en": "Order Date",
     "zh": "下单日期"
+  },
+  "supNoPhoto": {
+    "en": "No photo",
+    "zh": "无图片"
+  },
+  "supSecProduction": {
+    "en": "Production & Samples",
+    "zh": "生产与样品"
+  },
+  "supSecWarehousing": {
+    "en": "Warehousing",
+    "zh": "仓储信息"
+  },
+  "supSecComponents": {
+    "en": "Components",
+    "zh": "配件"
+  },
+  "supEditableHint": {
+    "en": "You can fill in the sample dates and bulk progress - they save as you type.",
+    "zh": "样品日期与大货进度可由您填写，修改后自动保存。"
   }
 }
