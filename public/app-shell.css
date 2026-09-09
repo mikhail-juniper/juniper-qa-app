@@ -98,7 +98,10 @@
    offset above, or their content sits hard against the left edge. They get
    ordinary centring and a narrower measure instead. */
 .form-root.no-sidebar {
-  max-width: 1100px;
+  /* Same measure as the sidebar pages: those get 1700px minus a 220px
+     sidebar, so this matches the usable content width rather than being
+     noticeably narrower. */
+  max-width: 1480px;
   margin-left: auto;
   margin-right: auto;
 }
