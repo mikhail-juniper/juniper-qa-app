@@ -263,6 +263,17 @@ function currentUser(req) {
 
 // Paths that must stay reachable without being logged in yet, so the login
 // page itself can load and submit.
+/**
+ * Domain-ownership verification files. WeCom (WW_verify_*.txt) and WeChat
+ * Official Accounts (MP_verify_*.txt) confirm you control a domain by
+ * fetching a file from its root - anonymously. Behind the site password
+ * they'd 401 and verification would always fail, so they're matched by
+ * pattern rather than being listed one by one.
+ */
+function isDomainVerificationFile(pathname) {
+  return /^\/(WW|MP)_verify_[A-Za-z0-9]+\.txt$/.test(pathname);
+}
+
 const AUTH_ALLOWLIST = new Set([
   '/login.html', '/api/login', '/api/login-options', '/favicon.ico',
   '/auth/google', '/auth/google/callback',
@@ -576,6 +587,7 @@ app.post('/api/logout', (req, res) => {
 
 app.use((req, res, next) => {
   if (AUTH_ALLOWLIST.has(req.path)) return next();
+  if (isDomainVerificationFile(req.path)) return next();
   const user = currentUser(req);
   if (user) {
     req.user = user; // downstream routes read this for permissions/scoping
