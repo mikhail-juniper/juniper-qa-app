@@ -44,6 +44,7 @@ const googleAuth = require('./lib/googleAuth');
 const gmailSend = require('./lib/gmailSend');
 const wechatAuth = require('./lib/wechatAuth');
 const wecomAuth = require('./lib/wecomAuth');
+const wecomCallback = require('./lib/wecomCallback');
 const AdmZip = require('adm-zip');
 const ASANA_FIELD_MAP_PATH = path.join(__dirname, 'config', 'asanaFieldMap.json');
 function loadAsanaFieldMap() { return loadJson(ASANA_FIELD_MAP_PATH); }
@@ -278,7 +279,8 @@ const AUTH_ALLOWLIST = new Set([
   '/login.html', '/api/login', '/api/login-options', '/favicon.ico',
   '/auth/google', '/auth/google/callback',
   '/auth/wechat', '/auth/wechat/callback',
-  '/auth/wecom', '/auth/wecom/callback'
+  '/auth/wecom', '/auth/wecom/callback',
+  '/wecom/callback'
 ]);
 
 /**
@@ -446,6 +448,35 @@ app.get('/auth/wechat/callback', async (req, res) => {
     console.error('WeChat sign-in failed:', err);
     return fail(err.message || 'WeChat sign-in failed.');
   }
+});
+
+/**
+ * WeCom message-callback URL. Configuring this is what unlocks the Trusted
+ * IP setting when the trusted-domain route is unavailable.
+ *
+ * GET  - WeCom's one-time URL verification. Must reply with the decrypted
+ *        echostr as bare text, no JSON, no wrapper.
+ * POST - Where WeCom would deliver events. Nothing consumes them yet, so it
+ *        acknowledges and discards; replying with an empty 200 is how WeCom
+ *        expects "received, no reply needed".
+ *
+ * Outside the auth gate: WeCom calls it unauthenticated, and the signature
+ * check is what actually protects it.
+ */
+app.get('/wecom/callback', (req, res) => {
+  try {
+    const echo = wecomCallback.verifyUrl(req.query);
+    res.type('text/plain').send(echo);
+  } catch (err) {
+    console.error('WeCom callback verification failed:', err.message || err);
+    res.status(400).type('text/plain').send('verification failed');
+  }
+});
+
+app.post('/wecom/callback', (req, res) => {
+  // Acknowledge immediately. WeCom retries on anything other than a fast
+  // 200, and we have no event handling to do yet.
+  res.status(200).send('');
 });
 
 // ---- WeCom (企业微信) sign-in ----
