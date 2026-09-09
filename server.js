@@ -798,27 +798,6 @@ app.delete('/api/order-management/orders/:id/approval-link', requirePermission('
   res.json({ ok: true });
 });
 
-/**
- * The one write a supplier may perform: their own sample dates and bulk
- * progress. Separate from the general order PATCH (which requires
- * orders:write) and hard-limited to three keys by the store, so this can be
- * exposed to a link-based session safely.
- */
-app.post('/api/supplier/orders/:id/factory-updates', (req, res) => {
-  if (!req.user || req.user.role !== 'supplier') {
-    return res.status(403).json({ error: 'Only supplier accounts can update these fields' });
-  }
-  const order = orderManagementStore.getOrderById(req.params.id);
-  if (!order) return res.status(404).json({ error: 'Order not found' });
-  // Same 404-not-403 treatment as elsewhere, so PO ids can't be probed.
-  if (!userStore.canSeeOrder(req.user, order)) return res.status(404).json({ error: 'Order not found' });
-
-  const updated = orderManagementStore.setFactoryUpdates(
-    req.params.id, req.body || {}, req.user.supplierName || 'Supplier');
-  if (!updated) return res.status(404).json({ error: 'Order not found' });
-  res.json({ ok: true, order: userStore.redactOrderForSupplier(req.user, updated) });
-});
-
 // Whether the signed-in user can send email from inside the app.
 app.get('/api/gmail/status', (req, res) => {
   const user = req.user && req.user.id ? userStore.getUser(req.user.id) : null;
@@ -2060,6 +2039,22 @@ app.post('/api/order-management/orders/:id/dispatch', requirePermission('dispatc
   }
   syncOrderToAsana(updated, req);
   res.json({ ok: true, entry, delivery, order: updated });
+});
+
+// Append a bulk shipment progress note. Internal only - the supplier page
+// shows these read-only.
+app.post('/api/order-management/orders/:id/progress-note', requirePermission('orders:write'), (req, res) => {
+  const body = req.body || {};
+  if (!body.text || !String(body.text).trim()) {
+    return res.status(400).json({ error: 'A note is required' });
+  }
+  const updated = orderManagementStore.addProgressNote(
+    req.params.id,
+    body.text,
+    body.actor || req.get('X-Actor') || (req.user && req.user.name) || 'Web user'
+  );
+  if (!updated) return res.status(404).json({ error: 'Order not found' });
+  res.json({ ok: true, order: updated });
 });
 
 app.post('/api/order-management/orders/:id/qa-report-status', (req, res) => {

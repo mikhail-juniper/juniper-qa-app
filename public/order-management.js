@@ -2060,6 +2060,8 @@ async function openDetailPanel(id, scope) {
   }
 
   try {
+  const progressLog = ((order.factoryUpdates || {}).bulkProgressLog || [])
+    .slice().sort((a, b) => new Date(b.at) - new Date(a.at));
   const panel = document.createElement('div');
   panel.className = 'om-panel';
   panel.innerHTML = `
@@ -2166,6 +2168,32 @@ async function openDetailPanel(id, scope) {
     </div>
 
     <div class="om-panel-card">
+    <div class="om-section-title">${i18('secBulkShipmentProgress', 'Bulk Shipment Progress')}</div>
+    <div class="section-help" style="margin-bottom:12px;">${i18('helpBulkProgress', 'Each note is saved with the date and who added it.')}</div>
+    <!-- Collapsed by default: the latest note is what matters day to day,
+         and clicking opens the editor plus the full history. -->
+    <div id="omProgressSummary" class="om-progress-summary" role="button" tabindex="0">
+      ${progressLog.length ? `
+        <div class="om-progress-latest">${escapeHtml(progressLog[0].text)}</div>
+        <div class="om-cl-meta">${new Date(progressLog[0].at).toLocaleString()}${progressLog[0].by ? ' · ' + escapeHtml(progressLog[0].by) : ''}</div>
+      ` : `<div class="om-progress-empty">${i18('noNotesYet', 'No notes yet - click to add one.')}</div>`}
+    </div>
+    <div id="omProgressEditor" style="display:none;margin-top:12px;">
+      <textarea id="omProgressNote" rows="3" style="width:100%;font-family:inherit;font-size:13px;"></textarea>
+      <button type="button" class="btn btn-primary" id="omProgressAdd" style="flex:none;width:auto;margin-top:8px;">${i18('btnAddNote', 'Add note')}</button>
+      ${progressLog.length ? `
+        <ul class="om-changelog" style="margin-top:14px;">
+          ${progressLog.map((e) => `
+            <li>
+              <strong style="font-weight:500;">${escapeHtml(e.text)}</strong>
+              <div class="om-cl-meta">${new Date(e.at).toLocaleString()}${e.by ? ' · ' + escapeHtml(e.by) : ''}</div>
+            </li>
+          `).join('')}
+        </ul>` : ''}
+    </div>
+    </div>
+
+    <div class="om-panel-card">
     <div class="om-section-title">${i18('secProductDevelopmentApproval', 'Product Development Approval')}</div>
     <div class="section-help" style="margin-bottom:6px;">${i18('helpPdApproval', 'Statuses below are set on the approval page - read-only here.')}</div>
     <div class="section-help" style="margin-bottom:14px;">${i18('helpPdApprovalLink', 'Share the link below to let PD or QA open this PO with no login.')}</div>
@@ -2199,6 +2227,12 @@ async function openDetailPanel(id, scope) {
         return `
         <div class="om-qa-report-col">
           <div class="om-qa-report-title">${title}</div>
+          <label>${stage === 'preProduction'
+            ? i18('fldPreProdSampleReady', 'Pre-Production Sample Ready Date')
+            : i18('fldBulkSampleReady', 'Bulk Sample Ready Date')}</label>
+          <input type="date" class="om-sample-ready" data-sample-stage="${stage}"
+            value="${escapeHtml(String((order.factoryUpdates || {})[stage === 'preProduction' ? 'preProductionSampleDate' : 'bulkSampleDate'] || '').slice(0, 10))}"
+            style="margin-bottom:10px;" />
           <label>${i18('fldStatusLc', 'Status')}</label>
           <select class="om-report-status-select" data-report-stage="${stage}" data-report-status="${escapeHtml(rep.status || 'Pending')}">
             ${['Pending', 'In Progress', 'Completed'].map((s) => `<option value="${s}" ${s === (rep.status || 'Pending') ? 'selected' : ''}>${tStatusText(s)}</option>`).join('')}
@@ -2978,6 +3012,48 @@ async function openDetailPanel(id, scope) {
     });
   }
 
+  // Bulk shipment progress: click the summary to reveal the editor and the
+  // full history. Notes append - they're a record, so nothing is editable
+  // after the fact.
+  const progressSummary = document.getElementById('omProgressSummary');
+  const progressEditor = document.getElementById('omProgressEditor');
+  if (progressSummary && progressEditor) {
+    const toggle = () => {
+      const open = progressEditor.style.display !== 'none';
+      progressEditor.style.display = open ? 'none' : '';
+      progressSummary.classList.toggle('om-progress-open', !open);
+      if (!open) document.getElementById('omProgressNote').focus();
+    };
+    progressSummary.addEventListener('click', toggle);
+    progressSummary.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+    });
+  }
+  const progressAdd = document.getElementById('omProgressAdd');
+  if (progressAdd) {
+    progressAdd.addEventListener('click', async () => {
+      const box = document.getElementById('omProgressNote');
+      const text = box.value.trim();
+      if (!text) return;
+      progressAdd.disabled = true;
+      try {
+        await api(`/api/order-management/orders/${encodeURIComponent(order.id)}/progress-note`, {
+          method: 'POST', body: JSON.stringify({ text, actor: 'Web user' })
+        });
+        showToast(i18t('noteAdded', 'Note added'));
+        // Reopen so the new entry shows in the history, and refresh the
+        // list behind the panel.
+        const id = order.id;
+        closePanel();
+        refreshCurrentView();
+        openDetailPanel(id, 'full');
+      } catch (e) {
+        showToast(e.message, true);
+        progressAdd.disabled = false;
+      }
+    });
+  }
+
   const deletePoBtn = document.getElementById('omDeletePoBtn');
   if (deletePoBtn) {
     deletePoBtn.addEventListener('click', () => {
@@ -3451,6 +3527,20 @@ async function openDetailPanel(id, scope) {
       : warehouseSelectEl.value;
     const patch = {
       buyer: buyerValue,
+      // Sample-ready dates from the QA/QC Reporting card. These are ours to
+      // enter once confirmed with the factory; the supplier sees them
+      // read-only. Deep-merged server-side, so this won't touch the
+      // progress log stored alongside them.
+      factoryUpdates: (() => {
+        const read = (stage) => {
+          const el = document.querySelector(`.om-sample-ready[data-sample-stage="${stage}"]`);
+          return el && el.value ? el.value : null;
+        };
+        return {
+          preProductionSampleDate: read('preProduction'),
+          bulkSampleDate: read('bulk')
+        };
+      })(),
       sourcer: (() => {
         const sel = document.getElementById('fSourcer');
         return sel.value === '__other__' ? document.getElementById('fSourcerOther').value.trim() : sel.value;

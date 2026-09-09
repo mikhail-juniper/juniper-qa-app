@@ -3874,5 +3874,33 @@
   "supUpdateAdded": {
     "en": "Update added",
     "zh": "进度已添加"
+  },
+  "fldPreProdSampleReady": {
+    "en": "Pre-Production Sample Ready Date",
+    "zh": "产前样完成日期"
+  },
+  "fldBulkSampleReady": {
+    "en": "Bulk Sample Ready Date",
+    "zh": "大货样完成日期"
+  },
+  "secBulkShipmentProgress": {
+    "en": "Bulk Shipment Progress",
+    "zh": "大货进度"
+  },
+  "helpBulkProgress": {
+    "en": "Add a progress note. Each one is saved with the date and who added it, and shows on the supplier's order page.",
+    "zh": "添加进度备注。每条记录会保存日期和填写人，并显示在供应商的订单页面。"
+  },
+  "btnAddNote": {
+    "en": "Add note",
+    "zh": "添加备注"
+  },
+  "noteAdded": {
+    "en": "Note added",
+    "zh": "备注已添加"
+  },
+  "supManufacturingProgress": {
+    "en": "Manufacturing Progress",
+    "zh": "生产进度"
   }
 }

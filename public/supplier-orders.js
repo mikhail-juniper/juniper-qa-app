@@ -196,18 +196,14 @@ function rowHtml(o, compCols) {
       <td>${fmtDate(o.orderDate)}</td>
       <td>${fmtDate(o.manufacturerDeliveryDate)}</td>
       <td>${o.inTransportationAt ? fmtDate(o.inTransportationAt) : dash}</td>
-      <td><input type="date" class="sup-edit" data-field="preProductionSampleDate"
-        data-order="${escapeHtml(o.id)}" value="${escapeHtml((f.preProductionSampleDate || '').slice(0, 10))}" /></td>
-      <td><input type="date" class="sup-edit" data-field="bulkSampleDate"
-        data-order="${escapeHtml(o.id)}" value="${escapeHtml((f.bulkSampleDate || '').slice(0, 10))}" /></td>
+      <td>${f.preProductionSampleDate ? fmtDate(f.preProductionSampleDate) : dash}</td>
+      <td>${f.bulkSampleDate ? fmtDate(f.bulkSampleDate) : dash}</td>
       <td class="sup-notes sup-wrap">${o.productionNotes ? escapeHtml(o.productionNotes) : dash}</td>
       <td class="sup-progress-cell">
         ${latest
-          ? `<div class="sup-progress-latest" title="${escapeHtml(latest.by || '')}">${escapeHtml(latest.text)}
+          ? `<div class="sup-progress-latest">${escapeHtml(latest.text)}
               <span class="sup-progress-when">${fmtDate(latest.at)}</span></div>`
-          : ''}
-        <input type="text" class="sup-edit sup-progress-add" data-order="${escapeHtml(o.id)}"
-          placeholder="${escapeHtml(i18t('supAddUpdate', 'Add update...'))}" />
+          : dash}
       </td>
       <td class="sup-wrap">${escapeHtml(o.warehouseAddress || '—')}</td>
       ${compCols.map((name) => {
@@ -216,7 +212,6 @@ function rowHtml(o, compCols) {
         return `<td>${hit.imageUrl ? thumb(hit.imageUrl, name) : `<span class="sup-comp-none">${i18('supNoPhoto', 'No photo')}</span>`}</td>`;
       }).join('')}
       <td>${thumb(mc.washingTagUrl, 'Washing tag')}</td>
-      <td>${escapeHtml(o.packingListNumber || '—')}</td>
     </tr>
   `;
 }
@@ -266,11 +261,10 @@ function drawList() {
               i18('supPreProdSample', 'Pre-Production Sample'),
               i18('supBulkSample', 'Bulk Sample'),
               i18('fldProductionNotes', 'Production Notes'),
-              i18('supBulkProgress', 'Bulk Shipment Progress'),
+              i18('supManufacturingProgress', 'Manufacturing Progress'),
               i18('fldWarehouseAddress', 'Warehouse Address'),
               ...compCols.map((n) => escapeHtml(n)),
-              i18('supWashingTag', 'Washing Tag'),
-              i18('supPackingList', 'Packing List Number')
+              i18('supWashingTag', 'Washing Tag')
             ].map((label) => `<th><span class="sup-th">${label}</span></th>`).join('')}
           </tr></thead>
           <tbody>
@@ -283,71 +277,11 @@ function drawList() {
   host.querySelectorAll('tbody tr[data-id]').forEach((tr) => {
     tr.addEventListener('click', (e) => {
       // Editing a cell shouldn't also open the detail panel over the top.
-      if (e.target.closest('.sup-edit') || e.target.closest('a')) return;
+      if (e.target.closest('a')) return; // let links behave normally
       openSupplierOrder(tr.dataset.id);
     });
   });
 
-  // The factory's own fields save as soon as they're changed - no separate
-  // save button, since a factory updating a date shouldn't have to hunt for
-  // one. Only these three keys are accepted by the server.
-  host.querySelectorAll('.sup-zoom').forEach((img) => {
-    img.addEventListener('click', (e) => {
-      e.stopPropagation(); // don't also open the PO detail panel
-      openLightbox(img.dataset.full);
-    });
-  });
-
-  /* Progress updates append rather than overwrite, so they post a
-   * bulkProgressNote and then clear the box ready for the next one. */
-  host.querySelectorAll('.sup-progress-add').forEach((el) => {
-    const submit = async () => {
-      const text = el.value.trim();
-      if (!text) return;
-      // Clear immediately: pressing Enter also fires blur, and without this
-      // the same update got logged twice.
-      el.value = '';
-      el.disabled = true;
-      try {
-        const res = await api(`/api/supplier/orders/${encodeURIComponent(el.dataset.order)}/factory-updates`, {
-          method: 'POST', body: JSON.stringify({ bulkProgressNote: text })
-        });
-        const idx = allOrders.findIndex((o) => o.id === el.dataset.order);
-        if (idx > -1 && res.order) allOrders[idx] = res.order;
-        showToast(i18t('supUpdateAdded', 'Update added'));
-        drawList();
-      } catch (err) {
-        showToast(err.message, true);
-        el.value = text; // put it back so nothing is lost
-        el.disabled = false;
-      }
-    };
-    el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
-    el.addEventListener('blur', submit);
-    el.addEventListener('click', (e) => e.stopPropagation());
-  });
-
-  host.querySelectorAll('.sup-edit').forEach((el) => {
-    el.addEventListener('change', async () => {
-      const body = {};
-      body[el.dataset.field] = el.value;
-      el.disabled = true;
-      try {
-        const res = await api(`/api/supplier/orders/${encodeURIComponent(el.dataset.order)}/factory-updates`, {
-          method: 'POST', body: JSON.stringify(body)
-        });
-        // Keep the local copy in step so a redraw doesn't revert the value.
-        const idx = allOrders.findIndex((o) => o.id === el.dataset.order);
-        if (idx > -1 && res.order) allOrders[idx] = res.order;
-        showToast(i18t('supSaved', 'Saved'));
-      } catch (err) {
-        showToast(err.message, true);
-      } finally {
-        el.disabled = false;
-      }
-    });
-    el.addEventListener('click', (e) => e.stopPropagation());
-  });
 }
 
 function closePanel() {
@@ -462,30 +396,18 @@ async function openSupplierOrder(id) {
 
     <div class="om-panel-card">
       <div class="om-section-title">${i18('supSecProduction', 'Production & Samples')}</div>
-      <div class="section-help" style="margin-bottom:12px;">${i18('supEditableHint', 'You can fill in the sample dates and bulk progress.')}</div>
-      <div class="om-field-grid">
-        <div>
-          <label>${i18('supPreProdSample', 'Pre-Production Sample')}</label>
-          <input type="date" class="sup-panel-edit" data-field="preProductionSampleDate"
-            data-order="${escapeHtml(order.id)}" value="${escapeHtml(((order.factoryUpdates || {}).preProductionSampleDate || '').slice(0, 10))}" />
-        </div>
-        <div>
-          <label>${i18('supBulkSample', 'Bulk Sample')}</label>
-          <input type="date" class="sup-panel-edit" data-field="bulkSampleDate"
-            data-order="${escapeHtml(order.id)}" value="${escapeHtml(((order.factoryUpdates || {}).bulkSampleDate || '').slice(0, 10))}" />
-        </div>
-
+      <div class="om-detail-grid">
+        <div class="om-detail-row"><span class="om-label">${i18('supPreProdSample', 'Pre-Production Sample')}</span><span class="om-value">${(order.factoryUpdates || {}).preProductionSampleDate ? fmtDate((order.factoryUpdates || {}).preProductionSampleDate) : '—'}</span></div>
+        <div class="om-detail-row"><span class="om-label">${i18('supBulkSample', 'Bulk Sample')}</span><span class="om-value">${(order.factoryUpdates || {}).bulkSampleDate ? fmtDate((order.factoryUpdates || {}).bulkSampleDate) : '—'}</span></div>
       </div>
+
       <div style="margin-top:14px;">
         <div class="om-label" style="margin-bottom:5px;">${i18('fldProductionNotes', 'Production Notes')}</div>
         <div class="om-value" style="white-space:pre-wrap;line-height:1.5;">${order.productionNotes ? escapeHtml(order.productionNotes) : '—'}</div>
       </div>
 
       <div style="margin-top:20px;">
-        <div class="om-section-title" style="margin-bottom:6px;">${i18('supProgressLog', 'Bulk Shipment Progress')}</div>
-        <div class="section-help" style="margin-bottom:10px;">${i18('supAddUpdateHint', 'Each update is saved with the date.')}</div>
-        <input type="text" id="supPanelProgressAdd" data-order="${escapeHtml(order.id)}"
-          class="sup-panel-edit" placeholder="${escapeHtml(i18t('supAddUpdate', 'Add update...'))}" />
+        <div class="om-section-title" style="margin-bottom:10px;">${i18('supManufacturingProgress', 'Manufacturing Progress')}</div>
         ${progressLog.length ? `
           <ul class="om-changelog" style="margin-top:12px;">
             ${progressLog.map((e) => `
@@ -515,7 +437,6 @@ async function openSupplierOrder(id) {
       <div class="om-section-title">${i18('supSecWarehousing', 'Warehousing')}</div>
       <div class="om-detail-grid">
         <div class="om-detail-row"><span class="om-label">${i18('fldWarehouseAddress', 'Warehouse Address')}</span><span class="om-value">${escapeHtml(order.warehouseAddress || '—')}</span></div>
-        <div class="om-detail-row"><span class="om-label">${i18('supPackingList', 'Packing List Number')}</span><span class="om-value">${escapeHtml(order.packingListNumber || '—')}</span></div>
       </div>
     </div>
 
@@ -556,58 +477,6 @@ async function openSupplierOrder(id) {
   /* The three factory fields are editable here as well as in the table, so
    * whichever view they're in works. Saving keeps the in-memory list in
    * step so closing the panel doesn't show a stale row. */
-  const panelProgress = document.getElementById('supPanelProgressAdd');
-  if (panelProgress) {
-    const submit = async () => {
-      const text = panelProgress.value.trim();
-      if (!text) return;
-      // Cleared before posting for the same Enter-then-blur reason.
-      panelProgress.value = '';
-      panelProgress.disabled = true;
-      try {
-        await api(`/api/supplier/orders/${encodeURIComponent(panelProgress.dataset.order)}/factory-updates`, {
-          method: 'POST', body: JSON.stringify({ bulkProgressNote: text })
-        });
-        showToast(i18t('supUpdateAdded', 'Update added'));
-        // Reopen so the new entry appears in the log, and refresh the table
-        // behind it.
-        const orderId = panelProgress.dataset.order;
-        const data = await api('/api/order-management/orders' + scopeParam);
-        allOrders = data.orders || [];
-        drawList();
-        closePanel();
-        openSupplierOrder(orderId);
-      } catch (err) {
-        showToast(err.message, true);
-        panelProgress.value = text;
-        panelProgress.disabled = false;
-      }
-    };
-    panelProgress.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
-    panelProgress.addEventListener('blur', submit);
-  }
-
-  // The date fields still overwrite; only progress is append-only.
-  panel.querySelectorAll('.sup-panel-edit[data-field]').forEach((el) => {
-    el.addEventListener('change', async () => {
-      const body = {};
-      body[el.dataset.field] = el.value;
-      el.disabled = true;
-      try {
-        const res = await api(`/api/supplier/orders/${encodeURIComponent(el.dataset.order)}/factory-updates`, {
-          method: 'POST', body: JSON.stringify(body)
-        });
-        const idx = allOrders.findIndex((o) => o.id === el.dataset.order);
-        if (idx > -1 && res.order) allOrders[idx] = res.order;
-        showToast(i18t('supSaved', 'Saved'));
-        drawList(); // reflect it in the table behind the panel
-      } catch (err) {
-        showToast(err.message, true);
-      } finally {
-        el.disabled = false;
-      }
-    });
-  });
   document.addEventListener('keydown', function esc(e) {
     if (e.key === 'Escape') { closePanel(); document.removeEventListener('keydown', esc); }
   });
