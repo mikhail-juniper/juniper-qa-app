@@ -945,3 +945,15 @@ div.om-money-wrap input { padding-left: 28px; width: 100%; }
 }
 .om-panel input.sup-panel-edit:focus { border-color: var(--jc-teal); background: #fff; }
 .om-panel input.sup-panel-edit:disabled { opacity: 0.6; }
+
+/* Bulk progress is a log: the table shows the newest entry with its date,
+   plus a box to append the next one. */
+.sup-progress-cell { min-width: 190px; white-space: normal; }
+.sup-progress-latest {
+  font-size: 12px;
+  line-height: 1.35;
+  margin-bottom: 5px;
+  max-width: 180px;
+}
+.sup-progress-when { display: block; color: var(--jc-muted); font-size: 10.5px; margin-top: 1px; }
+.sup-table input.sup-progress-add[type="text"] { width: 176px; }

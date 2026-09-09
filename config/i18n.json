@@ -3854,5 +3854,25 @@
   "supEditableHint": {
     "en": "You can fill in the sample dates and bulk progress - they save as you type.",
     "zh": "样品日期与大货进度可由您填写，修改后自动保存。"
+  },
+  "supAddUpdate": {
+    "en": "Add update...",
+    "zh": "添加进度..."
+  },
+  "supProgressLog": {
+    "en": "Bulk Shipment Progress",
+    "zh": "大货进度"
+  },
+  "supNoUpdates": {
+    "en": "No updates yet.",
+    "zh": "暂无进度更新。"
+  },
+  "supAddUpdateHint": {
+    "en": "Add a progress update - each one is saved with the date and can't be edited afterwards.",
+    "zh": "添加进度更新，每条记录会保存日期，提交后不可修改。"
+  },
+  "supUpdateAdded": {
+    "en": "Update added",
+    "zh": "进度已添加"
   }
 }

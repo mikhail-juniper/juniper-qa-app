@@ -183,6 +183,8 @@ function rowHtml(o, compCols) {
   const f = o.factoryUpdates || {};
   const dash = '<span style="color:var(--jc-muted);">—</span>';
   const comps = (o.componentPhotos || []).filter((c) => c.partName || c.imageUrl);
+  // Log comes back newest-first, so the head is the current status.
+  const latest = (o.bulkProgressLog || [])[0] || null;
   return `
     <tr data-id="${escapeHtml(o.id)}">
       <td>${thumb(mc.photoReference, mc.name)}</td>
@@ -199,8 +201,14 @@ function rowHtml(o, compCols) {
       <td><input type="date" class="sup-edit" data-field="bulkSampleDate"
         data-order="${escapeHtml(o.id)}" value="${escapeHtml((f.bulkSampleDate || '').slice(0, 10))}" /></td>
       <td class="sup-notes sup-wrap">${o.productionNotes ? escapeHtml(o.productionNotes) : dash}</td>
-      <td><input type="text" class="sup-edit" data-field="bulkShipmentProgress"
-        data-order="${escapeHtml(o.id)}" value="${escapeHtml(f.bulkShipmentProgress || '')}" /></td>
+      <td class="sup-progress-cell">
+        ${latest
+          ? `<div class="sup-progress-latest" title="${escapeHtml(latest.by || '')}">${escapeHtml(latest.text)}
+              <span class="sup-progress-when">${fmtDate(latest.at)}</span></div>`
+          : ''}
+        <input type="text" class="sup-edit sup-progress-add" data-order="${escapeHtml(o.id)}"
+          placeholder="${escapeHtml(i18t('supAddUpdate', 'Add update...'))}" />
+      </td>
       <td class="sup-wrap">${escapeHtml(o.warehouseAddress || '—')}</td>
       ${compCols.map((name) => {
         const hit = comps.find((c) => (c.partName || '').trim() === name);
@@ -290,6 +298,35 @@ function drawList() {
     });
   });
 
+  /* Progress updates append rather than overwrite, so they post a
+   * bulkProgressNote and then clear the box ready for the next one. */
+  host.querySelectorAll('.sup-progress-add').forEach((el) => {
+    const submit = async () => {
+      const text = el.value.trim();
+      if (!text) return;
+      // Clear immediately: pressing Enter also fires blur, and without this
+      // the same update got logged twice.
+      el.value = '';
+      el.disabled = true;
+      try {
+        const res = await api(`/api/supplier/orders/${encodeURIComponent(el.dataset.order)}/factory-updates`, {
+          method: 'POST', body: JSON.stringify({ bulkProgressNote: text })
+        });
+        const idx = allOrders.findIndex((o) => o.id === el.dataset.order);
+        if (idx > -1 && res.order) allOrders[idx] = res.order;
+        showToast(i18t('supUpdateAdded', 'Update added'));
+        drawList();
+      } catch (err) {
+        showToast(err.message, true);
+        el.value = text; // put it back so nothing is lost
+        el.disabled = false;
+      }
+    };
+    el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
+    el.addEventListener('blur', submit);
+    el.addEventListener('click', (e) => e.stopPropagation());
+  });
+
   host.querySelectorAll('.sup-edit').forEach((el) => {
     el.addEventListener('change', async () => {
       const body = {};
@@ -364,6 +401,7 @@ async function openSupplierOrder(id) {
   `;
   const log = order.supplierLog || [];
   const comps = (order.componentPhotos || []).filter((c) => c.partName || c.imageUrl);
+  const progressLog = order.bulkProgressLog || [];
 
   const panel = document.createElement('div');
   panel.className = 'om-panel';
@@ -436,15 +474,28 @@ async function openSupplierOrder(id) {
           <input type="date" class="sup-panel-edit" data-field="bulkSampleDate"
             data-order="${escapeHtml(order.id)}" value="${escapeHtml(((order.factoryUpdates || {}).bulkSampleDate || '').slice(0, 10))}" />
         </div>
-        <div>
-          <label>${i18('supBulkProgress', 'Bulk Shipment Progress')}</label>
-          <input type="text" class="sup-panel-edit" data-field="bulkShipmentProgress"
-            data-order="${escapeHtml(order.id)}" value="${escapeHtml((order.factoryUpdates || {}).bulkShipmentProgress || '')}" />
-        </div>
+
       </div>
       <div style="margin-top:14px;">
         <div class="om-label" style="margin-bottom:5px;">${i18('fldProductionNotes', 'Production Notes')}</div>
         <div class="om-value" style="white-space:pre-wrap;line-height:1.5;">${order.productionNotes ? escapeHtml(order.productionNotes) : '—'}</div>
+      </div>
+
+      <div style="margin-top:20px;">
+        <div class="om-section-title" style="margin-bottom:6px;">${i18('supProgressLog', 'Bulk Shipment Progress')}</div>
+        <div class="section-help" style="margin-bottom:10px;">${i18('supAddUpdateHint', 'Each update is saved with the date.')}</div>
+        <input type="text" id="supPanelProgressAdd" data-order="${escapeHtml(order.id)}"
+          class="sup-panel-edit" placeholder="${escapeHtml(i18t('supAddUpdate', 'Add update...'))}" />
+        ${progressLog.length ? `
+          <ul class="om-changelog" style="margin-top:12px;">
+            ${progressLog.map((e) => `
+              <li>
+                <strong style="font-weight:500;">${escapeHtml(e.text)}</strong>
+                <div class="om-cl-meta">${new Date(e.at).toLocaleString()}${e.by ? ' · ' + escapeHtml(e.by) : ''}</div>
+              </li>
+            `).join('')}
+          </ul>
+        ` : `<div class="om-empty" style="padding:14px 0;">${i18('supNoUpdates', 'No updates yet.')}</div>`}
       </div>
     </div>
 
@@ -505,7 +556,39 @@ async function openSupplierOrder(id) {
   /* The three factory fields are editable here as well as in the table, so
    * whichever view they're in works. Saving keeps the in-memory list in
    * step so closing the panel doesn't show a stale row. */
-  panel.querySelectorAll('.sup-panel-edit').forEach((el) => {
+  const panelProgress = document.getElementById('supPanelProgressAdd');
+  if (panelProgress) {
+    const submit = async () => {
+      const text = panelProgress.value.trim();
+      if (!text) return;
+      // Cleared before posting for the same Enter-then-blur reason.
+      panelProgress.value = '';
+      panelProgress.disabled = true;
+      try {
+        await api(`/api/supplier/orders/${encodeURIComponent(panelProgress.dataset.order)}/factory-updates`, {
+          method: 'POST', body: JSON.stringify({ bulkProgressNote: text })
+        });
+        showToast(i18t('supUpdateAdded', 'Update added'));
+        // Reopen so the new entry appears in the log, and refresh the table
+        // behind it.
+        const orderId = panelProgress.dataset.order;
+        const data = await api('/api/order-management/orders' + scopeParam);
+        allOrders = data.orders || [];
+        drawList();
+        closePanel();
+        openSupplierOrder(orderId);
+      } catch (err) {
+        showToast(err.message, true);
+        panelProgress.value = text;
+        panelProgress.disabled = false;
+      }
+    };
+    panelProgress.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
+    panelProgress.addEventListener('blur', submit);
+  }
+
+  // The date fields still overwrite; only progress is append-only.
+  panel.querySelectorAll('.sup-panel-edit[data-field]').forEach((el) => {
     el.addEventListener('change', async () => {
       const body = {};
       body[el.dataset.field] = el.value;
