@@ -129,6 +129,7 @@
     const emailInput = document.getElementById('emailInput');
     const toggleBtn = document.getElementById('toggleMode');
     const subText = document.getElementById('subText');
+    const errorMsg = document.getElementById('errorMsg');
 
     // Two modes: the original shared site password, and per-user accounts.
     // Shared stays the default so nothing changes for existing users; the
@@ -204,7 +205,8 @@
       (accountMode ? emailInput : input).focus();
     });
     const btn = document.getElementById('submitBtn');
-    const errorMsg = document.getElementById('errorMsg');
+    // errorMsg is declared with the other element lookups at the top - it's
+    // needed before this point to show an OAuth callback error.
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
