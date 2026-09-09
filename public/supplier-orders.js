@@ -120,14 +120,37 @@ async function render() {
   }
 }
 
-/** A thumbnail, or a link when the file is a PDF, or a dash. */
+/**
+ * Full-size image overlay. Photos open here rather than in a new tab, so a
+ * factory checking a reference photo doesn't lose their place in the table.
+ * Click anywhere, or press Escape, to close.
+ */
+function openLightbox(url) {
+  let overlay = document.getElementById('supLightbox');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'supLightbox';
+    overlay.className = 'lightbox-overlay';
+    overlay.innerHTML = '<img alt="" />';
+    overlay.addEventListener('click', () => overlay.classList.add('hidden'));
+    document.body.appendChild(overlay);
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') overlay.classList.add('hidden');
+    });
+  }
+  overlay.querySelector('img').src = url;
+  overlay.classList.remove('hidden');
+}
+
+/** A thumbnail, or a link when the file is a PDF, or a dash. PDFs still
+ *  open in a new tab - a browser renders those better than we can. */
 function thumb(url, alt) {
   if (!url) return '<span style="color:var(--jc-muted);">—</span>';
   if (isPdfFile(url)) {
     return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener" style="font-size:11.5px;">${i18('btnViewFile', 'View')}</a>`;
   }
-  return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">` +
-    `<img src="${escapeHtml(url)}" alt="${escapeHtml(alt || '')}" class="sup-thumb" /></a>`;
+  return `<img src="${escapeHtml(url)}" alt="${escapeHtml(alt || '')}" class="sup-thumb sup-zoom" ` +
+    `data-full="${escapeHtml(url)}" title="${escapeHtml(alt || '')}" />`;
 }
 
 /**
@@ -138,7 +161,24 @@ function thumb(url, alt) {
  * progress. They save on change through the narrow supplier endpoint; the
  * rest of the row is ours and read-only.
  */
-function rowHtml(o) {
+/**
+ * Every distinct component name across the POs on screen, in the order
+ * first seen. Each becomes its own column - matching the old KingDocs
+ * sheet, which had a column per part (drawstring bag, cards/tags, ...)
+ * rather than a list crammed into one cell.
+ */
+function componentColumns(orders) {
+  const names = [];
+  orders.forEach((o) => {
+    (o.componentPhotos || []).forEach((c) => {
+      const name = (c.partName || '').trim();
+      if (name && !names.includes(name)) names.push(name);
+    });
+  });
+  return names;
+}
+
+function rowHtml(o, compCols) {
   const mc = o.mainComponent || {};
   const f = o.factoryUpdates || {};
   const dash = '<span style="color:var(--jc-muted);">—</span>';
@@ -158,13 +198,15 @@ function rowHtml(o) {
         data-order="${escapeHtml(o.id)}" value="${escapeHtml((f.preProductionSampleDate || '').slice(0, 10))}" /></td>
       <td><input type="date" class="sup-edit" data-field="bulkSampleDate"
         data-order="${escapeHtml(o.id)}" value="${escapeHtml((f.bulkSampleDate || '').slice(0, 10))}" /></td>
-      <td class="sup-notes">${o.productionNotes ? escapeHtml(o.productionNotes) : dash}</td>
+      <td class="sup-notes sup-wrap">${o.productionNotes ? escapeHtml(o.productionNotes) : dash}</td>
       <td><input type="text" class="sup-edit" data-field="bulkShipmentProgress"
-        data-order="${escapeHtml(o.id)}" value="${escapeHtml(f.bulkShipmentProgress || '')}" style="min-width:150px;" /></td>
-      <td>${escapeHtml(o.warehouseAddress || '—')}</td>
-      <td>${comps.length ? `<div class="sup-comps">${comps.map((c) => `
-        <span class="sup-comp">${c.imageUrl ? thumb(c.imageUrl, c.partName) : ''}
-        <span class="sup-comp-name">${escapeHtml(c.partName)}</span></span>`).join('')}</div>` : dash}</td>
+        data-order="${escapeHtml(o.id)}" value="${escapeHtml(f.bulkShipmentProgress || '')}" /></td>
+      <td class="sup-wrap">${escapeHtml(o.warehouseAddress || '—')}</td>
+      ${compCols.map((name) => {
+        const hit = comps.find((c) => (c.partName || '').trim() === name);
+        if (!hit) return `<td>${dash}</td>`;
+        return `<td>${hit.imageUrl ? thumb(hit.imageUrl, name) : `<span class="sup-comp-none">${i18('supNoPhoto', 'No photo')}</span>`}</td>`;
+      }).join('')}
       <td>${thumb(mc.washingTagUrl, 'Washing tag')}</td>
       <td>${escapeHtml(o.packingListNumber || '—')}</td>
     </tr>
@@ -195,31 +237,36 @@ function drawList() {
     return;
   }
 
+  // Component columns depend on what's on screen, so they're computed from
+  // the filtered set rather than every order the supplier has.
+  const compCols = componentColumns(shown);
   host.innerHTML = `
     <div class="om-category-tile">
       <div class="om-table-wrap">
         <table class="om-table sup-table">
           <thead><tr>
-            <th>${i18('supPhoto', 'Photo')}</th>
-            <th>${i18('fldProductName', 'Product Name')}</th>
-            <th>${i18('fldSku', 'SKU')}</th>
-            <th>${i18('thPoNumber', 'PO Number')}</th>
-            <th>${i18('thStatus', 'Status')}</th>
-            <th>${i18('supQuantity', 'Quantity')}</th>
-            <th>${i18('supOrderDate', 'Order Date')}</th>
-            <th>${i18('fldRequiredManufacturerDelivery', 'Required Manufacturer Delivery Date')}</th>
-            <th>${i18('supActualShipDate', 'Actual Ship Date')}</th>
-            <th>${i18('supPreProdSample', 'Pre-Production Sample')}</th>
-            <th>${i18('supBulkSample', 'Bulk Sample')}</th>
-            <th>${i18('fldProductionNotes', 'Production Notes')}</th>
-            <th>${i18('supBulkProgress', 'Bulk Shipment Progress')}</th>
-            <th>${i18('fldWarehouseAddress', 'Warehouse Address')}</th>
-            <th>${i18('supComponents', 'Components')}</th>
-            <th>${i18('supWashingTag', 'Washing Tag')}</th>
-            <th>${i18('supPackingList', 'Packing List Number')}</th>
+            ${[
+              i18('supPhoto', 'Photo'),
+              i18('fldProductName', 'Product Name'),
+              i18('fldSku', 'SKU'),
+              i18('thPoNumber', 'PO Number'),
+              i18('thStatus', 'Status'),
+              i18('supQuantity', 'Quantity'),
+              i18('supOrderDate', 'Order Date'),
+              i18('fldRequiredManufacturerDelivery', 'Required Manufacturer Delivery Date'),
+              i18('supActualShipDate', 'Actual Ship Date'),
+              i18('supPreProdSample', 'Pre-Production Sample'),
+              i18('supBulkSample', 'Bulk Sample'),
+              i18('fldProductionNotes', 'Production Notes'),
+              i18('supBulkProgress', 'Bulk Shipment Progress'),
+              i18('fldWarehouseAddress', 'Warehouse Address'),
+              ...compCols.map((n) => escapeHtml(n)),
+              i18('supWashingTag', 'Washing Tag'),
+              i18('supPackingList', 'Packing List Number')
+            ].map((label) => `<th><span class="sup-th">${label}</span></th>`).join('')}
           </tr></thead>
           <tbody>
-            ${shown.map((o) => rowHtml(o)).join('')}
+            ${shown.map((o) => rowHtml(o, compCols)).join('')}
           </tbody>
         </table>
       </div>
@@ -236,6 +283,13 @@ function drawList() {
   // The factory's own fields save as soon as they're changed - no separate
   // save button, since a factory updating a date shouldn't have to hunt for
   // one. Only these three keys are accepted by the server.
+  host.querySelectorAll('.sup-zoom').forEach((img) => {
+    img.addEventListener('click', (e) => {
+      e.stopPropagation(); // don't also open the PO detail panel
+      openLightbox(img.dataset.full);
+    });
+  });
+
   host.querySelectorAll('.sup-edit').forEach((el) => {
     el.addEventListener('change', async () => {
       const body = {};
@@ -289,7 +343,7 @@ async function openSupplierOrder(id) {
     } else if (isPdfFile(url)) {
       value = `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${i18('btnViewFile', 'View file')}</a>`;
     } else {
-      value = `<a href="${escapeHtml(url)}" target="_blank" rel="noopener"><img src="${escapeHtml(url)}" alt="" class="om-table-thumb" style="cursor:pointer;" /></a>`;
+      value = `<img src="${escapeHtml(url)}" alt="" class="om-table-thumb sup-zoom" data-full="${escapeHtml(url)}" style="cursor:zoom-in;" />`;
     }
     return `<div class="om-detail-row"><span class="om-label">${i18(labelKey, fallback)}</span><span class="om-value">${value}</span></div>`;
   };
@@ -309,6 +363,7 @@ async function openSupplierOrder(id) {
     <div class="om-detail-row"><span class="om-label">${i18('fldVolumeWeightG', 'Volume Weight (g)')}</span><span class="om-value">${num(mc.volumeWeightGrams)}</span></div>
   `;
   const log = order.supplierLog || [];
+  const comps = (order.componentPhotos || []).filter((c) => c.partName || c.imageUrl);
 
   const panel = document.createElement('div');
   panel.className = 'om-panel';
@@ -329,8 +384,9 @@ async function openSupplierOrder(id) {
         <div class="om-detail-row"><span class="om-label">${i18('fldPurchaseOrderNumber', 'Purchase Order Number')}</span><span class="om-value">${escapeHtml(order.poNumber || '—')}</span></div>
         <div class="om-detail-row"><span class="om-label">${i18('fldSku', 'SKU')}</span><span class="om-value">${escapeHtml(mc.sku || '—')}</span></div>
         <div class="om-detail-row"><span class="om-label">${i18('fldOrderQuantity', 'Order Quantity')}</span><span class="om-value">${mc.purchaseQuantity ?? '—'}</span></div>
-        <div class="om-detail-row"><span class="om-label">${i18('fldOrderPlacementDate', 'Order placement date')}</span><span class="om-value">${fmtDate(order.orderPlacementDate)}</span></div>
+        <div class="om-detail-row"><span class="om-label">${i18('supOrderDate', 'Order Date')}</span><span class="om-value">${fmtDate(order.orderDate)}</span></div>
         <div class="om-detail-row"><span class="om-label">${i18('fldRequiredManufacturerDelivery', 'Required Manufacturer Delivery Date')}</span><span class="om-value">${fmtDate(order.manufacturerDeliveryDate)}</span></div>
+        <div class="om-detail-row"><span class="om-label">${i18('supActualShipDate', 'Actual Ship Date')}</span><span class="om-value">${order.inTransportationAt ? fmtDate(order.inTransportationAt) : '—'}</span></div>
         <div class="om-detail-row"><span class="om-label">${i18('fldStatusLc', 'Status')}</span><span class="om-value">${escapeHtml(order.status || '—')}</span></div>
       </div>
       ${mc.photoReference ? `
@@ -338,7 +394,7 @@ async function openSupplierOrder(id) {
           <div class="om-label" style="margin-bottom:6px;">${i18('fldPhotoReference', 'Photo reference')}</div>
           ${isPdfFile(mc.photoReference)
             ? `<a href="${escapeHtml(mc.photoReference)}" target="_blank" rel="noopener">${i18('btnViewFile', 'View file')}</a>`
-            : `<a href="${escapeHtml(mc.photoReference)}" target="_blank" rel="noopener"><img src="${escapeHtml(mc.photoReference)}" alt="" style="max-width:160px;border-radius:8px;border:1px solid var(--jc-border);" /></a>`}
+            : `<img src="${escapeHtml(mc.photoReference)}" alt="" class="sup-zoom" data-full="${escapeHtml(mc.photoReference)}" style="max-width:160px;border-radius:8px;border:1px solid var(--jc-border);cursor:zoom-in;" />`}
         </div>` : ''}
     </div>
 
@@ -364,6 +420,52 @@ async function openSupplierOrder(id) {
           </table>
         </div>
       ` : `<div class="om-empty">${i18('supNoVariants', 'No variant breakdown for this order.')}</div>`}
+    </div>
+
+    <div class="om-panel-card">
+      <div class="om-section-title">${i18('supSecProduction', 'Production & Samples')}</div>
+      <div class="section-help" style="margin-bottom:12px;">${i18('supEditableHint', 'You can fill in the sample dates and bulk progress.')}</div>
+      <div class="om-field-grid">
+        <div>
+          <label>${i18('supPreProdSample', 'Pre-Production Sample')}</label>
+          <input type="date" class="sup-panel-edit" data-field="preProductionSampleDate"
+            data-order="${escapeHtml(order.id)}" value="${escapeHtml(((order.factoryUpdates || {}).preProductionSampleDate || '').slice(0, 10))}" />
+        </div>
+        <div>
+          <label>${i18('supBulkSample', 'Bulk Sample')}</label>
+          <input type="date" class="sup-panel-edit" data-field="bulkSampleDate"
+            data-order="${escapeHtml(order.id)}" value="${escapeHtml(((order.factoryUpdates || {}).bulkSampleDate || '').slice(0, 10))}" />
+        </div>
+        <div>
+          <label>${i18('supBulkProgress', 'Bulk Shipment Progress')}</label>
+          <input type="text" class="sup-panel-edit" data-field="bulkShipmentProgress"
+            data-order="${escapeHtml(order.id)}" value="${escapeHtml((order.factoryUpdates || {}).bulkShipmentProgress || '')}" />
+        </div>
+      </div>
+      <div style="margin-top:14px;">
+        <div class="om-label" style="margin-bottom:5px;">${i18('fldProductionNotes', 'Production Notes')}</div>
+        <div class="om-value" style="white-space:pre-wrap;line-height:1.5;">${order.productionNotes ? escapeHtml(order.productionNotes) : '—'}</div>
+      </div>
+    </div>
+
+    <div class="om-panel-card">
+      <div class="om-section-title">${i18('supSecComponents', 'Components')}</div>
+      ${comps.length ? `<div class="sup-panel-comps">${comps.map((c) => `
+        <div class="sup-panel-comp">
+          ${c.imageUrl
+            ? `<img src="${escapeHtml(c.imageUrl)}" alt="" class="sup-panel-comp-img sup-zoom" data-full="${escapeHtml(c.imageUrl)}" />`
+            : `<div class="sup-panel-comp-img sup-panel-comp-empty">${i18('supNoPhoto', 'No photo')}</div>`}
+          <div class="sup-panel-comp-name">${escapeHtml(c.partName)}</div>
+        </div>
+      `).join('')}</div>` : `<div class="om-empty">${i18('supNoDocs', 'None listed.')}</div>`}
+    </div>
+
+    <div class="om-panel-card">
+      <div class="om-section-title">${i18('supSecWarehousing', 'Warehousing')}</div>
+      <div class="om-detail-grid">
+        <div class="om-detail-row"><span class="om-label">${i18('fldWarehouseAddress', 'Warehouse Address')}</span><span class="om-value">${escapeHtml(order.warehouseAddress || '—')}</span></div>
+        <div class="om-detail-row"><span class="om-label">${i18('supPackingList', 'Packing List Number')}</span><span class="om-value">${escapeHtml(order.packingListNumber || '—')}</span></div>
+      </div>
     </div>
 
     <div class="om-panel-card">
@@ -394,6 +496,35 @@ async function openSupplierOrder(id) {
   backdrop.addEventListener('click', (e) => { if (e.target === backdrop) closePanel(); });
   document.body.appendChild(backdrop);
   document.getElementById('supClose').addEventListener('click', closePanel);
+
+  // Photos inside the panel zoom in place, same as in the table.
+  panel.querySelectorAll('.sup-zoom').forEach((img) => {
+    img.addEventListener('click', () => openLightbox(img.dataset.full));
+  });
+
+  /* The three factory fields are editable here as well as in the table, so
+   * whichever view they're in works. Saving keeps the in-memory list in
+   * step so closing the panel doesn't show a stale row. */
+  panel.querySelectorAll('.sup-panel-edit').forEach((el) => {
+    el.addEventListener('change', async () => {
+      const body = {};
+      body[el.dataset.field] = el.value;
+      el.disabled = true;
+      try {
+        const res = await api(`/api/supplier/orders/${encodeURIComponent(el.dataset.order)}/factory-updates`, {
+          method: 'POST', body: JSON.stringify(body)
+        });
+        const idx = allOrders.findIndex((o) => o.id === el.dataset.order);
+        if (idx > -1 && res.order) allOrders[idx] = res.order;
+        showToast(i18t('supSaved', 'Saved'));
+        drawList(); // reflect it in the table behind the panel
+      } catch (err) {
+        showToast(err.message, true);
+      } finally {
+        el.disabled = false;
+      }
+    });
+  });
   document.addEventListener('keydown', function esc(e) {
     if (e.key === 'Escape') { closePanel(); document.removeEventListener('keydown', esc); }
   });
