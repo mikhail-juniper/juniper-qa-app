@@ -543,7 +543,7 @@ function renderStageNotesCard(stage, stageData) {
     `;
   }
 
-  const status = stageData.data.chinaApprovalStatus || 'approved';
+  const status = stageData.data.chinaApprovalStatus || '';
   const colorClass = approvalStatusColorClass(status);
   return `
     <div class="defect-card comment-card ${colorClass}">
@@ -1234,11 +1234,10 @@ function renderChinaApprovalStatusField() {
     <div class="field">
       <label class="field-label">${biBlockHtml('approvalStatusLabel', 'Approval')}<span class="required">*</span></label>
       <select id="chinaApprovalStatusSelect">
-        <option value="">${escapeHtml(bi('selectPlaceholder').en)}</option>
+        <option value="">${escapeHtml(bi('statusSelectPlaceholder').en)} ${escapeHtml(bi('statusSelectPlaceholder').zh)}</option>
         <option value="approved" ${approvalState.chinaApprovalStatus === 'approved' ? 'selected' : ''}>${escapeHtml(bi('statusApproved').en)} ${escapeHtml(bi('statusApproved').zh)}</option>
-        <option value="approvedWithComments" ${approvalState.chinaApprovalStatus === 'approvedWithComments' ? 'selected' : ''}>${escapeHtml(bi('statusApprovedWithComments').en)} ${escapeHtml(bi('statusApprovedWithComments').zh)}</option>
-        <option value="minorIssue" ${approvalState.chinaApprovalStatus === 'minorIssue' ? 'selected' : ''}>${escapeHtml(bi('statusMinorIssue').en)} ${escapeHtml(bi('statusMinorIssue').zh)}</option>
-        <option value="majorCriticalIssue" ${approvalState.chinaApprovalStatus === 'majorCriticalIssue' ? 'selected' : ''}>${escapeHtml(bi('statusMajorCriticalIssue').en)} ${escapeHtml(bi('statusMajorCriticalIssue').zh)}</option>
+        <option value="approvedWithNotes" ${approvalState.chinaApprovalStatus === 'approvedWithNotes' ? 'selected' : ''}>${escapeHtml(bi('statusApprovedWithNotes').en)} ${escapeHtml(bi('statusApprovedWithNotes').zh)}</option>
+        <option value="notApproved" ${approvalState.chinaApprovalStatus === 'notApproved' ? 'selected' : ''}>${escapeHtml(bi('statusNotApproved').en)} ${escapeHtml(bi('statusNotApproved').zh)}</option>
       </select>
     </div>
   `;
@@ -1687,18 +1686,27 @@ function photoColumnStageLabel(stage) {
 
 /* ---------------- HANDLERS ---------------- */
 
+/* The China approval decision is one of three values. Older reports were
+ * filed with a four-value set (approvedWithComments / minorIssue /
+ * majorCriticalIssue), so those are folded into the new labels rather than
+ * rendering as "General" on historical records. */
+function normaliseApprovalStatus(status) {
+  if (status === 'approvedWithComments') return 'approvedWithNotes';
+  if (status === 'minorIssue' || status === 'majorCriticalIssue') return 'notApproved';
+  return status;
+}
 function approvalStatusLabelKey(status) {
-  if (status === 'minorIssue') return 'statusMinorIssue';
-  if (status === 'majorCriticalIssue') return 'statusMajorCriticalIssue';
-  if (status === 'approved') return 'statusApproved';
-  if (status === 'approvedWithComments') return 'statusApprovedWithComments';
+  const s = normaliseApprovalStatus(status);
+  if (s === 'approved') return 'statusApproved';
+  if (s === 'approvedWithNotes') return 'statusApprovedWithNotes';
+  if (s === 'notApproved') return 'statusNotApproved';
   return 'statusGeneral';
 }
 function approvalStatusColorClass(status) {
-  if (status === 'minorIssue') return 'comment-minor';
-  if (status === 'majorCriticalIssue') return 'comment-major';
-  if (status === 'approved') return 'comment-approved';
-  if (status === 'approvedWithComments') return 'comment-approved';
+  const s = normaliseApprovalStatus(status);
+  if (s === 'approved') return 'comment-approved';
+  if (s === 'approvedWithNotes') return 'comment-approved';
+  if (s === 'notApproved') return 'comment-major';
   return 'comment-general';
 }
 
@@ -1862,21 +1870,23 @@ function attachStageHandlers() {
       // Also copy the Approved Sample Photos themselves (only these - not any
       // other stage's photos) by fetching each one back as a file so it flows
       // through the normal upload path when this stage gets submitted.
-      btnUsePrior.disabled = true;
-      showToast(bi('processingPhotos').en);
+      /* Carry the photos by REFERENCE rather than downloading each one and
+       * re-uploading it. The originals are already on the server, so this
+       * avoids storing a second copy of every image, is instant instead of
+       * one network round-trip per photo, and can't half-fail partway
+       * through a set. renderPhotoSlot draws from `_url`, so they look
+       * identical to a fresh upload and can be removed the same way. */
       const priorPhotos = prior.photos || {};
-      for (const slotKey of Object.keys(priorPhotos)) {
-        for (const url of priorPhotos[slotKey]) {
-          try {
-            const res = await fetch(url);
-            const blob = await res.blob();
-            blob.name = `${slotKey}.jpg`;
-            blob._url = URL.createObjectURL(blob);
-            if (!approvalState.photos[slotKey]) approvalState.photos[slotKey] = [];
-            approvalState.photos[slotKey].push(blob);
-          } catch (e) { console.error('Failed to copy photo', url, e); }
-        }
-      }
+      Object.keys(priorPhotos).forEach((slotKey) => {
+        const key = slotKey === 'notesPhotos' ? '_notes' : slotKey;
+        (priorPhotos[slotKey] || []).forEach((url) => {
+          if (!approvalState.photos[key]) approvalState.photos[key] = [];
+          const already = approvalState.photos[key].some((f) => f && f._carriedUrl === url);
+          if (!already) {
+            approvalState.photos[key].push({ _url: url, _carriedUrl: url, name: 'copied.jpg' });
+          }
+        });
+      });
 
       showToast(bi('copiedFromPrior').en + ' / ' + bi('copiedFromPrior').zh);
       render();
@@ -2007,12 +2017,26 @@ async function submitStage() {
       chinaApprovalStatus: approvalState.stage === 'sample' ? '' : approvalState.chinaApprovalStatus,
       sampledSize: approvalState.stage === 'sample' ? approvalState.sampledSize : undefined
     };
+    /* Photos are a mix of newly chosen Files and photos carried forward from
+     * a previous PO of the same SKU. The carried ones already exist on the
+     * server, so they're sent as URLs for the server to keep rather than
+     * re-uploaded - that keeps the request small and avoids storing a
+     * second copy of the same image. */
+    const carriedPhotos = {};
     const formData = new FormData();
-    formData.append('data', JSON.stringify(data));
     Object.keys(approvalState.photos).forEach((key) => {
       const slotKey = key === '_notes' ? 'notesPhotos' : key;
-      approvalState.photos[key].forEach((f) => formData.append(`photo_${slotKey}`, f, f.name));
+      (approvalState.photos[key] || []).forEach((f) => {
+        if (f && f._carriedUrl) {
+          if (!carriedPhotos[slotKey]) carriedPhotos[slotKey] = [];
+          carriedPhotos[slotKey].push(f._carriedUrl);
+        } else {
+          formData.append(`photo_${slotKey}`, f, f.name);
+        }
+      });
     });
+    data.carriedPhotos = carriedPhotos;
+    formData.append('data', JSON.stringify(data));
 
     const res = await fetch(`/api/approval/${encodeURIComponent(approvalState.po.poNumber)}/${STAGE_LABELS[approvalState.stage].apiPath}`, {
       method: 'POST', body: formData

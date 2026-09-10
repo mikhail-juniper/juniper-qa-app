@@ -320,8 +320,8 @@
     "zh": "跳过产前审批"
   },
   "confirmSkipPreProduction": {
-    "en": "Skip Pre-Production Approval for this PO? This moves straight to Bulk Approval.",
-    "zh": "是否跳过此订单的产前审批？将直接进入批量审批。"
+    "en": "Skip the pre-production sample stage for this PO?",
+    "zh": "确定跳过此订单的产前样阶段？"
   },
   "stageSkippedTitle": {
     "en": "Skipped",
@@ -3708,8 +3708,8 @@
     "zh": "将此链接分享给产品开发、质检或创作者 - 无需登录即可打开此订单的审批页面。重新生成可撤销已分享的链接。"
   },
   "btnGenerateApprovalLink": {
-    "en": "Generate share link",
-    "zh": "生成分享链接"
+    "en": "Share",
+    "zh": "分享"
   },
   "btnRegenerateLink": {
     "en": "Regenerate",
@@ -3942,5 +3942,169 @@
   "fldColorCode": {
     "en": "Color Code",
     "zh": "颜色编号"
+  },
+  "btnSkipStage": {
+    "en": "Skip",
+    "zh": "跳过"
+  },
+  "stageSkipped": {
+    "en": "Pre-production skipped",
+    "zh": "产前样已跳过"
+  },
+  "statusApprovedWithNotes": {
+    "en": "Approved with notes",
+    "zh": "有备注批准"
+  },
+  "statusNotApproved": {
+    "en": "Not approved",
+    "zh": "未批准"
+  },
+  "statusSelectPlaceholder": {
+    "en": "— Select —",
+    "zh": "— 请选择 —"
+  },
+  "aqlNoQuantity": {
+    "en": "No recommendation yet: this PO has no order quantity set. Add the quantity on the purchase order and it will appear.",
+    "zh": "暂无建议：此订单未设置采购数量。请在采购订单中填写数量后即会显示。"
+  },
+  "aqlNoUnitCost": {
+    "en": "No recommendation yet: there is no unit cost on file for this product category. Set one in Settings, or add a factory price to the purchase order.",
+    "zh": "暂无建议：该产品类别没有单位成本记录。请在设置中填写，或在采购订单中添加工厂价格。"
+  },
+  "aqlNoConfig": {
+    "en": "No recommendation available: the spot check configuration is missing or incomplete. Check Settings.",
+    "zh": "无法生成建议：抽检配置缺失或不完整，请检查设置。"
+  },
+  "fldCreator": {
+    "en": "Creator",
+    "zh": "创作者"
+  },
+  "thProductCategory": {
+    "en": "Product Category",
+    "zh": "产品类别"
+  },
+  "thRequestedDelivery": {
+    "en": "Requested Delivery Date",
+    "zh": "要求交货日期"
+  },
+  "copyFromPriorPo": {
+    "en": "Copy from previous PO",
+    "zh": "从上一个订单复制"
+  },
+  "copyFromPriorPoFound": {
+    "en": "A previous PO for this SKU has an approved Golden Sample",
+    "zh": "此 SKU 的上一个订单已有已批准的初样"
+  },
+  "copyFromPriorPoHelp": {
+    "en": "Copies the sample photos, sizing and factory details so they don't need re-entering. Anything copied can still be changed or removed.",
+    "zh": "复制样品照片、尺码和工厂信息，无需重新录入。复制的内容仍可修改或删除。"
+  },
+  "copiedFromPriorPo": {
+    "en": "Copied from",
+    "zh": "已复制自"
+  },
+  "fabricAddPlaceholder": {
+    "en": "Type to add a fabric...",
+    "zh": "输入以添加面料..."
+  },
+  "fabricNoneSelected": {
+    "en": "No fabric selected",
+    "zh": "未选择面料"
+  },
+  "supManufacturingFiles": {
+    "en": "Manufacturing Files",
+    "zh": "生产文件"
+  },
+  "supSizingChart": {
+    "en": "Sizing Chart",
+    "zh": "尺码表"
+  },
+  "supNoFiles": {
+    "en": "No manufacturing files attached.",
+    "zh": "暂无生产文件。"
+  },
+  "supDownload": {
+    "en": "Download",
+    "zh": "下载"
+  },
+  "supSpec": {
+    "en": "Spec",
+    "zh": "规格"
+  },
+  "btnCopyOrderImage": {
+    "en": "Copy order image",
+    "zh": "复制订单图片"
+  },
+  "copyImageHelp": {
+    "en": "Copies a picture of the order table, plus the production notes as text. Paste it straight into WeChat.",
+    "zh": "复制订单表格图片及生产备注文本，可直接粘贴到微信。"
+  },
+  "imageCopied": {
+    "en": "Order image copied - paste into WeChat",
+    "zh": "订单图片已复制，请粘贴到微信"
+  },
+  "imageCopiedNoText": {
+    "en": "Order image copied (notes copied separately)",
+    "zh": "订单图片已复制（备注需单独复制）"
+  },
+  "btnCopyNotes": {
+    "en": "Copy notes",
+    "zh": "复制备注"
+  },
+  "notesCopied": {
+    "en": "Production notes copied",
+    "zh": "生产备注已复制"
+  },
+  "imageCopyFailed": {
+    "en": "Could not copy the image - your browser may not allow it. Try Chrome.",
+    "zh": "无法复制图片，您的浏览器可能不支持，请尝试使用 Chrome。"
+  },
+  "secBatchSend": {
+    "en": "Send orders to suppliers",
+    "zh": "批量发送订单"
+  },
+  "batchSendHelp": {
+    "en": "Everything not yet sent, grouped by supplier. Tick what to send, copy one image for the whole batch, then mark it sent.",
+    "zh": "尚未发送的全部内容，按供应商分组。勾选需发送的项目，复制整批图片，然后标记为已发送。"
+  },
+  "batchNothing": {
+    "en": "Everything has been sent to its supplier.",
+    "zh": "所有内容均已发送给供应商。"
+  },
+  "btnOpenBatchSend": {
+    "en": "Batch send",
+    "zh": "批量发送"
+  },
+  "batchItems": {
+    "en": "items",
+    "zh": "项"
+  },
+  "btnMarkSent": {
+    "en": "Mark selected as sent",
+    "zh": "将所选标记为已发送"
+  },
+  "batchSelectSome": {
+    "en": "Select at least one item first",
+    "zh": "请先选择至少一项"
+  },
+  "batchSentCount": {
+    "en": "Marked as sent",
+    "zh": "已标记为已发送"
+  },
+  "batchCopyImage": {
+    "en": "Copy image for this supplier",
+    "zh": "复制该供应商的图片"
+  },
+  "groupInProduction": {
+    "en": "In Production",
+    "zh": "生产中"
+  },
+  "groupCompleted": {
+    "en": "Completed",
+    "zh": "已完成"
+  },
+  "filterAllProductLines": {
+    "en": "All product lines",
+    "zh": "全部产品线"
   }
 }

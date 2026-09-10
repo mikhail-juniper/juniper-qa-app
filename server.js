@@ -1296,10 +1296,18 @@ app.post('/api/submit', upload.any(), async (req, res) => {
       ? approvalRecord.sampleApproval.data.sizing
       : null;
     const overallResult = computeOverallResult(payload, fits, establishedSizing);
-    const recommendation = getRecommendation(
+    const recResult = getRecommendation(
       { category: payload.category, subcategory: payload.subcategory, poQuantity: payload.poQuantity, creator: payload.creator, risk: payload.productRisk, sku: payload.sku },
       { unitCosts: loadJson(UNIT_COSTS_PATH), aqlRecConfig: loadJson(AQL_RECOMMENDATION_PATH), creatorTiersConfig: loadJson(CREATOR_TIERS_PATH), findOrdersBySku: orderManagementStore.getOrdersBySku }
     );
+    /* getRecommendation now explains why it couldn't recommend instead of
+     * returning a bare null. Downstream consumers (the PDF, the stored
+     * submission, analytics) expect either a real recommendation or null,
+     * so the marker is logged and flattened here rather than leaking. */
+    if (recResult && recResult.unavailable) {
+      console.log(`Spot check recommendation unavailable for ${payload.poNumber || '(no PO)'}: ${recResult.reason}`);
+    }
+    const recommendation = (recResult && !recResult.unavailable) ? recResult : null;
     // Videos can't be embedded in a PDF, so each one is archived here and
     // linked from the report. Done before buildPdf so the links can go in.
     fs.mkdirSync(submissionLog.VIDEO_ARCHIVE_DIR, { recursive: true });
@@ -1906,6 +1914,62 @@ app.delete('/api/message-templates/:id', requirePermission('settings:write'), (r
 
 // Everyone who should receive part of this PO, with the contact details on
 // file for each - drives the "Send Purchase Order to Supplier" section.
+/**
+ * Components across all POs that haven't been sent to their supplier yet,
+ * grouped by supplier.
+ *
+ * The natural unit of work is "everything I owe this factory today", which
+ * cuts across product lines and PO numbers - five separate plush POs mean
+ * five plush-bag orders for the same bag supplier. Sending those one PO at
+ * a time is the tedious part, so this groups them instead of making someone
+ * filter for them.
+ *
+ * Only POs that have reached at least Order Placed... actually no: a PO in
+ * New Request hasn't been sent to anyone yet, and sending IS what moves it
+ * to Order Placed - so those are exactly the ones to include.
+ */
+app.get('/api/order-management/dispatch-queue', requirePermission('dispatch:send'), (req, res) => {
+  const base = `${req.protocol}://${req.get('host')}`;
+  const groups = new Map();
+
+  orderManagementStore.listOrders().forEach((order) => {
+    poDispatch.buildTargets(order).forEach((t) => {
+      if (t.lastSentAt) return;                 // already sent
+      if (!t.supplierName) return;              // nowhere to send it
+      const key = t.supplierId || `name:${t.supplierName}`;
+      if (!groups.has(key)) {
+        const sup = t.supplierId ? supplierStore.getSupplier(t.supplierId) : null;
+        groups.set(key, {
+          supplierId: t.supplierId || null,
+          supplierName: t.supplierName,
+          wechat: (sup && sup.wechat) || '',
+          contactName: (sup && sup.contactName) || '',
+          accessLink: (sup && sup.accessToken) ? supplierAccess.linkFor(base, sup) : null,
+          items: []
+        });
+      }
+      groups.get(key).items.push({
+        orderId: order.id,
+        poNumber: order.poNumber,
+        targetKey: t.key,
+        kind: t.kind,
+        componentName: t.componentName,
+        productLine: order.productLine,
+        // Same row shape the single-PO image uses, so one builder covers both.
+        row: {
+          ...dispatchImageRow(order, t),
+          quantity: t.quantity ?? null,
+          deliveryDate: t.deliveryDate || order.manufacturerDeliveryDate || null
+        }
+      });
+    });
+  });
+
+  const suppliers = [...groups.values()]
+    .sort((a, b) => b.items.length - a.items.length || a.supplierName.localeCompare(b.supplierName));
+  res.json({ ok: true, suppliers, totalItems: suppliers.reduce((n, g) => n + g.items.length, 0) });
+});
+
 app.get('/api/order-management/orders/:id/dispatch-targets', (req, res) => {
   const order = orderManagementStore.getOrderById(req.params.id);
   if (!order) return res.status(404).json({ error: 'Order not found' });
@@ -1923,12 +1987,33 @@ app.get('/api/order-management/orders/:id/dispatch-targets', (req, res) => {
 });
 
 // The composed message for one component's supplier.
+/**
+ * The fields the "copy order image" table needs. Kept in one place so the
+ * single-component dialog and batch sending draw identical rows.
+ */
+function dispatchImageRow(order, target) {
+  const mc = order.mainComponent || {};
+  return {
+    productName: mc.name || (target && target.componentName) || '',
+    sku: mc.sku || '',
+    quantity: mc.purchaseQuantity ?? null,
+    photoReference: mc.photoReference || '',
+    orderDate: order.orderPlacementDate || null,
+    deliveryDate: order.manufacturerDeliveryDate || null,
+    productionNotes: order.productionNotes || ''
+  };
+}
+
 app.get('/api/order-management/orders/:id/dispatch-message/:targetKey', (req, res) => {
   const order = orderManagementStore.getOrderById(req.params.id);
   if (!order) return res.status(404).json({ error: 'Order not found' });
   const target = poDispatch.buildTargets(order).find((t) => String(t.key) === String(req.params.targetKey));
   if (!target) return res.status(404).json({ error: 'Component not found on this order' });
-  res.json({ ok: true, target, message: poDispatch.buildMessage(order, target) });
+  res.json({
+    ok: true, target, message: poDispatch.buildMessage(order, target),
+    // Row data for the "copy order image" table.
+    order: dispatchImageRow(order, target), poNumber: order.poNumber
+  });
 });
 
 // Render a template against one component's PO details, in the requested
@@ -1950,7 +2035,7 @@ app.get('/api/order-management/orders/:id/dispatch-message/:targetKey/template/:
   }
   const message = messageTemplateStore.render(
     template, lang, poDispatch.templateValues(order, target, portalLink, resolveSender(req, req.query)));
-  res.json({ ok: true, message, target });
+  res.json({ ok: true, message, target, order: dispatchImageRow(order, target), poNumber: order.poNumber });
 });
 
 // Record a dispatch, and optionally save a newly-entered contact back onto
@@ -2420,6 +2505,20 @@ app.post('/api/approval/:poNumber/:stage', upload.any(), (req, res) => {
       const slotKey = field.slice('photo_'.length);
       photos[slotKey] = saveApprovalPhotos(filesByField[field], `${po.poNumber}_${req.params.stage}_${slotKey}`);
     });
+
+    /* Photos copied forward from a previous PO of the same SKU arrive as
+     * URLs rather than files - they're already stored, so the reference is
+     * kept instead of writing a duplicate image. Only URLs that look like
+     * our own approval-photo paths are accepted, so this can't be used to
+     * point a report at an arbitrary external image. */
+    const carried = (data && data.carriedPhotos) || {};
+    Object.keys(carried).forEach((slotKey) => {
+      const safe = (carried[slotKey] || [])
+        .filter((u) => typeof u === 'string' && /^\/approval-photos\/[A-Za-z0-9._%-]+$/.test(u));
+      if (!safe.length) return;
+      photos[slotKey] = [...safe, ...(photos[slotKey] || [])];
+    });
+    if (data) delete data.carriedPhotos;
 
     const entry = approvalStore.updateStage(po.poNumber, po.sku, stageKey, { ...data, photos });
 

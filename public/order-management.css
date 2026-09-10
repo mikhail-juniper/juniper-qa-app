@@ -983,3 +983,33 @@ div.om-money-wrap input { padding-left: 28px; width: 100%; }
 .om-progress-actions { display: flex; gap: 6px; margin-top: 5px; }
 /* Sample-ready dates sit inside the QA report columns. */
 .om-qa-report-col input.om-sample-ready { width: 100%; height: 35px; font-size: 14px; padding: 8px 10px; }
+
+/* Fabric multi-select: chosen fabrics as removable chips above the input. */
+.om-chip-field { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; min-height: 24px; }
+.om-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--jc-mint-light, #eef6f3);
+  border: 1px solid #bcdfd3;
+  border-radius: 999px;
+  padding: 3px 6px 3px 10px;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.om-chip-x {
+  border: 0; background: transparent; cursor: pointer;
+  font-size: 15px; line-height: 1; padding: 0 2px;
+  color: var(--jc-muted);
+}
+.om-chip-x:hover { color: var(--jc-fail); }
+.om-chip-empty { font-size: 12px; color: var(--jc-muted); }
+
+/* Supplier panel: manufacturing file list and per-component spec links. */
+.sup-file-list { list-style: none; margin: 0; padding: 0; }
+.sup-file-list li {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 0; border-bottom: 1px solid var(--jc-border);
+  font-size: 13px;
+}
+.sup-file-list li:last-child { border-bottom: 0; }
+.sup-file-cat { font-size: 11px; color: var(--jc-muted); }
+.sup-comp-spec { display: inline-block; margin-top: 4px; font-size: 11px; }

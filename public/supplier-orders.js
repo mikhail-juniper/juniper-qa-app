@@ -284,6 +284,42 @@ function drawList() {
 
 }
 
+/**
+ * Sizing chart for apparel, rendered from the PO's measurement table. Shown
+ * read-only: it's the standard the factory is producing to, so they need to
+ * see every measurement point per size. Omitted entirely for non-apparel,
+ * which has length/width/height instead.
+ */
+function sizingChartHtml(order) {
+  const table = (order.mainComponent || {}).dimensionsTable;
+  if (!table || !table.sizes || !Object.keys(table.sizes).length) return '';
+  const points = table.points || [];
+  const labels = table.pointLabels || {};
+  const sizes = Object.keys(table.sizes);
+  return `
+    <div class="om-panel-card">
+      <div class="om-section-title">${i18('supSizingChart', 'Sizing Chart')}</div>
+      <div class="om-table-wrap">
+        <table class="om-table" style="min-width:0;">
+          <thead>
+            <tr>
+              <th>${i18('thSize', 'Size')}</th>
+              ${points.map((p) => `<th>${escapeHtml((labels[p] && (labels[p].en || labels[p])) || p)}</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            ${sizes.map((sz) => `
+              <tr>
+                <td><strong>${escapeHtml(sz)}</strong></td>
+                ${points.map((p) => `<td>${escapeHtml((table.sizes[sz] && table.sizes[sz][p]) || '\u2014')}</td>`).join('')}
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
 function closePanel() {
   document.querySelectorAll('.om-panel-backdrop').forEach((el) => el.remove());
 }
@@ -429,9 +465,26 @@ async function openSupplierOrder(id) {
             ? `<img src="${escapeHtml(c.imageUrl)}" alt="" class="sup-panel-comp-img sup-zoom" data-full="${escapeHtml(c.imageUrl)}" />`
             : `<div class="sup-panel-comp-img sup-panel-comp-empty">${i18('supNoPhoto', 'No photo')}</div>`}
           <div class="sup-panel-comp-name">${escapeHtml(c.partName)}</div>
+          ${c.designDocUrl
+            ? `<a class="sup-comp-spec" href="${escapeHtml(c.designDocUrl)}" target="_blank" rel="noopener" download>${i18('supSpec', 'Spec')}</a>`
+            : ''}
         </div>
       `).join('')}</div>` : `<div class="om-empty">${i18('supNoDocs', 'None listed.')}</div>`}
     </div>
+
+    <div class="om-panel-card">
+      <div class="om-section-title">${i18('supManufacturingFiles', 'Manufacturing Files')}</div>
+      ${(order.manufacturingFiles || []).length ? `
+        <ul class="sup-file-list">
+          ${order.manufacturingFiles.map((f) => `
+            <li>
+              <a href="${escapeHtml(f.url)}" target="_blank" rel="noopener" download>${escapeHtml(f.name || i18t('supDownload', 'Download'))}</a>
+              ${f.category ? `<span class="sup-file-cat">${escapeHtml(f.category)}</span>` : ''}
+            </li>`).join('')}
+        </ul>` : `<div class="om-empty">${i18('supNoFiles', 'No manufacturing files attached.')}</div>`}
+    </div>
+
+    ${sizingChartHtml(order)}
 
     <div class="om-panel-card">
       <div class="om-section-title">${i18('supSecWarehousing', 'Warehousing')}</div>

@@ -85,6 +85,28 @@ const CATEGORY_META = {
   other: { label: 'Other', key: 'catOther', color: '#1F6FA5' }
 };
 
+/**
+ * The home page groups POs by where they are in manufacturing, not by
+ * product line - the question people actually ask is "what's in production"
+ * rather than "what's apparel". Product line survives as a filter inside
+ * each group.
+ */
+const STATUS_GROUPS = {
+  requests: {
+    label: 'PO Requests', key: 'viewPoRequests', color: 'var(--jc-teal)',
+    match: (o) => o.status === 'New Request'
+  },
+  production: {
+    label: 'In Production', key: 'groupInProduction', color: '#B9540E',
+    // Everything that's been placed with a factory but isn't finished.
+    match: (o) => o.status !== 'New Request' && o.status !== 'Completed'
+  },
+  completed: {
+    label: 'Completed', key: 'groupCompleted', color: '#1F6FA5',
+    match: (o) => o.status === 'Completed'
+  }
+};
+
 function refreshCurrentView() {
   if (currentView === 'category') return loadOrders();
   if (currentView === 'suppliers') return renderSuppliersShell(document.getElementById('omRoot'));
@@ -156,11 +178,14 @@ function bindBackToHub() {
 // Per-tile view state. 'all' is a fourth pseudo-category showing every PO
 // regardless of product line; it uses the same code path as the real ones,
 // with productLine left off the API query.
+/* Every order, fetched once per home render. The tiles group and filter it
+ * client-side, so counts and rows always come from the same data. */
+let allOrdersCache = [];
+
 const homeTileState = {
-  clothing: { subTab: 'orders', search: '', supplier: '', sku: '', status: '' },
-  toys: { subTab: 'orders', search: '', supplier: '', sku: '', status: '' },
-  other: { subTab: 'orders', search: '', supplier: '', sku: '', status: '' },
-  all: { subTab: 'orders', search: '', supplier: '', sku: '', status: '' }
+  requests: { subTab: 'orders', search: '', supplier: '', sku: '', status: '', productLine: '' },
+  production: { subTab: 'orders', search: '', supplier: '', sku: '', status: '', productLine: '' },
+  completed: { subTab: 'orders', search: '', supplier: '', sku: '', status: '', productLine: '' }
 };
 
 /* Shared filter toolbar for the category tiles and their "View all" views.
@@ -171,6 +196,9 @@ const homeTileState = {
 function tileToolbarHtml(scope, st, idPrefix) {
   return `
     <div class="om-tile-toolbar om-filter-toolbar">
+      <select class="om-filter-select" data-filter="productLine" data-scope="${scope}" id="${idPrefix}ProductLine">
+        <option value="">${escapeHtml(i18t('filterAllProductLines', 'All product lines'))}</option>
+      </select>
       <select class="om-filter-select" data-filter="supplier" data-scope="${scope}" id="${idPrefix}Supplier">
         <option value="">${escapeHtml(i18t('filterAllSuppliers', 'All suppliers'))}</option>
       </select>
@@ -204,11 +232,20 @@ function populateTileFilters(idPrefix, orders, st) {
   };
   fill(`${idPrefix}Supplier`, orders.map((o) => o.supplier && o.supplier.name), st.supplier);
   fill(`${idPrefix}Sku`, orders.map((o) => o.mainComponent && o.mainComponent.sku), st.sku);
+  // Product line is a filter now that the tiles are grouped by status.
+  const lineEl = document.getElementById(`${idPrefix}ProductLine`);
+  if (lineEl) {
+    const present = [...new Set(orders.map((o) => o.productLine).filter(Boolean))];
+    const firstOpt = lineEl.querySelector('option[value=""]');
+    lineEl.innerHTML = (firstOpt ? firstOpt.outerHTML : '')
+      + present.map((v) => `<option value="${escapeHtml(v)}" ${v === st.productLine ? 'selected' : ''}>${escapeHtml(CATEGORY_META[v] ? CATEGORY_META[v].label : v)}</option>`).join('');
+  }
 }
 
 /** Applies the three dropdown filters plus the free-text search. */
 function applyTileFilters(orders, st) {
   return orders.filter((o) => {
+    if (st.productLine && o.productLine !== st.productLine) return false;
     if (st.supplier && (!o.supplier || o.supplier.name !== st.supplier)) return false;
     if (st.sku && (!o.mainComponent || o.mainComponent.sku !== st.sku)) return false;
     if (st.status && o.status !== st.status) return false;
@@ -222,73 +259,49 @@ function applyTileFilters(orders, st) {
 
 async function renderHome(root) {
   root.innerHTML = `<div class="om-empty">${i18('emptyLoading', 'Loading...')}</div>`;
-  let counts = { toys: 0, clothing: 0, other: 0, suppliers: 0, settlementPending: 0, newRequests: 0 };
-  let newRequests = [];
+  /* Fetch once before drawing: the tile headers show counts derived from
+   * this same list, so they can never disagree with the rows below. */
   try {
-    counts = await api('/api/order-management/counts');
-    const req = await api('/api/order-management/orders?status=' + encodeURIComponent('New Request'));
-    newRequests = req.orders || [];
-  } catch (e) { showToast(e.message, true); }
+    const data = await api('/api/order-management/orders');
+    allOrdersCache = data.orders || [];
+  } catch (e) {
+    showToast(e.message, true);
+    allOrdersCache = [];
+  }
 
-  const categoryTile = (productLine) => {
-    // 'all' is a synthetic category covering every product line, so its
-    // counts are the sum of the three real ones rather than a server field.
-    const meta = CATEGORY_META[productLine] || { label: 'All', key: 'catAll', color: 'var(--jc-muted)' };
-    const st = homeTileState[productLine];
-    const lineCount = productLine === 'all'
-      ? (counts.clothing || 0) + (counts.toys || 0) + (counts.other || 0)
-      : (counts[productLine] || 0);
-    const accCount = productLine === 'all'
-      ? (counts.clothingAccessories || 0) + (counts.toysAccessories || 0) + (counts.otherAccessories || 0)
-      : (counts[productLine + 'Accessories'] || 0);
+
+  const groupTile = (groupKey) => {
+    const meta = STATUS_GROUPS[groupKey];
+    const st = homeTileState[groupKey];
+    // Counts come from the orders actually in this group, so they can't
+    // disagree with the rows shown beneath them.
+    const inGroup = allOrdersCache.filter(meta.match);
+    const accCount = inGroup.reduce((n, o) => n + ((o.accessories || []).length), 0);
     return `
-      <div class="om-category-tile" data-tab="${productLine}">
+      <div class="om-category-tile" data-tab="${groupKey}" style="margin-bottom:24px;">
         <div class="om-category-tile-header" style="border-color:${meta.color};">
           <span>${i18i(meta.key, meta.label)}</span>
-          <button class="btn btn-secondary om-view-all-btn" data-viewall="${productLine}">${i18('btnViewAll', 'View all')}</button>
+          <span style="display:flex;align-items:center;gap:12px;">
+            ${groupKey === 'requests' ? `<button type="button" class="btn btn-secondary" id="omBatchSendBtn"
+              style="flex:none;width:auto;padding:6px 14px;font-size:12.5px;">${i18('btnOpenBatchSend', 'Batch send')}</button>` : ''}
+            <button class="btn btn-secondary om-view-all-btn" data-viewall="${groupKey}">${i18('btnViewAll', 'View all')}</button>
+          </span>
         </div>
         <div class="om-category-tile-subtabs">
-          <div class="om-subtab-btn ${st.subTab === 'orders' ? 'active' : ''}" data-subtab="orders">${i18i('tabAllOrders', 'All Orders')} <span class="om-subtab-count">${lineCount}</span></div>
-          <div class="om-subtab-btn ${st.subTab === 'components' ? 'active' : ''}" data-subtab="components">${i18i('tabMainComponents', 'Main Components')} <span class="om-subtab-count">${lineCount}</span></div>
+          <div class="om-subtab-btn ${st.subTab === 'orders' ? 'active' : ''}" data-subtab="orders">${i18i('tabAllOrders', 'All Orders')} <span class="om-subtab-count">${inGroup.length}</span></div>
+          <div class="om-subtab-btn ${st.subTab === 'components' ? 'active' : ''}" data-subtab="components">${i18i('tabMainComponents', 'Main Components')} <span class="om-subtab-count">${inGroup.length}</span></div>
           <div class="om-subtab-btn ${st.subTab === 'accessories' ? 'active' : ''}" data-subtab="accessories">${i18i('tabAccessories', 'Accessories')} <span class="om-subtab-count">${accCount}</span></div>
         </div>
-        ${tileToolbarHtml(productLine, st, `omTileF-${productLine}-`)}
-        <div class="om-tile-table-scroll" id="omTilePreview-${productLine}"><div class="om-empty">${i18('emptyLoading', 'Loading...')}</div></div>
+        ${tileToolbarHtml(groupKey, st, `omTileF-${groupKey}-`)}
+        <div class="om-tile-table-scroll" id="omTilePreview-${groupKey}"><div class="om-empty">${i18('emptyLoading', 'Loading...')}</div></div>
       </div>
     `;
   };
 
   root.innerHTML = `
-    <div class="om-category-tile" style="margin-bottom:24px;">
-      <div class="om-category-tile-header" style="border-color:var(--jc-teal);">
-        <span>${i18('viewPoRequests', 'PO Requests')}</span>
-        <span class="om-subtab-count" style="font-size:15px;">${counts.newRequests || 0}</span>
-      </div>
-      <div style="padding:14px 18px 20px 18px;" id="omPoRequestsHost">
-        ${newRequests.length ? `
-          <table class="om-table" style="min-width:0;">
-            <thead><tr><th>${i18i('thPoNumber', 'PO Number')}</th><th>${i18i('thProductLine', 'Product line')}</th><th>${i18i('thBuyer', 'Buyer')}</th><th>${i18i('thSupplier', 'Supplier')}</th><th>${i18i('thDesiredEntry', 'Desired entry')}</th></tr></thead>
-            <tbody>
-              ${newRequests.slice(0, 10).map((o) => `
-                <tr data-id="${escapeHtml(o.id)}">
-                  <td><strong>${escapeHtml(o.poNumber)}</strong></td>
-                  <td>${escapeHtml(CATEGORY_META[o.productLine] ? CATEGORY_META[o.productLine].label : o.productLine)}</td>
-                  <td>${escapeHtml(o.buyer || '—')}</td>
-                  <td>${escapeHtml(o.supplier && o.supplier.name || '—')}</td>
-                  <td>${fmtDate(o.desiredEntryDate)}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-          ${newRequests.length > 10 ? `<div class="section-help" style="margin-top:10px;">Showing 10 of ${newRequests.length} - the rest are in the category tiles below, filtered to New Request.</div>` : ''}
-        ` : `<div class="om-empty">${i18('emptyNoNewRequests', 'No new PO requests right now.')}</div>`}
-      </div>
-    </div>
-
-    ${categoryTile('clothing')}
-    ${categoryTile('toys')}
-    ${categoryTile('other')}
-    ${categoryTile('all')}
+    ${groupTile('requests')}
+    ${groupTile('production')}
+    ${groupTile('completed')}
   `;
 
   root.querySelectorAll('.om-category-tile[data-tab]').forEach((tile) => {
@@ -315,42 +328,42 @@ async function renderHome(root) {
   root.querySelectorAll('.om-view-all-btn').forEach((btn) => {
     btn.addEventListener('click', () => openCategoryFullScreen(btn.dataset.viewall));
   });
-  root.querySelectorAll('#omPoRequestsHost tbody tr').forEach((tr) => {
-    tr.addEventListener('click', () => openDetailPanel(tr.dataset.id));
-  });
+  const batchBtn = document.getElementById('omBatchSendBtn');
+  if (batchBtn) {
+    batchBtn.addEventListener('click', (e) => { e.stopPropagation(); openBatchSendPanel(); });
+  }
 
-  ['clothing', 'toys', 'other', 'all'].forEach(loadTilePreview);
+  Object.keys(STATUS_GROUPS).forEach(loadTilePreview);
 }
 
-async function loadTilePreview(productLine) {
-  const host = document.getElementById(`omTilePreview-${productLine}`);
-  if (!host) return;
-  const st = homeTileState[productLine];
+async function loadTilePreview(groupKey) {
+  const host = document.getElementById(`omTilePreview-${groupKey}`);
+  const meta = STATUS_GROUPS[groupKey];
+  if (!host || !meta) return;
+  const st = homeTileState[groupKey];
   try {
-    // Fetch this category unfiltered so the supplier/SKU dropdowns can list
-    // every real option; the filters themselves are applied client-side.
-    const params = new URLSearchParams();
-    if (productLine !== 'all') params.set('productLine', productLine);
-    const data = await api(`/api/order-management/orders?${params.toString()}`);
-    // A PO that hasn't been sent to the factory yet lives in the PO
-    // Requests section above, not in the category tiles - otherwise every
-    // new request appears twice on the same screen.
-    const all = (data.orders || []).filter((o) => o.status !== 'New Request');
-    populateTileFilters(`omTileF-${productLine}-`, all, st);
-    const filtered = applyTileFilters(all, st);
+    // Everything is fetched once and grouped client-side. Product line is a
+    // filter now, so the dropdowns need the full set to list real options.
+    if (!allOrdersCache.length) {
+      const data = await api('/api/order-management/orders');
+      allOrdersCache = data.orders || [];
+    }
+    const inGroup = allOrdersCache.filter(meta.match);
+    populateTileFilters(`omTileF-${groupKey}-`, inGroup, st);
+    const filtered = applyTileFilters(inGroup, st);
     const orders = filtered.slice(0, 10); // preview only - "View all" shows everything
     if (st.subTab === 'components') renderComponentsTable(host, orders);
     else if (st.subTab === 'accessories') renderAccessoriesTable(host, flattenAccessories(orders));
-    else renderOrdersTableFull(host, orders, productLine);
+    else renderOrdersTableFull(host, orders, groupKey);
   } catch (e) { showToast(e.message, true); }
 }
 
 // "View all" on a home tile: opens the same category + sub-tab as a
 // full-screen modal (reusing the panel infrastructure from the PO detail
 // view) rather than navigating to a separate page.
-function openCategoryFullScreen(productLine) {
-  const meta = CATEGORY_META[productLine] || { label: 'All', key: 'catAll' };
-  const st = homeTileState[productLine];
+function openCategoryFullScreen(groupKey) {
+  const meta = STATUS_GROUPS[groupKey] || { label: 'All', key: 'catAll', match: () => true };
+  const st = homeTileState[groupKey] || { subTab: 'orders', search: '', supplier: '', sku: '', status: '', productLine: '' };
   const panel = document.createElement('div');
   panel.className = 'om-panel';
   panel.innerHTML = `
@@ -364,7 +377,7 @@ function openCategoryFullScreen(productLine) {
       <button class="om-subtab ${st.subTab === 'components' ? 'active' : ''}" data-subtab="components">${i18i('tabMainComponents', 'Main Components')}</button>
       <button class="om-subtab ${st.subTab === 'accessories' ? 'active' : ''}" data-subtab="accessories">${i18i('tabAccessories', 'Accessories')}</button>
     </div>
-    ${tileToolbarHtml(productLine, st, 'omFullF-')}
+    ${tileToolbarHtml(groupKey, st, 'omFullF-')}
     <div class="om-table-wrap"><div id="omFullTableHost"><div class="om-empty">${i18('emptyLoading', 'Loading...')}</div></div></div>
    </div>
   `;
@@ -374,16 +387,14 @@ function openCategoryFullScreen(productLine) {
 
   async function loadFull() {
     const host = document.getElementById('omFullTableHost');
-    const params = new URLSearchParams();
-    if (productLine !== 'all') params.set('productLine', productLine);
-    const data = await api(`/api/order-management/orders?${params.toString()}`);
-    // Same exclusion as the tiles - new requests live in PO Requests only.
-    const all = (data.orders || []).filter((o) => o.status !== 'New Request');
+    // Same grouping rule as the tile it was opened from.
+    const data = await api('/api/order-management/orders');
+    const all = (data.orders || []).filter(meta.match);
     populateTileFilters('omFullF-', all, st);
     const orders = applyTileFilters(all, st); // no 10-row cap here
     if (st.subTab === 'components') renderComponentsTable(host, orders);
     else if (st.subTab === 'accessories') renderAccessoriesTable(host, flattenAccessories(orders));
-    else renderOrdersTableFull(host, orders, productLine);
+    else renderOrdersTableFull(host, orders, groupKey);
   }
   panel.querySelectorAll('.om-subtab').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -2045,6 +2056,60 @@ function openImageLightbox(url) {
 // START WITH what's typed (so "Sha" only shows "Shanghai...", not anything
 // containing "sha" anywhere). Replaces native <datalist>, whose popup
 // position and match rules the browser controls, not us.
+/**
+ * Turns the Fabric Code box into a multi-select. Selected fabrics show as
+ * removable chips; the hidden field holds them comma-separated, which is
+ * exactly what the field stored before - so this is a UI change only.
+ */
+function wireFabricMultiSelect() {
+  const chipHost = document.getElementById('fFabricChips');
+  const input = document.getElementById('fFabricInfo');
+  const hidden = document.getElementById('fFabricInfoValue');
+  if (!chipHost || !input || !hidden) return;
+
+  const read = () => hidden.value.split(',').map((v) => v.trim()).filter(Boolean);
+  const write = (list) => {
+    // De-duplicate case-insensitively; the same fabric twice is never meant.
+    const seen = new Set();
+    const clean = list.filter((v) => {
+      const k = v.toLowerCase();
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    hidden.value = clean.join(', ');
+    draw();
+  };
+  function draw() {
+    const list = read();
+    chipHost.innerHTML = list.length
+      ? list.map((v, i) => `<span class="om-chip">${escapeHtml(v)}
+          <button type="button" class="om-chip-x" data-fabric-remove="${i}" aria-label="Remove">&times;</button></span>`).join('')
+      : `<span class="om-chip-empty">${i18('fabricNoneSelected', 'No fabric selected')}</span>`;
+    chipHost.querySelectorAll('[data-fabric-remove]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const next = read();
+        next.splice(Number(btn.dataset.fabricRemove), 1);
+        write(next);
+      });
+    });
+  }
+  const add = () => {
+    const v = input.value.trim();
+    if (!v) return;
+    write([...read(), v]);
+    input.value = '';
+  };
+  // Enter or picking a suggestion commits the entry; blur catches the case
+  // where someone types and clicks straight to Save.
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add(); }
+  });
+  input.addEventListener('change', add);
+  input.addEventListener('blur', () => setTimeout(add, 120));
+  draw();
+}
+
 function attachTypeahead(inputId, getOptions) {
   const input = document.getElementById(inputId);
   if (!input || input.dataset.typeaheadAttached) return;
@@ -2224,6 +2289,7 @@ async function openDetailPanel(id, scope) {
       <div><label>${i18('fldRequiredManufacturerDelivery', 'Required Manufacturer Delivery Date')}</label><input id="fManufDelivery" type="date" value="${val(order.manufacturerDeliveryDate)}" /></div>
       <div><label>${i18('fldOrderQuantity', 'Order Quantity')}</label><input id="fPurchaseQty" type="number" value="${val(order.mainComponent.purchaseQuantity)}" /></div>
       <div><label>${i18('fldQuantityReceived', 'Quantity received')}</label><input id="fFulfillQtyReceived" type="number" value="${val(order.fulfillment.quantityReceived)}" /></div>
+      <div><label>${i18('fldCreator', 'Creator')}</label><input id="fCreator" type="text" value="${val(order.creator)}" /></div>
       <div><label>${i18('fldSourcer', 'Sourcer')}</label>
         <select id="fSourcer" data-current="${escapeHtml(order.sourcer || '')}">
           <option value="${escapeHtml(order.sourcer || '')}">${escapeHtml(order.sourcer || '')}</option>
@@ -2305,6 +2371,13 @@ async function openDetailPanel(id, scope) {
             ${['Pending', 'In Progress', 'Completed'].map((s) => `<option value="${s}" ${s === (rep.status || 'Pending') ? 'selected' : ''}>${tStatusText(s)}</option>`).join('')}
           </select>
           <button type="button" class="btn btn-secondary om-copy-link-btn" style="width:100%;margin-top:10px;padding:9px 16px;" data-copy-url="${escapeHtml(`${location.origin}/reporting.html?mode=${mode}&po=${order.poNumber}`)}">${i18('btnCopyReportLink', 'Copy Report Link')}</button>
+          ${stage === 'preProduction' ? `
+            <!-- Same action as Skip on the PD Approval page, so a PO that
+                 needs no pre-production sample can move on without leaving
+                 this panel. Marks the stage Not Applicable in Asana too. -->
+            <button type="button" class="btn btn-secondary om-skip-stage-btn"
+              style="width:100%;margin-top:8px;padding:9px 16px;"
+              data-po="${escapeHtml(order.poNumber)}">${i18('btnSkipStage', 'Skip')}</button>` : ''}
           <div class="om-qa-report-file">
             ${rep.pdfUrl ? `
               <a href="${escapeHtml(rep.pdfUrl)}" target="_blank" rel="noopener" class="om-qa-report-link">${i18('btnDownloadReportPdf', 'Download report PDF')}</a>
@@ -2373,7 +2446,15 @@ async function openDetailPanel(id, scope) {
     <div class="om-section-title">${i18('secMainComponentSpecs', 'Main Component Specifications')}</div>
     <div class="om-field-grid">
       ${order.productLine === 'clothing' ? `
-        <div><label>${i18('fldFabricCode', 'Fabric Code')}</label><input id="fFabricInfo" type="text" value="${val(order.mainComponent.fabricInfo)}" /></div>
+        <div><label>${i18('fldFabricCode', 'Fabric Code')}</label>
+          <!-- Multi-select: a garment often uses more than one fabric. The
+               chosen fabrics are stored as a comma-separated string in the
+               same field as before, so old POs and the Asana sync are
+               unaffected. -->
+          <div class="om-chip-field" id="fFabricChips"></div>
+          <input id="fFabricInfo" type="text" placeholder="${i18t('fabricAddPlaceholder', 'Type to add a fabric...')}" />
+          <input type="hidden" id="fFabricInfoValue" value="${val(order.mainComponent.fabricInfo)}" />
+        </div>
         <div><label>${i18('fldFabricType', 'Fabric Type')}</label><input id="fComponent" type="text" placeholder="${i18t('phFabricTypeEg', 'e.g. 100% Cotton')}" value="${val(order.mainComponent.component)}" /></div>
       ` : ''}
       <div><label>${i18('fldUnitPrice', 'Unit Price')} (¥)</label><div class="om-money-wrap"><input id="fFactoryPrice" type="number" step="0.01" value="${val(order.mainComponent.factoryPrice)}" /></div></div>
@@ -2469,6 +2550,25 @@ async function openDetailPanel(id, scope) {
   document.getElementById('omClosePanel').addEventListener('click', closePanel);
   const viewFullPoBtn = document.getElementById('omViewFullPo');
   if (viewFullPoBtn) viewFullPoBtn.addEventListener('click', () => { closePanel(); openDetailPanel(order.id, 'full'); });
+
+  panel.querySelectorAll('.om-skip-stage-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      if (!confirm(i18t('confirmSkipPreProduction', 'Skip the pre-production sample stage for this PO?'))) return;
+      btn.disabled = true;
+      try {
+        await api(`/api/approval/${encodeURIComponent(btn.dataset.po)}/preProduction/skip`, { method: 'POST' });
+        showToast(i18t('stageSkipped', 'Pre-production skipped'));
+        // Reopen so the PD approval statuses above reflect the skip.
+        const id = order.id;
+        closePanel();
+        refreshCurrentView();
+        openDetailPanel(id, 'full');
+      } catch (e) {
+        showToast(e.message, true);
+        btn.disabled = false;
+      }
+    });
+  });
 
   panel.querySelectorAll('.om-copy-link-btn').forEach((btn) => {
     const originalLabel = btn.textContent;
@@ -2914,7 +3014,7 @@ async function openDetailPanel(id, scope) {
         `;
       } else {
         host.innerHTML = `
-          <button type="button" class="btn btn-secondary" id="omApprovalLinkRotate" style="flex:none;width:auto;padding:9px 16px;">${i18('btnGenerateApprovalLink', 'Generate share link')}</button>
+          <button type="button" class="btn btn-secondary" id="omApprovalLinkRotate" style="flex:none;width:auto;padding:9px 16px;">${i18('btnGenerateApprovalLink', 'Share')}</button>
           ${openBtn}
         `;
       }
@@ -3376,6 +3476,19 @@ async function openDetailPanel(id, scope) {
       document.getElementById('fFactoryPrice').value = src.mainComponent.factoryPrice || '';
       document.getElementById('fWarehouse').value = src.mainComponent.warehouse || '';
 
+      /* Carry the uploaded artwork forward too. These belong to the
+       * PRODUCT, not to one order, so re-uploading the same drawing for
+       * every repeat PO is wasted work. The fields hold URLs of files
+       * already on the server, so copying the reference is enough - the
+       * source PO keeps its own copy and nothing is re-uploaded. */
+      [['fPhotoReference', 'photoReference'],
+       ['fWashingTagUrl', 'washingTagUrl'],
+       ['fPackagingUrl', 'packagingUrl'],
+       ['fDimensionsUrl', 'dimensionsUrl']].forEach(([elId, field]) => {
+        const el = document.getElementById(elId);
+        if (el && src.mainComponent[field]) el.value = src.mainComponent[field];
+      });
+
       // Sizing source of truth: copy the whole dimensions table forward
       // too, if the source PO has one - this is the "copy over the sizing"
       // button for PO2+.
@@ -3480,6 +3593,7 @@ async function openDetailPanel(id, scope) {
         (historyData.fabricCodes || []).filter((v) => v && !librarySet.has(v.toLowerCase()))
       );
       attachTypeahead('fFabricInfo', () => fabricCodeOptions);
+      wireFabricMultiSelect();
       attachTypeahead('fComponent', () => historyData.fabricTypes || []);
 
       // Picking a library swatch (by reference name or pantone) auto-fills
@@ -3595,6 +3709,7 @@ async function openDetailPanel(id, scope) {
       : warehouseSelectEl.value;
     const patch = {
       buyer: buyerValue,
+      creator: document.getElementById('fCreator').value,
       // Sample-ready dates from the QA/QC Reporting card. These are ours to
       // enter once confirmed with the factory; the supplier sees them
       // read-only. Deep-merged server-side, so this won't touch the
@@ -3642,7 +3757,7 @@ async function openDetailPanel(id, scope) {
         weightGrams: document.getElementById('fWeightGrams').value || null,
         shippingWeightGrams: document.getElementById('fShippingWeightGrams').value || null,
         volumeWeightGrams: document.getElementById('fVolumeWeightGrams').value || null,
-        fabricInfo: productLine === 'clothing' ? document.getElementById('fFabricInfo').value : order.mainComponent.fabricInfo,
+        fabricInfo: productLine === 'clothing' ? document.getElementById('fFabricInfoValue').value : order.mainComponent.fabricInfo,
         component: productLine === 'clothing' ? document.getElementById('fComponent').value : order.mainComponent.component,
         sizeDistribution: Array.from(sizeRowsHost.querySelectorAll('[data-size-row]')).map((row) => ({
           sku: row.querySelector('.om-size-sku').value,
@@ -3725,6 +3840,311 @@ async function openDetailPanel(id, scope) {
  * WeChat is copy-and-paste since personal WeChat has no send API. Either
  * way the dispatch is recorded against the PO.
  */
+/**
+ * Draws the order table as a PNG for pasting into WeChat.
+ *
+ * Built on a plain <canvas> rather than a screenshot library: the content is
+ * ours, so drawing it directly needs no dependency, produces a predictable
+ * layout at any DPI, and can't be thrown off by page CSS. Product photos
+ * come from our own origin, so the canvas isn't tainted and toBlob works.
+ *
+ * Columns mirror what the factory already reads in the shared sheet:
+ * photo, product name, SKU, PO number, quantity, order date, required
+ * manufacturer delivery date.
+ */
+const DISPATCH_IMAGE_COLUMNS = [
+  { key: 'photo', label: 'Photo', width: 96 },
+  { key: 'productName', label: 'Product Name', width: 190 },
+  { key: 'sku', label: 'SKU', width: 130 },
+  { key: 'poNumber', label: 'PO Number', width: 170 },
+  { key: 'quantity', label: 'Quantity', width: 90, align: 'right' },
+  { key: 'orderDate', label: 'Order Date', width: 110 },
+  { key: 'deliveryDate', label: 'Required Delivery', width: 140 }
+];
+
+/** Load an image, resolving to null rather than rejecting so one missing
+ *  photo can't abort the whole export. */
+function loadImageForCanvas(src) {
+  return new Promise((resolve) => {
+    if (!src) return resolve(null);
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
+async function buildDispatchImage(rows, options) {
+  const opts = options || {};
+  const scale = 2;                    // retina, so it stays sharp in WeChat
+  const rowH = 84;
+  const headH = 44;
+  const pad = 20;
+  const titleH = opts.title ? 40 : 0;
+  const cols = DISPATCH_IMAGE_COLUMNS;
+  const tableW = cols.reduce((sum, c) => sum + c.width, 0);
+  const width = tableW + pad * 2;
+  const height = pad * 2 + titleH + headH + rowH * rows.length;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(scale, scale);
+  ctx.textBaseline = 'middle';
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, height);
+
+  let y = pad;
+  if (opts.title) {
+    ctx.fillStyle = '#1b1b1b';
+    ctx.font = '600 17px -apple-system, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(opts.title, pad, y + titleH / 2);
+    y += titleH;
+  }
+
+  // Header
+  ctx.fillStyle = '#f2f4f2';
+  ctx.fillRect(pad, y, tableW, headH);
+  ctx.fillStyle = '#5b625c';
+  ctx.font = '600 11.5px -apple-system, "Segoe UI", Roboto, sans-serif';
+  let x = pad;
+  cols.forEach((c) => {
+    ctx.textAlign = 'left';
+    ctx.fillText(String(c.label).toUpperCase(), x + 10, y + headH / 2);
+    x += c.width;
+  });
+  y += headH;
+
+  // Preload every photo first so rows draw in one pass, in order.
+  const images = await Promise.all(rows.map((r) => loadImageForCanvas(r.photo)));
+
+  rows.forEach((row, i) => {
+    const top = y + i * rowH;
+    if (i % 2 === 1) {
+      ctx.fillStyle = '#fafbfa';
+      ctx.fillRect(pad, top, tableW, rowH);
+    }
+    ctx.strokeStyle = '#e3e6e3';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad, top + rowH);
+    ctx.lineTo(pad + tableW, top + rowH);
+    ctx.stroke();
+
+    let cx = pad;
+    cols.forEach((c) => {
+      if (c.key === 'photo') {
+        const img = images[i];
+        const box = rowH - 18;
+        if (img) {
+          // Cover-crop into a square so photos of any aspect ratio line up.
+          const side = Math.min(img.width, img.height);
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(cx + 10, top + 9, box, box);
+          ctx.clip();
+          ctx.drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side,
+            cx + 10, top + 9, box, box);
+          ctx.restore();
+          ctx.strokeStyle = '#e3e6e3';
+          ctx.strokeRect(cx + 10, top + 9, box, box);
+        } else {
+          ctx.fillStyle = '#f0f2f0';
+          ctx.fillRect(cx + 10, top + 9, box, box);
+          ctx.fillStyle = '#9aa29b';
+          ctx.font = '10px -apple-system, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('—', cx + 10 + box / 2, top + 9 + box / 2);
+        }
+      } else {
+        const value = row[c.key] == null || row[c.key] === '' ? '—' : String(row[c.key]);
+        ctx.fillStyle = c.key === 'poNumber' || c.key === 'productName' ? '#1b1b1b' : '#3d423e';
+        ctx.font = (c.key === 'poNumber' || c.key === 'productName' ? '600 ' : '') +
+          '13px -apple-system, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = c.align === 'right' ? 'right' : 'left';
+        const tx = c.align === 'right' ? cx + c.width - 10 : cx + 10;
+        // Truncate rather than overflow into the next column.
+        let text = value;
+        const maxW = c.width - 20;
+        if (ctx.measureText(text).width > maxW) {
+          while (text.length > 1 && ctx.measureText(text + '…').width > maxW) text = text.slice(0, -1);
+          text += '…';
+        }
+        ctx.fillText(text, tx, top + rowH / 2);
+      }
+      cx += c.width;
+    });
+  });
+
+  ctx.strokeStyle = '#d8ddd9';
+  ctx.strokeRect(pad, y - headH, tableW, headH + rowH * rows.length);
+
+  return new Promise((resolve) => canvas.toBlob((b) => resolve(b), 'image/png'));
+}
+
+/**
+ * Put the image on the clipboard, with the notes as a text flavour on the
+ * same item. WeChat will paste one or the other - in practice the image -
+ * so the caller also offers a separate "copy notes" button.
+ */
+async function copyDispatchImage(blob, notesText) {
+  const items = { 'image/png': blob };
+  if (notesText) items['text/plain'] = new Blob([notesText], { type: 'text/plain' });
+  await navigator.clipboard.write([new ClipboardItem(items)]);
+}
+
+/**
+ * Batch send: one screen per supplier showing everything not yet sent to
+ * them, across every PO. Copy a single image covering the whole batch, send
+ * it in WeChat, then mark the batch sent - which records a dispatch against
+ * each PO individually, so per-PO status tracking is unchanged.
+ */
+async function openBatchSendPanel() {
+  let data;
+  try {
+    data = await api('/api/order-management/dispatch-queue');
+  } catch (e) { return showToast(e.message, true); }
+
+  const panel = document.createElement('div');
+  panel.className = 'om-panel-backdrop';
+  panel.innerHTML = `
+    <div class="om-panel">
+     <div class="om-panel-inner">
+      <div class="om-panel-header">
+        <div>
+          <div style="font-size:19px;font-weight:700;">${i18('secBatchSend', 'Send orders to suppliers')}</div>
+          <div style="color:var(--jc-muted);font-size:13px;">${data.totalItems} ${i18t('batchItems', 'items')}</div>
+        </div>
+        <button class="om-panel-close" id="batchClose">&times;</button>
+      </div>
+      <div class="section-help" style="padding:0 4px 12px 4px;">${i18('batchSendHelp', 'Grouped by supplier.')}</div>
+      ${data.suppliers.length ? data.suppliers.map((g, gi) => `
+        <div class="om-panel-card">
+          <div class="om-section-title">${escapeHtml(g.supplierName)}
+            <span class="om-subtab-count" style="margin-left:8px;">${g.items.length}</span>
+          </div>
+          <div class="section-help" style="margin-bottom:10px;">
+            ${g.wechat ? `WeChat: ${escapeHtml(g.wechat)}` : ''}
+            ${g.contactName ? ` · ${escapeHtml(g.contactName)}` : ''}
+          </div>
+          <div class="om-table-wrap">
+            <table class="om-table" style="min-width:0;">
+              <thead><tr>
+                <th style="width:34px;"><input type="checkbox" class="batch-all" data-group="${gi}" checked style="width:auto;" /></th>
+                <th>${i18i('thPoNumber', 'PO Number')}</th>
+                <th>${i18i('th2MainComponent', 'Component')}</th>
+                <th>${i18i('th2PurchaseQty', 'Quantity')}</th>
+                <th>${i18i('thDeliveryDate', 'Delivery Date')}</th>
+              </tr></thead>
+              <tbody>
+                ${g.items.map((it, ii) => `
+                  <tr>
+                    <td><input type="checkbox" class="batch-item" data-group="${gi}" data-idx="${ii}" checked style="width:auto;" /></td>
+                    <td><strong>${escapeHtml(it.poNumber)}</strong></td>
+                    <td>${escapeHtml(it.componentName)}</td>
+                    <td>${it.row.quantity != null ? Number(it.row.quantity).toLocaleString() : '—'}</td>
+                    <td>${fmtDate(it.row.deliveryDate)}</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+            <button type="button" class="btn btn-primary batch-copy" data-group="${gi}" style="flex:none;width:auto;">${i18('batchCopyImage', 'Copy image for this supplier')}</button>
+            <button type="button" class="btn btn-secondary batch-sent" data-group="${gi}" style="flex:none;width:auto;">${i18('btnMarkSent', 'Mark selected as sent')}</button>
+          </div>
+        </div>
+      `).join('') : `<div class="om-empty">${i18('batchNothing', 'Everything has been sent.')}</div>`}
+     </div>
+    </div>
+  `;
+  document.body.appendChild(panel);
+  document.getElementById('batchClose').addEventListener('click', () => panel.remove());
+
+  const selected = (gi) => Array.from(panel.querySelectorAll(`.batch-item[data-group="${gi}"]`))
+    .filter((cb) => cb.checked)
+    .map((cb) => data.suppliers[gi].items[Number(cb.dataset.idx)]);
+
+  panel.querySelectorAll('.batch-all').forEach((all) => {
+    all.addEventListener('change', () => {
+      panel.querySelectorAll(`.batch-item[data-group="${all.dataset.group}"]`)
+        .forEach((cb) => { cb.checked = all.checked; });
+    });
+  });
+
+  panel.querySelectorAll('.batch-copy').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const gi = Number(btn.dataset.group);
+      const items = selected(gi);
+      if (!items.length) return showToast(i18t('batchSelectSome', 'Select at least one item first'), true);
+      btn.disabled = true;
+      try {
+        const rows = items.map((it) => ({
+          photo: it.row.photoReference || '',
+          productName: it.componentName || it.row.productName || '',
+          sku: it.row.sku || '',
+          poNumber: it.poNumber,
+          quantity: it.row.quantity != null ? Number(it.row.quantity).toLocaleString() : '',
+          orderDate: fmtDate(it.row.orderDate),
+          deliveryDate: fmtDate(it.row.deliveryDate)
+        }));
+        // Notes from every PO in the batch, labelled so the factory can tell
+        // which PO each note belongs to.
+        const notes = items
+          .filter((it) => it.row.productionNotes)
+          .map((it) => `${it.poNumber}: ${it.row.productionNotes}`)
+          .join('\n');
+        const blob = await buildDispatchImage(rows, { title: data.suppliers[gi].supplierName });
+        try {
+          await copyDispatchImage(blob, notes);
+          showToast(i18t('imageCopied', 'Order image copied - paste into WeChat'));
+        } catch (clipErr) {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = `${data.suppliers[gi].supplierName}.png`;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 2000);
+          showToast(i18t('imageCopyFailed', 'Could not copy - downloaded instead.'), true);
+        }
+      } catch (e) { showToast(e.message, true); }
+      finally { btn.disabled = false; }
+    });
+  });
+
+  panel.querySelectorAll('.batch-sent').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const gi = Number(btn.dataset.group);
+      const items = selected(gi);
+      if (!items.length) return showToast(i18t('batchSelectSome', 'Select at least one item first'), true);
+      btn.disabled = true;
+      let done = 0;
+      /* Recorded one PO at a time on purpose: each dispatch advances that
+       * PO's own status and writes its own log entry, so a partial failure
+       * leaves correct records for whatever did go out. */
+      for (const it of items) {
+        try {
+          await api(`/api/order-management/orders/${encodeURIComponent(it.orderId)}/dispatch`, {
+            method: 'POST',
+            body: JSON.stringify({
+              targetKey: it.targetKey, channel: 'wechat',
+              recipient: data.suppliers[gi].wechat || data.suppliers[gi].supplierName
+            })
+          });
+          done += 1;
+        } catch (e) {
+          showToast(`${it.poNumber}: ${e.message}`, true);
+        }
+      }
+      showToast(`${i18t('batchSentCount', 'Marked as sent')}: ${done}`);
+      panel.remove();
+      refreshCurrentView();
+      openBatchSendPanel();
+    });
+  });
+}
+
 async function openDispatchDialog(orderId, targetKey, onSent) {
   let data;
   let templates = [];
@@ -3760,9 +4180,10 @@ async function openDispatchDialog(orderId, targetKey, onSent) {
       <div class="om-field-grid">
         <div>
           <label>${i18('fldType', 'Type')}</label>
+          <!-- WeChat only: orders are sent through WeChat in practice, so
+               the email flow was removed rather than left as a trap. -->
           <select id="dispChannel">
-            <option value="email" ${channel === 'email' ? 'selected' : ''}>${i18t('sendViaEmail', 'Email')}</option>
-            <option value="wechat" ${channel === 'wechat' ? 'selected' : ''}>${i18t('sendViaWechat', 'WeChat')}</option>
+            <option value="wechat" selected>${i18t('sendViaWechat', 'WeChat')}</option>
           </select>
         </div>
         <div>
@@ -3787,7 +4208,8 @@ async function openDispatchDialog(orderId, targetKey, onSent) {
         <input type="checkbox" id="dispSave" style="width:auto;margin:0;" />
         <span>${i18('saveToSupplierRecord', 'Save this contact to the supplier record')}</span>
       </label>
-      <div class="section-help" style="margin-top:8px;" id="dispSendModeNote"></div>
+      <div class="section-help" style="margin-top:8px;">${i18('copyImageHelp', 'Copies a picture of the order table, plus the production notes as text.')}</div>
+      <div class="section-help" style="margin-top:4px;" id="dispSendModeNote"></div>
       <div id="dispWechatNote" class="section-help" style="margin-top:8px;display:${channel === 'wechat' ? '' : 'none'};">
         ${i18('wechatNoApi', 'WeChat cannot be sent automatically - copy the message and paste it to this contact.')}
       </div>
@@ -3812,6 +4234,8 @@ async function openDispatchDialog(orderId, targetKey, onSent) {
       <input type="text" id="dispSubject" value="${escapeHtml(msg.subject)}" style="margin-bottom:10px;" />
       <textarea id="dispBody" rows="16" style="width:100%;font-family:inherit;font-size:13px;line-height:1.5;">${escapeHtml(msg.body)}</textarea>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+        <button type="button" class="btn btn-primary" id="dispCopyImage" style="flex:none;width:auto;">${i18('btnCopyOrderImage', 'Copy order image')}</button>
+        <button type="button" class="btn btn-secondary" id="dispCopyNotes" style="flex:none;width:auto;">${i18('btnCopyNotes', 'Copy notes')}</button>
         <button type="button" class="btn btn-secondary" id="dispCopy" style="flex:none;width:auto;">${i18('btnCopyMessage', 'Copy message')}</button>
         <button type="button" class="btn btn-primary" id="dispSend" style="flex:none;width:auto;">${i18('btnSend', 'Send')}</button>
       </div>
@@ -3885,6 +4309,54 @@ async function openDispatchDialog(orderId, targetKey, onSent) {
     recipientInput.value = channel === 'email' ? (t.email || '') : (t.wechat || '');
     document.getElementById('dispWechatNote').style.display = channel === 'wechat' ? '' : 'none';
     updateSendModeNote();
+  });
+
+  /* Copy the order as a picture. Rows come from the dialog's own target, so
+   * a single-component send produces a one-row table; batch sending reuses
+   * the same builder with more rows. */
+  document.getElementById('dispCopyImage').addEventListener('click', async () => {
+    const btn = document.getElementById('dispCopyImage');
+    btn.disabled = true;
+    try {
+      const rows = [{
+        photo: (data.order && data.order.photoReference) || '',
+        productName: (data.order && data.order.productName) || t.componentName || '',
+        sku: (data.order && data.order.sku) || '',
+        poNumber: data.poNumber || '',
+        quantity: (data.order && data.order.quantity) != null ? Number(data.order.quantity).toLocaleString() : '',
+        orderDate: fmtDate(data.order && data.order.orderDate),
+        deliveryDate: fmtDate(data.order && data.order.deliveryDate)
+      }];
+      const notes = (data.order && data.order.productionNotes) || '';
+      const blob = await buildDispatchImage(rows, { title: data.poNumber || '' });
+      try {
+        await copyDispatchImage(blob, notes);
+        showToast(notes ? i18t('imageCopied', 'Order image copied - paste into WeChat')
+                        : i18t('imageCopiedNoText', 'Order image copied'));
+      } catch (clipErr) {
+        // Some browsers refuse image writes; offer the file instead of
+        // failing outright so the send isn't blocked.
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `${data.poNumber || 'order'}.png`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        showToast(i18t('imageCopyFailed', 'Could not copy the image - downloaded instead.'), true);
+      }
+    } catch (e) {
+      showToast(e.message, true);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  document.getElementById('dispCopyNotes').addEventListener('click', async () => {
+    const notes = (data.order && data.order.productionNotes) || '';
+    if (!notes) return showToast(i18t('noNotesYet', 'No notes yet.'), true);
+    try {
+      await navigator.clipboard.writeText(notes);
+      showToast(i18t('notesCopied', 'Production notes copied'));
+    } catch (e) { showToast(e.message, true); }
   });
 
   document.getElementById('dispCopy').addEventListener('click', async () => {

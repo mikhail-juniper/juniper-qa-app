@@ -238,17 +238,44 @@ function getCreatorTier(creatorName) {
   return cfg.defaultTier;
 }
 function getAqlRecommendation() {
-  const orderValue = computeOrderValue(state.category, state.subcategory, state.poQuantity);
-  if (orderValue === null) return null;
-  const poSizeBand = getPoSizeBand(orderValue);
-  if (!poSizeBand) return null;
-  const tier = getCreatorTier(state.creator);
-  if (!tier) return null;
+  /* Mirrors lib/aqlRecommendation.js, including its failure reasons. It
+   * previously returned null on any missing input, so the Spot Check
+   * Recommendation card just disappeared with no explanation - which made
+   * an incomplete PO indistinguishable from a broken feature. */
+  const fail = (reason) => ({ unavailable: true, reason });
   const cfg = CONFIG.aqlRecommendation;
-  const tierTable = cfg && cfg.table[String(tier)];
+  if (!cfg || !cfg.table || !cfg.poSizeBands) return fail('missingConfig');
+  if (!CONFIG.creatorTiers) return fail('missingCreatorTiers');
+
+  const qty = parseInt(state.poQuantity, 10);
+  if (isNaN(qty) || qty < 1) return fail('missingQuantity');
+
+  const cost = getUnitCost(state.category, state.subcategory);
+  if (cost === null || cost === undefined) return fail('missingUnitCost');
+
+  const orderValue = qty * cost;
+  const poSizeBand = getPoSizeBand(orderValue);
+  if (!poSizeBand) return fail('noSizeBand');
+  const tier = getCreatorTier(state.creator);
+  if (!tier) return fail('noCreatorTier');
+  const tierTable = cfg.table[String(tier)];
   const cell = tierTable && tierTable[state.productRisk] && tierTable[state.productRisk][poSizeBand];
-  if (!cell) return null;
+  if (!cell) return fail('noTableEntry');
   return { orderValue, poSizeBand, tier, pointCheck: cell.pointCheck, inspectionLevel: cell.inspectionLevel };
+}
+
+/** Plain-language explanation for a recommendation that can't be produced. */
+function aqlUnavailableMessage(reason) {
+  const map = {
+    missingQuantity: 'aqlNoQuantity',
+    missingUnitCost: 'aqlNoUnitCost',
+    missingConfig: 'aqlNoConfig',
+    missingCreatorTiers: 'aqlNoConfig',
+    noCreatorTier: 'aqlNoConfig',
+    noSizeBand: 'aqlNoConfig',
+    noTableEntry: 'aqlNoConfig'
+  };
+  return bi(map[reason] || 'aqlNoConfig');
 }
 function levelNumberToRoman(n) { return n === 1 ? 'I' : n === 2 ? 'II' : 'III'; }
 function syncInspectionLevelToRecommendation() {
@@ -256,7 +283,7 @@ function syncInspectionLevelToRecommendation() {
   // from the recommendation (Creator Tier + Risk + PO Size), used only to compute
   // the reference thresholds below.
   const rec = getAqlRecommendation();
-  if (rec) state.inspectionLevel = levelNumberToRoman(rec.inspectionLevel);
+  if (rec && !rec.unavailable) state.inspectionLevel = levelNumberToRoman(rec.inspectionLevel);
 }
 
 function getEffectiveCodeLetterFromCount(actualCount) {
@@ -461,7 +488,7 @@ function validateStep(s) {
       ok = false;
     }
   } else if (name === 'orderInfo') {
-    const required = ['poNumber', 'factoryCode', 'date', 'qaLead'];
+    const required = ['poNumber', 'date', 'qaLead'];
     required.forEach((f) => {
       if (!state[f] || !String(state[f]).trim()) { markError(f); ok = false; }
     });
@@ -545,7 +572,7 @@ function getAllValidationProblems() {
   if (!state.category) problems.push(bi('selectCategory'));
   else if (categoryHasSubcategories() && !state.subcategory) problems.push(bi('selectSubcategory'));
 
-  ['poNumber', 'factoryCode', 'date', 'qaLead'].forEach((f) => {
+  ['poNumber', 'date', 'qaLead'].forEach((f) => {
     if (!state[f] || !String(state[f]).trim()) problems.push(bi(f));
   });
   if (!state.poQuantity || parseInt(state.poQuantity, 10) < 2) problems.push(bi('poQuantity'));
@@ -1670,7 +1697,9 @@ function renderOrderInfoStep() {
       <div class="review-row"><span class="k">${escapeHtml(bi('poNumber').en)}</span><span class="v">${escapeHtml(state.poNumber)}</span></div>
       <div class="review-row"><span class="k">${escapeHtml(bi('productSku').en)}</span><span class="v">${escapeHtml(state.sku)}</span></div>
       ${state.productTitle ? `<div class="review-row"><span class="k">${escapeHtml(bi('productTitle').en)}</span><span class="v">${escapeHtml(state.productTitle)}</span></div>` : ''}
-      ${selectFieldWithOther('factoryCode', 'factoryCode', state.factoryCode, OPTIONS.factoryCodes || [], { required: true })}
+      <!-- Supplier/factory code removed: it belongs to the purchase order,
+           and asking QA to re-enter it here invited it drifting out of step
+           with the PO. It's still carried on the report via the PO. -->
       <div class="field-row">
         <div style="flex:1">${dateField('date', 'date', state.date, { required: true })}</div>
       </div>
@@ -1738,7 +1767,9 @@ function renderRestOfOrderInfo() {
   return `
     <div class="card">
       ${state.autoFilledForPo ? `<div class="section-help" style="margin-bottom:10px; color:var(--jc-teal-dark);">${escapeHtml(bi('prefilledNotice').en)}<br/>${escapeHtml(bi('prefilledNotice').zh)}</div>` : ''}
-      ${selectFieldWithOther('factoryCode', 'factoryCode', state.factoryCode, OPTIONS.factoryCodes || [], { required: true })}
+      <!-- Supplier/factory code removed: it belongs to the purchase order,
+           and asking QA to re-enter it here invited it drifting out of step
+           with the PO. It's still carried on the report via the PO. -->
       <div class="field-row">
         <div style="flex:1">${dateField('date', 'date', state.date, { required: true })}</div>
       </div>
@@ -1779,7 +1810,7 @@ function renderAqlSection() {
   const rec = getAqlRecommendation();
 
   let recBlock;
-  if (rec) {
+  if (rec && !rec.unavailable) {
     const range = pointCheckRangeToUnits(rec.pointCheck, state.poQuantity);
     recBlock = `
       <div class="aql-preview">
@@ -1789,7 +1820,10 @@ function renderAqlSection() {
       </div>
     `;
   } else {
-    recBlock = `<div class="section-help" style="margin-top:8px;">${escapeHtml(bi('needMoreInfoForRecommendation').en)}<br/>${escapeHtml(bi('needMoreInfoForRecommendation').zh)}</div>`;
+    // Say WHICH input is missing rather than a generic "need more info" -
+    // otherwise there's no way to know whether to fix the PO or report a bug.
+    const msg = aqlUnavailableMessage(rec && rec.reason);
+    recBlock = `<div class="section-help" style="margin-top:8px;">${escapeHtml(msg.en)}<br/>${escapeHtml(msg.zh)}</div>`;
   }
 
   return `
@@ -2207,11 +2241,10 @@ function renderCustomSizeChart() {
       ${rows}
       <button type="button" class="add-defect-btn" id="btnAddCustomSize">${escapeHtml(bi('addCustomSize').en)} <span class="zh">${escapeHtml(bi('addCustomSize').zh)}</span></button>
     </div>
-    <div class="card">
-      <div class="section-title">${biBlockHtml('chartPhotoTitle', 'Reference Chart Photo')}</div>
-      <div class="section-help">${escapeHtml(bi('chartPhotoHelp').en)}<br/>${escapeHtml(bi('chartPhotoHelp').zh)}</div>
-      ${photoGrid('chartphotos', true)}
-    </div>
+    <!-- The "Reference Chart Photo" upload was removed deliberately: a
+         photographed paper chart let sizes be recorded without entering
+         the actual measurements, which is what this section exists for.
+         Every size must now be filled in explicitly. -->
   `;
 }
 
@@ -2542,7 +2575,6 @@ function renderReviewStep() {
       <div class="review-block">
         <div class="review-block-title">${bi('poInfo').en} / ${bi('poInfo').zh}</div>
         ${reviewRow('poNumber', state.poNumber)}
-        ${reviewRow('factoryCode', state.factoryCode)}
         ${reviewRow('date', state.date)}
         ${reviewRow('poQuantity', state.poQuantity)}
         ${reviewRow('qaLead', state.qaLead)}
