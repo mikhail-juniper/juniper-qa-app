@@ -2314,6 +2314,14 @@ async function openDetailPanel(id, scope) {
     </div>
 
     <div class="om-panel-card">
+    <div class="om-section-title">${i18('secAsanaHandoff', 'Asana handoff')}</div>
+    <div class="section-help" style="margin-bottom:12px;">${i18('helpImportHandoff', 'Pulls the approved sample photos and manufacturing files from Asana.')}</div>
+    <button type="button" class="btn btn-secondary" id="omImportHandoffBtn"
+      style="flex:none;width:auto;padding:9px 16px;">${i18('btnImportHandoff', 'Import files from Asana')}</button>
+    <div id="omHandoffResult" style="margin-top:12px;"></div>
+    </div>
+
+    <div class="om-panel-card">
     <div class="om-section-title">${i18('secProductionProgress', 'Production Progress')}</div>
     <div class="section-help" style="margin-bottom:12px;">${i18('helpProductionProgress', 'Each note is saved with the date and who added it.')}</div>
     <!-- Always open here: on the full PO view there's room for the editor
@@ -3291,6 +3299,41 @@ async function openDetailPanel(id, scope) {
       } catch (e) {
         showToast(e.message, true);
         progressAdd.disabled = false;
+      }
+    });
+  }
+
+  /* Asana handoff import. Results are listed per item rather than reduced
+   * to one message - a partial import is the normal case while some links
+   * point at Drive folders and others at Asana comments. */
+  const importBtn = document.getElementById('omImportHandoffBtn');
+  if (importBtn) {
+    importBtn.addEventListener('click', async () => {
+      if (!confirm(i18t('confirmImportHandoff', 'Import from the Asana handoff task?'))) return;
+      const host = document.getElementById('omHandoffResult');
+      importBtn.disabled = true;
+      host.innerHTML = `<div class="section-help">${i18('emptyLoading', 'Loading...')}</div>`;
+      try {
+        const res = await api(`/api/asana/handoff-import`, {
+          method: 'POST', body: JSON.stringify({ poNumber: order.poNumber })
+        });
+        const rows = res.results || [];
+        host.innerHTML = rows.length ? `
+          <ul class="om-changelog">
+            ${rows.map((r) => `
+              <li>
+                <strong style="font-weight:500;">${escapeHtml(r.label)}</strong>
+                <div class="om-cl-meta">${escapeHtml(r.status)}${r.files ? ` · ${r.files} file(s)` : ''}${r.as ? ` · ${escapeHtml(r.as)}` : ''}${r.reason ? ` · ${escapeHtml(r.reason)}` : ''}${r.error ? ` · ${escapeHtml(r.error)}` : ''}</div>
+              </li>`).join('')}
+          </ul>` : `<div class="om-empty">${i18('handoffNothing', 'Nothing was imported.')}</div>`;
+        const n = (res.summary && res.summary.imported) || 0;
+        showToast(`${i18t('handoffImported', 'Imported')}: ${n}`);
+        // Refresh the Product Documentation / files section below.
+        if (typeof refreshFilesSection === 'function') refreshFilesSection();
+      } catch (e) {
+        host.innerHTML = `<div class="section-help" style="color:var(--jc-fail);">${escapeHtml(e.message)}</div>`;
+      } finally {
+        importBtn.disabled = false;
       }
     });
   }

@@ -1077,6 +1077,8 @@ function attachNewPoHandlers() {
           newPoState[key] = value;
           filled.push(label);
         };
+        // Taken from the Asana task name, which is "PONUMBER - Product Title".
+        setIf('productTitle', f.productTitle, 'Product title');
         setIf('sku', f.sku, 'SKU');
         setIf('orderQuantity', f.orderQuantity, 'Quantity');
         setIf('creator', f.creator, 'Creator');

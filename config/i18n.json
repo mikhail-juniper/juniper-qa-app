@@ -4182,5 +4182,29 @@
   "viewFullOrderZh": {
     "en": "查看完整订单详情：",
     "zh": "查看完整订单详情："
+  },
+  "btnImportHandoff": {
+    "en": "Import files from Asana",
+    "zh": "从 Asana 导入文件"
+  },
+  "helpImportHandoff": {
+    "en": "Follows this PO's Sample Link to the handoff task and pulls in the approved sample photos and manufacturing files.",
+    "zh": "沿此订单的 Sample Link 找到交接任务，导入已批准的样品照片与生产文件。"
+  },
+  "confirmImportHandoff": {
+    "en": "Import the sample photos and files from this PO's Asana handoff task?",
+    "zh": "确定从此订单的 Asana 交接任务导入样品照片与文件？"
+  },
+  "handoffImported": {
+    "en": "Imported",
+    "zh": "已导入"
+  },
+  "handoffNothing": {
+    "en": "Nothing was imported - see the details below.",
+    "zh": "未导入任何内容，详见下方信息。"
+  },
+  "secAsanaHandoff": {
+    "en": "Asana handoff",
+    "zh": "Asana 交接"
   }
 }
