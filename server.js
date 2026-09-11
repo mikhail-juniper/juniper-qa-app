@@ -2051,12 +2051,13 @@ app.post('/api/asana/handoff-import', requirePermission('orders:write'), async (
     // Washing tag first: "washing tag" must not be caught by the packaging
     // rule below, and order decides which pattern wins.
     [/^washing\s*tag/i, 'washingTagUrl'],
-    /* Packaging covers what the artwork actually is: the bag, the hangtag,
-     * the card. These arrive under product-specific names ("Plush Bag",
-     * "Hangtag"), so the slot matches on those rather than on the word
-     * "packaging", which nobody writes. */
-    [/^(packaging|hang\s*tag|hangtag|swing\s*tag|.*\bbag\b|.*\bcard\b|.*\bsleeve\b|.*\bbox\b)/i, 'packagingUrl'],
-    [/^product\s*dimensions/i, 'dimensionsUrl']
+    // Hang tags have their own field, so they no longer compete with the
+    // bag or card artwork for one Packaging slot.
+    [/^(hang\s*tag|hangtag|swing\s*tag)/i, 'hangTagUrl'],
+    /* Packaging is everything the product ships in or with, under whatever
+     * product-specific name it arrives as - "Plush Bag", "Plush Card",
+     * "Gift Box". Nobody writes the word "packaging" as a subtask name. */
+    [/^(packaging|.*\bbag\b|.*\bcard\b|.*\bsleeve\b|.*\bbox\b|.*\binsert\b)/i, 'packagingUrl']
   ];
   /* Several subtasks can legitimately map to the same slot - a PO often has
    * both a Plush Bag and a Hangtag, and both are packaging. Only the first

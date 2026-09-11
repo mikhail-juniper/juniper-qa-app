@@ -2427,10 +2427,13 @@ async function openDetailPanel(id, scope) {
     <div class="om-panel-card">
     <div class="om-section-title">${i18('secProductDocumentation', 'Product Documentation')}</div>
     <div class="om-field-grid om-field-grid-row">
-      ${uploadFieldHtml('fManufacturingDrawing', 'Manufacturing Drawing', order.mainComponent.manufacturingDrawing, true)}
-      ${uploadFieldHtml('fWashingTagUrl', 'Washing Tag', order.mainComponent.washingTagUrl, true)}
-      ${uploadFieldHtml('fPackagingUrl', 'Packaging', order.mainComponent.packagingUrl, true)}
-      ${order.productLine !== 'clothing' ? uploadFieldHtml('fDimensionsUrl', 'Product Dimensions', order.mainComponent.dimensionsUrl, true) : ''}
+      ${uploadFieldHtml('fManufacturingDrawing', i18t('fldManufacturingDrawing', 'Manufacturing Drawing'), order.mainComponent.manufacturingDrawing, true)}
+      ${uploadFieldHtml('fWashingTagUrl', i18t('fldWashingTag', 'Washing Tag'), order.mainComponent.washingTagUrl, true)}
+      ${uploadFieldHtml('fHangTagUrl', i18t('fldHangTag', 'Hang Tag'), order.mainComponent.hangTagUrl, true)}
+      ${uploadFieldHtml('fPackagingUrl', i18t('fldPackaging', 'Packaging'), order.mainComponent.packagingUrl, true)}
+      <!-- The Product Dimensions photo upload was removed on purpose: it
+           let people attach a picture of measurements instead of entering
+           the actual values below, which is what the fields exist for. -->
     </div>
     <div class="om-field-grid om-field-grid-row" style="margin-top:22px;">
       <div><label>${i18('fldWeightG', 'Weight (g)')}</label><input id="fWeightGrams" type="number" step="1" value="${val(order.mainComponent.weightGrams)}" /></div>
@@ -3646,7 +3649,7 @@ async function openDetailPanel(id, scope) {
       [['fPhotoReference', 'photoReference'],
        ['fWashingTagUrl', 'washingTagUrl'],
        ['fPackagingUrl', 'packagingUrl'],
-       ['fDimensionsUrl', 'dimensionsUrl']].forEach(([elId, field]) => {
+       ['fHangTagUrl', 'hangTagUrl']].forEach(([elId, field]) => {
         const el = document.getElementById(elId);
         if (el && src.mainComponent[field]) el.value = src.mainComponent[field];
       });
@@ -3855,7 +3858,7 @@ async function openDetailPanel(id, scope) {
   wireUploadField('fManufacturingDrawing', order.id, 'Design document', true);
   wireUploadField('fWashingTagUrl', order.id, 'Other', true);
   wireUploadField('fPackagingUrl', order.id, 'Other', true);
-  if (order.productLine !== 'clothing') wireUploadField('fDimensionsUrl', order.id, 'Other', true);
+  wireUploadField('fHangTagUrl', order.id, 'Design document', true);
 
   // Master "Save changes": everything on the page except status (saves
   // immediately above) and payment status (its own Mark Paid/Pending toggle).
@@ -3910,8 +3913,11 @@ async function openDetailPanel(id, scope) {
         photoReference: document.getElementById('fPhotoReference').value,
         manufacturingDrawing: document.getElementById('fManufacturingDrawing').value,
         washingTagUrl: document.getElementById('fWashingTagUrl').value,
+        hangTagUrl: document.getElementById('fHangTagUrl').value,
         packagingUrl: document.getElementById('fPackagingUrl').value,
-        dimensionsUrl: productLine !== 'clothing' ? document.getElementById('fDimensionsUrl').value : '',
+        // dimensionsUrl is no longer editable - kept as-is so existing
+        // records don't lose a previously uploaded file.
+        dimensionsUrl: order.mainComponent.dimensionsUrl || '',
         dimensionsTable: productLine === 'clothing' ? dimensionsTableState : null,
         dimensionsLength: productLine !== 'clothing' ? (document.getElementById('fDimensionsLength').value || null) : null,
         dimensionsWidth: productLine !== 'clothing' ? (document.getElementById('fDimensionsWidth').value || null) : null,
