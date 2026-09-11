@@ -3328,8 +3328,29 @@ async function openDetailPanel(id, scope) {
           </ul>` : `<div class="om-empty">${i18('handoffNothing', 'Nothing was imported.')}</div>`;
         const n = (res.summary && res.summary.imported) || 0;
         showToast(`${i18t('handoffImported', 'Imported')}: ${n}`);
-        // Refresh the Product Documentation / files section below.
-        if (typeof refreshFilesSection === 'function') refreshFilesSection();
+        /* Reopen the panel. Product Documentation, the photo reference and
+         * the file list were all rendered from the order as it was when the
+         * panel opened, so without this the import looks like it did
+         * nothing - the fields are saved but the screen is stale. The
+         * results list is passed through so it survives the reopen. */
+        if (n) {
+          const id = order.id;
+          const carry = res.results || [];
+          closePanel();
+          refreshCurrentView();
+          await openDetailPanel(id, 'full');
+          const again = document.getElementById('omHandoffResult');
+          if (again) {
+            again.innerHTML = `
+              <ul class="om-changelog">
+                ${carry.map((r) => `
+                  <li>
+                    <strong style="font-weight:500;">${escapeHtml(r.label)}</strong>
+                    <div class="om-cl-meta">${escapeHtml(r.status)}${r.files ? ` · ${r.files} file(s)` : ''}${r.as ? ` · ${escapeHtml(r.as)}` : ''}</div>
+                  </li>`).join('')}
+              </ul>`;
+          }
+        }
       } catch (e) {
         host.innerHTML = `<div class="section-help" style="color:var(--jc-fail);">${escapeHtml(e.message)}</div>`;
       } finally {
