@@ -45,6 +45,7 @@ const gmailSend = require('./lib/gmailSend');
 const wechatAuth = require('./lib/wechatAuth');
 const wecomAuth = require('./lib/wecomAuth');
 const wecomCallback = require('./lib/wecomCallback');
+const driveClient = require('./lib/driveClient');
 const AdmZip = require('adm-zip');
 const ASANA_FIELD_MAP_PATH = path.join(__dirname, 'config', 'asanaFieldMap.json');
 function loadAsanaFieldMap() { return loadJson(ASANA_FIELD_MAP_PATH); }
@@ -1990,6 +1991,136 @@ app.post('/api/asana/pull-po', async (req, res) => {
  * Accepts ?poNumber= (looked up in the ERP) or ?taskGid= (any Asana task,
  * so a PO that isn't in the ERP yet can still be checked).
  */
+/**
+ * Run the PO handoff import for real.
+ *
+ * Same traversal as the preview, but writes: Asana comment images become
+ * PO photos, Drive links become PO files. A folder of several files is
+ * zipped into one archive named after the subtask, rather than scattering
+ * loose files across the PO.
+ *
+ * Failures are per-item. One unreachable Drive folder shouldn't abandon the
+ * sample photos that fetched fine, so every item reports its own outcome.
+ */
+app.post('/api/asana/handoff-import', requirePermission('orders:write'), async (req, res) => {
+  const poNumber = String((req.body && req.body.poNumber) || req.query.poNumber || '').trim();
+  if (!poNumber) return res.status(400).json({ error: 'poNumber is required' });
+  const order = orderManagementStore.getOrderByPoNumber(poNumber);
+  if (!order) return res.status(404).json({ error: 'PO not found in the ERP' });
+  if (!order.asanaTaskGid) return res.status(404).json({ error: 'This PO has no linked Asana task' });
+
+  // Drive is per-user, so the import runs as whoever triggered it.
+  const user = req.user && req.user.id ? userStore.getUser(req.user.id) : null;
+  const driveToken = user && user.driveRefreshToken
+    ? gmailSend.decryptToken(user.driveRefreshToken) : null;
+
+  const results = [];
+  const saveFile = (buffer, filename, category) => {
+    const dir = path.join(orderManagementStore.ORDER_FILES_DIR, order.id);
+    fs.mkdirSync(dir, { recursive: true });
+    const stored = `${Date.now()}_${filename.replace(/[^A-Za-z0-9._-]+/g, '_')}`;
+    fs.writeFileSync(path.join(dir, stored), buffer);
+    orderManagementStore.addFile(order.id, {
+      id: uuidv4(),
+      category,
+      originalName: filename,
+      storedName: stored,
+      size: buffer.length,
+      relatedTo: null,
+      url: `/order-management-files/${encodeURIComponent(order.id)}/${encodeURIComponent(stored)}`,
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: 'Asana handoff import'
+    }, 'Asana handoff import');
+  };
+
+  try {
+    const task = await asanaClient.getTaskRaw(order.asanaTaskGid, 'name,custom_fields');
+    const sampleField = (task.custom_fields || []).find(
+      (f) => String(f.name || '').trim().toLowerCase() === 'sample link');
+    const sampleValue = sampleField ? (sampleField.text_value || sampleField.display_value || '') : '';
+    const handoff = String(sampleValue).match(/\/task\/(\d+)/);
+    if (!handoff) return res.status(404).json({ error: 'Sample Link is empty or is not an Asana task URL' });
+
+    const subtasks = await asanaClient.getSubtasks(handoff[1]);
+    for (const st of subtasks) {
+      const text = `${st.name || ''}\n${st.notes || ''}`;
+      const url = (text.match(/https?:\/\/[^\s)>\]]+/) || [])[0] || null;
+      const label = String(st.name || '').replace(/[:：]\s*$/, '').split(/[:：]/)[0].trim() || 'Untitled';
+      if (!url) { results.push({ label, status: 'skipped', reason: 'no link' }); continue; }
+
+      const comment = url.match(/\/task\/(\d+)\/comment\/(\d+)/);
+      const drvFolder = url.match(/drive\.google\.com\/drive\/(?:u\/\d+\/)?folders\/([A-Za-z0-9_-]+)/);
+      const drvFile = url.match(/drive\.google\.com\/file\/d\/([A-Za-z0-9_-]+)/);
+
+      try {
+        if (comment) {
+          const atts = await asanaClient.getCommentAttachments(comment[1], comment[2]);
+          let saved = 0;
+          for (const a of atts) {
+            const got = await asanaClient.downloadAttachment(a);
+            if (got) { saveFile(got.buffer, got.name, 'Style picture'); saved += 1; }
+          }
+          results.push({ label, status: saved ? 'imported' : 'empty', files: saved, as: 'Style picture' });
+        } else if (drvFolder || drvFile) {
+          if (!driveToken) {
+            results.push({ label, status: 'pending', reason: 'Drive not connected for this user', url });
+            continue;
+          }
+          const access = await gmailSend.accessTokenFor(driveToken);
+          if (drvFile) {
+            const meta = await driveClient.getFile(access, drvFile[1]);
+            const got = await driveClient.downloadFile(access, meta);
+            saveFile(got.buffer, got.name, 'Design document');
+            results.push({ label, status: 'imported', files: 1, as: 'Design document' });
+          } else {
+            const listed = await driveClient.listFolder(access, drvFolder[1]);
+            if (!listed.length) { results.push({ label, status: 'empty', files: 0 }); continue; }
+            if (listed.length === 1) {
+              const got = await driveClient.downloadFile(access, listed[0]);
+              saveFile(got.buffer, got.name, 'Design document');
+              results.push({ label, status: 'imported', files: 1, as: 'Design document' });
+            } else {
+              // Several files: one archive, so the PO doesn't fill with loose parts.
+              const zip = archiver('zip', { zlib: { level: 9 } });
+              const chunks = [];
+              zip.on('data', (c) => chunks.push(c));
+              const done = new Promise((resolve, reject) => {
+                zip.on('end', resolve); zip.on('error', reject);
+              });
+              for (const f of listed) {
+                const got = await driveClient.downloadFile(access, f);
+                zip.append(got.buffer, { name: got.name });
+              }
+              zip.finalize();
+              await done;
+              saveFile(Buffer.concat(chunks), `${label}.zip`, 'Design document');
+              results.push({ label, status: 'imported', files: listed.length, as: 'Design document (zip)' });
+            }
+          }
+        } else {
+          results.push({ label, status: 'skipped', reason: 'unrecognised link', url });
+        }
+      } catch (itemErr) {
+        // Per-item: one bad folder must not lose the rest.
+        results.push({ label, status: 'failed', error: itemErr.message || String(itemErr), url });
+      }
+    }
+
+    res.json({
+      ok: true, poNumber, handoffTaskGid: handoff[1],
+      results,
+      summary: {
+        imported: results.filter((r) => r.status === 'imported').length,
+        pending: results.filter((r) => r.status === 'pending').length,
+        failed: results.filter((r) => r.status === 'failed').length,
+        skipped: results.filter((r) => r.status === 'skipped').length
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || String(err), results });
+  }
+});
+
 app.get('/api/asana/handoff-preview', requirePermission('orders:write'), async (req, res) => {
   try {
     let taskGid = String(req.query.taskGid || '').trim();
