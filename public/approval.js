@@ -424,6 +424,10 @@ async function loadApprovalForPo(poNumber) {
     approvalState.productRisk = data.po.productRisk || 'medium';
     // Only lock risk if the PO actually specified one.
     if (data.po.productRisk) approvalState.riskFromPo = true;
+    /* The PO's administrator replaces the old free QA/QC Lead choice: the
+     * person responsible is already recorded in Order Management, so asking
+     * again just invited the two disagreeing. */
+    if (data.po.orderManagementSpecialist) approvalState.qaLead = data.po.orderManagementSpecialist;
     if (data.po.factoryCode) approvalState.factoryCode = data.po.factoryCode;
 
     /* Non-apparel sizing comes straight from the PO's L/W/H. Only apparel
@@ -1307,25 +1311,22 @@ function renderSampleApprovalForm() {
     ${priorBlock}
     <div class="card">
       <div class="section-title">${biBlockHtml('sampleDetailsTitle', 'Sample Details')}</div>
-      ${/* Factory code and risk belong to the purchase order. Shown read-only
-           so this form can't disagree with Order Management about the same
-           product - QA/QC Lead stays editable because it's whoever is doing
-           this approval, which the PO has no opinion about. */ ''}
-      ${approvalState.factoryCode ? `
-        <div class="field">
-          <label class="field-label">${biBlockHtml('factoryCode', 'Factory Code')}</label>
-          <input type="text" value="${escapeHtml(approvalState.factoryCode)}" readonly />
-          <div class="section-help">${escapeHtml(bi('detailsFromPo').en)} ${escapeHtml(bi('detailsFromPo').zh)}</div>
-        </div>`
-        : selectField3WithOther('factoryCode', 'factoryCode', approvalState.factoryCode, OPTIONS.factoryCodes || [])}
-      ${selectField3WithOther('qaLead', 'qaLead', approvalState.qaLead, OPTIONS.qaLeads || [])}
-      <div class="field">
-        <label class="field-label">${biBlockHtml('productRisk', 'Product Complexity/Risk')}</label>
-        <div class="segmented${approvalState.riskFromPo ? ' segmented-locked' : ''}">
-          ${['high', 'medium', 'low'].map((r) => `<div class="segmented-option ${approvalState.productRisk === r ? 'selected' : ''}"${approvalState.riskFromPo ? '' : ` data-approval-risk="${r}"`}>${escapeHtml(bi('risk' + r.charAt(0).toUpperCase() + r.slice(1)).en)}<span class="zh">${escapeHtml(bi('risk' + r.charAt(0).toUpperCase() + r.slice(1)).zh)}</span></div>`).join('')}
-        </div>
-        ${approvalState.riskFromPo ? `<div class="section-help">${escapeHtml(bi('detailsFromPo').en)} ${escapeHtml(bi('detailsFromPo').zh)}</div>` : ''}
+      ${/* Read-only rows in the same style as Order Information above. These
+           are all owned by the purchase order, and rendering them as inputs
+           implied they could be edited here when they couldn't. */ ''}
+      <div class="review-row">
+        <span class="k">${escapeHtml(bi('factoryCode').en)}<span class="zh">${escapeHtml(bi('factoryCode').zh)}</span></span>
+        <span class="v">${escapeHtml(approvalState.factoryCode || '-')}</span>
       </div>
+      <div class="review-row">
+        <span class="k">${escapeHtml(bi('omSpecialist').en)}<span class="zh">${escapeHtml(bi('omSpecialist').zh)}</span></span>
+        <span class="v">${escapeHtml(approvalState.qaLead || '-')}</span>
+      </div>
+      <div class="review-row">
+        <span class="k">${escapeHtml(bi('productRisk').en)}<span class="zh">${escapeHtml(bi('productRisk').zh)}</span></span>
+        <span class="v">${escapeHtml(bi('risk' + String(approvalState.productRisk || 'medium').charAt(0).toUpperCase() + String(approvalState.productRisk || 'medium').slice(1)).en)}</span>
+      </div>
+      <div class="section-help" style="margin-top:8px;">${escapeHtml(bi('detailsFromPo').en)}<br/>${escapeHtml(bi('detailsFromPo').zh)}</div>
       ${sampledSizeField}
     </div>
 

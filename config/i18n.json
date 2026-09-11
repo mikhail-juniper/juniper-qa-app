@@ -4242,5 +4242,9 @@
   "btnInsertSelected": {
     "en": "Insert selected",
     "zh": "插入所选"
+  },
+  "omSpecialist": {
+    "en": "Order Management Specialist",
+    "zh": "订单管理专员"
   }
 }
