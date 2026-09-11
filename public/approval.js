@@ -1606,25 +1606,47 @@ function renderPhotoSlot(slotKey, labelEn, labelZh, size, mini) {
  * applies here, avoiding a second copy of every photo.
  */
 function openImportedPicker(slotKey) {
-  const images = approvalState.importedImages || [];
+  // Guard against stacking: clicking a second slot while one is open was
+  // leaving two pickers on the page.
+  const existing = document.querySelector('.pick-backdrop');
+  if (existing) existing.remove();
+
+  /* De-duplicate by filename. Running the Asana import twice leaves two
+   * copies of every photo on the PO, and offering both is just confusing -
+   * the newest wins. */
+  const seen = new Set();
+  const images = (approvalState.importedImages || []).filter((img) => {
+    const key = (img.name || img.url).toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
   const chosen = new Set();
   const wrap = document.createElement('div');
-  wrap.className = 'om-ask-backdrop';
+  wrap.className = 'pick-backdrop';
   wrap.innerHTML = `
-    <div class="om-ask-box" style="max-width:760px;">
-      <div class="om-ask-title">${escapeHtml(bi('pickImportedTitle').en)}</div>
+    <div class="pick-box">
+      <div class="pick-title">${escapeHtml(bi('pickImportedTitle').en)}</div>
       <div class="section-help" style="margin-bottom:10px;">${escapeHtml(bi('pickImportedHelp').en)}</div>
       ${images.length ? `
         <div class="pick-grid">
           ${images.map((img, i) => `
             <div class="pick-item" data-pick="${i}">
-              <img src="${escapeHtml(img.url)}" alt="" />
+              ${/* loading="lazy" matters here: a PO can carry 15+ full-size
+                   sample photos, and fetching them all at once made the
+                   picker crawl. Only what's scrolled into view loads. The
+                   full-resolution file is what gets inserted either way. */ ''}
+              ${/* The small version loads here; the full-resolution file is
+                   what gets attached on select. onerror falls back to the
+                   original so an image sharp can't read still shows. */ ''}
+              <img src="${escapeHtml(img.thumbUrl || img.url)}" alt="" loading="lazy" decoding="async"
+                onerror="this.onerror=null;this.src='${escapeHtml(img.url)}'" />
               <div class="pick-name">${escapeHtml(img.name || '')}</div>
             </div>`).join('')}
         </div>` : `<div class="om-empty">${escapeHtml(bi('pickImportedNone').en)}</div>`}
-      <div class="om-ask-actions">
-        <button type="button" class="btn btn-secondary pick-cancel" style="flex:none;width:auto;">${escapeHtml(bi('cancel').en || 'Cancel')}</button>
-        <button type="button" class="btn btn-primary pick-ok" style="flex:none;width:auto;" ${images.length ? '' : 'disabled'}>${escapeHtml(bi('btnInsertSelected').en)}</button>
+      <div class="pick-actions">
+        <button type="button" class="btn btn-secondary pick-cancel">${escapeHtml(bi('cancel').en || 'Cancel')}</button>
+        <button type="button" class="btn btn-primary pick-ok" ${images.length ? '' : 'disabled'}>${escapeHtml(bi('btnInsertSelected').en)}</button>
       </div>
     </div>`;
   document.body.appendChild(wrap);
@@ -1637,6 +1659,8 @@ function openImportedPicker(slotKey) {
     });
   });
   const close = () => wrap.remove();
+  const onKey = (e) => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); } };
+  document.addEventListener('keydown', onKey);
   wrap.querySelector('.pick-cancel').addEventListener('click', close);
   wrap.addEventListener('click', (e) => { if (e.target === wrap) close(); });
   wrap.querySelector('.pick-ok').addEventListener('click', () => {

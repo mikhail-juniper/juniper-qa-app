@@ -46,6 +46,7 @@ const wechatAuth = require('./lib/wechatAuth');
 const wecomAuth = require('./lib/wecomAuth');
 const wecomCallback = require('./lib/wecomCallback');
 const driveClient = require('./lib/driveClient');
+const sharp = require('sharp');
 const AdmZip = require('adm-zip');
 const ASANA_FIELD_MAP_PATH = path.join(__dirname, 'config', 'asanaFieldMap.json');
 function loadAsanaFieldMap() { return loadJson(ASANA_FIELD_MAP_PATH); }
@@ -2373,6 +2374,49 @@ app.post('/api/order-management/orders/:id/asana-push', async (req, res) => {
  * Only displayable images are returned - a zip of drawings is on the PO too
  * but is no use as a sample photo.
  */
+/**
+ * Downscaled version of a PO file, for the "Insert from ERP" picker.
+ *
+ * Sample photos come off a camera at several MB each, and a PO can carry
+ * fifteen of them. Fetching the originals just to draw 120px tiles made the
+ * picker unusable on a slow connection, so this serves a small JPEG
+ * instead - the full-resolution file is still what gets attached.
+ *
+ * Results are cached on disk next to the original: resizing the same photo
+ * on every open would move the cost rather than remove it.
+ */
+app.get('/api/order-management/orders/:id/thumb', async (req, res) => {
+  try {
+    const order = orderManagementStore.getOrderById(req.params.id);
+    if (!order) return res.status(404).end();
+    const stored = String(req.query.file || '');
+    // Only files recorded on this order, matched by their stored name, so
+    // the parameter can't be used to read arbitrary paths.
+    const file = (order.files || []).find((f) => f.storedName === stored);
+    if (!file) return res.status(404).end();
+
+    const dir = path.join(orderManagementStore.ORDER_FILES_DIR, order.id);
+    const src = path.join(dir, file.storedName);
+    if (!fs.existsSync(src)) return res.status(404).end();
+
+    const cacheDir = path.join(dir, '.thumbs');
+    const cached = path.join(cacheDir, `${file.storedName}.jpg`);
+    if (!fs.existsSync(cached)) {
+      fs.mkdirSync(cacheDir, { recursive: true });
+      await sharp(src).rotate().resize(320, 320, { fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 72 }).toFile(cached);
+    }
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+    res.setHeader('Content-Type', 'image/jpeg');
+    fs.createReadStream(cached).pipe(res);
+  } catch (err) {
+    // A file sharp can't read shouldn't break the picker - fall back to the
+    // original by telling the client to use it.
+    console.warn('Thumbnail failed:', err.message || err);
+    res.status(415).end();
+  }
+});
+
 app.get('/api/order-management/orders/:id/importable-images', (req, res) => {
   const order = orderManagementStore.getOrderById(req.params.id)
     || orderManagementStore.getOrderByPoNumber(req.params.id);
@@ -2382,6 +2426,9 @@ app.get('/api/order-management/orders/:id/importable-images', (req, res) => {
     .map((f) => ({
       name: f.originalName || '',
       url: f.url,
+      // Small version for the picker grid; `url` is what gets attached.
+      thumbUrl: `/api/order-management/orders/${encodeURIComponent(order.id)}/thumb`
+        + `?file=${encodeURIComponent(f.storedName)}`,
       category: f.category || '',
       uploadedBy: f.uploadedBy || '',
       uploadedAt: f.uploadedAt || null

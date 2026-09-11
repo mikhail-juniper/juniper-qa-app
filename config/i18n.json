@@ -4224,16 +4224,16 @@
     "zh": "来自采购订单。"
   },
   "btnInsertFromDrive": {
-    "en": "Insert from Drive",
-    "zh": "从云端插入"
+    "en": "Insert from ERP",
+    "zh": "从系统插入"
   },
   "pickImportedTitle": {
-    "en": "Images imported for this PO",
-    "zh": "此订单已导入的图片"
+    "en": "Images on this PO",
+    "zh": "此订单的图片"
   },
   "pickImportedHelp": {
-    "en": "Tap to select. These were pulled from the Asana handoff, so there is no need to re-upload them.",
-    "zh": "点击选择。这些图片来自 Asana 交接，无需重新上传。"
+    "en": "Tap to select. These were imported from the Asana handoff, so there is no need to re-upload them.",
+    "zh": "点击选择。这些图片已从 Asana 交接导入，无需重新上传。"
   },
   "pickImportedNone": {
     "en": "No imported images on this PO yet. Run the Asana import from Order Management first.",

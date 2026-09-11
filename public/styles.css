@@ -1226,3 +1226,37 @@ td.reference-selectable { outline-offset: -2px; }
   color: var(--jc-muted, #666);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+
+/* "Insert from ERP" picker. Self-contained styling: this page loads only
+   styles.css, so relying on the Order Management modal classes left the
+   picker unstyled and rendered inline at the bottom of the form. */
+.pick-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 24, 21, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9000;
+  padding: 20px;
+}
+.pick-box {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.3);
+  padding: 20px 22px;
+  width: 100%;
+  max-width: 780px;
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+}
+.pick-title { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+.pick-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 14px;
+  flex: 0 0 auto;
+}
+.pick-actions .btn { flex: 0 0 auto; width: auto; padding: 10px 18px; }
