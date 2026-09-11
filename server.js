@@ -1718,6 +1718,36 @@ app.post('/api/purchase-orders', requirePermission('orders:write'), (req, res) =
         const approvalLink = `${req.protocol}://${req.get('host')}/approval.html?po=${encodeURIComponent(id)}`;
         asanaClient.setTextCustomField(entry.asanaTaskGid, fieldMap.qaqcDriveLinkFieldGid, approvalLink);
       }
+
+      /* Pull the handoff files onto the new PO.
+       *
+       * Deliberately AFTER the response: fetching a Drive folder can take
+       * tens of seconds, and the person submitting a PO request shouldn't
+       * wait on it. The files appear on the Order Management panel when
+       * they land, and the manual Import button re-runs it if anything
+       * failed. Errors are logged, never surfaced as a failed submission -
+       * the PO itself was created successfully.
+       *
+       * Runs as the submitting user's Drive grant; without one, the Drive
+       * items are recorded as pending and the Asana photos still import. */
+      (async () => {
+        try {
+          const user = req.user && req.user.id ? userStore.getUser(req.user.id) : null;
+          const driveToken = user && user.driveRefreshToken
+            ? gmailSend.decryptToken(user.driveRefreshToken) : null;
+          const fresh = orderManagementStore.getOrderById(id);
+          if (!fresh) return;
+          const run = await runHandoffImport(fresh, driveToken);
+          if (run.ok) {
+            const done = run.results.filter((r) => r.status === 'imported').length;
+            console.log(`Handoff import for ${entry.poNumber}: ${done} of ${run.results.length} item(s) imported.`);
+          } else {
+            console.log(`Handoff import for ${entry.poNumber} skipped: ${run.reason}`);
+          }
+        } catch (err) {
+          console.error(`Handoff import for ${entry.poNumber} failed:`, err.message || err);
+        }
+      })();
     }
   } catch (err) {
     console.error('Failed to create purchase order:', err);
@@ -1961,6 +1991,27 @@ app.post('/api/asana/pull-po', async (req, res) => {
         });
       }
     }
+
+    /* What the handoff will bring across, as counts only. The New PO form
+     * has no order to attach files to yet, so downloading here would mean
+     * temp storage and orphaned files if the form is abandoned - the actual
+     * import runs on submit, once an order exists. */
+    if (result.taskGid) {
+      try {
+        const found = await discoverHandoffItems(result.taskGid);
+        if (found.ok) {
+          result.handoff = {
+            handoffTaskGid: found.handoffTaskGid,
+            items: found.items.map((it) => ({ label: it.label, source: it.source })),
+            willImport: found.items.filter(
+              (it) => it.source !== 'none' && it.source !== 'unknownUrl').length
+          };
+        }
+      } catch (err) {
+        // Must never block the field sync people actually pressed for.
+        console.warn('Handoff discovery during pull-po failed:', err.message || err);
+      }
+    }
     res.json(result);
   } catch (err) {
     console.error('Asana pull failed:', err);
@@ -2015,12 +2066,6 @@ app.post('/api/asana/handoff-import', requirePermission('orders:write'), async (
   const driveToken = user && user.driveRefreshToken
     ? gmailSend.decryptToken(user.driveRefreshToken) : null;
 
-  const results = [];
-
-  /* Re-running the import should replace what it wrote last time, not add a
-   * second copy. Imported files are tagged by uploadedBy, so a prior run is
-   * identifiable without any extra bookkeeping. Files uploaded by a person
-   * are never touched. */
   const IMPORT_TAG = 'Asana handoff import';
   const previous = (order.files || []).filter((f) => f.uploadedBy === IMPORT_TAG);
   if (previous.length && !(req.body && req.body.replace)) {
@@ -2033,166 +2078,19 @@ app.post('/api/asana/handoff-import', requirePermission('orders:write'), async (
     });
   }
   if (previous.length) {
-    // Confirmed: clear the old set first so the PO ends up with one copy.
     previous.forEach((f) => {
-      try {
-        orderManagementStore.removeFile(order.id, f.id, IMPORT_TAG);
-      } catch (err) {
-        console.error('Handoff re-import: could not remove old file', f.originalName, err.message || err);
-      }
+      try { orderManagementStore.removeFile(order.id, f.id, IMPORT_TAG); }
+      catch (err) { console.error('Handoff re-import: could not remove', f.originalName, err.message || err); }
     });
     console.log(`Handoff re-import: removed ${previous.length} file(s) from the previous run.`);
   }
 
-  /* Product Documentation slots, matched on the subtask label. Anything not
-   * listed still lands in the PO's file list, so nothing is lost - it just
-   * doesn't claim one of the four named slots. */
-  const DOC_SLOTS = [
-    [/^manufacturing\s*drawing/i, 'manufacturingDrawing'],
-    // Washing tag first: "washing tag" must not be caught by the packaging
-    // rule below, and order decides which pattern wins.
-    [/^washing\s*tag/i, 'washingTagUrl'],
-    // Hang tags have their own field, so they no longer compete with the
-    // bag or card artwork for one Packaging slot.
-    [/^(hang\s*tag|hangtag|swing\s*tag)/i, 'hangTagUrl'],
-    /* Packaging is everything the product ships in or with, under whatever
-     * product-specific name it arrives as - "Plush Bag", "Plush Card",
-     * "Gift Box". Nobody writes the word "packaging" as a subtask name. */
-    [/^(packaging|.*\bbag\b|.*\bcard\b|.*\bsleeve\b|.*\bbox\b|.*\binsert\b)/i, 'packagingUrl']
-  ];
-  /* Several subtasks can legitimately map to the same slot - a PO often has
-   * both a Plush Bag and a Hangtag, and both are packaging. Only the first
-   * claims the slot; later ones stay in the file list rather than silently
-   * overwriting it, and say so in the result. */
-  const claimedSlots = new Set();
-  const docSlotFor = (label) => {
-    const hit = DOC_SLOTS.find(([re]) => re.test(String(label || '').trim()));
-    if (!hit) return null;
-    if (claimedSlots.has(hit[1])) return null;
-    claimedSlots.add(hit[1]);
-    return hit[1];
-  };
-
-  const saveFile = (buffer, filename, category) => {
-    const dir = path.join(orderManagementStore.ORDER_FILES_DIR, order.id);
-    fs.mkdirSync(dir, { recursive: true });
-    const stored = `${Date.now()}_${filename.replace(/[^A-Za-z0-9._-]+/g, '_')}`;
-    fs.writeFileSync(path.join(dir, stored), buffer);
-    orderManagementStore.addFile(order.id, {
-      id: uuidv4(),
-      category,
-      originalName: filename,
-      storedName: stored,
-      size: buffer.length,
-      relatedTo: null,
-      url: `/order-management-files/${encodeURIComponent(order.id)}/${encodeURIComponent(stored)}`,
-      uploadedAt: new Date().toISOString(),
-      uploadedBy: 'Asana handoff import'
-    }, 'Asana handoff import');
-    return `/order-management-files/${encodeURIComponent(order.id)}/${encodeURIComponent(stored)}`;
-  };
-
-  /** Point a Product Documentation field at a file we just saved. */
-  const setDocSlot = (slot, url) => {
-    if (!slot || !url) return;
-    orderManagementStore.updateOrder(order.id,
-      { mainComponent: { [slot]: url } }, 'Asana handoff import', 'Handoff import');
-  };
-
   try {
-    const task = await asanaClient.getTaskRaw(order.asanaTaskGid, 'name,custom_fields');
-    const sampleField = (task.custom_fields || []).find(
-      (f) => String(f.name || '').trim().toLowerCase() === 'sample link');
-    const sampleValue = sampleField ? (sampleField.text_value || sampleField.display_value || '') : '';
-    const handoff = String(sampleValue).match(/\/task\/(\d+)/);
-    if (!handoff) return res.status(404).json({ error: 'Sample Link is empty or is not an Asana task URL' });
-
-    const subtasks = await asanaClient.getSubtasks(handoff[1]);
-    for (const st of subtasks) {
-      const text = `${st.name || ''}\n${st.notes || ''}`;
-      const url = (text.match(/https?:\/\/[^\s)>\]]+/) || [])[0] || null;
-      const label = String(st.name || '').replace(/[:：]\s*$/, '').split(/[:：]/)[0].trim() || 'Untitled';
-      if (!url) { results.push({ label, status: 'skipped', reason: 'no link' }); continue; }
-
-      const comment = url.match(/\/task\/(\d+)\/comment\/(\d+)/);
-      const drvFolder = url.match(/drive\.google\.com\/drive\/(?:u\/\d+\/)?folders\/([A-Za-z0-9_-]+)/);
-      const drvFile = url.match(/drive\.google\.com\/file\/d\/([A-Za-z0-9_-]+)/);
-
-      try {
-        if (comment) {
-          const atts = await asanaClient.getCommentAttachments(comment[1], comment[2]);
-          let saved = 0;
-          let firstUrl = null;
-          for (const a of atts) {
-            const got = await asanaClient.downloadAttachment(a);
-            if (got) {
-              const url = saveFile(got.buffer, got.name, 'Style picture');
-              if (!firstUrl) firstUrl = url;
-              saved += 1;
-            }
-          }
-          // Use the first approved-sample image as the PO's photo if it has
-          // none, so it shows in the tables and on the supplier page.
-          if (firstUrl && !(order.mainComponent && order.mainComponent.photoReference)) {
-            setDocSlot('photoReference', firstUrl);
-          }
-          results.push({ label, status: saved ? 'imported' : 'empty', files: saved, as: 'Style picture' });
-        } else if (drvFolder || drvFile) {
-          if (!driveToken) {
-            results.push({ label, status: 'pending', reason: 'Drive not connected for this user', url });
-            continue;
-          }
-          const access = await gmailSend.accessTokenFor(driveToken);
-          if (drvFile) {
-            const meta = await driveClient.getFile(access, drvFile[1]);
-            const got = await driveClient.downloadFile(access, meta);
-            const url = saveFile(got.buffer, got.name, 'Design document');
-            const slot = docSlotFor(label);
-            setDocSlot(slot, url);
-            results.push({ label, status: 'imported', files: 1,
-              as: slot ? `Product Documentation - ${label}` : 'PO file (slot already filled)' });
-          } else {
-            const listed = await driveClient.listFolder(access, drvFolder[1]);
-            if (!listed.length) { results.push({ label, status: 'empty', files: 0 }); continue; }
-            if (listed.length === 1) {
-              const got = await driveClient.downloadFile(access, listed[0]);
-              const url = saveFile(got.buffer, got.name, 'Design document');
-              const slot = docSlotFor(label);
-              setDocSlot(slot, url);
-              results.push({ label, status: 'imported', files: 1,
-                as: slot ? `Product Documentation - ${label}` : 'PO file (slot already filled)' });
-            } else {
-              // Several files: one archive, so the PO doesn't fill with loose parts.
-              const zip = archiver('zip', { zlib: { level: 9 } });
-              const chunks = [];
-              zip.on('data', (c) => chunks.push(c));
-              const done = new Promise((resolve, reject) => {
-                zip.on('end', resolve); zip.on('error', reject);
-              });
-              for (const f of listed) {
-                const got = await driveClient.downloadFile(access, f);
-                zip.append(got.buffer, { name: got.name });
-              }
-              zip.finalize();
-              await done;
-              const url = saveFile(Buffer.concat(chunks), `${label}.zip`, 'Design document');
-              const slot = docSlotFor(label);
-              setDocSlot(slot, url);
-              results.push({ label, status: 'imported', files: listed.length,
-                as: slot ? `Product Documentation - ${label} (zip)` : 'Design document (zip)' });
-            }
-          }
-        } else {
-          results.push({ label, status: 'skipped', reason: 'unrecognised link', url });
-        }
-      } catch (itemErr) {
-        // Per-item: one bad folder must not lose the rest.
-        results.push({ label, status: 'failed', error: itemErr.message || String(itemErr), url });
-      }
-    }
-
+    const run = await runHandoffImport(order, driveToken);
+    if (!run.ok) return res.status(404).json({ error: run.reason });
+    const results = run.results;
     res.json({
-      ok: true, poNumber, handoffTaskGid: handoff[1],
+      ok: true, poNumber, handoffTaskGid: run.handoffTaskGid,
       results,
       summary: {
         imported: results.filter((r) => r.status === 'imported').length,
@@ -2490,6 +2388,156 @@ app.delete('/api/message-templates/:id', requirePermission('settings:write'), (r
  * own string. The per-order wording comes from the editable template; the
  * supplier link is appended ONCE at the end however many orders there are.
  */
+/**
+ * Fetch a PO's handoff files onto it: Asana comment images become PO photos,
+ * Drive links become PO files.
+ *
+ * Callable both from the manual import button and automatically when a PO
+ * request is submitted. Per-item failures are collected rather than thrown -
+ * one unreachable Drive folder must not lose the sample photos that fetched
+ * fine.
+ */
+async function runHandoffImport(order, driveToken) {
+  const IMPORT_TAG = 'Asana handoff import';
+  const results = [];
+
+  const DOC_SLOTS = [
+    [/^manufacturing\s*drawing/i, 'manufacturingDrawing'],
+    [/^washing\s*tag/i, 'washingTagUrl'],
+    [/^(hang\s*tag|hangtag|swing\s*tag)/i, 'hangTagUrl'],
+    [/^(packaging|.*\bbag\b|.*\bcard\b|.*\bsleeve\b|.*\bbox\b|.*\binsert\b)/i, 'packagingUrl']
+  ];
+  const claimed = new Set();
+  const docSlotFor = (label) => {
+    const hit = DOC_SLOTS.find(([re]) => re.test(String(label || '').trim()));
+    if (!hit || claimed.has(hit[1])) return null;
+    claimed.add(hit[1]);
+    return hit[1];
+  };
+
+  const saveFile = (buffer, filename, category) => {
+    const dir = path.join(orderManagementStore.ORDER_FILES_DIR, order.id);
+    fs.mkdirSync(dir, { recursive: true });
+    const stored = `${Date.now()}_${filename.replace(/[^A-Za-z0-9._-]+/g, '_')}`;
+    fs.writeFileSync(path.join(dir, stored), buffer);
+    const url = `/order-management-files/${encodeURIComponent(order.id)}/${encodeURIComponent(stored)}`;
+    orderManagementStore.addFile(order.id, {
+      id: uuidv4(), category, originalName: filename, storedName: stored,
+      size: buffer.length, relatedTo: null, url,
+      uploadedAt: new Date().toISOString(), uploadedBy: IMPORT_TAG
+    }, IMPORT_TAG);
+    return url;
+  };
+  const setSlot = (slot, url) => {
+    if (slot && url) {
+      orderManagementStore.updateOrder(order.id,
+        { mainComponent: { [slot]: url } }, IMPORT_TAG, 'Handoff import');
+    }
+  };
+
+  const found = await discoverHandoffItems(order.asanaTaskGid);
+  if (!found.ok || !found.handoffTaskGid) {
+    return { ok: false, reason: 'no handoff task linked from Sample Link', results };
+  }
+
+  for (const it of found.items) {
+    if (it.source === 'none') { results.push({ label: it.label, status: 'skipped', reason: 'no link' }); continue; }
+    try {
+      if (it.source === 'asanaComment') {
+        const atts = await asanaClient.getCommentAttachments(it.comment[1], it.comment[2]);
+        let saved = 0; let firstUrl = null;
+        for (const a of atts) {
+          const got = await asanaClient.downloadAttachment(a);
+          if (!got) continue;
+          const u = saveFile(got.buffer, got.name, 'Style picture');
+          if (!firstUrl) firstUrl = u;
+          saved += 1;
+        }
+        if (firstUrl && !(orderManagementStore.getOrderById(order.id).mainComponent || {}).photoReference) {
+          setSlot('photoReference', firstUrl);
+        }
+        results.push({ label: it.label, status: saved ? 'imported' : 'empty', files: saved, as: 'Style picture' });
+      } else if (it.source === 'driveFolder' || it.source === 'driveFile') {
+        if (!driveToken) { results.push({ label: it.label, status: 'pending', reason: 'Drive not connected', url: it.url }); continue; }
+        const access = await gmailSend.accessTokenFor(driveToken);
+        if (it.drvFile) {
+          const meta = await driveClient.getFile(access, it.drvFile[1]);
+          const got = await driveClient.downloadFile(access, meta);
+          const url = saveFile(got.buffer, got.name, 'Design document');
+          const slot = docSlotFor(it.label);
+          setSlot(slot, url);
+          results.push({ label: it.label, status: 'imported', files: 1, as: slot ? `Product Documentation - ${it.label}` : 'PO file (slot already filled)' });
+        } else {
+          const listed = await driveClient.listFolder(access, it.drvFolder[1]);
+          if (!listed.length) { results.push({ label: it.label, status: 'empty', files: 0 }); continue; }
+          let url;
+          if (listed.length === 1) {
+            const got = await driveClient.downloadFile(access, listed[0]);
+            url = saveFile(got.buffer, got.name, 'Design document');
+          } else {
+            const zip = archiver('zip', { zlib: { level: 9 } });
+            const chunks = [];
+            zip.on('data', (c) => chunks.push(c));
+            const done = new Promise((resolve, reject) => { zip.on('end', resolve); zip.on('error', reject); });
+            for (const f of listed) {
+              const got = await driveClient.downloadFile(access, f);
+              zip.append(got.buffer, { name: got.name });
+            }
+            zip.finalize();
+            await done;
+            url = saveFile(Buffer.concat(chunks), `${it.label}.zip`, 'Design document');
+          }
+          const slot = docSlotFor(it.label);
+          setSlot(slot, url);
+          results.push({ label: it.label, status: 'imported', files: listed.length,
+            as: slot ? `Product Documentation - ${it.label}${listed.length > 1 ? ' (zip)' : ''}` : 'PO file (slot already filled)' });
+        }
+      } else {
+        results.push({ label: it.label, status: 'skipped', reason: 'unrecognised link', url: it.url });
+      }
+    } catch (itemErr) {
+      results.push({ label: it.label, status: 'failed', error: itemErr.message || String(itemErr), url: it.url });
+    }
+  }
+  return { ok: true, handoffTaskGid: found.handoffTaskGid, results };
+}
+
+/**
+ * Find the handoff items for an Asana task: follow Sample Link to the
+ * handoff task and classify each subtask's link.
+ *
+ * Shared by the preview, the manual import, and the New PO form's Sync
+ * button - three callers doing this separately would drift apart, which is
+ * exactly what happened with the dispatch message text earlier.
+ */
+async function discoverHandoffItems(taskGid) {
+  const task = await asanaClient.getTaskRaw(taskGid, 'name,custom_fields');
+  if (!task) return { ok: false, error: 'Asana returned no task' };
+  const sampleField = (task.custom_fields || []).find(
+    (f) => String(f.name || '').trim().toLowerCase() === 'sample link');
+  const sampleValue = sampleField ? (sampleField.text_value || sampleField.display_value || '') : '';
+  const handoff = String(sampleValue).match(/\/task\/(\d+)/);
+  if (!handoff) {
+    return { ok: true, taskName: task.name, sampleLink: sampleValue || null, handoffTaskGid: null, items: [] };
+  }
+  const subtasks = await asanaClient.getSubtasks(handoff[1]);
+  const items = subtasks.map((st) => {
+    const text = `${st.name || ''}\n${st.notes || ''}`;
+    const url = (text.match(/https?:\/\/[^\s)>\]]+/) || [])[0] || null;
+    const label = String(st.name || '').replace(/[:：]\s*$/, '').split(/[:：]/)[0].trim() || 'Untitled';
+    const comment = url && url.match(/\/task\/(\d+)\/comment\/(\d+)/);
+    const drvFolder = url && url.match(/drive\.google\.com\/drive\/(?:u\/\d+\/)?folders\/([A-Za-z0-9_-]+)/);
+    const drvFile = url && url.match(/drive\.google\.com\/file\/d\/([A-Za-z0-9_-]+)/);
+    let source = 'none';
+    if (comment) source = 'asanaComment';
+    else if (drvFolder) source = 'driveFolder';
+    else if (drvFile) source = 'driveFile';
+    else if (url) source = 'unknownUrl';
+    return { label, url, source, comment, drvFolder, drvFile };
+  });
+  return { ok: true, taskName: task.name, sampleLink: sampleValue, handoffTaskGid: handoff[1], items };
+}
+
 app.post('/api/order-management/dispatch-text', requirePermission('dispatch:send'), (req, res) => {
   const body = req.body || {};
   const items = Array.isArray(body.items) ? body.items : [];

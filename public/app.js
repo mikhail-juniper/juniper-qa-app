@@ -1078,6 +1078,12 @@ function attachNewPoHandlers() {
           filled.push(label);
         };
         // Taken from the Asana task name, which is "PONUMBER - Product Title".
+        /* Report what the handoff will bring across. Counts only - the
+         * files themselves are fetched on submit, once there's a PO to
+         * attach them to. */
+        if (body.handoff && body.handoff.willImport) {
+          filled.push(`${body.handoff.willImport} handoff file(s)`);
+        }
         setIf('productTitle', f.productTitle, 'Product title');
         setIf('sku', f.sku, 'SKU');
         setIf('orderQuantity', f.orderQuantity, 'Quantity');

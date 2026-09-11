@@ -4262,5 +4262,9 @@
   "statusSaveFailed": {
     "en": "Not saved - check your connection",
     "zh": "未保存，请检查网络"
+  },
+  "handoffWillImport": {
+    "en": "file(s) will be imported from the Asana handoff when you submit",
+    "zh": "提交后将从 Asana 交接导入文件"
   }
 }
