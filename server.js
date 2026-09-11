@@ -46,6 +46,7 @@ const wechatAuth = require('./lib/wechatAuth');
 const wecomAuth = require('./lib/wecomAuth');
 const wecomCallback = require('./lib/wecomCallback');
 const driveClient = require('./lib/driveClient');
+const componentDefinitions = require('./lib/componentDefinitionStore');
 const sharp = require('sharp');
 const AdmZip = require('adm-zip');
 const ASANA_FIELD_MAP_PATH = path.join(__dirname, 'config', 'asanaFieldMap.json');
@@ -2345,6 +2346,37 @@ app.get('/api/order-management/orders/:id/thumb', async (req, res) => {
   }
 });
 
+/**
+ * The component definition library: one row per real part, rather than one
+ * per part per PO. This is what the Components page should show when you
+ * want "what hang tags do we have", as opposed to "what's on order now".
+ */
+app.get('/api/component-definitions', (req, res) => {
+  const defs = componentDefinitions.listDefinitions({ sku: req.query.sku });
+  // How many POs currently carry each part, so a definition can be seen in
+  // context rather than as a bare spec.
+  const orders = orderManagementStore.listOrders();
+  const withUsage = defs.map((d) => {
+    const usedBy = orders.filter((o) => (o.accessories || []).some(
+      (a) => a.definitionId === d.id
+        || componentDefinitions.keyFor(o.mainComponent && o.mainComponent.sku, a.partName) === d.key));
+    return {
+      ...d,
+      poCount: usedBy.length,
+      poNumbers: usedBy.map((o) => o.poNumber),
+      productName: (usedBy[0] && usedBy[0].mainComponent && usedBy[0].mainComponent.name) || ''
+    };
+  });
+  res.json({ ok: true, definitions: withUsage });
+});
+
+app.patch('/api/component-definitions/:id', requirePermission('orders:write'), (req, res) => {
+  const updated = componentDefinitions.updateDefinition(
+    req.params.id, (req.body && req.body.patch) || {}, req.body && req.body.actor);
+  if (!updated) return res.status(404).json({ error: 'Definition not found' });
+  res.json({ ok: true, definition: updated });
+});
+
 app.get('/api/order-management/orders/:id/importable-images', (req, res) => {
   const order = orderManagementStore.getOrderById(req.params.id)
     || orderManagementStore.getOrderByPoNumber(req.params.id);
@@ -3721,6 +3753,42 @@ app.get('/api/backup/scheduled/:filename', (req, res) => {
   }
   res.download(filePath);
 });
+
+/**
+ * Build component definitions from the components already on POs.
+ *
+ * One-time, guarded by a marker: every existing hang tag, bag and card
+ * becomes a definition for its SKU, so the library starts populated instead
+ * of only learning from POs created after this change. Oldest PO first, so
+ * the earliest recorded spec wins and later POs only fill gaps.
+ */
+function migrateComponentDefinitions() {
+  const marker = path.join(submissionLog.DATA_DIR, '.component-definitions-migrated-v1');
+  if (fs.existsSync(marker)) return;
+  try {
+    const orders = orderManagementStore.listOrders()
+      .slice()
+      .sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+    let made = 0;
+    orders.forEach((o) => {
+      const sku = o.mainComponent && o.mainComponent.sku;
+      if (!sku) return;
+      (o.accessories || []).forEach((a) => {
+        if (!a || !a.partName) return;
+        const before = componentDefinitions.findFor(sku, a.partName);
+        componentDefinitions.upsertFromAccessory(sku, a, 'Migration');
+        if (!before) made += 1;
+      });
+    });
+    fs.mkdirSync(submissionLog.DATA_DIR, { recursive: true });
+    fs.writeFileSync(marker, new Date().toISOString());
+    if (made) console.log(`Component definitions: created ${made} from existing PO components.`);
+  } catch (err) {
+    console.error('Component definition migration failed:', err.message || err);
+  }
+}
+
+migrateComponentDefinitions();
 
 app.listen(PORT, () => {
   console.log(`Juniper QA/QC app listening on port ${PORT}`);
