@@ -4095,8 +4095,10 @@ async function openBatchSendPanel() {
             </table>
           </div>
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
-            <button type="button" class="btn btn-primary batch-copy" data-group="${gi}" style="flex:none;width:auto;">${i18('batchCopyImage', 'Copy image for this supplier')}</button>
-            <button type="button" class="btn btn-secondary batch-sent" data-group="${gi}" style="flex:none;width:auto;">${i18('btnMarkSent', 'Mark selected as sent')}</button>
+            <button type="button" class="btn btn-primary batch-copy" data-group="${gi}" style="flex:none;width:auto;">${i18('btnCopyPoImage', 'Copy PO Image')}</button>
+            <button type="button" class="btn btn-secondary batch-info" data-group="${gi}" style="flex:none;width:auto;">${i18('btnCopyPoInfo', 'Copy PO Information')}</button>
+            <button type="button" class="btn btn-secondary batch-doc" data-group="${gi}" style="flex:none;width:auto;">${i18('btnShareSupplierDoc', 'Share Supplier Doc')}</button>
+            <button type="button" class="btn btn-secondary batch-sent" data-group="${gi}" style="flex:none;width:auto;">${i18('btnMarkAsSent', 'Mark as sent')}</button>
           </div>
         </div>
       `).join('') : `<div class="om-empty">${i18('batchNothing', 'Everything has been sent.')}</div>`}
@@ -4145,8 +4147,8 @@ async function openBatchSendPanel() {
           .join('\n');
         const blob = await buildDispatchImage(rows, { title: data.suppliers[gi].supplierName });
         try {
-          await copyDispatchImage(blob, notes);
-          showToast(i18t('imageCopied', 'Order image copied - paste into WeChat'));
+          await copyDispatchImage(blob, null);
+          showToast(i18t('poImageCopied', 'PO image copied - paste into WeChat'));
         } catch (clipErr) {
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
@@ -4157,6 +4159,45 @@ async function openBatchSendPanel() {
         }
       } catch (e) { showToast(e.message, true); }
       finally { btn.disabled = false; }
+    });
+  });
+
+  /* Copy PO Information: the written details as text, with a chance to add
+   * production notes first. Separate from the image because WeChat pastes
+   * one or the other, never both. */
+  panel.querySelectorAll('.batch-info').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const gi = Number(btn.dataset.group);
+      const items = selected(gi);
+      if (!items.length) return showToast(i18t('batchSelectSome', 'Select at least one item first'), true);
+      const extra = window.prompt(i18t('promptExtraNotes', 'Any additional production notes to include?'), '');
+      if (extra === null) return;                       // cancelled
+      const lines = [`${data.suppliers[gi].supplierName}`, ''];
+      items.forEach((it) => {
+        lines.push(`${it.poNumber} - ${it.componentName}`);
+        if (it.row.sku) lines.push(`  SKU: ${it.row.sku}`);
+        if (it.row.quantity != null) lines.push(`  Qty: ${Number(it.row.quantity).toLocaleString()}`);
+        if (it.row.deliveryDate) lines.push(`  Delivery: ${fmtDate(it.row.deliveryDate)}`);
+        if (it.row.productionNotes) lines.push(`  Notes: ${it.row.productionNotes}`);
+        lines.push('');
+      });
+      if (extra.trim()) lines.push(extra.trim(), '');
+      if (data.suppliers[gi].accessLink) lines.push(data.suppliers[gi].accessLink);
+      try {
+        await navigator.clipboard.writeText(lines.join('\n').trim());
+        showToast(i18t('poInfoCopied', 'Order information copied'));
+      } catch (e) { showToast(e.message, true); }
+    });
+  });
+
+  panel.querySelectorAll('.batch-doc').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const link = data.suppliers[Number(btn.dataset.group)].accessLink;
+      if (!link) return showToast(i18t('noSupplierDoc', 'This supplier has no access link yet.'), true);
+      try {
+        await navigator.clipboard.writeText(link);
+        showToast(i18t('supplierDocCopied', 'Supplier page link copied'));
+      } catch (e) { showToast(e.message, true); }
     });
   });
 
@@ -4315,7 +4356,9 @@ async function openDispatchDialog(orderId, targetKey, onSent) {
       <input type="text" id="dispSubject" value="${escapeHtml(msg.subject)}" style="margin-bottom:10px;" />
       <textarea id="dispBody" rows="16" style="width:100%;font-family:inherit;font-size:13px;line-height:1.5;">${escapeHtml(msg.body)}</textarea>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
-        <button type="button" class="btn btn-primary" id="dispCopyImage" style="flex:none;width:auto;">${i18('btnCopyOrderInfo', 'Copy order information')}</button>
+        <button type="button" class="btn btn-primary" id="dispCopyImage" style="flex:none;width:auto;">${i18('btnCopyPoImage', 'Copy PO Image')}</button>
+        <button type="button" class="btn btn-secondary" id="dispCopyInfo" style="flex:none;width:auto;">${i18('btnCopyPoInfo', 'Copy PO Information')}</button>
+        <button type="button" class="btn btn-secondary" id="dispShareDoc" style="flex:none;width:auto;">${i18('btnShareSupplierDoc', 'Share Supplier Doc')}</button>
         <button type="button" class="btn btn-secondary" id="dispSend" style="flex:none;width:auto;">${i18('btnMarkAsSent', 'Mark as sent')}</button>
       </div>
     </div>
@@ -4406,16 +4449,10 @@ async function openDispatchDialog(orderId, targetKey, onSent) {
         orderDate: fmtDate(data.order && data.order.orderDate),
         deliveryDate: fmtDate(data.order && data.order.deliveryDate)
       }];
-      // The edited message from the box above, so anything typed there is
-      // what gets sent - drawn into the image so one paste carries it.
-      const messageText = document.getElementById('dispBody').value.trim();
-      const blob = await buildDispatchImage(rows, {
-        title: data.poNumber || '',
-        caption: messageText
-      });
+      const blob = await buildDispatchImage(rows, { title: data.poNumber || '' });
       try {
-        await copyDispatchImage(blob, messageText);
-        showToast(i18t('orderInfoCopied', 'Copied - paste into WeChat'));
+        await copyDispatchImage(blob, null);
+        showToast(i18t('poImageCopied', 'PO image copied - paste into WeChat'));
       } catch (clipErr) {
         // Some browsers refuse image writes; offer the file instead of
         // failing outright so the send isn't blocked.
@@ -4431,6 +4468,29 @@ async function openDispatchDialog(orderId, targetKey, onSent) {
     } finally {
       btn.disabled = false;
     }
+  });
+
+  /* Copy PO Information: the message text, with a chance to append notes
+   * first. Kept separate from the image because WeChat pastes one flavour. */
+  document.getElementById('dispCopyInfo').addEventListener('click', async () => {
+    const extra = window.prompt(i18t('promptExtraNotes', 'Any additional production notes to include?'), '');
+    if (extra === null) return;
+    const body = document.getElementById('dispBody').value.trim();
+    const text = extra.trim() ? `${body}\n\n${extra.trim()}` : body;
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast(i18t('poInfoCopied', 'Order information copied'));
+    } catch (e) { showToast(e.message, true); }
+  });
+
+  document.getElementById('dispShareDoc').addEventListener('click', async () => {
+    // The link lives on the dispatch target, alongside the contact details.
+    const link = t && t.accessLink;
+    if (!link) return showToast(i18t('noSupplierDoc', 'This supplier has no access link yet.'), true);
+    try {
+      await navigator.clipboard.writeText(link);
+      showToast(i18t('supplierDocCopied', 'Supplier page link copied'));
+    } catch (e) { showToast(e.message, true); }
   });
 
   document.getElementById('dispSend').addEventListener('click', async () => {

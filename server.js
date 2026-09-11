@@ -2009,9 +2009,19 @@ app.get('/api/order-management/orders/:id/dispatch-message/:targetKey', (req, re
   if (!order) return res.status(404).json({ error: 'Order not found' });
   const target = poDispatch.buildTargets(order).find((t) => String(t.key) === String(req.params.targetKey));
   if (!target) return res.status(404).json({ error: 'Component not found on this order' });
+  /* The supplier's access link travels with the target so the dialog's
+   * "Share Supplier Doc" button has something to copy. ensureToken creates
+   * one on demand - the point of the link is that it's always shareable. */
+  let accessLink = null;
+  if (target.supplierId) {
+    const sup = supplierAccess.ensureToken(target.supplierId);
+    if (sup) accessLink = supplierAccess.linkFor(`${req.protocol}://${req.get('host')}`, sup);
+  }
   res.json({
-    ok: true, target, message: poDispatch.buildMessage(order, target),
-    // Row data for the "copy order image" table.
+    ok: true,
+    target: { ...target, accessLink },
+    message: poDispatch.buildMessage(order, target),
+    // Row data for the "copy PO image" table.
     order: dispatchImageRow(order, target), poNumber: order.poNumber
   });
 });

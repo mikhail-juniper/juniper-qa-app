@@ -4122,5 +4122,37 @@
   "orderInfoCopied": {
     "en": "Copied - paste into WeChat",
     "zh": "已复制，请粘贴到微信"
+  },
+  "btnCopyPoImage": {
+    "en": "Copy PO Image",
+    "zh": "复制订单图片"
+  },
+  "btnCopyPoInfo": {
+    "en": "Copy PO Information",
+    "zh": "复制订单信息"
+  },
+  "btnShareSupplierDoc": {
+    "en": "Share Supplier Doc",
+    "zh": "分享供应商页面"
+  },
+  "promptExtraNotes": {
+    "en": "Any additional production notes to include? (leave blank for none)",
+    "zh": "需要补充的生产备注？（如无请留空）"
+  },
+  "poInfoCopied": {
+    "en": "Order information copied",
+    "zh": "订单信息已复制"
+  },
+  "poImageCopied": {
+    "en": "PO image copied - paste into WeChat",
+    "zh": "订单图片已复制，请粘贴到微信"
+  },
+  "supplierDocCopied": {
+    "en": "Supplier page link copied",
+    "zh": "供应商页面链接已复制"
+  },
+  "noSupplierDoc": {
+    "en": "This supplier has no access link yet - create one from the Suppliers page.",
+    "zh": "该供应商尚无访问链接，请在供应商页面创建。"
   }
 }
