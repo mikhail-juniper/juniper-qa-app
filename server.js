@@ -321,7 +321,7 @@ function isDomainVerificationFile(pathname) {
 
 const AUTH_ALLOWLIST = new Set([
   '/login.html', '/api/login', '/api/login-options', '/favicon.ico',
-  '/auth/google', '/auth/google/callback',
+  '/auth/google', '/auth/google/callback', '/auth/google/gmail', '/auth/google/drive',
   '/auth/wechat', '/auth/wechat/callback',
   '/auth/wecom', '/auth/wecom/callback',
   '/wecom/callback'
@@ -339,6 +339,7 @@ const GOOGLE_STATE_COOKIE = 'juniper_gstate';
 // Marks a callback as coming from the "Connect Gmail" flow rather than a
 // plain sign-in, so we know to keep the refresh token and where to return.
 const GMAIL_INTENT_COOKIE = 'juniper_gmail_intent';
+const DRIVE_INTENT_COOKIE = 'juniper_drive_intent';
 
 app.get('/auth/google', (req, res) => {
   if (!googleAuth.isConfigured()) return res.redirect('/login.html?error=google_not_configured');
@@ -346,6 +347,25 @@ app.get('/auth/google', (req, res) => {
   // Short-lived cookie ties the callback to this browser (CSRF protection).
   res.cookie(GOOGLE_STATE_COOKIE, state, { httpOnly: true, sameSite: 'lax', maxAge: 10 * 60 * 1000 });
   res.redirect(googleAuth.authUrl(req, state));
+});
+
+/**
+ * Connect Drive - and, just as usefully, find out whether this Workspace
+ * permits it at all.
+ *
+ * drive.readonly is a RESTRICTED scope. Internal apps are exempt from
+ * Google's verification, but a Workspace admin can still block restricted
+ * scopes under Security > API controls. There's no API to ask whether
+ * that's configured, so the only reliable test is to attempt consent: if the
+ * domain blocks it, Google returns admin_policy_enforced and the callback
+ * reports it plainly instead of a generic failure.
+ */
+app.get('/auth/google/drive', (req, res) => {
+  if (!googleAuth.isConfigured()) return res.redirect('/login.html?error=google_not_configured');
+  const state = googleAuth.makeState();
+  res.cookie(GOOGLE_STATE_COOKIE, state, { httpOnly: true, sameSite: 'lax', maxAge: 10 * 60 * 1000 });
+  res.cookie(DRIVE_INTENT_COOKIE, '1', { httpOnly: true, sameSite: 'lax', maxAge: 10 * 60 * 1000 });
+  res.redirect(googleAuth.authUrl(req, state, [googleAuth.DRIVE_READONLY_SCOPE]));
 });
 
 // Connect Gmail: same OAuth flow, but additionally asking for send access.
@@ -362,16 +382,35 @@ app.get('/auth/google/gmail', (req, res) => {
 app.get('/auth/google/callback', async (req, res) => {
   const fail = (msg) => res.redirect(`/login.html?error=${encodeURIComponent(msg)}`);
   if (!googleAuth.isConfigured()) return fail('Google sign-in is not configured.');
+  /* An error param means consent didn't happen, so read it before the state
+   * check - otherwise a domain-level block reports as "sign-in expired",
+   * which sends you looking in entirely the wrong place. */
+  if (req.query.error) {
+    res.clearCookie(GOOGLE_STATE_COOKIE);
+    res.clearCookie(GMAIL_INTENT_COOKIE);
+    res.clearCookie(DRIVE_INTENT_COOKIE);
+    const code = String(req.query.error);
+    console.log(`Google consent returned error=${code}`);
+    if (code === 'admin_policy_enforced') {
+      return fail('Your Google Workspace admin blocks this permission for the domain. '
+        + 'An admin must allow this app under Security > API controls.');
+    }
+    if (code === 'access_denied') return fail('Google sign-in was cancelled.');
+    return fail(`Google sign-in failed: ${code}`);
+  }
+
   const expected = parseCookies(req)[GOOGLE_STATE_COOKIE];
   res.clearCookie(GOOGLE_STATE_COOKIE);
   if (!req.query.state || !expected || req.query.state !== expected) {
     return fail('Sign-in expired or was interrupted. Please try again.');
   }
-  if (req.query.error) return fail('Google sign-in was cancelled.');
   if (!req.query.code) return fail('Google did not return an authorization code.');
 
   const gmailIntent = parseCookies(req)[GMAIL_INTENT_COOKIE] === '1';
+  const driveIntent = parseCookies(req)[DRIVE_INTENT_COOKIE] === '1';
   res.clearCookie(GMAIL_INTENT_COOKIE);
+  res.clearCookie(DRIVE_INTENT_COOKIE);
+
   try {
     const { profile, tokens } = await googleAuth.completeSignIn(req, req.query.code);
 
@@ -411,6 +450,13 @@ app.get('/auth/google/callback', async (req, res) => {
     }
     userStore.recordLogin(user.id);
     issueSession(res, { kind: 'user', userId: user.id });
+    if (driveIntent) {
+      if (tokens && tokens.refresh_token) {
+        userStore.updateUser(user.id, { driveRefreshToken: gmailSend.encryptToken(tokens.refresh_token) });
+      }
+      const ok = !!(tokens && tokens.refresh_token);
+      return res.redirect(`/order-management.html?drive=${ok ? 'connected' : 'failed'}`);
+    }
     if (gmailIntent) {
       const ok = !!(tokens && tokens.refresh_token);
       return res.redirect(`/order-management.html?gmail=${ok ? 'connected' : 'failed'}`);
@@ -840,6 +886,43 @@ app.delete('/api/order-management/orders/:id/approval-link', requirePermission('
   const updated = supplierAccess.revokeApprovalToken(orderManagementStore, req.params.id, req.user && req.user.name);
   if (!updated) return res.status(404).json({ error: 'Order not found' });
   res.json({ ok: true });
+});
+
+/**
+ * Drive connection status, and a live read test.
+ *
+ * Pass ?folderId= to actually list a folder - proving not just that consent
+ * was granted but that the app can read the folders the handoff links point
+ * at, which is the thing that actually matters.
+ */
+app.get('/api/drive/status', async (req, res) => {
+  const user = req.user && req.user.id ? userStore.getUser(req.user.id) : null;
+  const connected = !!(user && user.driveRefreshToken);
+  const out = {
+    ok: true,
+    available: googleAuth.isConfigured(),
+    connected,
+    canConnect: !!(user && googleAuth.isConfigured()),
+    email: (user && user.email) || null
+  };
+  const folderId = String(req.query.folderId || '').trim();
+  if (connected && folderId) {
+    try {
+      const token = await gmailSend.accessTokenFor(gmailSend.decryptToken(user.driveRefreshToken));
+      const q = encodeURIComponent(`'${folderId}' in parents and trashed = false`);
+      const url = `https://www.googleapis.com/drive/v3/files?q=${q}`
+        + '&fields=files(id,name,mimeType,size)&pageSize=50&supportsAllDrives=true'
+        + '&includeItemsFromAllDrives=true';
+      const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      const body = await r.json().catch(() => ({}));
+      out.folderTest = r.ok
+        ? { ok: true, fileCount: (body.files || []).length, files: (body.files || []).map((f) => f.name) }
+        : { ok: false, status: r.status, error: (body.error && body.error.message) || 'unknown' };
+    } catch (err) {
+      out.folderTest = { ok: false, error: err.message || String(err) };
+    }
+  }
+  res.json(out);
 });
 
 // Whether the signed-in user can send email from inside the app.
