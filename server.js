@@ -1825,31 +1825,27 @@ function buildAsanaExtras(order, req) {
     const base = req ? `${req.protocol}://${req.get('host')}` : (process.env.PUBLIC_BASE_URL || '');
     if (base) extras.approvalLink = `${base}/approval.html?po=${encodeURIComponent(order.id)}`;
 
-    // Most recent bulk ("production") report for this PO drives the
-    // inspection fields. Proposed % is what the app recommended; QA Check %
-    // is what the inspector actually checked.
+    // Deep link to this PO in the ERP, for anyone working from Asana.
+    if (base) extras.poLink = `${base}/order-management.html?po=${encodeURIComponent(order.id)}`;
+
+    /* Most recent bulk ("production") report drives Inspection Result.
+     *
+     * This previously sent the report's PDF URL into that field - but it's a
+     * dropdown of Pass / Rework / Exception Approved / Reinspect & Pass, so
+     * every write was silently rejected. It now sends the verdict. Proposed
+     * Inspection % and QA Check Percentage were removed entirely: those
+     * fields are being retired in Asana and their options never matched the
+     * numbers we produced. */
     const subs = (submissionLog.findPriorReportsByPoNumber(order.poNumber) || [])
       .filter((sub) => sub.qaType === 'production')
       .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
     const bulk = subs[0];
     if (bulk) {
-      const poQty = Number(order.mainComponent && order.mainComponent.purchaseQuantity) || null;
-      const checked = Number(bulk.actualUnitsChecked) || null;
-      if (poQty && checked) extras.qaCheckPercentage = Math.round((checked / poQty) * 1000) / 10;
-      const rec = bulk.recommendation;
-      if (rec && rec.pointCheck != null) {
-        // pointCheck is the recommended sampling figure (e.g. "10%" or a
-        // number) - send the numeric part so Asana's number field accepts it.
-        const num = typeof rec.pointCheck === 'number'
-          ? rec.pointCheck
-          : parseFloat(String(rec.pointCheck).replace('%', ''));
-        if (!isNaN(num)) extras.proposedInspectionPct = num;
-      }
-      if (bulk.pdfFilename) {
-        extras.inspectionResult = base
-          ? `${base}/submissions/${encodeURIComponent(bulk.pdfFilename)}`
-          : bulk.pdfFilename;
-      }
+      // Stored as overallResult ('pass' | 'fail') by the report submission.
+      const verdict = String(bulk.overallResult || '').trim().toLowerCase();
+      if (verdict === 'pass' || verdict === 'passed') extras.inspectionResult = 'Pass';
+      else if (verdict === 'fail' || verdict === 'failed') extras.inspectionResult = 'Rework';
+      // Anything else (or no verdict) is left alone rather than guessed at.
     }
   } catch (err) {
     // Best-effort: never let this block the caller.
