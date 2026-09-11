@@ -1733,30 +1733,13 @@ app.post('/api/purchase-orders', requirePermission('orders:write'), (req, res) =
        * items are recorded as pending and the Asana photos still import. */
       (async () => {
         try {
-          /* Drive access is granted per user, but a PO can be submitted
-           * from a shared-password session that has no user at all - in
-           * which case every Drive item silently came back "pending" while
-           * the Asana photos imported, which looks like a half-broken
-           * import for no visible reason.
-           *
-           * So: use the submitter's grant when there is one, otherwise fall
-           * back to any account that has connected Drive. These are company
-           * files in a company Drive, and the alternative is the import
-           * quietly not working. Whose grant was used is logged, because
-           * acting as someone else shouldn't be invisible. */
-          let user = req.user && req.user.id ? userStore.getUser(req.user.id) : null;
-          if (!user || !user.driveRefreshToken) {
-            const donor = userStore.listUsers().find((u) => u.driveRefreshToken);
-            if (donor) {
-              console.log(`Handoff import: session has no Drive grant, using ${donor.email}'s.`);
-              user = donor;
-            }
-          }
-          const driveToken = user && user.driveRefreshToken
-            ? gmailSend.decryptToken(user.driveRefreshToken) : null;
+          const drive = resolveDriveToken(req);
+          const driveToken = drive.token;
+          if (!driveToken) console.log(`Handoff import for ${entry.poNumber}: no Drive access - ${drive.reason}`);
+          else if (drive.borrowed) console.log(`Handoff import for ${entry.poNumber}: using ${drive.via}'s Drive grant.`);
           const fresh = orderManagementStore.getOrderById(id);
           if (!fresh) return;
-          const run = await runHandoffImport(fresh, driveToken);
+          const run = await runHandoffImport(fresh, driveToken, drive);
           if (run.ok) {
             const done = run.results.filter((r) => r.status === 'imported').length;
             const summary = run.results
@@ -2092,10 +2075,10 @@ app.post('/api/asana/handoff-import', requirePermission('orders:write'), async (
   if (!order) return res.status(404).json({ error: 'PO not found in the ERP' });
   if (!order.asanaTaskGid) return res.status(404).json({ error: 'This PO has no linked Asana task' });
 
-  // Drive is per-user, so the import runs as whoever triggered it.
-  const user = req.user && req.user.id ? userStore.getUser(req.user.id) : null;
-  const driveToken = user && user.driveRefreshToken
-    ? gmailSend.decryptToken(user.driveRefreshToken) : null;
+  const drive = resolveDriveToken(req);
+  const driveToken = drive.token;
+  if (!driveToken) console.log(`Handoff import for ${poNumber}: no Drive access - ${drive.reason}`);
+  else if (drive.borrowed) console.log(`Handoff import for ${poNumber}: using ${drive.via}'s Drive grant.`);
 
   const IMPORT_TAG = 'Asana handoff import';
   const previous = (order.files || []).filter((f) => f.uploadedBy === IMPORT_TAG);
@@ -2117,9 +2100,14 @@ app.post('/api/asana/handoff-import', requirePermission('orders:write'), async (
   }
 
   try {
-    const run = await runHandoffImport(order, driveToken);
+    const run = await runHandoffImport(order, driveToken, drive);
     if (!run.ok) return res.status(404).json({ error: run.reason });
     const results = run.results;
+    // Leave a trace on the PO, same as the automatic path.
+    const okCount = results.filter((r) => r.status === 'imported').length;
+    orderManagementStore.logNote(order.id, IMPORT_TAG,
+      `${okCount} of ${results.length} item(s) imported. `
+      + results.map((r) => `${r.label}: ${r.status}${r.reason ? ` (${r.reason})` : ''}`).join('; '));
     res.json({
       ok: true, poNumber, handoffTaskGid: run.handoffTaskGid,
       results,
@@ -2451,6 +2439,41 @@ app.delete('/api/message-templates/:id', requirePermission('settings:write'), (r
  * supplier link is appended ONCE at the end however many orders there are.
  */
 /**
+ * Resolve a Drive token for a handoff import, and explain any failure.
+ *
+ * Previously both paths just produced null and reported "Drive not
+ * connected", which covers three quite different situations - no signed-in
+ * user, a user who never connected Drive, and a stored grant that no longer
+ * works. Telling them apart is the difference between a two-second fix and
+ * an hour of guessing.
+ */
+function resolveDriveToken(req) {
+  const sessionUser = req.user && req.user.id ? userStore.getUser(req.user.id) : null;
+  if (sessionUser && sessionUser.driveRefreshToken) {
+    return { token: gmailSend.decryptToken(sessionUser.driveRefreshToken), via: sessionUser.email };
+  }
+  /* Fall back to any account that has connected Drive. A PO can be
+   * submitted from a shared-password session with no user at all, and these
+   * are company files in a company Drive - the alternative is the import
+   * silently half-working. Whose grant was used is reported, because acting
+   * as someone else shouldn't be invisible. */
+  const donor = userStore.listUsers().find((u) => u.driveRefreshToken);
+  if (donor) {
+    return {
+      token: gmailSend.decryptToken(donor.driveRefreshToken),
+      via: donor.email,
+      borrowed: !!sessionUser
+    };
+  }
+  return {
+    token: null,
+    reason: sessionUser
+      ? `${sessionUser.email} has not connected Drive, and no other account has either`
+      : 'this session has no signed-in user, and no account has connected Drive'
+  };
+}
+
+/**
  * Fetch a PO's handoff files onto it: Asana comment images become PO photos,
  * Drive links become PO files.
  *
@@ -2459,7 +2482,7 @@ app.delete('/api/message-templates/:id', requirePermission('settings:write'), (r
  * one unreachable Drive folder must not lose the sample photos that fetched
  * fine.
  */
-async function runHandoffImport(order, driveToken) {
+async function runHandoffImport(order, driveToken, drive) {
   const IMPORT_TAG = 'Asana handoff import';
   const results = [];
 
@@ -2520,7 +2543,11 @@ async function runHandoffImport(order, driveToken) {
         }
         results.push({ label: it.label, status: saved ? 'imported' : 'empty', files: saved, as: 'Style picture' });
       } else if (it.source === 'driveFolder' || it.source === 'driveFile') {
-        if (!driveToken) { results.push({ label: it.label, status: 'pending', reason: 'Drive not connected', url: it.url }); continue; }
+        if (!driveToken) {
+          results.push({ label: it.label, status: 'pending',
+            reason: (drive && drive.reason) || 'Drive not connected', url: it.url });
+          continue;
+        }
         const access = await gmailSend.accessTokenFor(driveToken);
         if (it.drvFile) {
           const meta = await driveClient.getFile(access, it.drvFile[1]);
