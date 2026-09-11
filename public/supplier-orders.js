@@ -216,6 +216,45 @@ function rowHtml(o, compCols) {
   `;
 }
 
+/**
+ * The supplier page is grouped by manufacturing stage, matching the internal
+ * Order Management page - so "In Production" means the same thing to the
+ * factory as it does to us.
+ */
+const SUPPLIER_GROUPS = [
+  { key: 'requests', labelKey: 'viewPoRequests', label: 'PO Requests',
+    match: (o) => o.status === 'New Request' },
+  { key: 'production', labelKey: 'groupInProduction', label: 'In Production',
+    match: (o) => o.status !== 'New Request' && o.status !== 'Completed' },
+  { key: 'completed', labelKey: 'groupCompleted', label: 'Completed',
+    match: (o) => o.status === 'Completed' }
+];
+
+/** Shared header row, so all three stage tables have identical columns. */
+function tableHeadHtml(compCols) {
+  return `
+    <thead><tr>
+      ${[
+        i18('supPhoto', 'Photo'),
+        i18('fldProductName', 'Product Name'),
+        i18('fldSku', 'SKU'),
+        i18('thPoNumber', 'PO Number'),
+        i18('thStatus', 'Status'),
+        i18('supQuantity', 'Quantity'),
+        i18('supOrderDate', 'Order Date'),
+        i18('fldRequiredManufacturerDelivery', 'Required Manufacturer Delivery Date'),
+        i18('supActualShipDate', 'Actual Ship Date'),
+        i18('supPreProdSample', 'Pre-Production Sample'),
+        i18('supBulkSample', 'Bulk Sample'),
+        i18('fldProductionNotes', 'Production Notes'),
+        i18('supManufacturingProgress', 'Manufacturing Progress'),
+        i18('fldWarehouseAddress', 'Warehouse Address'),
+        ...compCols.map((n) => escapeHtml(n)),
+        i18('supWashingTag', 'Washing Tag')
+      ].map((label) => `<th><span class="sup-th">${label}</span></th>`).join('')}
+    </tr></thead>`;
+}
+
 function drawList() {
   const host = document.getElementById('supListHost');
   const val = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
@@ -240,40 +279,29 @@ function drawList() {
     return;
   }
 
-  // Component columns depend on what's on screen, so they're computed from
-  // the filtered set rather than every order the supplier has.
+  /* Columns are computed across every visible order, not per section, so
+   * the three tables line up with each other. */
   const compCols = componentColumns(shown);
-  host.innerHTML = `
-    <div class="om-category-tile">
-      <div class="om-table-wrap">
-        <table class="om-table sup-table">
-          <thead><tr>
-            ${[
-              i18('supPhoto', 'Photo'),
-              i18('fldProductName', 'Product Name'),
-              i18('fldSku', 'SKU'),
-              i18('thPoNumber', 'PO Number'),
-              i18('thStatus', 'Status'),
-              i18('supQuantity', 'Quantity'),
-              i18('supOrderDate', 'Order Date'),
-              i18('fldRequiredManufacturerDelivery', 'Required Manufacturer Delivery Date'),
-              i18('supActualShipDate', 'Actual Ship Date'),
-              i18('supPreProdSample', 'Pre-Production Sample'),
-              i18('supBulkSample', 'Bulk Sample'),
-              i18('fldProductionNotes', 'Production Notes'),
-              i18('supManufacturingProgress', 'Manufacturing Progress'),
-              i18('fldWarehouseAddress', 'Warehouse Address'),
-              ...compCols.map((n) => escapeHtml(n)),
-              i18('supWashingTag', 'Washing Tag')
-            ].map((label) => `<th><span class="sup-th">${label}</span></th>`).join('')}
-          </tr></thead>
-          <tbody>
-            ${shown.map((o) => rowHtml(o, compCols)).join('')}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  `;
+
+  host.innerHTML = SUPPLIER_GROUPS.map((g) => {
+    const rows = shown.filter(g.match);
+    return `
+      <div class="om-category-tile" style="margin-bottom:22px;">
+        <div class="om-category-tile-header">
+          <span>${i18(g.labelKey, g.label)}</span>
+          <span class="om-subtab-count" style="font-size:15px;">${rows.length}</span>
+        </div>
+        ${rows.length ? `
+          <div class="om-table-wrap">
+            <table class="om-table sup-table">
+              ${tableHeadHtml(compCols)}
+              <tbody>${rows.map((o) => rowHtml(o, compCols)).join('')}</tbody>
+            </table>
+          </div>`
+        : `<div class="om-empty" style="padding:18px;">${i18('supGroupNone', 'Nothing in this stage.')}</div>`}
+      </div>`;
+  }).join('');
+
   host.querySelectorAll('tbody tr[data-id]').forEach((tr) => {
     tr.addEventListener('click', (e) => {
       // Editing a cell shouldn't also open the detail panel over the top.

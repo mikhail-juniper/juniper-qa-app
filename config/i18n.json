@@ -4166,5 +4166,9 @@
   "btnOk": {
     "en": "OK",
     "zh": "确定"
+  },
+  "supGroupNone": {
+    "en": "Nothing in this stage.",
+    "zh": "此阶段暂无订单。"
   }
 }

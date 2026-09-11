@@ -2020,7 +2020,17 @@ app.get('/api/order-management/orders/:id/dispatch-message/:targetKey', (req, re
   res.json({
     ok: true,
     target: { ...target, accessLink },
-    message: poDispatch.buildMessage(order, target),
+    /* Rendered from the editable default template so the wording can be
+     * changed in Settings. Falls back to the built-in message only if no
+     * template exists at all. */
+    message: (() => {
+      const tpl = messageTemplateStore.getDefaultTemplate();
+      if (!tpl) return poDispatch.buildMessage(order, target, accessLink);
+      const lang = req.query.lang === 'en' ? 'en' : 'zh';
+      return messageTemplateStore.render(
+        tpl, lang,
+        poDispatch.templateValues(order, target, accessLink, resolveSender(req, req.query)));
+    })(),
     // Row data for the "copy PO image" table.
     order: dispatchImageRow(order, target), poNumber: order.poNumber
   });
