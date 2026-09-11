@@ -5126,6 +5126,14 @@ function isDisplayableImage(nameOrUrl) {
 // elsewhere. Used for the several Product Documentation fields that are
 // uploads rather than typed values (Manufacturing Drawing, Washing Tag,
 // Packaging, etc).
+/** Preview URL for a file stored on this order, or null. */
+function previewUrlFor(currentUrl) {
+  // /order-management-files/<orderId>/<storedName>
+  const m = String(currentUrl || '').match(/^\/order-management-files\/([^/]+)\/([^/?#]+)/);
+  if (!m) return null;
+  return `/api/order-management/orders/${m[1]}/thumb?file=${m[2]}`;
+}
+
 function uploadFieldHtml(fieldId, label, currentUrl, isImage) {
   let preview;
   /* An image-type field may be holding something that isn't an image at
@@ -5133,9 +5141,21 @@ function uploadFieldHtml(fieldId, label, currentUrl, isImage) {
    * and only show a thumbnail for types a browser can actually render. */
   const showAsImage = isImage && isDisplayableImage(currentUrl);
   if (currentUrl) {
+    /* A PDF or .ai now previews as its rendered first page, with the link
+     * kept underneath - the point is to see the artwork without opening it,
+     * which is why people were screenshotting these by hand. onerror falls
+     * back to the plain link if the render didn't work. */
+    const pv = showAsImage ? null : previewUrlFor(currentUrl);
     preview = showAsImage
       ? `<img id="${fieldId}Preview" class="om-upload-preview" src="${escapeHtml(currentUrl)}" alt="" title="Click to view larger" />`
-      : `<a id="${fieldId}Preview" href="${escapeHtml(currentUrl)}" target="_blank" rel="noopener" style="font-size:12px;">View file</a>`;
+      : pv
+        ? `<span class="om-doc-preview">
+             <img class="om-upload-preview" src="${escapeHtml(pv)}" alt=""
+               title="First page - click to open the file"
+               onerror="this.style.display='none';" />
+             <a id="${fieldId}Preview" href="${escapeHtml(currentUrl)}" target="_blank" rel="noopener" style="font-size:12px;">View file</a>
+           </span>`
+        : `<a id="${fieldId}Preview" href="${escapeHtml(currentUrl)}" target="_blank" rel="noopener" style="font-size:12px;">View file</a>`;
   } else if (isImage) {
     // Reserved, empty slot rather than nothing - keeps the row's height
     // stable and shows where the thumbnail will land once a file's chosen.

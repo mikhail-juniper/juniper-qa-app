@@ -47,6 +47,7 @@ const wecomAuth = require('./lib/wecomAuth');
 const wecomCallback = require('./lib/wecomCallback');
 const os = require('os');
 const driveClient = require('./lib/driveClient');
+const filePreview = require('./lib/filePreview');
 const componentDefinitions = require('./lib/componentDefinitionStore');
 const sharp = require('sharp');
 const AdmZip = require('adm-zip');
@@ -2349,7 +2350,25 @@ app.get('/api/order-management/orders/:id/thumb', async (req, res) => {
     const cached = path.join(cacheDir, `${file.storedName}.jpg`);
     if (!fs.existsSync(cached)) {
       fs.mkdirSync(cacheDir, { recursive: true });
-      await sharp(src).rotate().resize(320, 320, { fit: 'inside', withoutEnlargement: true })
+      /* A PDF or .ai has no pixels for sharp to resize, so render its first
+       * page first. This is what the team was doing by hand - screenshotting
+       * the hang tag artwork to get a picture they could show. */
+      let rasterSrc = src;
+      if (!filePreview.isImage(file.originalName || src)) {
+        /* A pre-rendered page image takes priority over the file's own
+         * type. It's how a zip gets a preview at all: the archive can't be
+         * rendered, but a member was rendered for it during the import, and
+         * refusing on extension alone threw that away. */
+        const pre = path.join(cacheDir, `${file.storedName}.page1.png`);
+        if (fs.existsSync(pre)) {
+          rasterSrc = pre;
+        } else {
+          if (!filePreview.canPreview(file.originalName || src)) return res.status(415).end();
+          rasterSrc = await filePreview.ensurePreview(src, cacheDir, `${file.storedName}.page1`);
+          if (!rasterSrc) return res.status(415).end();
+        }
+      }
+      await sharp(rasterSrc).rotate().resize(320, 320, { fit: 'inside', withoutEnlargement: true })
         .jpeg({ quality: 72 }).toFile(cached);
     }
     res.setHeader('Cache-Control', 'private, max-age=86400');
@@ -2398,8 +2417,11 @@ app.get('/api/order-management/orders/:id/importable-images', (req, res) => {
   const order = orderManagementStore.getOrderById(req.params.id)
     || orderManagementStore.getOrderByPoNumber(req.params.id);
   if (!order) return res.status(404).json({ error: 'Order not found' });
+  /* Documents are offered alongside photos: a hang tag PDF previews as its
+   * first page, which is exactly the screenshot someone would otherwise
+   * take by hand to attach to a PD approval. */
   const images = (order.files || [])
-    .filter((f) => f && f.url && /\.(png|jpe?g|gif|webp|bmp|avif)(\?|#|$)/i.test(f.originalName || f.url))
+    .filter((f) => f && f.url && filePreview.canPreview(f.originalName || f.url))
     .map((f) => ({
       name: f.originalName || '',
       url: f.url,
@@ -2558,7 +2580,11 @@ async function runHandoffImport(order, driveToken, drive) {
   /** Stream a Drive file to disk, never holding it in memory. */
   const saveDriveFile = async (access, meta, category) => {
     const stored = storedNameFor(meta.name || 'file');
-    const got = await driveClient.downloadFileToPath(access, meta, path.join(dirFor(), stored));
+    const dest = path.join(dirFor(), stored);
+    const got = await driveClient.downloadFileToPath(access, meta, dest);
+    // Render the preview now, so the Order Management panel shows artwork
+    // immediately rather than the first visitor waiting on it.
+    await filePreview.tryGeneratePreview(dest, path.join(dirFor(), '.thumbs'), `${stored}.page1`);
     return registerFile(stored, got.name, category);
   };
   const setSlot = (slot, url) => {
@@ -2608,20 +2634,50 @@ async function runHandoffImport(order, driveToken, drive) {
           if (!listed.length) { results.push({ label: it.label, status: 'empty', files: 0 }); continue; }
           let url;
           if (listed.length === 1) {
-            const got = await driveClient.downloadFile(access, listed[0]);
-            url = saveFile(got.buffer, got.name, 'Design document');
+            url = await saveDriveFile(access, listed[0], 'Design document');
           } else {
-            const zip = archiver('zip', { zlib: { level: 9 } });
-            const chunks = [];
-            zip.on('data', (c) => chunks.push(c));
-            const done = new Promise((resolve, reject) => { zip.on('end', resolve); zip.on('error', reject); });
-            for (const f of listed) {
-              const got = await driveClient.downloadFile(access, f);
-              zip.append(got.buffer, { name: got.name });
+            /* Stream each member to a temp file and build the archive from
+             * disk. The previous version held every downloaded file AND the
+             * finished zip in memory at once - the same fault that killed
+             * the single-file path, just not yet triggered because a folder
+             * of three drawings happened to fit. */
+            const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'handoff-'));
+            const stored = storedNameFor(`${it.label}.zip`);
+            const zipPath = path.join(dirFor(), stored);
+            try {
+              const members = [];
+              for (const f of listed) {
+                const safe = String(f.name || 'file').replace(/[^A-Za-z0-9._-]+/g, '_');
+                const tmp = path.join(tmpDir, safe);
+                const got = await driveClient.downloadFileToPath(access, f, tmp);
+                members.push({ path: tmp, name: got.name });
+              }
+
+              /* A zip can't be previewed, so the preview is rendered from
+               * the first member that can be. Otherwise Manufacturing
+               * Drawing - the slot where the artwork matters most - would
+               * be the only one with no image. */
+              const previewable = members.find((m) => filePreview.canPreview(m.name));
+              if (previewable) {
+                await filePreview.tryGeneratePreview(
+                  previewable.path, path.join(dirFor(), '.thumbs'), `${stored}.page1`);
+              }
+
+              const zip = archiver('zip', { zlib: { level: 9 } });
+              const out = fs.createWriteStream(zipPath);
+              const done = new Promise((resolve, reject) => {
+                out.on('close', resolve);
+                zip.on('error', reject);
+                out.on('error', reject);
+              });
+              zip.pipe(out);
+              members.forEach((m) => zip.file(m.path, { name: m.name }));
+              zip.finalize();
+              await done;
+              url = registerFile(stored, `${it.label}.zip`, 'Design document');
+            } finally {
+              fs.rmSync(tmpDir, { recursive: true, force: true });
             }
-            zip.finalize();
-            await done;
-            url = saveFile(Buffer.concat(chunks), `${it.label}.zip`, 'Design document');
           }
           const slot = docSlotFor(it.label);
           setSlot(slot, url);

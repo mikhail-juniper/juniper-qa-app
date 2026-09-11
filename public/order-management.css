@@ -1059,3 +1059,8 @@ details.om-handoff-card > summary::after {
   color: var(--jc-muted);
 }
 details.om-handoff-card[open] > summary::after { content: '▾'; }
+
+/* Document preview: the rendered first page of a PDF or .ai, with the link
+   to the original underneath. Replaces the manual screenshot step. */
+.om-doc-preview { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.om-doc-preview .om-upload-preview { max-height: 56px; width: auto; border: 1px solid var(--jc-border); border-radius: 4px; background: #fff; }
