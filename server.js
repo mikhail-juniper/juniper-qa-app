@@ -2015,6 +2015,21 @@ app.post('/api/asana/handoff-import', requirePermission('orders:write'), async (
     ? gmailSend.decryptToken(user.driveRefreshToken) : null;
 
   const results = [];
+
+  /* Product Documentation slots, matched on the subtask label. Anything not
+   * listed still lands in the PO's file list, so nothing is lost - it just
+   * doesn't claim one of the four named slots. */
+  const DOC_SLOTS = [
+    [/^manufacturing\s*drawing/i, 'manufacturingDrawing'],
+    [/^washing\s*tag/i, 'washingTagUrl'],
+    [/^packaging/i, 'packagingUrl'],
+    [/^product\s*dimensions/i, 'dimensionsUrl']
+  ];
+  const docSlotFor = (label) => {
+    const hit = DOC_SLOTS.find(([re]) => re.test(String(label || '').trim()));
+    return hit ? hit[1] : null;
+  };
+
   const saveFile = (buffer, filename, category) => {
     const dir = path.join(orderManagementStore.ORDER_FILES_DIR, order.id);
     fs.mkdirSync(dir, { recursive: true });
@@ -2031,6 +2046,14 @@ app.post('/api/asana/handoff-import', requirePermission('orders:write'), async (
       uploadedAt: new Date().toISOString(),
       uploadedBy: 'Asana handoff import'
     }, 'Asana handoff import');
+    return `/order-management-files/${encodeURIComponent(order.id)}/${encodeURIComponent(stored)}`;
+  };
+
+  /** Point a Product Documentation field at a file we just saved. */
+  const setDocSlot = (slot, url) => {
+    if (!slot || !url) return;
+    orderManagementStore.updateOrder(order.id,
+      { mainComponent: { [slot]: url } }, 'Asana handoff import', 'Handoff import');
   };
 
   try {
@@ -2056,9 +2079,19 @@ app.post('/api/asana/handoff-import', requirePermission('orders:write'), async (
         if (comment) {
           const atts = await asanaClient.getCommentAttachments(comment[1], comment[2]);
           let saved = 0;
+          let firstUrl = null;
           for (const a of atts) {
             const got = await asanaClient.downloadAttachment(a);
-            if (got) { saveFile(got.buffer, got.name, 'Style picture'); saved += 1; }
+            if (got) {
+              const url = saveFile(got.buffer, got.name, 'Style picture');
+              if (!firstUrl) firstUrl = url;
+              saved += 1;
+            }
+          }
+          // Use the first approved-sample image as the PO's photo if it has
+          // none, so it shows in the tables and on the supplier page.
+          if (firstUrl && !(order.mainComponent && order.mainComponent.photoReference)) {
+            setDocSlot('photoReference', firstUrl);
           }
           results.push({ label, status: saved ? 'imported' : 'empty', files: saved, as: 'Style picture' });
         } else if (drvFolder || drvFile) {
@@ -2070,15 +2103,21 @@ app.post('/api/asana/handoff-import', requirePermission('orders:write'), async (
           if (drvFile) {
             const meta = await driveClient.getFile(access, drvFile[1]);
             const got = await driveClient.downloadFile(access, meta);
-            saveFile(got.buffer, got.name, 'Design document');
-            results.push({ label, status: 'imported', files: 1, as: 'Design document' });
+            const url = saveFile(got.buffer, got.name, 'Design document');
+            const slot = docSlotFor(label);
+            setDocSlot(slot, url);
+            results.push({ label, status: 'imported', files: 1,
+              as: slot ? `Product Documentation - ${label}` : 'Design document' });
           } else {
             const listed = await driveClient.listFolder(access, drvFolder[1]);
             if (!listed.length) { results.push({ label, status: 'empty', files: 0 }); continue; }
             if (listed.length === 1) {
               const got = await driveClient.downloadFile(access, listed[0]);
-              saveFile(got.buffer, got.name, 'Design document');
-              results.push({ label, status: 'imported', files: 1, as: 'Design document' });
+              const url = saveFile(got.buffer, got.name, 'Design document');
+              const slot = docSlotFor(label);
+              setDocSlot(slot, url);
+              results.push({ label, status: 'imported', files: 1,
+                as: slot ? `Product Documentation - ${label}` : 'Design document' });
             } else {
               // Several files: one archive, so the PO doesn't fill with loose parts.
               const zip = archiver('zip', { zlib: { level: 9 } });
@@ -2093,8 +2132,11 @@ app.post('/api/asana/handoff-import', requirePermission('orders:write'), async (
               }
               zip.finalize();
               await done;
-              saveFile(Buffer.concat(chunks), `${label}.zip`, 'Design document');
-              results.push({ label, status: 'imported', files: listed.length, as: 'Design document (zip)' });
+              const url = saveFile(Buffer.concat(chunks), `${label}.zip`, 'Design document');
+              const slot = docSlotFor(label);
+              setDocSlot(slot, url);
+              results.push({ label, status: 'imported', files: listed.length,
+                as: slot ? `Product Documentation - ${label} (zip)` : 'Design document (zip)' });
             }
           }
         } else {
