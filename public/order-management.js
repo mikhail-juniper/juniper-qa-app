@@ -121,7 +121,14 @@ async function api(path, opts) {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Request failed (${res.status})`);
+    const err = new Error(body.error || body.message || `Request failed (${res.status})`);
+    /* Attach the parsed response and status. Some endpoints answer with a
+     * structured non-2xx that the caller needs to act on - a 409 asking
+     * whether to replace existing files, say - and throwing only a message
+     * string would discard it. */
+    err.body = body;
+    err.status = res.status;
+    throw err;
   }
   return res.json();
 }
@@ -3314,9 +3321,27 @@ async function openDetailPanel(id, scope) {
       importBtn.disabled = true;
       host.innerHTML = `<div class="section-help">${i18('emptyLoading', 'Loading...')}</div>`;
       try {
-        const res = await api(`/api/asana/handoff-import`, {
-          method: 'POST', body: JSON.stringify({ poNumber: order.poNumber })
-        });
+        /* First attempt without `replace`. The server answers 409 if a
+         * previous import is already on the PO, so the warning names the
+         * actual files rather than asking abstractly. */
+        let res;
+        try {
+          res = await api(`/api/asana/handoff-import`, {
+            method: 'POST', body: JSON.stringify({ poNumber: order.poNumber })
+          });
+        } catch (firstErr) {
+          const info = firstErr.body || {};
+          if (!info.needsConfirmation) throw firstErr;
+          const names = (info.existingFiles || []).slice(0, 6).join(', ');
+          const more = (info.existingFiles || []).length > 6 ? '...' : '';
+          const go = confirm(
+            `${order.poNumber} ${i18t('confirmReimport', 'already has imported files. Replace them?')}`
+            + `\n\n${info.existingCount} file(s): ${names}${more}`);
+          if (!go) { host.innerHTML = ''; return; }
+          res = await api(`/api/asana/handoff-import`, {
+            method: 'POST', body: JSON.stringify({ poNumber: order.poNumber, replace: true })
+          });
+        }
         const rows = res.results || [];
         host.innerHTML = rows.length ? `
           <ul class="om-changelog">
@@ -4914,6 +4939,18 @@ function isPdfFile(nameOrUrl) {
   return /\.pdf(\?|#|$)/i.test(String(nameOrUrl || ''));
 }
 
+/**
+ * Can this file be shown as a thumbnail?
+ *
+ * Checking "is it a PDF" was too narrow: these fields now receive zips (a
+ * folder of drawings imported from Drive) and .ai files, which rendered as
+ * a broken image icon with no way to open them. Allow-listing image types
+ * is the right way round - anything else gets a "View file" link.
+ */
+function isDisplayableImage(nameOrUrl) {
+  return /\.(png|jpe?g|gif|webp|bmp|svg|avif)(\?|#|$)/i.test(String(nameOrUrl || ''));
+}
+
 // Generic upload-type field: label + (thumbnail or file link) + Upload
 // button, backed by the same order-management file-upload endpoint used
 // elsewhere. Used for the several Product Documentation fields that are
@@ -4921,9 +4958,10 @@ function isPdfFile(nameOrUrl) {
 // Packaging, etc).
 function uploadFieldHtml(fieldId, label, currentUrl, isImage) {
   let preview;
-  // An image-type field may still be holding a PDF, so decide from the file
-  // itself rather than the field's declared type.
-  const showAsImage = isImage && !isPdfFile(currentUrl);
+  /* An image-type field may be holding something that isn't an image at
+   * all - a PDF, a zip of drawings, an .ai. Decide from the file itself,
+   * and only show a thumbnail for types a browser can actually render. */
+  const showAsImage = isImage && isDisplayableImage(currentUrl);
   if (currentUrl) {
     preview = showAsImage
       ? `<img id="${fieldId}Preview" class="om-upload-preview" src="${escapeHtml(currentUrl)}" alt="" title="Click to view larger" />`

@@ -4206,5 +4206,9 @@
   "secAsanaHandoff": {
     "en": "Asana handoff",
     "zh": "Asana 交接"
+  },
+  "confirmReimport": {
+    "en": "already has files from a previous import. Re-running will replace them with a fresh copy. Continue?",
+    "zh": "已有上次导入的文件。重新导入将用新副本替换它们。是否继续？"
   }
 }

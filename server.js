@@ -2016,6 +2016,33 @@ app.post('/api/asana/handoff-import', requirePermission('orders:write'), async (
 
   const results = [];
 
+  /* Re-running the import should replace what it wrote last time, not add a
+   * second copy. Imported files are tagged by uploadedBy, so a prior run is
+   * identifiable without any extra bookkeeping. Files uploaded by a person
+   * are never touched. */
+  const IMPORT_TAG = 'Asana handoff import';
+  const previous = (order.files || []).filter((f) => f.uploadedBy === IMPORT_TAG);
+  if (previous.length && !(req.body && req.body.replace)) {
+    return res.status(409).json({
+      needsConfirmation: true,
+      existingCount: previous.length,
+      existingFiles: previous.map((f) => f.originalName),
+      message: `This PO already has ${previous.length} file(s) from a previous import. `
+        + 'Re-running will replace them.'
+    });
+  }
+  if (previous.length) {
+    // Confirmed: clear the old set first so the PO ends up with one copy.
+    previous.forEach((f) => {
+      try {
+        orderManagementStore.removeFile(order.id, f.id, IMPORT_TAG);
+      } catch (err) {
+        console.error('Handoff re-import: could not remove old file', f.originalName, err.message || err);
+      }
+    });
+    console.log(`Handoff re-import: removed ${previous.length} file(s) from the previous run.`);
+  }
+
   /* Product Documentation slots, matched on the subtask label. Anything not
    * listed still lands in the PO's file list, so nothing is lost - it just
    * doesn't claim one of the four named slots. */

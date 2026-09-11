@@ -53,6 +53,15 @@ function statusSlug(s) {
   return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-');
 }
 
+/**
+ * Only render a thumbnail for types a browser can display. The imported
+ * manufacturing drawings arrive as zips or .ai files, which otherwise
+ * showed as a broken image with no way to open them.
+ */
+function isDisplayableImage(nameOrUrl) {
+  return /\.(png|jpe?g|gif|webp|bmp|svg|avif)(\?|#|$)/i.test(String(nameOrUrl || ''));
+}
+
 function isPdfFile(nameOrUrl) {
   return /\.pdf(\?|#|$)/i.test(String(nameOrUrl || ''));
 }
@@ -146,7 +155,7 @@ function openLightbox(url) {
  *  open in a new tab - a browser renders those better than we can. */
 function thumb(url, alt) {
   if (!url) return '<span style="color:var(--jc-muted);">—</span>';
-  if (isPdfFile(url)) {
+  if (!isDisplayableImage(url)) {
     return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener" style="font-size:11.5px;">${i18('btnViewFile', 'View')}</a>`;
   }
   return `<img src="${escapeHtml(url)}" alt="${escapeHtml(alt || '')}" class="sup-thumb sup-zoom" ` +
@@ -408,8 +417,9 @@ async function openSupplierOrder(id) {
     let value;
     if (!url) {
       value = `<span style="color:var(--jc-muted);">${i18('supNoFile', 'Not uploaded')}</span>`;
-    } else if (isPdfFile(url)) {
-      value = `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${i18('btnViewFile', 'View file')}</a>`;
+    } else if (!isDisplayableImage(url)) {
+      // Zips, PDFs and .ai files get a link - only real images get a thumbnail.
+      value = `<a href="${escapeHtml(url)}" target="_blank" rel="noopener" download>${i18('btnViewFile', 'View file')}</a>`;
     } else {
       value = `<img src="${escapeHtml(url)}" alt="" class="om-table-thumb sup-zoom" data-full="${escapeHtml(url)}" style="cursor:zoom-in;" />`;
     }
