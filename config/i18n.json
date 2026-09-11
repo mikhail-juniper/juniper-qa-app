@@ -4266,5 +4266,9 @@
   "handoffWillImport": {
     "en": "file(s) will be imported from the Asana handoff when you submit",
     "zh": "提交后将从 Asana 交接导入文件"
+  },
+  "btnReimportHandoff": {
+    "en": "Re-import files from Asana",
+    "zh": "重新从 Asana 导入文件"
   }
 }

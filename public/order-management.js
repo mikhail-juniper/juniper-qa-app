@@ -2372,18 +2372,20 @@ async function openDetailPanel(id, scope) {
     </div>
     </div>
 
-    ${/* The import runs automatically when a PO request is submitted, so
-         this card is only shown when it hasn't produced anything yet -
-         either because the PO predates the automatic import, or because it
-         failed. Removing it entirely would leave no way to retry. */ ''}
-    ${(order.files || []).some((f) => f.uploadedBy === 'Asana handoff import') ? '' : `
+    ${/* The import runs automatically on submission, so this is a retry
+         rather than the main path. It stays visible even once files have
+         landed: hiding it also removed the only place import results and
+         errors are shown, which is precisely when they're needed - a
+         partial import reported nothing at all. */ ''}
     <div class="om-panel-card">
     <div class="om-section-title">${i18('secAsanaHandoff', 'Asana handoff')}</div>
     <div class="section-help" style="margin-bottom:12px;">${i18('helpImportHandoff', 'Pulls the approved sample photos and manufacturing files from Asana.')}</div>
     <button type="button" class="btn btn-secondary" id="omImportHandoffBtn"
-      style="flex:none;width:auto;padding:9px 16px;">${i18('btnImportHandoff', 'Import files from Asana')}</button>
+      style="flex:none;width:auto;padding:9px 16px;">${(order.files || []).some((f) => f.uploadedBy === 'Asana handoff import')
+        ? i18('btnReimportHandoff', 'Re-import files from Asana')
+        : i18('btnImportHandoff', 'Import files from Asana')}</button>
     <div id="omHandoffResult" style="margin-top:12px;"></div>
-    </div>`}
+    </div>
 
     <div class="om-panel-card">
     <div class="om-section-title">${i18('secProductionProgress', 'Production Progress')}</div>
@@ -3403,16 +3405,16 @@ async function openDetailPanel(id, scope) {
           });
         }
         const rows = res.results || [];
-        host.innerHTML = rows.length ? `
-          <ul class="om-changelog">
-            ${rows.map((r) => `
-              <li>
-                <strong style="font-weight:500;">${escapeHtml(r.label)}</strong>
-                <div class="om-cl-meta">${escapeHtml(r.status)}${r.files ? ` · ${r.files} file(s)` : ''}${r.as ? ` · ${escapeHtml(r.as)}` : ''}${r.reason ? ` · ${escapeHtml(r.reason)}` : ''}${r.error ? ` · ${escapeHtml(r.error)}` : ''}</div>
-              </li>`).join('')}
-          </ul>` : `<div class="om-empty">${i18('handoffNothing', 'Nothing was imported.')}</div>`;
+        host.innerHTML = handoffResultsHtml(rows);
         const n = (res.summary && res.summary.imported) || 0;
-        showToast(`${i18t('handoffImported', 'Imported')}: ${n}`);
+        const bad = (res.results || []).filter((r) => r.status === 'failed' || r.status === 'pending');
+        if (bad.length) {
+          // Say the first real reason in the toast: a partial import that
+          // only reports a count reads as success.
+          showToast(`${i18t('handoffImported', 'Imported')}: ${n}. ${bad[0].label}: ${bad[0].error || bad[0].reason || bad[0].status}`, true);
+        } else {
+          showToast(`${i18t('handoffImported', 'Imported')}: ${n}`);
+        }
         /* Reopen the panel. Product Documentation, the photo reference and
          * the file list were all rendered from the order as it was when the
          * panel opened, so without this the import looks like it did
@@ -3426,14 +3428,7 @@ async function openDetailPanel(id, scope) {
           await openDetailPanel(id, 'full');
           const again = document.getElementById('omHandoffResult');
           if (again) {
-            again.innerHTML = `
-              <ul class="om-changelog">
-                ${carry.map((r) => `
-                  <li>
-                    <strong style="font-weight:500;">${escapeHtml(r.label)}</strong>
-                    <div class="om-cl-meta">${escapeHtml(r.status)}${r.files ? ` · ${r.files} file(s)` : ''}${r.as ? ` · ${escapeHtml(r.as)}` : ''}</div>
-                  </li>`).join('')}
-              </ul>`;
+            again.innerHTML = handoffResultsHtml(carry);
           }
         }
       } catch (e) {
@@ -4405,6 +4400,38 @@ async function fetchDispatchText(items) {
     body: JSON.stringify({ items, lang: currentLang() })
   });
   return res.text || '';
+}
+
+/**
+ * Render handoff import results.
+ *
+ * Shared because the panel renders these twice - once on completion, then
+ * again after the panel reopens to show the new files - and the second
+ * render was omitting `reason` and `error`. That made every failure look
+ * like a bare status with no explanation, which is why a Drive permission
+ * problem was impossible to diagnose from the screen.
+ */
+function handoffResultsHtml(rows) {
+  if (!rows || !rows.length) {
+    return `<div class="om-empty">${i18('handoffNothing', 'Nothing was imported.')}</div>`;
+  }
+  return `
+    <ul class="om-changelog">
+      ${rows.map((r) => {
+        const bad = r.status === 'failed' || r.status === 'pending';
+        const extra = [
+          r.files ? `${r.files} file(s)` : '',
+          r.as || '',
+          r.reason || '',
+          r.error || ''
+        ].filter(Boolean).map(escapeHtml).join(' · ');
+        return `
+          <li>
+            <strong style="font-weight:500;">${escapeHtml(r.label)}</strong>
+            <div class="om-cl-meta"${bad ? ' style="color:var(--jc-fail);"' : ''}>${escapeHtml(r.status)}${extra ? ` · ${extra}` : ''}</div>
+          </li>`;
+      }).join('')}
+    </ul>`;
 }
 
 async function openBatchSendPanel() {

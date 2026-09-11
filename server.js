@@ -908,23 +908,51 @@ app.get('/api/drive/status', async (req, res) => {
     canConnect: !!(user && googleAuth.isConfigured()),
     email: (user && user.email) || null
   };
+  /* ?fileId= tests a SINGLE file, which is a different Drive call from
+   * listing a folder - files/{id} plus an alt=media download, rather than
+   * files?q=. A folder listing succeeding says nothing about whether an
+   * individual file fetch works, so there was no way to test the failing
+   * path without running a whole import. */
+  const fileId = String(req.query.fileId || '').trim();
   const folderId = String(req.query.folderId || '').trim();
-  if (connected && folderId) {
+
+  /* Both tests go through lib/driveClient - the same code the importer
+   * uses. They previously used their own hand-rolled fetch against a
+   * hardcoded URL, which meant a passing folder test proved nothing about
+   * whether the importer would work. Testing a different code path than the
+   * one that fails is worse than not testing at all. */
+  if (connected && (fileId || folderId)) {
+    let token = null;
     try {
-      const token = await gmailSend.accessTokenFor(gmailSend.decryptToken(user.driveRefreshToken));
-      const q = encodeURIComponent(`'${folderId}' in parents and trashed = false`);
-      const url = `https://www.googleapis.com/drive/v3/files?q=${q}`
-        + '&fields=files(id,name,mimeType,size)&pageSize=50&supportsAllDrives=true'
-        + '&includeItemsFromAllDrives=true';
-      const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-      const body = await r.json().catch(() => ({}));
-      out.folderTest = r.ok
-        ? { ok: true, fileCount: (body.files || []).length, files: (body.files || []).map((f) => f.name) }
-        : { ok: false, status: r.status, error: (body.error && body.error.message) || 'unknown' };
+      token = await gmailSend.accessTokenFor(gmailSend.decryptToken(user.driveRefreshToken));
     } catch (err) {
-      out.folderTest = { ok: false, error: err.message || String(err) };
+      out.tokenError = err.message || String(err);
+    }
+    if (token && fileId) {
+      try {
+        const meta = await driveClient.getFile(token, fileId);
+        const got = await driveClient.downloadFile(token, meta);
+        out.fileTest = {
+          ok: true, name: meta.name, mimeType: meta.mimeType,
+          // A shortcut has no bytes of its own and can't be exported, which
+          // is a plausible cause that looks nothing like a permission problem.
+          isShortcut: String(meta.mimeType || '').endsWith('.shortcut'),
+          downloadedAs: got.name, bytes: got.buffer.length
+        };
+      } catch (err) {
+        out.fileTest = { ok: false, error: err.message || String(err) };
+      }
+    }
+    if (token && folderId) {
+      try {
+        const files = await driveClient.listFolder(token, folderId);
+        out.folderTest = { ok: true, fileCount: files.length, files: files.map((f) => f.name) };
+      } catch (err) {
+        out.folderTest = { ok: false, error: err.message || String(err) };
+      }
     }
   }
+
   res.json(out);
 });
 
