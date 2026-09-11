@@ -1043,3 +1043,19 @@ div.om-money-wrap input { padding-left: 28px; width: 100%; }
   box-sizing: border-box;
 }
 .om-ask-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
+
+/* A disabled money box still needs the wrapper's left padding, or the
+   computed values sit hard against the ¥ while the editable ones don't. */
+div.om-money-wrap input:disabled { padding-left: 28px; }
+
+/* Asana handoff: a collapsed retry panel near the bottom of the PO. Closed
+   it's just a heading, since the import normally runs automatically. */
+details.om-handoff-card > summary { list-style: none; }
+details.om-handoff-card > summary::-webkit-details-marker { display: none; }
+details.om-handoff-card > summary::after {
+  content: '▸';
+  margin-left: 8px;
+  font-size: 11px;
+  color: var(--jc-muted);
+}
+details.om-handoff-card[open] > summary::after { content: '▾'; }

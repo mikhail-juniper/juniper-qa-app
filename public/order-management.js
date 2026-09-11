@@ -2372,21 +2372,6 @@ async function openDetailPanel(id, scope) {
     </div>
     </div>
 
-    ${/* The import runs automatically on submission, so this is a retry
-         rather than the main path. It stays visible even once files have
-         landed: hiding it also removed the only place import results and
-         errors are shown, which is precisely when they're needed - a
-         partial import reported nothing at all. */ ''}
-    <div class="om-panel-card">
-    <div class="om-section-title">${i18('secAsanaHandoff', 'Asana handoff')}</div>
-    <div class="section-help" style="margin-bottom:12px;">${i18('helpImportHandoff', 'Pulls the approved sample photos and manufacturing files from Asana.')}</div>
-    <button type="button" class="btn btn-secondary" id="omImportHandoffBtn"
-      style="flex:none;width:auto;padding:9px 16px;">${(order.files || []).some((f) => f.uploadedBy === 'Asana handoff import')
-        ? i18('btnReimportHandoff', 'Re-import files from Asana')
-        : i18('btnImportHandoff', 'Import files from Asana')}</button>
-    <div id="omHandoffResult" style="margin-top:12px;"></div>
-    </div>
-
     <div class="om-panel-card">
     <div class="om-section-title">${i18('secProductionProgress', 'Production Progress')}</div>
     <div class="section-help" style="margin-bottom:12px;">${i18('helpProductionProgress', 'Each note is saved with the date and who added it.')}</div>
@@ -2609,6 +2594,21 @@ async function openDetailPanel(id, scope) {
       </button>
     </div>
     </div>
+
+    ${/* A retry, not the main path - the import runs automatically when a
+         PO request is submitted. Collapsed and near the bottom because it's
+         rarely needed, but kept rather than removed: it's also the only
+         place import results and errors are shown, and hiding it made a
+         partial import report nothing at all. */ ''}
+    <details class="om-panel-card om-handoff-card">
+      <summary class="om-section-title" style="cursor:pointer;">${i18('secAsanaHandoff', 'Asana handoff')}</summary>
+      <div class="section-help" style="margin:10px 0 12px 0;">${i18('helpImportHandoff', 'Pulls the approved sample photos and manufacturing files from Asana.')}</div>
+      <button type="button" class="btn btn-secondary" id="omImportHandoffBtn"
+        style="flex:none;width:auto;padding:9px 16px;">${(order.files || []).some((f) => f.uploadedBy === 'Asana handoff import')
+          ? i18('btnReimportHandoff', 'Re-import files from Asana')
+          : i18('btnImportHandoff', 'Import files from Asana')}</button>
+      <div id="omHandoffResult" style="margin-top:12px;"></div>
+    </details>
 
     <div class="om-panel-card">
     <div class="om-section-title">${i18('secChangeLog', 'Change log')}</div>
