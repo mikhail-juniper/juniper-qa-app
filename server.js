@@ -1732,7 +1732,25 @@ app.post('/api/purchase-orders', requirePermission('orders:write'), (req, res) =
        * items are recorded as pending and the Asana photos still import. */
       (async () => {
         try {
-          const user = req.user && req.user.id ? userStore.getUser(req.user.id) : null;
+          /* Drive access is granted per user, but a PO can be submitted
+           * from a shared-password session that has no user at all - in
+           * which case every Drive item silently came back "pending" while
+           * the Asana photos imported, which looks like a half-broken
+           * import for no visible reason.
+           *
+           * So: use the submitter's grant when there is one, otherwise fall
+           * back to any account that has connected Drive. These are company
+           * files in a company Drive, and the alternative is the import
+           * quietly not working. Whose grant was used is logged, because
+           * acting as someone else shouldn't be invisible. */
+          let user = req.user && req.user.id ? userStore.getUser(req.user.id) : null;
+          if (!user || !user.driveRefreshToken) {
+            const donor = userStore.listUsers().find((u) => u.driveRefreshToken);
+            if (donor) {
+              console.log(`Handoff import: session has no Drive grant, using ${donor.email}'s.`);
+              user = donor;
+            }
+          }
           const driveToken = user && user.driveRefreshToken
             ? gmailSend.decryptToken(user.driveRefreshToken) : null;
           const fresh = orderManagementStore.getOrderById(id);
@@ -1740,14 +1758,26 @@ app.post('/api/purchase-orders', requirePermission('orders:write'), (req, res) =
           const run = await runHandoffImport(fresh, driveToken);
           if (run.ok) {
             const done = run.results.filter((r) => r.status === 'imported').length;
-            console.log(`Handoff import for ${entry.poNumber}: ${done} of ${run.results.length} item(s) imported.`);
+            const summary = run.results
+              .map((r) => `${r.label}: ${r.status}${r.reason ? ` (${r.reason})` : ''}`).join('; ');
+            console.log(`Handoff import for ${entry.poNumber}: ${done} of ${run.results.length} imported. ${summary}`);
+            orderManagementStore.logNote(id, 'Asana handoff import',
+              `${done} of ${run.results.length} item(s) imported. ${summary}`);
           } else {
             console.log(`Handoff import for ${entry.poNumber} skipped: ${run.reason}`);
+            orderManagementStore.logNote(id, 'Asana handoff import', `Skipped: ${run.reason}`);
           }
         } catch (err) {
           console.error(`Handoff import for ${entry.poNumber} failed:`, err.message || err);
+          orderManagementStore.logNote(id, 'Asana handoff import', `Failed: ${err.message || err}`);
         }
       })();
+    } else {
+      /* No Asana task on this PO, so there's nothing to follow. Recorded on
+       * the PO rather than only in the log: an import that quietly does
+       * nothing is impossible to diagnose from the screen. */
+      orderManagementStore.logNote(id, 'Asana handoff import',
+        'Skipped: this PO has no Asana task link, so there is no Sample Link to follow.');
     }
   } catch (err) {
     console.error('Failed to create purchase order:', err);

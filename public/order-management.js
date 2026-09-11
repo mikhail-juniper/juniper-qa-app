@@ -272,8 +272,13 @@ function applyTileFilters(orders, st) {
     if (st.sku && (!o.mainComponent || o.mainComponent.sku !== st.sku)) return false;
     if (st.status && o.status !== st.status) return false;
     if (st.search) {
+      /* Sub-component names are searchable too: on the Accessories sub-tab,
+       * typing "hang tag" should find them, and previously the search only
+       * looked at the parent order's own fields. */
+      const partNames = (o.accessories || []).map((a) => a.partName).filter(Boolean);
       return matchesSearch(st.search, o.poNumber, o.supplier && o.supplier.name,
-        o.mainComponent && o.mainComponent.sku, o.mainComponent && o.mainComponent.name, o.buyer);
+        o.mainComponent && o.mainComponent.sku, o.mainComponent && o.mainComponent.name, o.buyer,
+        ...partNames);
     }
     return true;
   });
@@ -375,7 +380,7 @@ async function loadTilePreview(groupKey) {
     const filtered = applyTileFilters(inGroup, st);
     const orders = filtered.slice(0, 10); // preview only - "View all" shows everything
     if (st.subTab === 'components') renderComponentsTable(host, orders);
-    else if (st.subTab === 'accessories') renderAccessoriesTable(host, flattenAccessories(orders));
+    else if (st.subTab === 'accessories') renderAccessoriesTable(host, filterAccessoryRows(flattenAccessories(orders), st));
     else renderOrdersTableFull(host, orders, groupKey);
   } catch (e) { showToast(e.message, true); }
 }
@@ -415,7 +420,7 @@ function openCategoryFullScreen(groupKey) {
     populateTileFilters('omFullF-', all, st);
     const orders = applyTileFilters(all, st); // no 10-row cap here
     if (st.subTab === 'components') renderComponentsTable(host, orders);
-    else if (st.subTab === 'accessories') renderAccessoriesTable(host, flattenAccessories(orders));
+    else if (st.subTab === 'accessories') renderAccessoriesTable(host, filterAccessoryRows(flattenAccessories(orders), st));
     else renderOrdersTableFull(host, orders, groupKey);
   }
   panel.querySelectorAll('.om-subtab').forEach((btn) => {
@@ -1659,6 +1664,11 @@ function renderAccessoriesTable(host, rows) {
       <thead>
         <tr>
           <th>${i18i('thPartName', 'Part Name')}</th>
+          ${/* Which product this part belongs to. Without these, a dozen
+               rows all read "Hang Tag" and the only way to tell them apart
+               is to recognise the PO number. */ ''}
+          <th>${i18i('fldProductName', 'Product Name')}</th>
+          <th>${i18i('fldSku', 'SKU')}</th>
           <th>${i18i('thPoNumber', 'PO Number')}</th>
           <th>${i18i('thPoStatus', 'PO Status')}</th>
           <th>${i18i('thOrderDate', 'Order Date')}</th>
@@ -1673,6 +1683,8 @@ function renderAccessoriesTable(host, rows) {
         ${rows.map(({ order, accessory: a }) => `
           <tr data-id="${escapeHtml(order.id)}" data-accessory-id="${escapeHtml(a.id)}">
             <td><strong>${escapeHtml(a.partName || '\u2014')}</strong></td>
+            <td>${escapeHtml((order.mainComponent && order.mainComponent.name) || '\u2014')}</td>
+            <td>${escapeHtml((order.mainComponent && order.mainComponent.sku) || '\u2014')}</td>
             <td>${escapeHtml(order.poNumber)}</td>
             <td><span class="om-pill om-pill-${statusSlug(a.status)}">${tStatusInline(a.status)}</span></td>
             <td>${fmtDate(order.orderPlacementDate)}</td>
@@ -1913,6 +1925,22 @@ function renderTable() {
   if (currentCategorySubTab === 'components') return renderComponentsTable(host, currentOrders);
   if (currentCategorySubTab === 'accessories') return renderAccessoriesTable(host, flattenAccessories(currentOrders));
   return renderOrdersTableFull(host, currentOrders);
+}
+
+/**
+ * Narrow flattened accessory rows by the active search.
+ *
+ * The order-level filter matches a PO if ANY of its parts matches, which on
+ * the Accessories sub-tab meant searching "hang tag" returned that PO's
+ * plush bags too. So the rows themselves get filtered: a part whose name
+ * matches is kept, and if nothing in the PO matches by part name the search
+ * must have matched the order (PO number, SKU, product, supplier) and all
+ * its parts stay.
+ */
+function filterAccessoryRows(rows, st) {
+  if (!st || !st.search) return rows;
+  const byPart = rows.filter(({ accessory }) => matchesSearch(st.search, accessory.partName));
+  return byPart.length ? byPart : rows;
 }
 
 function flattenAccessories(orders) {
@@ -2344,13 +2372,18 @@ async function openDetailPanel(id, scope) {
     </div>
     </div>
 
+    ${/* The import runs automatically when a PO request is submitted, so
+         this card is only shown when it hasn't produced anything yet -
+         either because the PO predates the automatic import, or because it
+         failed. Removing it entirely would leave no way to retry. */ ''}
+    ${(order.files || []).some((f) => f.uploadedBy === 'Asana handoff import') ? '' : `
     <div class="om-panel-card">
     <div class="om-section-title">${i18('secAsanaHandoff', 'Asana handoff')}</div>
     <div class="section-help" style="margin-bottom:12px;">${i18('helpImportHandoff', 'Pulls the approved sample photos and manufacturing files from Asana.')}</div>
     <button type="button" class="btn btn-secondary" id="omImportHandoffBtn"
       style="flex:none;width:auto;padding:9px 16px;">${i18('btnImportHandoff', 'Import files from Asana')}</button>
     <div id="omHandoffResult" style="margin-top:12px;"></div>
-    </div>
+    </div>`}
 
     <div class="om-panel-card">
     <div class="om-section-title">${i18('secProductionProgress', 'Production Progress')}</div>
