@@ -2021,13 +2021,27 @@ app.post('/api/asana/handoff-import', requirePermission('orders:write'), async (
    * doesn't claim one of the four named slots. */
   const DOC_SLOTS = [
     [/^manufacturing\s*drawing/i, 'manufacturingDrawing'],
+    // Washing tag first: "washing tag" must not be caught by the packaging
+    // rule below, and order decides which pattern wins.
     [/^washing\s*tag/i, 'washingTagUrl'],
-    [/^packaging/i, 'packagingUrl'],
+    /* Packaging covers what the artwork actually is: the bag, the hangtag,
+     * the card. These arrive under product-specific names ("Plush Bag",
+     * "Hangtag"), so the slot matches on those rather than on the word
+     * "packaging", which nobody writes. */
+    [/^(packaging|hang\s*tag|hangtag|swing\s*tag|.*\bbag\b|.*\bcard\b|.*\bsleeve\b|.*\bbox\b)/i, 'packagingUrl'],
     [/^product\s*dimensions/i, 'dimensionsUrl']
   ];
+  /* Several subtasks can legitimately map to the same slot - a PO often has
+   * both a Plush Bag and a Hangtag, and both are packaging. Only the first
+   * claims the slot; later ones stay in the file list rather than silently
+   * overwriting it, and say so in the result. */
+  const claimedSlots = new Set();
   const docSlotFor = (label) => {
     const hit = DOC_SLOTS.find(([re]) => re.test(String(label || '').trim()));
-    return hit ? hit[1] : null;
+    if (!hit) return null;
+    if (claimedSlots.has(hit[1])) return null;
+    claimedSlots.add(hit[1]);
+    return hit[1];
   };
 
   const saveFile = (buffer, filename, category) => {
@@ -2107,7 +2121,7 @@ app.post('/api/asana/handoff-import', requirePermission('orders:write'), async (
             const slot = docSlotFor(label);
             setDocSlot(slot, url);
             results.push({ label, status: 'imported', files: 1,
-              as: slot ? `Product Documentation - ${label}` : 'Design document' });
+              as: slot ? `Product Documentation - ${label}` : 'PO file (slot already filled)' });
           } else {
             const listed = await driveClient.listFolder(access, drvFolder[1]);
             if (!listed.length) { results.push({ label, status: 'empty', files: 0 }); continue; }
@@ -2117,7 +2131,7 @@ app.post('/api/asana/handoff-import', requirePermission('orders:write'), async (
               const slot = docSlotFor(label);
               setDocSlot(slot, url);
               results.push({ label, status: 'imported', files: 1,
-                as: slot ? `Product Documentation - ${label}` : 'Design document' });
+                as: slot ? `Product Documentation - ${label}` : 'PO file (slot already filled)' });
             } else {
               // Several files: one archive, so the PO doesn't fill with loose parts.
               const zip = archiver('zip', { zlib: { level: 9 } });
