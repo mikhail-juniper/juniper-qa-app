@@ -1891,6 +1891,40 @@ app.post('/api/asana/pull-po', async (req, res) => {
 // actually offers. Enum fields only accept an exact option-name match, so a
 // single renamed/mis-guessed option silently skips that field - this makes
 // which ones line up (and which don't) visible without digging in logs.
+/**
+ * Dump EVERY custom field on a PO's Asana task, not just the ones we write.
+ *
+ * The existing inspect-po endpoint only reports fields listed in
+ * asanaPoSync.json, so a field we don't sync - like "Sample Link" - is
+ * invisible there. This shows the raw shape of each field, which is what's
+ * needed to work out whether a newer field type (relationship, reference)
+ * exposes a usable task GID.
+ */
+app.get('/api/asana/inspect-task-fields', requirePermission('orders:write'), async (req, res) => {
+  try {
+    const poNumber = String(req.query.poNumber || '').trim();
+    if (!poNumber) return res.status(400).json({ error: 'poNumber is required' });
+    const order = orderManagementStore.getOrderByPoNumber(poNumber);
+    if (!order) return res.status(404).json({ error: 'PO not found in the ERP' });
+    if (!order.asanaTaskGid) return res.status(404).json({ error: 'This PO has no linked Asana task' });
+
+    const task = await asanaClient.getTaskRaw(order.asanaTaskGid, 'name,custom_fields');
+    if (!task) return res.status(502).json({ error: 'Asana returned no task - check ASANA_ACCESS_TOKEN' });
+
+    const fields = (task.custom_fields || []).map((f) => ({
+      name: f.name,
+      type: f.type || f.resource_subtype || null,
+      displayValue: f.display_value ?? null,
+      // The whole raw object, since the useful identifier on newer field
+      // types isn't always in a predictable place.
+      raw: f
+    }));
+    res.json({ ok: true, poNumber, taskGid: order.asanaTaskGid, taskName: task.name, fields });
+  } catch (err) {
+    res.status(500).json({ error: err.message || String(err) });
+  }
+});
+
 app.get('/api/asana/inspect-po', async (req, res) => {
   const poNumber = (req.query.poNumber || '').trim();
   if (!poNumber) return res.status(400).json({ error: 'poNumber query param is required' });
