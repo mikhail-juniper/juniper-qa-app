@@ -45,6 +45,7 @@ const gmailSend = require('./lib/gmailSend');
 const wechatAuth = require('./lib/wechatAuth');
 const wecomAuth = require('./lib/wecomAuth');
 const wecomCallback = require('./lib/wecomCallback');
+const os = require('os');
 const driveClient = require('./lib/driveClient');
 const componentDefinitions = require('./lib/componentDefinitionStore');
 const sharp = require('sharp');
@@ -2528,18 +2529,37 @@ async function runHandoffImport(order, driveToken, drive) {
     return hit[1];
   };
 
-  const saveFile = (buffer, filename, category) => {
+  const dirFor = () => {
     const dir = path.join(orderManagementStore.ORDER_FILES_DIR, order.id);
     fs.mkdirSync(dir, { recursive: true });
-    const stored = `${Date.now()}_${filename.replace(/[^A-Za-z0-9._-]+/g, '_')}`;
-    fs.writeFileSync(path.join(dir, stored), buffer);
+    return dir;
+  };
+  const storedNameFor = (filename) =>
+    `${Date.now()}_${filename.replace(/[^A-Za-z0-9._-]+/g, '_')}`;
+
+  /** Register a file already written to disk. */
+  const registerFile = (stored, filename, category) => {
     const url = `/order-management-files/${encodeURIComponent(order.id)}/${encodeURIComponent(stored)}`;
+    const full = path.join(dirFor(), stored);
     orderManagementStore.addFile(order.id, {
       id: uuidv4(), category, originalName: filename, storedName: stored,
-      size: buffer.length, relatedTo: null, url,
+      size: fs.existsSync(full) ? fs.statSync(full).size : 0,
+      relatedTo: null, url,
       uploadedAt: new Date().toISOString(), uploadedBy: IMPORT_TAG
     }, IMPORT_TAG);
     return url;
+  };
+  /** Buffer-based save, still used for Asana attachments (small images). */
+  const saveFile = (buffer, filename, category) => {
+    const stored = storedNameFor(filename);
+    fs.writeFileSync(path.join(dirFor(), stored), buffer);
+    return registerFile(stored, filename, category);
+  };
+  /** Stream a Drive file to disk, never holding it in memory. */
+  const saveDriveFile = async (access, meta, category) => {
+    const stored = storedNameFor(meta.name || 'file');
+    const got = await driveClient.downloadFileToPath(access, meta, path.join(dirFor(), stored));
+    return registerFile(stored, got.name, category);
   };
   const setSlot = (slot, url) => {
     if (slot && url) {
@@ -2579,8 +2599,7 @@ async function runHandoffImport(order, driveToken, drive) {
         const access = await gmailSend.accessTokenFor(driveToken);
         if (it.drvFile) {
           const meta = await driveClient.getFile(access, it.drvFile[1]);
-          const got = await driveClient.downloadFile(access, meta);
-          const url = saveFile(got.buffer, got.name, 'Design document');
+          const url = await saveDriveFile(access, meta, 'Design document');
           const slot = docSlotFor(it.label);
           setSlot(slot, url);
           results.push({ label: it.label, status: 'imported', files: 1, as: slot ? `Product Documentation - ${it.label}` : 'PO file (slot already filled)' });
@@ -2612,7 +2631,9 @@ async function runHandoffImport(order, driveToken, drive) {
       } else {
         results.push({ label: it.label, status: 'skipped', reason: 'unrecognised link', url: it.url });
       }
+      console.log(`Handoff import: ${it.label} done (${it.source}).`);
     } catch (itemErr) {
+      console.error(`Handoff import: ${it.label} failed -`, itemErr.message || itemErr);
       results.push({ label: it.label, status: 'failed', error: itemErr.message || String(itemErr), url: it.url });
     }
   }
