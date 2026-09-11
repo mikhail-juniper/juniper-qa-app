@@ -73,7 +73,7 @@ async function render() {
         <a href="/order-management.html" style="margin-left:8px;">Back to Order Management</a>
       </div>` : ''}
     <h2 class="om-view-title">${i18('supYourPos', 'Your Purchase Orders')}</h2>
-    <div class="om-tile-toolbar om-filter-toolbar" style="margin-bottom:16px;">
+    <div class="om-tile-toolbar om-filter-toolbar" id="supFilterBar" style="margin:0 0 14px 0;">
       <select class="om-filter-select" id="supSku">
         <option value="">${escapeHtml(i18t('filterAllSkus', 'All SKUs'))}</option>
       </select>
@@ -255,6 +255,10 @@ function tableHeadHtml(compCols) {
     </tr></thead>`;
 }
 
+// The filter toolbar is a single long-lived element, moved in and out of
+// the list on each redraw rather than rebuilt.
+let filterBarNode = null;
+
 function drawList() {
   const host = document.getElementById('supListHost');
   const val = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
@@ -271,11 +275,8 @@ function drawList() {
     return [o.poNumber, mc.name, mc.sku]
       .some((v) => v && String(v).toLowerCase().includes(q));
   });
-  if (!shown.length) {
-    // Distinguish "you have no orders" from "your filters excluded them all".
-    host.innerHTML = `<div class="om-empty">${filtering
-      ? i18('supNoMatches', 'No purchase orders match those filters.')
-      : i18('supNoOrders', 'No purchase orders yet.')}</div>`;
+  if (!allOrders.length) {
+    host.innerHTML = `<div class="om-empty">${i18('supNoOrders', 'No purchase orders yet.')}</div>`;
     return;
   }
 
@@ -283,14 +284,29 @@ function drawList() {
    * the three tables line up with each other. */
   const compCols = componentColumns(shown);
 
+  /* Rescue the toolbar before innerHTML wipes whatever is in the host.
+   * Detaching a focused element blurs it, so the caret position is noted
+   * and restored - otherwise typing in the search stopped dead after the
+   * first character, because the debounced redraw stole focus. */
+  filterBarNode = filterBarNode || document.getElementById('supFilterBar');
+  const active = document.activeElement;
+  const hadFocus = filterBarNode && active && filterBarNode.contains(active) ? active : null;
+  const caret = hadFocus && hadFocus.selectionStart != null ? hadFocus.selectionStart : null;
+  if (filterBarNode && filterBarNode.parentNode) filterBarNode.parentNode.removeChild(filterBarNode);
+
   host.innerHTML = SUPPLIER_GROUPS.map((g) => {
-    const rows = shown.filter(g.match);
+    /* Filters belong to the live orders section only. Completed POs are
+     * history - narrowing them by the same search rarely helps, and an
+     * empty Completed section after a search looks like data is missing. */
+    const source = g.key === 'active' ? shown : allOrders;
+    const rows = source.filter(g.match);
     return `
       <div class="om-category-tile" style="margin-bottom:22px;">
         <div class="om-category-tile-header">
           <span>${i18(g.labelKey, g.label)}</span>
           <span class="om-subtab-count" style="font-size:15px;">${rows.length}</span>
         </div>
+        ${g.key === 'active' ? '<div id="supFilterSlot" style="padding:14px 18px 0 18px;"></div>' : ''}
         ${rows.length ? `
           <div class="om-table-wrap">
             <table class="om-table sup-table">
@@ -298,9 +314,26 @@ function drawList() {
               <tbody>${rows.map((o) => rowHtml(o, compCols)).join('')}</tbody>
             </table>
           </div>`
-        : `<div class="om-empty" style="padding:18px;">${i18('supGroupNone', 'Nothing in this stage.')}</div>`}
+        : `<div class="om-empty" style="padding:18px;">${(g.key === 'active' && filtering)
+            ? i18('supNoMatches', 'No purchase orders match those filters.')
+            : i18('supGroupNone', 'Nothing in this stage.')}</div>`}
       </div>`;
   }).join('');
+
+  /* Move (not clone) the toolbar into the Purchase Orders card. Moving
+   * keeps the same DOM node, so its listeners, values and focus survive a
+   * redraw - which matters because every keystroke in the search triggers
+   * one. */
+  const slot = document.getElementById('supFilterSlot');
+  if (filterBarNode && slot) {
+    slot.appendChild(filterBarNode);
+    if (hadFocus) {
+      hadFocus.focus();
+      if (caret != null && hadFocus.setSelectionRange) {
+        try { hadFocus.setSelectionRange(caret, caret); } catch (e) { /* not a text input */ }
+      }
+    }
+  }
 
   host.querySelectorAll('tbody tr[data-id]').forEach((tr) => {
     tr.addEventListener('click', (e) => {
