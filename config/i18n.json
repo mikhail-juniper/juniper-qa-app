@@ -4170,5 +4170,17 @@
   "supGroupNone": {
     "en": "Nothing in this stage.",
     "zh": "此阶段暂无订单。"
+  },
+  "supGroupOrders": {
+    "en": "Purchase Orders",
+    "zh": "采购订单"
+  },
+  "viewFullOrderEn": {
+    "en": "View full order details:",
+    "zh": "View full order details:"
+  },
+  "viewFullOrderZh": {
+    "en": "查看完整订单详情：",
+    "zh": "查看完整订单详情："
   }
 }

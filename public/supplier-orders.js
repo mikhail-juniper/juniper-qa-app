@@ -222,10 +222,10 @@ function rowHtml(o, compCols) {
  * factory as it does to us.
  */
 const SUPPLIER_GROUPS = [
-  { key: 'requests', labelKey: 'viewPoRequests', label: 'PO Requests',
-    match: (o) => o.status === 'New Request' },
-  { key: 'production', labelKey: 'groupInProduction', label: 'In Production',
-    match: (o) => o.status !== 'New Request' && o.status !== 'Completed' },
+  // Two sections only: a factory cares whether an order is still live or
+  // finished. The finer internal stages are visible in the Status column.
+  { key: 'active', labelKey: 'supGroupOrders', label: 'Purchase Orders',
+    match: (o) => o.status !== 'Completed' },
   { key: 'completed', labelKey: 'groupCompleted', label: 'Completed',
     match: (o) => o.status === 'Completed' }
 ];

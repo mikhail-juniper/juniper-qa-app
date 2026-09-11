@@ -3219,10 +3219,9 @@ async function openDetailPanel(id, scope) {
         if (extra === null) return;
         btn.disabled = true;
         try {
-          const d = await loadTarget(btn.dataset.targetKey);
-          const parts = [d.message && d.message.body ? d.message.body : ''];
-          if (extra.trim()) parts.push(extra.trim());
-          await navigator.clipboard.writeText(parts.filter(Boolean).join('\n\n'));
+          let text = await fetchDispatchText([{ orderId: order.id, targetKey: btn.dataset.targetKey }]);
+          if (extra.trim()) text += `\n\n${extra.trim()}`;
+          await navigator.clipboard.writeText(text);
           showToast(i18t('poInfoCopied', 'Order information copied'));
         } catch (e) { showToast(e.message, true); }
         finally { btn.disabled = false; }
@@ -4158,6 +4157,24 @@ function askForNote(titleKey, helpKey, initial) {
   });
 }
 
+/** The language the site is currently shown in - copied messages follow it
+ *  rather than being bilingual, so a factory reads one clean message. */
+function currentLang() {
+  const l = (window.JuniperLang && window.JuniperLang.get && window.JuniperLang.get())
+    || localStorage.getItem('juniper.lang');
+  return l === 'en' ? 'en' : 'zh';
+}
+
+/** Assemble the paste-ready text server-side, so the single-PO and batch
+ *  flows can't drift apart - which is what happened when each built its own. */
+async function fetchDispatchText(items) {
+  const res = await api('/api/order-management/dispatch-text', {
+    method: 'POST',
+    body: JSON.stringify({ items, lang: currentLang() })
+  });
+  return res.text || '';
+}
+
 async function openBatchSendPanel() {
   let data;
   try {
@@ -4286,21 +4303,16 @@ async function openBatchSendPanel() {
       if (!items.length) return showToast(i18t('batchSelectSome', 'Select at least one item first'), true);
       const extra = await askForNote('notePromptTitle', 'notePromptHelp', '');
       if (extra === null) return;                       // cancelled
-      const lines = [`${data.suppliers[gi].supplierName}`, ''];
-      items.forEach((it) => {
-        lines.push(`${it.poNumber} - ${it.componentName}`);
-        if (it.row.sku) lines.push(`  SKU: ${it.row.sku}`);
-        if (it.row.quantity != null) lines.push(`  Qty: ${Number(it.row.quantity).toLocaleString()}`);
-        if (it.row.deliveryDate) lines.push(`  Delivery: ${fmtDate(it.row.deliveryDate)}`);
-        if (it.row.productionNotes) lines.push(`  Notes: ${it.row.productionNotes}`);
-        lines.push('');
-      });
-      if (extra.trim()) lines.push(extra.trim(), '');
-      if (data.suppliers[gi].accessLink) lines.push(data.suppliers[gi].accessLink);
+      btn.disabled = true;
       try {
-        await navigator.clipboard.writeText(lines.join('\n').trim());
+        // Same endpoint the single-PO button uses, so the wording matches.
+        let text = await fetchDispatchText(
+          items.map((it) => ({ orderId: it.orderId, targetKey: it.targetKey })));
+        if (extra.trim()) text += `\n\n${extra.trim()}`;
+        await navigator.clipboard.writeText(text);
         showToast(i18t('poInfoCopied', 'Order information copied'));
       } catch (e) { showToast(e.message, true); }
+      finally { btn.disabled = false; }
     });
   });
 

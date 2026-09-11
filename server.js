@@ -59,20 +59,64 @@ function resolvePhotoSet(category, subcategory) {
   return approvalPhotoSets.sets.default;
 }
 const analytics = require('./lib/analytics');
+// Loaded from the live path below once it's resolved; see FITS_PATH.
 let fits = require('./config/fits.json');
 const i18n = require('./config/i18n.json');
 const categories = require('./config/categories.json');
 const aqlTable = require('./config/aql.json');
 
-const OPTIONS_PATH = path.join(__dirname, 'config', 'options.json');
-const CREATOR_TIERS_PATH = path.join(__dirname, 'config', 'creatorTiers.json');
-const AQL_RECOMMENDATION_PATH = path.join(__dirname, 'config', 'aqlRecommendation.json');
-const UNIT_COSTS_PATH = path.join(__dirname, 'config', 'unitCosts.json');
-const FITS_PATH = path.join(__dirname, 'config', 'fits.json');
+/**
+ * Config the team edits in Settings lives on the PERSISTENT DISK, not in the
+ * repo.
+ *
+ * These five files are written at runtime - dropdown lists like Product
+ * Development Leads, unit costs, creator tiers, the AQL table and fits. They
+ * used to be read and written under ./config, which ships with the code, so
+ * every deploy overwrote them and any edits made through the UI were lost.
+ *
+ * The repo copy is now a SEED: on first run each file is copied to
+ * DATA_DIR/config and everything reads and writes there from then on, so a
+ * deploy can't touch it.
+ */
+const USER_CONFIG_DIR = path.join(submissionLog.DATA_DIR, 'config');
+
+function userConfigPath(filename) {
+  const live = path.join(USER_CONFIG_DIR, filename);
+  if (!fs.existsSync(live)) {
+    try {
+      fs.mkdirSync(USER_CONFIG_DIR, { recursive: true });
+      const shipped = path.join(__dirname, 'config', filename);
+      if (fs.existsSync(shipped)) {
+        fs.copyFileSync(shipped, live);
+        console.log(`Seeded editable config ${filename} onto the data disk.`);
+      }
+    } catch (err) {
+      // If the disk isn't writable, fall back to the shipped copy so the
+      // app still starts - edits won't persist, but nothing breaks.
+      console.error(`Could not seed ${filename} to the data disk:`, err.message || err);
+      return path.join(__dirname, 'config', filename);
+    }
+  }
+  return live;
+}
+
+const OPTIONS_PATH = userConfigPath('options.json');
+const CREATOR_TIERS_PATH = userConfigPath('creatorTiers.json');
+const AQL_RECOMMENDATION_PATH = userConfigPath('aqlRecommendation.json');
+const UNIT_COSTS_PATH = userConfigPath('unitCosts.json');
+const FITS_PATH = userConfigPath('fits.json');
 const EDITABLE_OPTION_LISTS = ['creators', 'factoryCodes', 'qaLeads', 'productDevelopmentLeads', 'sourcers'];
 
 function loadJson(p) { return JSON.parse(fs.readFileSync(p, 'utf8')); }
 function saveJson(p, data) { fs.writeFileSync(p, JSON.stringify(data, null, 2)); }
+/* fits was require()d from the repo above, which would ignore edits saved
+ * to the disk copy. Re-read it from the live path now that it's resolved. */
+try {
+  fits = loadJson(FITS_PATH);
+} catch (err) {
+  console.error('Could not read fits.json from the data disk; using the shipped copy:', err.message || err);
+}
+
 function loadOptions() { return loadJson(OPTIONS_PATH); }
 function saveOptions(newOptions) { saveJson(OPTIONS_PATH, newOptions); }
 
@@ -1928,6 +1972,48 @@ app.delete('/api/message-templates/:id', requirePermission('settings:write'), (r
  * New Request hasn't been sent to anyone yet, and sending IS what moves it
  * to Order Placed - so those are exactly the ones to include.
  */
+/**
+ * Assemble the text to paste into WeChat, for one component or many.
+ *
+ * Both the single-PO row buttons and the batch panel call this, so the two
+ * can't drift apart - which is exactly what happened when each built its
+ * own string. The per-order wording comes from the editable template; the
+ * supplier link is appended ONCE at the end however many orders there are.
+ */
+app.post('/api/order-management/dispatch-text', requirePermission('dispatch:send'), (req, res) => {
+  const body = req.body || {};
+  const items = Array.isArray(body.items) ? body.items : [];
+  if (!items.length) return res.status(400).json({ error: 'No items supplied' });
+  const lang = body.lang === 'en' ? 'en' : 'zh';
+  const tpl = messageTemplateStore.getDefaultTemplate();
+  const base = `${req.protocol}://${req.get('host')}`;
+
+  const blocks = [];
+  let portalLink = null;
+  for (const it of items) {
+    const order = orderManagementStore.getOrderById(it.orderId);
+    if (!order) continue;
+    const target = poDispatch.buildTargets(order).find((t) => t.key === it.targetKey);
+    if (!target) continue;
+    // One link for the whole message - the first supplier seen wins, which
+    // is correct because a batch is always for a single supplier.
+    if (!portalLink && target.supplierId) {
+      const sup = supplierAccess.ensureToken(target.supplierId);
+      if (sup) portalLink = supplierAccess.linkFor(base, sup);
+    }
+    const values = poDispatch.templateValues(order, target, portalLink || '', resolveSender(req, body));
+    blocks.push(tpl
+      ? messageTemplateStore.render(tpl, lang, values).body
+      : poDispatch.buildMessage(order, target).body);
+  }
+  if (!blocks.length) return res.status(404).json({ error: 'Nothing to send' });
+
+  const footer = lang === 'en' ? 'View full order details:' : '查看完整订单详情：';
+  const text = blocks.join('\n\n')
+    + (portalLink ? `\n\n${footer}\n${portalLink}` : '');
+  res.json({ ok: true, text, portalLink });
+});
+
 app.get('/api/order-management/dispatch-queue', requirePermission('dispatch:send'), (req, res) => {
   const base = `${req.protocol}://${req.get('host')}`;
   const groups = new Map();
