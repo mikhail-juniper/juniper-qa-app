@@ -1013,3 +1013,33 @@ div.om-money-wrap input { padding-left: 28px; width: 100%; }
 .sup-file-list li:last-child { border-bottom: 0; }
 .sup-file-cat { font-size: 11px; color: var(--jc-muted); }
 .sup-comp-spec { display: inline-block; margin-top: 4px; font-size: 11px; }
+
+/* In-app note prompt, replacing window.prompt. Sits above the panels it's
+   opened from, hence the z-index above .om-panel-backdrop. */
+.om-ask-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 24, 21, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 12000;
+  padding: 24px;
+}
+.om-ask-box {
+  background: #fff;
+  border-radius: var(--radius);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+  padding: 22px 24px;
+  width: 100%;
+  max-width: 480px;
+}
+.om-ask-title { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+.om-ask-input {
+  width: 100%;
+  font-family: inherit;
+  font-size: 14px;
+  padding: 10px 12px;
+  box-sizing: border-box;
+}
+.om-ask-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }

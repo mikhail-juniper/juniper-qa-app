@@ -3127,49 +3127,36 @@ async function openDetailPanel(id, scope) {
           <thead><tr>
             <th>${i18i('thComponent2', 'Component')}</th>
             <th>${i18i('thSupplier', 'Supplier')}</th>
-            <th>${i18i('fldRecipient', 'Recipient')}</th>
             <th>${i18i('sentAlready', 'Last sent')}</th>
-            <th>${i18i('thAccessLink', 'Access link')}</th>
             <th></th>
           </tr></thead>
           <tbody>
-            ${targets.map((t) => {
-              const onFile = [t.email, t.wechat].filter(Boolean).join(' · ');
-              return `
+            ${targets.map((t) => `
               <tr>
                 <td><strong>${escapeHtml(t.componentName)}</strong></td>
-                <td>${escapeHtml(t.supplierName || '—')}</td>
-                <td>${onFile
-                  ? escapeHtml(onFile)
-                  : `<span style="color:var(--jc-muted);">${i18('noRecipientOnFile', 'No contact on file')}</span>`}</td>
+                <td>${escapeHtml(t.supplierName || '\u2014')}</td>
                 <td>${t.lastSentAt
                   ? `${fmtDate(t.lastSentAt)} · ${escapeHtml(t.lastChannel || '')}`
                   : `<span style="color:var(--jc-muted);">${i18('neverSent', 'Not sent yet')}</span>`}</td>
+                <!-- Same four actions as the batch panel, inline. The
+                     recipient column is gone: everything is copied and
+                     pasted into WeChat by hand, so a contact shown here
+                     served no purpose. -->
                 <td style="white-space:nowrap;">
-                  ${t.accessLink ? `
-                    <button type="button" class="om-table-upload-btn om-po-share-link" data-link="${escapeHtml(t.accessLink)}">${i18('btnShareAccess', 'Share')}</button>
-                    <a class="om-table-upload-btn" href="${escapeHtml(t.accessLink)}" target="_blank" rel="noopener" style="text-decoration:none;">${i18('btnOpenAccess', 'Open')}</a>
-                  ` : (t.supplierId
-                    ? `<button type="button" class="om-table-upload-btn om-po-make-link" data-supplier="${escapeHtml(t.supplierId)}">${i18('btnCreateAccessLink', 'Create link')}</button>`
-                    : `<span style="color:var(--jc-muted);font-size:11.5px;">—</span>`)}
+                  <button type="button" class="om-table-upload-btn row-copy-image" data-target-key="${escapeHtml(t.key)}">${i18('btnCopyPoImage', 'Copy PO Image')}</button>
+                  <button type="button" class="om-table-upload-btn row-copy-info" data-target-key="${escapeHtml(t.key)}">${i18('btnCopyPoInfo', 'Copy PO Information')}</button>
+                  ${t.accessLink
+                    ? `<button type="button" class="om-table-upload-btn row-share-doc" data-link="${escapeHtml(t.accessLink)}">${i18('btnShareSupplierDoc', 'Share Supplier Doc')}</button>`
+                    : (t.supplierId
+                      ? `<button type="button" class="om-table-upload-btn om-po-make-link" data-supplier="${escapeHtml(t.supplierId)}">${i18('btnCreateAccessLink', 'Create link')}</button>`
+                      : '')}
+                  <button type="button" class="om-table-upload-btn row-mark-sent" data-target-key="${escapeHtml(t.key)}">${i18('btnMarkAsSent', 'Mark as sent')}</button>
                 </td>
-                <td><button type="button" class="om-table-upload-btn om-dispatch-btn" data-target-key="${escapeHtml(t.key)}">${i18('btnSend', 'Send')}</button></td>
-              </tr>`;
-            }).join('')}
+              </tr>`).join('')}
           </tbody>
         </table>
       </div>
     `;
-    // The supplier's link stays reachable here after the PO has gone out,
-    // so you can re-share it without hunting through the Suppliers page.
-    host.querySelectorAll('.om-po-share-link').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        try {
-          await navigator.clipboard.writeText(btn.dataset.link);
-          showToast(i18t('toastAccessLinkCopied', 'Supplier link copied'));
-        } catch (err) { showToast(err.message, true); }
-      });
-    });
     // A supplier with no link yet can get one right here, rather than
     // having to go find them on the Suppliers page first.
     host.querySelectorAll('.om-po-make-link').forEach((btn) => {
@@ -3181,8 +3168,88 @@ async function openDetailPanel(id, scope) {
         } catch (err) { showToast(err.message, true); }
       });
     });
-    host.querySelectorAll('.om-dispatch-btn').forEach((btn) => {
-      btn.addEventListener('click', () => openDispatchDialog(order.id, btn.dataset.targetKey, refreshDispatchList));
+
+    host.querySelectorAll('.row-share-doc').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(btn.dataset.link);
+          showToast(i18t('supplierDocCopied', 'Supplier page link copied'));
+        } catch (err) { showToast(err.message, true); }
+      });
+    });
+
+    /** Details for one component, fetched on demand when a button is used. */
+    const loadTarget = (key) =>
+      api(`/api/order-management/orders/${encodeURIComponent(order.id)}/dispatch-message/${encodeURIComponent(key)}`);
+
+    host.querySelectorAll('.row-copy-image').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+          const d = await loadTarget(btn.dataset.targetKey);
+          const o = d.order || {};
+          const blob = await buildDispatchImage([{
+            photo: o.photoReference || '',
+            productName: o.productName || (d.target && d.target.componentName) || '',
+            sku: o.sku || '',
+            poNumber: d.poNumber || order.poNumber,
+            quantity: o.quantity != null ? Number(o.quantity).toLocaleString() : '',
+            orderDate: fmtDate(o.orderDate),
+            deliveryDate: fmtDate(o.deliveryDate)
+          }], { title: d.poNumber || order.poNumber });
+          try {
+            await copyDispatchImage(blob, null);
+            showToast(i18t('poImageCopied', 'PO image copied - paste into WeChat'));
+          } catch (clipErr) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `${d.poNumber || 'order'}.png`;
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 2000);
+            showToast(i18t('imageCopyFailed', 'Could not copy - downloaded instead.'), true);
+          }
+        } catch (e) { showToast(e.message, true); }
+        finally { btn.disabled = false; }
+      });
+    });
+
+    host.querySelectorAll('.row-copy-info').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const extra = await askForNote('notePromptTitle', 'notePromptHelp', '');
+        if (extra === null) return;
+        btn.disabled = true;
+        try {
+          const d = await loadTarget(btn.dataset.targetKey);
+          const parts = [d.message && d.message.body ? d.message.body : ''];
+          if (extra.trim()) parts.push(extra.trim());
+          await navigator.clipboard.writeText(parts.filter(Boolean).join('\n\n'));
+          showToast(i18t('poInfoCopied', 'Order information copied'));
+        } catch (e) { showToast(e.message, true); }
+        finally { btn.disabled = false; }
+      });
+    });
+
+    host.querySelectorAll('.row-mark-sent').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+          const d = await loadTarget(btn.dataset.targetKey);
+          const t = d.target || {};
+          await api(`/api/order-management/orders/${encodeURIComponent(order.id)}/dispatch`, {
+            method: 'POST',
+            body: JSON.stringify({
+              targetKey: btn.dataset.targetKey,
+              channel: 'wechat',
+              recipient: t.wechat || t.supplierName || 'WeChat'
+            })
+          });
+          showToast(i18t('dispatchRecorded', 'Dispatch recorded'));
+          refreshDispatchList();
+        } catch (e) {
+          showToast(e.message, true);
+          btn.disabled = false;
+        }
+      });
     });
   }
 
@@ -4044,6 +4111,53 @@ async function copyDispatchImage(blob, notesText) {
  * it in WeChat, then mark the batch sent - which records a dispatch against
  * each PO individually, so per-PO status tracking is unchanged.
  */
+/**
+ * In-app replacement for window.prompt.
+ *
+ * The browser dialog is jarring, shows the hostname, and only takes a single
+ * line - production notes are often a couple of sentences. Resolves to the
+ * entered string, or null if cancelled, so callers read the same as before.
+ */
+function askForNote(titleKey, helpKey, initial) {
+  return new Promise((resolve) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'om-ask-backdrop';
+    wrap.innerHTML = `
+      <div class="om-ask-box" role="dialog" aria-modal="true">
+        <div class="om-ask-title">${i18(titleKey, 'Additional notes')}</div>
+        <div class="section-help" style="margin-bottom:10px;">${i18(helpKey, '')}</div>
+        <textarea class="om-ask-input" rows="4"></textarea>
+        <div class="om-ask-actions">
+          <button type="button" class="btn btn-secondary om-ask-cancel" style="flex:none;width:auto;">${i18('btnCancel', 'Cancel')}</button>
+          <button type="button" class="btn btn-primary om-ask-ok" style="flex:none;width:auto;">${i18('btnOk', 'OK')}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(wrap);
+    const box = wrap.querySelector('.om-ask-input');
+    box.value = initial || '';
+    box.focus();
+
+    let settled = false;
+    const done = (value) => {
+      if (settled) return;              // guard against double-fire
+      settled = true;
+      document.removeEventListener('keydown', onKey);
+      wrap.remove();
+      resolve(value);
+    };
+    function onKey(e) {
+      if (e.key === 'Escape') { e.preventDefault(); done(null); }
+      // Ctrl/Cmd+Enter submits, so plain Enter can still make a new line.
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); done(box.value); }
+    }
+    document.addEventListener('keydown', onKey);
+    wrap.querySelector('.om-ask-cancel').addEventListener('click', () => done(null));
+    wrap.querySelector('.om-ask-ok').addEventListener('click', () => done(box.value));
+    // Clicking the backdrop cancels; clicking inside the box must not.
+    wrap.addEventListener('click', (e) => { if (e.target === wrap) done(null); });
+  });
+}
+
 async function openBatchSendPanel() {
   let data;
   try {
@@ -4170,7 +4284,7 @@ async function openBatchSendPanel() {
       const gi = Number(btn.dataset.group);
       const items = selected(gi);
       if (!items.length) return showToast(i18t('batchSelectSome', 'Select at least one item first'), true);
-      const extra = window.prompt(i18t('promptExtraNotes', 'Any additional production notes to include?'), '');
+      const extra = await askForNote('notePromptTitle', 'notePromptHelp', '');
       if (extra === null) return;                       // cancelled
       const lines = [`${data.suppliers[gi].supplierName}`, ''];
       items.forEach((it) => {
@@ -4473,7 +4587,7 @@ async function openDispatchDialog(orderId, targetKey, onSent) {
   /* Copy PO Information: the message text, with a chance to append notes
    * first. Kept separate from the image because WeChat pastes one flavour. */
   document.getElementById('dispCopyInfo').addEventListener('click', async () => {
-    const extra = window.prompt(i18t('promptExtraNotes', 'Any additional production notes to include?'), '');
+    const extra = await askForNote('notePromptTitle', 'notePromptHelp', '');
     if (extra === null) return;
     const body = document.getElementById('dispBody').value.trim();
     const text = extra.trim() ? `${body}\n\n${extra.trim()}` : body;

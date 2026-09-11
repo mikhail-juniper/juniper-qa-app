@@ -4154,5 +4154,17 @@
   "noSupplierDoc": {
     "en": "This supplier has no access link yet - create one from the Suppliers page.",
     "zh": "该供应商尚无访问链接，请在供应商页面创建。"
+  },
+  "notePromptTitle": {
+    "en": "Additional production notes",
+    "zh": "补充生产备注"
+  },
+  "notePromptHelp": {
+    "en": "Anything extra to include with this order. Leave blank for none.",
+    "zh": "随此订单一并发送的补充说明。如无请留空。"
+  },
+  "btnOk": {
+    "en": "OK",
+    "zh": "确定"
   }
 }
