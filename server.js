@@ -1896,6 +1896,111 @@ app.post('/api/asana/pull-po', async (req, res) => {
  * needed to work out whether a newer field type (relationship, reference)
  * exposes a usable task GID.
  */
+/**
+ * Dry run for the PO handoff import.
+ *
+ * Follows Sample Link -> the handoff task -> its subtasks, and reports what
+ * WOULD be imported and where each item would land. Writes nothing: an
+ * importer that silently attaches the wrong artwork to a PO is worse than
+ * one that does nothing, so the preview comes first.
+ *
+ * Accepts ?poNumber= (looked up in the ERP) or ?taskGid= (any Asana task,
+ * so a PO that isn't in the ERP yet can still be checked).
+ */
+app.get('/api/asana/handoff-preview', requirePermission('orders:write'), async (req, res) => {
+  try {
+    let taskGid = String(req.query.taskGid || '').trim();
+    // A pasted Asana URL is more convenient than digging out the GID.
+    const fromUrl = taskGid.match(/\/task\/(\d+)/);
+    if (fromUrl) taskGid = fromUrl[1];
+
+    if (!taskGid) {
+      const poNumber = String(req.query.poNumber || '').trim();
+      if (!poNumber) return res.status(400).json({ error: 'Pass poNumber or taskGid' });
+      const order = orderManagementStore.getOrderByPoNumber(poNumber);
+      if (!order) return res.status(404).json({ error: 'PO not found in the ERP' });
+      if (!order.asanaTaskGid) return res.status(404).json({ error: 'This PO has no linked Asana task' });
+      taskGid = order.asanaTaskGid;
+    }
+
+    const task = await asanaClient.getTaskRaw(taskGid, 'name,custom_fields');
+    if (!task) return res.status(502).json({ error: 'Asana returned no task' });
+
+    const sampleField = (task.custom_fields || []).find(
+      (f) => String(f.name || '').trim().toLowerCase() === 'sample link');
+    const sampleValue = sampleField
+      ? (sampleField.text_value || sampleField.display_value || '')
+      : '';
+    if (!sampleValue) {
+      return res.json({
+        ok: true, taskGid, taskName: task.name,
+        sampleLink: null,
+        problem: 'Sample Link is empty on this PO - nothing to follow.'
+      });
+    }
+
+    const handoffMatch = String(sampleValue).match(/\/task\/(\d+)/);
+    if (!handoffMatch) {
+      return res.json({
+        ok: true, taskGid, taskName: task.name, sampleLink: sampleValue,
+        problem: 'Sample Link does not contain an Asana task URL.'
+      });
+    }
+    const handoffGid = handoffMatch[1];
+    const subtasks = await asanaClient.getSubtasks(handoffGid);
+
+    /* Title decides WHERE it lands, the URL decides HOW it's fetched. Those
+     * are independent, which is what lets one list mix Asana comments with
+     * Drive folders. */
+    const items = subtasks.map((st) => {
+      const text = `${st.name || ''}\n${st.notes || ''}`;
+      const url = (text.match(/https?:\/\/[^\s)>\]]+/) || [])[0] || null;
+      let source = 'none';
+      let detail = null;
+      if (url) {
+        const comment = url.match(/\/task\/(\d+)\/comment\/(\d+)/);
+        const drvFolder = url.match(/drive\.google\.com\/drive\/(?:u\/\d+\/)?folders\/([A-Za-z0-9_-]+)/);
+        const drvFile = url.match(/drive\.google\.com\/file\/d\/([A-Za-z0-9_-]+)/);
+        const asanaTask = url.match(/app\.asana\.com\/.*\/task\/(\d+)/);
+        if (comment) { source = 'asanaComment'; detail = { taskGid: comment[1], commentGid: comment[2] }; }
+        else if (drvFolder) { source = 'driveFolder'; detail = { folderId: drvFolder[1] }; }
+        else if (drvFile) { source = 'driveFile'; detail = { fileId: drvFile[1] }; }
+        else if (asanaTask) { source = 'asanaTask'; detail = { taskGid: asanaTask[1] }; }
+        else { source = 'unknownUrl'; }
+      }
+      const label = String(st.name || '').replace(/[:：]\s*$/, '').split(/[:：]/)[0].trim();
+      const isSample = /final approved sample|approved sample|golden sample/i.test(label);
+      return {
+        subtask: st.name,
+        label,
+        url,
+        source,
+        detail,
+        wouldImportAs: source === 'none' ? 'skipped (no link)'
+          : isSample ? 'Golden Sample photos'
+          : `PO file - ${label || 'Untitled'}`,
+        needsDriveAccess: source === 'driveFolder' || source === 'driveFile'
+      };
+    });
+
+    res.json({
+      ok: true,
+      taskGid, taskName: task.name,
+      sampleLink: sampleValue,
+      handoffTaskGid: handoffGid,
+      subtaskCount: subtasks.length,
+      items,
+      summary: {
+        importable: items.filter((i) => i.source === 'asanaComment' || i.source === 'asanaTask').length,
+        needsDrive: items.filter((i) => i.needsDriveAccess).length,
+        skipped: items.filter((i) => i.source === 'none').length
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || String(err) });
+  }
+});
+
 app.get('/api/asana/inspect-task-fields', requirePermission('orders:write'), async (req, res) => {
   try {
     const poNumber = String(req.query.poNumber || '').trim();
