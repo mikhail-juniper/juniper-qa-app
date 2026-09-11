@@ -2364,6 +2364,36 @@ app.post('/api/order-management/orders/:id/asana-push', async (req, res) => {
 
 // PD approval statuses for the three stages, shown read-only in the Order
 // Management panel's Product Development Approval section.
+/**
+ * Images already on a PO, for the approval form's "Insert from Drive"
+ * picker. These are the sample photos pulled from the Asana handoff, so an
+ * approver can attach the ones already imported instead of re-uploading
+ * from their own machine.
+ *
+ * Only displayable images are returned - a zip of drawings is on the PO too
+ * but is no use as a sample photo.
+ */
+app.get('/api/order-management/orders/:id/importable-images', (req, res) => {
+  const order = orderManagementStore.getOrderById(req.params.id)
+    || orderManagementStore.getOrderByPoNumber(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  const images = (order.files || [])
+    .filter((f) => f && f.url && /\.(png|jpe?g|gif|webp|bmp|avif)(\?|#|$)/i.test(f.originalName || f.url))
+    .map((f) => ({
+      name: f.originalName || '',
+      url: f.url,
+      category: f.category || '',
+      uploadedBy: f.uploadedBy || '',
+      uploadedAt: f.uploadedAt || null
+    }));
+  // The main photo reference is worth offering even if it isn't in the list.
+  const ref = (order.mainComponent || {}).photoReference;
+  if (ref && !images.some((i) => i.url === ref)) {
+    images.unshift({ name: 'Photo reference', url: ref, category: 'Style picture', uploadedBy: '', uploadedAt: null });
+  }
+  res.json({ ok: true, poNumber: order.poNumber, images });
+});
+
 app.get('/api/order-management/orders/:id/pd-approvals', (req, res) => {
   const order = orderManagementStore.getOrderById(req.params.id);
   if (!order) return res.status(404).json({ error: 'Order not found' });
@@ -3053,7 +3083,10 @@ app.post('/api/approval/:poNumber/:stage', upload.any(), (req, res) => {
     const carried = (data && data.carriedPhotos) || {};
     Object.keys(carried).forEach((slotKey) => {
       const safe = (carried[slotKey] || [])
-        .filter((u) => typeof u === 'string' && /^\/approval-photos\/[A-Za-z0-9._%-]+$/.test(u));
+        .filter((u) => typeof u === 'string' && (
+          /^\/approval-photos\/[A-Za-z0-9._%-]+$/.test(u)
+          // Images imported onto the PO, offered by "Insert from Drive".
+          || /^\/order-management-files\/[A-Za-z0-9._%-]+\/[A-Za-z0-9._%-]+$/.test(u)));
       if (!safe.length) return;
       photos[slotKey] = [...safe, ...(photos[slotKey] || [])];
     });

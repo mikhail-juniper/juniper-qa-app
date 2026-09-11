@@ -394,6 +394,22 @@ async function loadApprovalForPo(poNumber) {
   approvalState.photoSet = data.photoSet;
   approvalState.approval = data.approval;
   approvalState.priorSampleApproval = data.priorSampleApproval;
+
+  /* Images already imported onto the PO, offered by "Insert from Drive".
+   * Best-effort: if this fails the form still works, just without the
+   * shortcut, so it must not block the page from rendering. */
+  if (data.po && data.po.id) {
+    try {
+      const imgRes = await fetch(`/api/order-management/orders/${encodeURIComponent(data.po.id)}/importable-images`);
+      if (imgRes.ok) {
+        const body = await imgRes.json();
+        approvalState.importedImages = body.images || [];
+      }
+    } catch (err) {
+      console.warn('Could not load imported images for this PO:', err);
+      approvalState.importedImages = [];
+    }
+  }
   approvalState.reportingHistory = data.reportingHistory;
   approvalState.stage = determineCurrentStage(data.approval);
 
@@ -406,7 +422,27 @@ async function loadApprovalForPo(poNumber) {
   // record is the source of truth for what was actually approved.
   if (!data.approval.sampleApproval.submitted && data.po) {
     approvalState.productRisk = data.po.productRisk || 'medium';
+    // Only lock risk if the PO actually specified one.
+    if (data.po.productRisk) approvalState.riskFromPo = true;
     if (data.po.factoryCode) approvalState.factoryCode = data.po.factoryCode;
+
+    /* Non-apparel sizing comes straight from the PO's L/W/H. Only apparel
+     * was being carried over, so a plush PO arrived here with empty
+     * dimension boxes even though the values existed in Order Management.
+     *
+     * The mapping is deliberate: the PO records length/width/height, this
+     * form asks for height/width/depth, and "depth" is the PO's length. */
+    const poDims = {
+      height: data.po.dimensionsHeight,
+      width: data.po.dimensionsWidth,
+      depth: data.po.dimensionsLength
+    };
+    Object.entries(poDims).forEach(([key, value]) => {
+      if (value !== null && value !== undefined && value !== '') {
+        approvalState.dimensions[key] = String(value);
+        approvalState.dimensionsFromPo = true;
+      }
+    });
 
     const dt = data.po.dimensionsTable;
     if (data.po.category === 'apparel' && dt && dt.sizes && Object.keys(dt.sizes).length) {
@@ -1271,13 +1307,24 @@ function renderSampleApprovalForm() {
     ${priorBlock}
     <div class="card">
       <div class="section-title">${biBlockHtml('sampleDetailsTitle', 'Sample Details')}</div>
-      ${selectField3WithOther('factoryCode', 'factoryCode', approvalState.factoryCode, OPTIONS.factoryCodes || [])}
+      ${/* Factory code and risk belong to the purchase order. Shown read-only
+           so this form can't disagree with Order Management about the same
+           product - QA/QC Lead stays editable because it's whoever is doing
+           this approval, which the PO has no opinion about. */ ''}
+      ${approvalState.factoryCode ? `
+        <div class="field">
+          <label class="field-label">${biBlockHtml('factoryCode', 'Factory Code')}</label>
+          <input type="text" value="${escapeHtml(approvalState.factoryCode)}" readonly />
+          <div class="section-help">${escapeHtml(bi('detailsFromPo').en)} ${escapeHtml(bi('detailsFromPo').zh)}</div>
+        </div>`
+        : selectField3WithOther('factoryCode', 'factoryCode', approvalState.factoryCode, OPTIONS.factoryCodes || [])}
       ${selectField3WithOther('qaLead', 'qaLead', approvalState.qaLead, OPTIONS.qaLeads || [])}
       <div class="field">
         <label class="field-label">${biBlockHtml('productRisk', 'Product Complexity/Risk')}</label>
-        <div class="segmented">
-          ${['high', 'medium', 'low'].map((r) => `<div class="segmented-option ${approvalState.productRisk === r ? 'selected' : ''}" data-approval-risk="${r}">${escapeHtml(bi('risk' + r.charAt(0).toUpperCase() + r.slice(1)).en)}<span class="zh">${escapeHtml(bi('risk' + r.charAt(0).toUpperCase() + r.slice(1)).zh)}</span></div>`).join('')}
+        <div class="segmented${approvalState.riskFromPo ? ' segmented-locked' : ''}">
+          ${['high', 'medium', 'low'].map((r) => `<div class="segmented-option ${approvalState.productRisk === r ? 'selected' : ''}"${approvalState.riskFromPo ? '' : ` data-approval-risk="${r}"`}>${escapeHtml(bi('risk' + r.charAt(0).toUpperCase() + r.slice(1)).en)}<span class="zh">${escapeHtml(bi('risk' + r.charAt(0).toUpperCase() + r.slice(1)).zh)}</span></div>`).join('')}
         </div>
+        ${approvalState.riskFromPo ? `<div class="section-help">${escapeHtml(bi('detailsFromPo').en)} ${escapeHtml(bi('detailsFromPo').zh)}</div>` : ''}
       </div>
       ${sampledSizeField}
     </div>
@@ -1343,13 +1390,19 @@ function renderSizingSection() {
  *  dimensions rather than a fit-based chart. */
 function renderApprovalDimensionsFields() {
   const dims = approvalState.dimensions;
+  /* Dimensions that came from the PO are shown read-only: Order Management
+   * is where they're maintained, and letting them be retyped here invites
+   * the two records disagreeing about the same product. */
+  const locked = !!approvalState.dimensionsFromPo;
   const field = (key, i18nKey, fallback) => `
     <div class="field" style="flex:1;">
       <label class="field-label">${biBlockHtml(i18nKey, fallback)}</label>
-      <input type="number" step="0.1" inputmode="decimal" data-approval-dimension="${key}" value="${escapeHtml(dims[key])}" placeholder="0.0" />
+      <input type="number" step="0.1" inputmode="decimal" data-approval-dimension="${key}"
+        value="${escapeHtml(dims[key])}" placeholder="0.0" ${locked ? 'readonly' : ''} />
     </div>
   `;
   return `
+    ${locked ? `<div class="section-help" style="margin-bottom:8px;">${escapeHtml(bi('dimsFromPo').en)}<br/>${escapeHtml(bi('dimsFromPo').zh)}</div>` : ''}
     <div class="field-row">
       ${field('height', 'dimensionHeight', 'Height (cm)')}
       ${field('width', 'dimensionWidth', 'Width (cm)')}
@@ -1533,9 +1586,71 @@ function renderPhotoSlot(slotKey, labelEn, labelZh, size, mini) {
           <span>${escapeHtml(bi('addPhoto').en)}</span>
           <input type="file" id="${inputId}" accept="image/*" multiple data-approval-photo-input="${key}" />
         </label>
+        ${/* Only offered when the PO actually has imported images - an empty
+             picker would be a dead end. */ ''}
+        ${(approvalState.importedImages || []).length ? `
+          <button type="button" class="photo-add photo-add-drive" data-pick-imported="${key}">
+            <span class="plus">&#8681;</span>
+            <span>${escapeHtml(bi('btnInsertFromDrive').en)}</span>
+          </button>` : ''}
       </div>
     </div>
   `;
+}
+
+/**
+ * Picker for images already imported onto this PO.
+ *
+ * Chosen images are carried by reference - they're already on the server, so
+ * the same `_carriedUrl` mechanism the "Copy From Prior PO" button uses
+ * applies here, avoiding a second copy of every photo.
+ */
+function openImportedPicker(slotKey) {
+  const images = approvalState.importedImages || [];
+  const chosen = new Set();
+  const wrap = document.createElement('div');
+  wrap.className = 'om-ask-backdrop';
+  wrap.innerHTML = `
+    <div class="om-ask-box" style="max-width:760px;">
+      <div class="om-ask-title">${escapeHtml(bi('pickImportedTitle').en)}</div>
+      <div class="section-help" style="margin-bottom:10px;">${escapeHtml(bi('pickImportedHelp').en)}</div>
+      ${images.length ? `
+        <div class="pick-grid">
+          ${images.map((img, i) => `
+            <div class="pick-item" data-pick="${i}">
+              <img src="${escapeHtml(img.url)}" alt="" />
+              <div class="pick-name">${escapeHtml(img.name || '')}</div>
+            </div>`).join('')}
+        </div>` : `<div class="om-empty">${escapeHtml(bi('pickImportedNone').en)}</div>`}
+      <div class="om-ask-actions">
+        <button type="button" class="btn btn-secondary pick-cancel" style="flex:none;width:auto;">${escapeHtml(bi('cancel').en || 'Cancel')}</button>
+        <button type="button" class="btn btn-primary pick-ok" style="flex:none;width:auto;" ${images.length ? '' : 'disabled'}>${escapeHtml(bi('btnInsertSelected').en)}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+
+  wrap.querySelectorAll('.pick-item').forEach((el) => {
+    el.addEventListener('click', () => {
+      const i = Number(el.dataset.pick);
+      if (chosen.has(i)) { chosen.delete(i); el.classList.remove('selected'); }
+      else { chosen.add(i); el.classList.add('selected'); }
+    });
+  });
+  const close = () => wrap.remove();
+  wrap.querySelector('.pick-cancel').addEventListener('click', close);
+  wrap.addEventListener('click', (e) => { if (e.target === wrap) close(); });
+  wrap.querySelector('.pick-ok').addEventListener('click', () => {
+    if (!approvalState.photos[slotKey]) approvalState.photos[slotKey] = [];
+    [...chosen].forEach((i) => {
+      const img = images[i];
+      const already = approvalState.photos[slotKey].some((f) => f && f._carriedUrl === img.url);
+      if (!already) {
+        approvalState.photos[slotKey].push({ _url: img.url, _carriedUrl: img.url, name: img.name || 'imported.jpg' });
+      }
+    });
+    close();
+    render();
+  });
 }
 function selectField3(id, i18nKey, value, optionsList) {
   const l = bi(i18nKey);
@@ -1733,6 +1848,10 @@ function attachStageHandlers() {
       setTimeout(() => highlightTarget.classList.remove('reference-highlight'), 2500);
     });
   });
+  document.querySelectorAll('[data-pick-imported]').forEach((el) => {
+    el.addEventListener('click', () => openImportedPicker(el.getAttribute('data-pick-imported')));
+  });
+
   document.querySelectorAll('[data-approval-risk]').forEach((el) => {
     el.addEventListener('click', () => { approvalState.productRisk = el.getAttribute('data-approval-risk'); render(); });
   });

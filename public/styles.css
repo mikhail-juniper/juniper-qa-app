@@ -1195,3 +1195,34 @@ td.reference-selectable { outline-offset: -2px; }
    biHtml, so hide empty ones globally - otherwise each leaves a blank
    display:block line and a gap under its label. */
 .zh:empty { display: none; }
+
+/* A segmented control showing a value owned by the purchase order: visible
+   and legible, but not clickable, since it's maintained in Order Management. */
+.segmented.segmented-locked { opacity: 0.75; }
+.segmented.segmented-locked .segmented-option { cursor: default; }
+
+/* "Insert from Drive" picker: images already imported onto the PO. */
+.photo-add-drive { border-style: dashed; background: transparent; font: inherit; }
+.pick-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+  max-height: 46vh;
+  overflow-y: auto;
+  padding: 2px;
+}
+.pick-item {
+  border: 2px solid var(--jc-border, #e3e6e3);
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  background: #fff;
+}
+.pick-item.selected { border-color: var(--jc-teal, #2a7); box-shadow: 0 0 0 2px rgba(42,119,119,0.18); }
+.pick-item img { width: 100%; height: 96px; object-fit: cover; display: block; }
+.pick-name {
+  font-size: 10.5px;
+  padding: 4px 6px;
+  color: var(--jc-muted, #666);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}

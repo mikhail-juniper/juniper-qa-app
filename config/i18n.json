@@ -4214,5 +4214,33 @@
   "fldHangTag": {
     "en": "Hang Tag",
     "zh": "吊牌"
+  },
+  "dimsFromPo": {
+    "en": "Taken from the purchase order. Change them in Order Management if they are wrong.",
+    "zh": "来自采购订单。如有错误请在订单管理中修改。"
+  },
+  "detailsFromPo": {
+    "en": "Taken from the purchase order.",
+    "zh": "来自采购订单。"
+  },
+  "btnInsertFromDrive": {
+    "en": "Insert from Drive",
+    "zh": "从云端插入"
+  },
+  "pickImportedTitle": {
+    "en": "Images imported for this PO",
+    "zh": "此订单已导入的图片"
+  },
+  "pickImportedHelp": {
+    "en": "Tap to select. These were pulled from the Asana handoff, so there is no need to re-upload them.",
+    "zh": "点击选择。这些图片来自 Asana 交接，无需重新上传。"
+  },
+  "pickImportedNone": {
+    "en": "No imported images on this PO yet. Run the Asana import from Order Management first.",
+    "zh": "此订单暂无已导入的图片。请先在订单管理中执行 Asana 导入。"
+  },
+  "btnInsertSelected": {
+    "en": "Insert selected",
+    "zh": "插入所选"
   }
 }
