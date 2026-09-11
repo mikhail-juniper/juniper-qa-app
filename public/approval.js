@@ -1326,6 +1326,19 @@ function renderSampleApprovalForm() {
         <span class="k">${escapeHtml(bi('productRisk').en)}<span class="zh">${escapeHtml(bi('productRisk').zh)}</span></span>
         <span class="v">${escapeHtml(bi('risk' + String(approvalState.productRisk || 'medium').charAt(0).toUpperCase() + String(approvalState.productRisk || 'medium').slice(1)).en)}</span>
       </div>
+      ${approvalState.po.category !== 'apparel' ? `
+        <div class="review-row">
+          <span class="k">${escapeHtml(bi('dimensionHeight').en)}<span class="zh">${escapeHtml(bi('dimensionHeight').zh)}</span></span>
+          <span class="v">${escapeHtml(approvalState.dimensions.height || '-')}</span>
+        </div>
+        <div class="review-row">
+          <span class="k">${escapeHtml(bi('dimensionWidth').en)}<span class="zh">${escapeHtml(bi('dimensionWidth').zh)}</span></span>
+          <span class="v">${escapeHtml(approvalState.dimensions.width || '-')}</span>
+        </div>
+        <div class="review-row">
+          <span class="k">${escapeHtml(bi('dimensionDepth').en)}<span class="zh">${escapeHtml(bi('dimensionDepth').zh)}</span></span>
+          <span class="v">${escapeHtml(approvalState.dimensions.depth || '-')}</span>
+        </div>` : ''}
       <div class="section-help" style="margin-top:8px;">${escapeHtml(bi('detailsFromPo').en)}<br/>${escapeHtml(bi('detailsFromPo').zh)}</div>
       ${sampledSizeField}
     </div>
@@ -1351,14 +1364,12 @@ function renderSampleApprovalForm() {
 }
 
 function renderSizingSection() {
-  if (approvalState.po.category !== 'apparel') {
-    return `
-      <div class="card">
-        <div class="section-title">${biBlockHtml('sizingTitle', 'Sizing')}</div>
-        ${renderApprovalDimensionsFields()}
-      </div>
-    `;
-  }
+  /* Non-apparel sizing is three fixed values from the purchase order, now
+   * shown as read-only rows in Sample Details above. A card of its own with
+   * input-shaped boxes implied they could be edited here; the apparel path
+   * below is different, because that table is where the sample's ACTUAL
+   * measurements get recorded. */
+  if (approvalState.po.category !== 'apparel') return '';
 
   const fits = fitsForPoSubcategory();
   const options = Object.keys(fits).map((k) => `<option value="${k}" ${approvalState.fit === k ? 'selected' : ''}>${escapeHtml(catLabel(fits[k]))}</option>`).join('');
@@ -1387,34 +1398,10 @@ function renderSizingSection() {
   return pickerCard;
 }
 
-/** Non-apparel (plush, bags, accessories, etc.) sizing - three plain
- *  dimensions rather than a fit-based chart. */
-function renderApprovalDimensionsFields() {
-  const dims = approvalState.dimensions;
-  /* Dimensions that came from the PO are shown read-only: Order Management
-   * is where they're maintained, and letting them be retyped here invites
-   * the two records disagreeing about the same product. */
-  const locked = !!approvalState.dimensionsFromPo;
-  const field = (key, i18nKey, fallback) => `
-    <div class="field" style="flex:1;">
-      <label class="field-label">${biBlockHtml(i18nKey, fallback)}</label>
-      <input type="number" step="0.1" inputmode="decimal" data-approval-dimension="${key}"
-        value="${escapeHtml(dims[key])}" placeholder="0.0" ${locked ? 'readonly' : ''} />
-    </div>
-  `;
-  return `
-    ${locked ? `<div class="section-help" style="margin-bottom:8px;">${escapeHtml(bi('dimsFromPo').en)}<br/>${escapeHtml(bi('dimsFromPo').zh)}</div>` : ''}
-    <div class="field-row">
-      ${field('height', 'dimensionHeight', 'Height (cm)')}
-      ${field('width', 'dimensionWidth', 'Width (cm)')}
-      ${field('depth', 'dimensionDepth', 'Depth (cm)')}
-    </div>
-    <div class="field">
-      <label class="field-label">${biBlockHtml('dimensionsNotes', 'Additional Notes')} <span class="section-help">(${escapeHtml(bi('optional').en)})</span></label>
-      <textarea data-approval-dimension="notes" placeholder="${escapeHtml(bi('dimensionsNotesPlaceholder').en)}">${escapeHtml(dims.notes || '')}</textarea>
-    </div>
-  `;
-}
+/* renderApprovalDimensionsFields() was removed: those three dimensions are
+ * PO-owned and now render as read-only rows in Sample Details, and its
+ * "Additional Notes" box was redundant with the comment field on the photo
+ * submission below. */
 
 /** Editable measurement entry, one card per size (scoped to the PO's
  *  included sizes if set), with a photo slot per size and tolerance
@@ -1916,9 +1903,8 @@ function attachStageHandlers() {
       render();
     });
   }
-  document.querySelectorAll('[data-approval-dimension]').forEach((el) => {
-    el.addEventListener('input', (e) => { approvalState.dimensions[el.getAttribute('data-approval-dimension')] = e.target.value; });
-  });
+  // No dimension inputs any more - the values come from the PO and are
+  // rendered read-only in Sample Details.
   const simpleSizeInput = document.getElementById('approvalSimpleSize');
   if (simpleSizeInput) simpleSizeInput.addEventListener('input', (e) => { approvalState.simpleSizeValue = e.target.value; });
   const notes = document.getElementById('approvalNotes');

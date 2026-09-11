@@ -66,6 +66,21 @@ function statusSlug(status) {
   return String(status || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
+/**
+ * A computed money value for a disabled input inside .om-money-wrap.
+ *
+ * The editable boxes get their ¥ from CSS (with matching left padding),
+ * while the read-only ones were rendering fmtMoney()'s own "¥" into the
+ * value - so the symbol sat in a different place with different spacing in
+ * every other box. This returns the number alone and lets the wrapper draw
+ * the symbol, so all six line up.
+ */
+function moneyValueOnly(num) {
+  const n = Number(num);
+  if (num === null || num === undefined || num === '' || isNaN(n)) return '—';
+  return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
 function fmtMoney(n) {
   if (n === null || n === undefined || n === '') return '—';
   const num = Number(n);
@@ -2031,6 +2046,14 @@ function renderComponentsTable(host, orders) {
 }
 
 function closePanel() {
+  /* Tell anything listening that the panel is going away, before it does.
+   * Autosave uses this to flush a debounced edit - closing the panel one
+   * second after typing must not lose the change, which is the exact
+   * failure autosave exists to prevent. */
+  document.querySelectorAll('.om-panel-backdrop').forEach((el) => {
+    const inner = el.querySelector('.om-panel') || el;
+    inner.dispatchEvent(new CustomEvent('om-panel-closing'));
+  });
   document.querySelectorAll('.om-panel-backdrop').forEach((el) => el.remove());
   // Typeahead menus are rendered on <body> (so scroll containers can't clip
   // them), which means they don't get removed along with the panel.
@@ -2226,6 +2249,7 @@ async function openDetailPanel(id, scope) {
       </div>
       <div style="display:flex;gap:10px;align-items:center;">
         ${scope !== 'full' ? `<button class="btn btn-secondary" id="omViewFullPo" style="flex:none;width:auto;padding:7px 14px;font-size:13px;">${i18('btnViewFullPo', 'View full PO')}</button>` : ''}
+        <span id="omSaveStatus" style="font-size:12px;color:var(--jc-muted);margin-right:10px;"></span>
         <button class="btn btn-primary" id="omSaveOrder" style="flex:none;width:auto;padding:8px 18px;">${i18('btnSaveChanges', 'Save changes')}</button>
         <button class="om-panel-close" id="omClosePanel">&times;</button>
       </div>
@@ -2532,9 +2556,9 @@ async function openDetailPanel(id, scope) {
       <div><label>${i18('fldAdditionalAssemblyFee', 'Additional Assembly Fee')} (¥)</label><div class="om-money-wrap"><input id="fAssemblyFee" type="number" step="0.01" value="${val(order.costs.assemblyFee)}" /></div></div>
       <div><label>${i18('fldAdditionalLaborFee', 'Additional Labor Fee')} (¥)</label><div class="om-money-wrap"><input id="fLaborCosts" type="number" step="0.01" value="${val(order.costs.laborCosts)}" /></div></div>
       <div><label>${i18('fldOtherExpenses', 'Other Expenses')} (¥)</label><div class="om-money-wrap"><input id="fOtherExpenses" type="number" step="0.01" value="${val(order.costs.otherExpenses)}" /></div></div>
-      <div><label>${i18('fldManufacturingCostPerUnit', 'Manufacturing Cost per unit')} (¥)</label><input id="fManufacturingCostTotal" type="text" value="${fmtMoney(computeManufacturingCostPerUnit(order))}" disabled title="Main component unit price + sum of sub-component unit prices" /></div>
-      <div><label>${i18('fldTotalPoCost', 'Total PO Cost')} (¥)</label><input id="fTotalPoCost" type="text" value="${fmtMoney(computeOrderTotal(order))}" disabled title="Manufacturing Cost x Order Quantity, plus shipping and additional fees" /></div>
-      <div><label>${i18('fldTotalPricePerUnit', 'Total Price per Unit')} (¥)</label><input id="fTotalPricePerUnit" type="text" value="${order.mainComponent.purchaseQuantity ? fmtMoney(computeOrderTotal(order) / order.mainComponent.purchaseQuantity) : '—'}" disabled title="Total PO cost divided by units ordered" /></div>
+      <div><label>${i18('fldManufacturingCostPerUnit', 'Manufacturing Cost per unit')} (¥)</label><div class="om-money-wrap"><input id="fManufacturingCostTotal" type="text" value="${moneyValueOnly(computeManufacturingCostPerUnit(order))}" disabled title="Main component unit price + sum of sub-component unit prices" /></div></div>
+      <div><label>${i18('fldTotalPoCost', 'Total PO Cost')} (¥)</label><div class="om-money-wrap"><input id="fTotalPoCost" type="text" value="${moneyValueOnly(computeOrderTotal(order))}" disabled title="Manufacturing Cost x Order Quantity, plus shipping and additional fees" /></div></div>
+      <div><label>${i18('fldTotalPricePerUnit', 'Total Price per Unit')} (¥)</label><div class="om-money-wrap"><input id="fTotalPricePerUnit" type="text" value="${order.mainComponent.purchaseQuantity ? moneyValueOnly(computeOrderTotal(order) / order.mainComponent.purchaseQuantity) : '—'}" disabled title="Total PO cost divided by units ordered" /></div></div>
     </div>
 
     <div class="om-section-title" style="margin-top:20px;">${i18('secPaidStatusByComponent', 'Paid Status by Component')}</div>
@@ -3862,7 +3886,14 @@ async function openDetailPanel(id, scope) {
 
   // Master "Save changes": everything on the page except status (saves
   // immediately above) and payment status (its own Mark Paid/Pending toggle).
-  document.getElementById('omSaveOrder').addEventListener('click', async () => {
+  /* Build the patch from whatever is currently in the form. Split out from
+   * the click handler so autosave can use exactly the same payload - two
+   * code paths building it separately would drift. */
+  const buildPatch = () => {
+    /* The form may already be gone - beforeunload fires after teardown, and
+     * closePanel detaches the panel. Reading fields then throws on null, so
+     * bail out and let the caller treat it as "nothing to save". */
+    if (!document.getElementById('fCreator')) return null;
     const productLine = order.productLine;
     const buyerSelectEl = document.getElementById('fBuyer');
     const buyerValue = buyerSelectEl.value === '__other__'
@@ -3947,19 +3978,41 @@ async function openDetailPanel(id, scope) {
         otherExpenses: document.getElementById('fOtherExpenses').value || 0
       }
     };
+    return patch;
+  };
+
+  /* Autosave state.
+   *
+   * `lastSaved` is the JSON of the last payload the server accepted, so an
+   * edit that returns a field to its original value doesn't write, and
+   * clicking around without changing anything doesn't either - otherwise
+   * every panel open would append a changelog entry. */
+  let lastSaved = null;
+  let autoSaveTimer = null;
+  let saveInFlight = false;
+
+  const setSaveStatus = (key, fallback) => {
+    const el = document.getElementById('omSaveStatus');
+    if (el) el.textContent = key ? i18t(key, fallback) : '';
+  };
+
+  const doSave = async ({ silent } = {}) => {
+    const patch = buildPatch();
+    if (!patch) return;                     // form no longer on the page
+    const asJson = JSON.stringify(patch);
+    if (silent && lastSaved !== null && asJson === lastSaved) return;   // nothing changed
+    if (saveInFlight) { scheduleAutoSave(); return; }                   // coalesce
+    saveInFlight = true;
     // Save in place rather than tearing the panel down and rebuilding it.
     // The old flow (closePanel + openDetailPanel) flashed the whole panel,
     // threw away the scroll position, and collapsed any section the person
     // had scrolled to - jarring for a change as small as editing one field.
-    const saveBtn = document.getElementById('omSaveOrder');
     const scroller = panel; // panel IS the .om-panel scroll container
     // Disabling the focused button and re-rendering the change log both make
     // the browser scroll the focused element back into view, which yanks the
     // panel away from wherever the person was reading. Capture and restore.
     const savedScrollTop = scroller.scrollTop;
-    const originalLabel = saveBtn.innerHTML;
-    saveBtn.disabled = true;
-    saveBtn.innerHTML = i18('btnSaving', 'Saving...');
+    setSaveStatus('statusSaving', 'Saving...');
     try {
       const res = await api(`/api/order-management/orders/${encodeURIComponent(order.id)}`, {
         method: 'PATCH',
@@ -3979,17 +4032,68 @@ async function openDetailPanel(id, scope) {
         }
         updateCompletePoButtonState();
       }
-      showToast(i18t('toastChangesSaved', 'Changes saved'));
+      lastSaved = asJson;
+      /* Autosave shows a quiet inline status instead of a toast. A toast on
+       * every field would be constant noise; an explicit Save still gets
+       * one, because the person asked for confirmation. */
+      if (silent) setSaveStatus('statusSaved', 'Saved');
+      else showToast(i18t('toastChangesSaved', 'Changes saved'));
       refreshCurrentView(); // background list only - the panel stays put
     } catch (e) {
+      setSaveStatus('statusSaveFailed', 'Not saved');
       showToast(e.message, true);
     } finally {
-      saveBtn.disabled = false;
-      saveBtn.innerHTML = originalLabel;
+      saveInFlight = false;
       // Restore after the DOM settles, so the browser's own scroll-into-view
       // has already run and won't immediately override this.
       requestAnimationFrame(() => { scroller.scrollTop = savedScrollTop; });
     }
+  };
+
+  /* Debounced so typing a number doesn't fire a request per keystroke, and
+   * so a changelog entry covers a field rather than each character. */
+  function scheduleAutoSave() {
+    clearTimeout(autoSaveTimer);
+    setSaveStatus('statusUnsaved', 'Unsaved changes');
+    autoSaveTimer = setTimeout(() => doSave({ silent: true }), 1200);
+  }
+
+  // Baseline: whatever the form holds on open counts as already saved, so
+  // simply opening a PO never writes.
+  const baseline = buildPatch();
+  lastSaved = baseline ? JSON.stringify(baseline) : null;
+
+  /* Autosave on edit. `change` covers selects and date pickers, `input`
+   * covers typing. Uploads, status changes and the sub-component tables
+   * have their own endpoints and save themselves already. */
+  panel.querySelectorAll('input, select, textarea').forEach((el) => {
+    if (el.type === 'file' || el.disabled) return;
+    el.addEventListener('change', scheduleAutoSave);
+    if (el.tagName === 'TEXTAREA' || ['text', 'number', 'date'].includes(el.type)) {
+      el.addEventListener('input', scheduleAutoSave);
+    }
+  });
+
+  /* A pending edit must not be lost if the panel closes or the tab goes
+   * away before the debounce elapses - that's the exact failure autosave is
+   * meant to prevent. */
+  const flushPending = () => {
+    if (autoSaveTimer) {
+      clearTimeout(autoSaveTimer);
+      autoSaveTimer = null;
+      doSave({ silent: true });
+    }
+  };
+  panel.addEventListener('om-panel-closing', () => {
+    flushPending();
+    window.removeEventListener('beforeunload', flushPending);
+  });
+  window.addEventListener('beforeunload', flushPending);
+
+  document.getElementById('omSaveOrder').addEventListener('click', () => {
+    clearTimeout(autoSaveTimer);
+    autoSaveTimer = null;
+    doSave({ silent: false });
   });
   } catch (e) {
     console.error('Failed to render order detail panel:', e);

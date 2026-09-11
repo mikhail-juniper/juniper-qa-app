@@ -4246,5 +4246,21 @@
   "omSpecialist": {
     "en": "Order Management Specialist",
     "zh": "订单管理专员"
+  },
+  "statusSaving": {
+    "en": "Saving...",
+    "zh": "保存中..."
+  },
+  "statusSaved": {
+    "en": "Saved",
+    "zh": "已保存"
+  },
+  "statusUnsaved": {
+    "en": "Unsaved changes",
+    "zh": "有未保存的更改"
+  },
+  "statusSaveFailed": {
+    "en": "Not saved - check your connection",
+    "zh": "未保存，请检查网络"
   }
 }
