@@ -4106,5 +4106,21 @@
   "filterAllProductLines": {
     "en": "All product lines",
     "zh": "全部产品线"
+  },
+  "btnCopyOrderInfo": {
+    "en": "Copy order information",
+    "zh": "复制订单信息"
+  },
+  "btnMarkAsSent": {
+    "en": "Mark as sent",
+    "zh": "标记为已发送"
+  },
+  "copyOrderInfoHelp": {
+    "en": "Copies one image containing the order table and the message. Paste it into WeChat, then mark it sent.",
+    "zh": "复制包含订单表格与消息的单张图片。粘贴到微信后，再标记为已发送。"
+  },
+  "orderInfoCopied": {
+    "en": "Copied - paste into WeChat",
+    "zh": "已复制，请粘贴到微信"
   }
 }

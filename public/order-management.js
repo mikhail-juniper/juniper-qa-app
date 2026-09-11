@@ -1903,6 +1903,9 @@ function flattenAccessories(orders) {
 // column breadth (Images 2-3) rather than a trimmed-down summary.
 function renderOrdersTableFull(host, orders, productLine) {
   productLine = productLine || currentTab;
+  // Before a PO goes to a factory, most of the production columns are empty
+  // by definition - so that group shows only what's meaningful at request time.
+  const isRequests = productLine === 'requests';
   if (!orders.length) {
     host.innerHTML = `<div class="om-empty">${i18('emptyNoOrdersIn', 'No orders yet.')}</div>`;
     return;
@@ -1914,8 +1917,10 @@ function renderOrdersTableFull(host, orders, productLine) {
           <th>${i18i('fldProductName', 'Product Name')}</th>
           <th>${i18i('thPoNumber', 'PO Number')}</th>
           <th>${i18i('thStatus', 'Status')}</th>
+          ${isRequests ? `<th>${i18i('fldCreator', 'Creator')}</th>` : ''}
           <th>${i18i('thOrderDate', 'Order Date')}</th>
           <th>${i18i('thFulfillmentRequest', 'Fulfillment Request Date')}</th>
+          ${isRequests ? '' : `
           <th>${i18i('thDeliveryDate', 'Delivery Date')}</th>
           <th>${i18i('thProductionProgress', 'Production Progress Notes')}</th>
           <th>${i18i('thSupplier', 'Supplier')}</th>
@@ -1923,7 +1928,7 @@ function renderOrdersTableFull(host, orders, productLine) {
           <th>${i18i('th2PurchaseQty', 'Purchase Quantity')}</th>
           <th>${i18i('thUnitPrice', 'Unit Price')}</th>
           <th>${i18i('th2Warehouse', 'Warehouse')}</th>
-          <th>${i18i('thPayment', 'Payment')}</th>
+          <th>${i18i('thPayment', 'Payment')}</th>`}
         </tr>
       </thead>
       <tbody>
@@ -1934,8 +1939,10 @@ function renderOrdersTableFull(host, orders, productLine) {
             <td><strong>${escapeHtml(mc.name || '\u2014')}</strong></td>
             <td><strong>${escapeHtml(o.poNumber)}</strong></td>
             <td><span class="om-pill om-pill-${statusSlug(o.status)}">${tStatusInline(o.status)}</span></td>
+            ${isRequests ? `<td>${escapeHtml(o.creator || '\u2014')}</td>` : ''}
             <td>${fmtDate(o.orderPlacementDate)}</td>
             <td>${fmtDate(o.fulfillmentRequestDate)}</td>
+            ${isRequests ? '' : `
             <td>${fmtDate(o.manufacturerDeliveryDate)}</td>
             ${progressCellHtml(o)}
             <td>${escapeHtml((o.supplier && o.supplier.name) || '\u2014')}</td>
@@ -1943,7 +1950,7 @@ function renderOrdersTableFull(host, orders, productLine) {
             <td>${escapeHtml(mc.purchaseQuantity ?? '\u2014')}</td>
             <td>${fmtMoney(mc.factoryPrice)}</td>
             <td>${escapeHtml(mc.warehouse || '\u2014')}</td>
-            <td>${escapeHtml(tStatusText((o.settlement && o.settlement.status) || 'Pending'))}</td>
+            <td>${escapeHtml(tStatusText((o.settlement && o.settlement.status) || 'Pending'))}</td>`}
           </tr>
         `;
         }).join('')}
@@ -3884,7 +3891,31 @@ async function buildDispatchImage(rows, options) {
   const cols = DISPATCH_IMAGE_COLUMNS;
   const tableW = cols.reduce((sum, c) => sum + c.width, 0);
   const width = tableW + pad * 2;
-  const height = pad * 2 + titleH + headH + rowH * rows.length;
+
+  /* The message is wrapped to the table width first, so the canvas can be
+   * sized to fit it. Measuring needs a context, hence the throwaway one. */
+  const captionLines = [];
+  if (opts.caption) {
+    const m = document.createElement('canvas').getContext('2d');
+    m.font = '13px -apple-system, "Segoe UI", Roboto, sans-serif';
+    String(opts.caption).split('\n').forEach((para) => {
+      if (!para.trim()) { captionLines.push(''); return; }
+      let line = '';
+      para.split(/\s+/).forEach((word) => {
+        const next = line ? `${line} ${word}` : word;
+        if (m.measureText(next).width > tableW - 20 && line) {
+          captionLines.push(line);
+          line = word;
+        } else {
+          line = next;
+        }
+      });
+      if (line) captionLines.push(line);
+    });
+  }
+  const capLineH = 20;
+  const capH = captionLines.length ? captionLines.length * capLineH + 24 : 0;
+  const height = pad * 2 + titleH + headH + rowH * rows.length + capH;
 
   const canvas = document.createElement('canvas');
   canvas.width = width * scale;
@@ -3982,6 +4013,17 @@ async function buildDispatchImage(rows, options) {
   ctx.strokeStyle = '#d8ddd9';
   ctx.strokeRect(pad, y - headH, tableW, headH + rowH * rows.length);
 
+  if (captionLines.length) {
+    let cy = y + rowH * rows.length + 22;
+    ctx.fillStyle = '#3d423e';
+    ctx.font = '13px -apple-system, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    captionLines.forEach((line) => {
+      ctx.fillText(line, pad, cy);
+      cy += capLineH;
+    });
+  }
+
   return new Promise((resolve) => canvas.toBlob((b) => resolve(b), 'image/png'));
 }
 
@@ -4016,13 +4058,14 @@ async function openBatchSendPanel() {
       <div class="om-panel-header">
         <div>
           <div style="font-size:19px;font-weight:700;">${i18('secBatchSend', 'Send orders to suppliers')}</div>
-          <div style="color:var(--jc-muted);font-size:13px;">${data.totalItems} ${i18t('batchItems', 'items')}</div>
+          <div class="batch-total" style="color:var(--jc-muted);font-size:13px;">${data.totalItems} ${i18t('batchItems', 'items')}</div>
         </div>
         <button class="om-panel-close" id="batchClose">&times;</button>
       </div>
       <div class="section-help" style="padding:0 4px 12px 4px;">${i18('batchSendHelp', 'Grouped by supplier.')}</div>
+      <div class="batch-body">
       ${data.suppliers.length ? data.suppliers.map((g, gi) => `
-        <div class="om-panel-card">
+        <div class="om-panel-card batch-card" data-group="${gi}">
           <div class="om-section-title">${escapeHtml(g.supplierName)}
             <span class="om-subtab-count" style="margin-left:8px;">${g.items.length}</span>
           </div>
@@ -4057,15 +4100,19 @@ async function openBatchSendPanel() {
           </div>
         </div>
       `).join('') : `<div class="om-empty">${i18('batchNothing', 'Everything has been sent.')}</div>`}
+      </div>
      </div>
     </div>
   `;
   document.body.appendChild(panel);
   document.getElementById('batchClose').addEventListener('click', () => panel.remove());
 
+  /* Items are flagged `_sent` rather than removed from the array, so the
+   * data-idx attributes on the remaining checkboxes stay valid. */
   const selected = (gi) => Array.from(panel.querySelectorAll(`.batch-item[data-group="${gi}"]`))
-    .filter((cb) => cb.checked)
-    .map((cb) => data.suppliers[gi].items[Number(cb.dataset.idx)]);
+    .filter((cb) => cb.checked && !cb.disabled)
+    .map((cb) => data.suppliers[gi].items[Number(cb.dataset.idx)])
+    .filter((it) => it && !it._sent);
 
   panel.querySelectorAll('.batch-all').forEach((all) => {
     all.addEventListener('change', () => {
@@ -4120,6 +4167,7 @@ async function openBatchSendPanel() {
       if (!items.length) return showToast(i18t('batchSelectSome', 'Select at least one item first'), true);
       btn.disabled = true;
       let done = 0;
+      const sentIdx = [];
       /* Recorded one PO at a time on purpose: each dispatch advances that
        * PO's own status and writes its own log entry, so a partial failure
        * leaves correct records for whatever did go out. */
@@ -4133,14 +4181,47 @@ async function openBatchSendPanel() {
             })
           });
           done += 1;
+          sentIdx.push(data.suppliers[gi].items.indexOf(it));
         } catch (e) {
           showToast(`${it.poNumber}: ${e.message}`, true);
         }
       }
+      btn.disabled = false;
+      /* Update in place rather than closing and reopening the panel. The
+       * old approach rebuilt everything, which flashed and threw away the
+       * scroll position - unhelpful when working down a long list. */
+      sentIdx.forEach((idx) => {
+        const cb = panel.querySelector(`.batch-item[data-group="${gi}"][data-idx="${idx}"]`);
+        const row = cb && cb.closest('tr');
+        if (row) row.remove();
+        data.suppliers[gi].items[idx]._sent = true;
+      });
+
+      const card = panel.querySelector(`.batch-card[data-group="${gi}"]`);
+      const remaining = data.suppliers[gi].items.filter((it) => !it._sent).length;
+      if (card) {
+        if (!remaining) {
+          card.remove();                       // nothing left for this supplier
+        } else {
+          const badge = card.querySelector('.om-subtab-count');
+          if (badge) badge.textContent = remaining;
+        }
+      }
+
+      // Header total, and the empty state when the whole queue is cleared.
+      const totalLeft = data.suppliers.reduce(
+        (n, g) => n + g.items.filter((it) => !it._sent).length, 0);
+      const totalEl = panel.querySelector('.batch-total');
+      if (totalEl) totalEl.textContent = `${totalLeft} ${i18t('batchItems', 'items')}`;
+      if (!totalLeft) {
+        const body = panel.querySelector('.batch-body');
+        if (body) body.innerHTML = `<div class="om-empty">${i18('batchNothing', 'Everything has been sent.')}</div>`;
+      }
+
       showToast(`${i18t('batchSentCount', 'Marked as sent')}: ${done}`);
-      panel.remove();
+      // Refresh the list behind the panel without disturbing the panel itself.
+      allOrdersCache = [];
       refreshCurrentView();
-      openBatchSendPanel();
     });
   });
 }
@@ -4208,7 +4289,7 @@ async function openDispatchDialog(orderId, targetKey, onSent) {
         <input type="checkbox" id="dispSave" style="width:auto;margin:0;" />
         <span>${i18('saveToSupplierRecord', 'Save this contact to the supplier record')}</span>
       </label>
-      <div class="section-help" style="margin-top:8px;">${i18('copyImageHelp', 'Copies a picture of the order table, plus the production notes as text.')}</div>
+      <div class="section-help" style="margin-top:8px;">${i18('copyOrderInfoHelp', 'Copies one image containing the order table and the message.')}</div>
       <div class="section-help" style="margin-top:4px;" id="dispSendModeNote"></div>
       <div id="dispWechatNote" class="section-help" style="margin-top:8px;display:${channel === 'wechat' ? '' : 'none'};">
         ${i18('wechatNoApi', 'WeChat cannot be sent automatically - copy the message and paste it to this contact.')}
@@ -4234,10 +4315,8 @@ async function openDispatchDialog(orderId, targetKey, onSent) {
       <input type="text" id="dispSubject" value="${escapeHtml(msg.subject)}" style="margin-bottom:10px;" />
       <textarea id="dispBody" rows="16" style="width:100%;font-family:inherit;font-size:13px;line-height:1.5;">${escapeHtml(msg.body)}</textarea>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
-        <button type="button" class="btn btn-primary" id="dispCopyImage" style="flex:none;width:auto;">${i18('btnCopyOrderImage', 'Copy order image')}</button>
-        <button type="button" class="btn btn-secondary" id="dispCopyNotes" style="flex:none;width:auto;">${i18('btnCopyNotes', 'Copy notes')}</button>
-        <button type="button" class="btn btn-secondary" id="dispCopy" style="flex:none;width:auto;">${i18('btnCopyMessage', 'Copy message')}</button>
-        <button type="button" class="btn btn-primary" id="dispSend" style="flex:none;width:auto;">${i18('btnSend', 'Send')}</button>
+        <button type="button" class="btn btn-primary" id="dispCopyImage" style="flex:none;width:auto;">${i18('btnCopyOrderInfo', 'Copy order information')}</button>
+        <button type="button" class="btn btn-secondary" id="dispSend" style="flex:none;width:auto;">${i18('btnMarkAsSent', 'Mark as sent')}</button>
       </div>
     </div>
    </div>
@@ -4327,12 +4406,16 @@ async function openDispatchDialog(orderId, targetKey, onSent) {
         orderDate: fmtDate(data.order && data.order.orderDate),
         deliveryDate: fmtDate(data.order && data.order.deliveryDate)
       }];
-      const notes = (data.order && data.order.productionNotes) || '';
-      const blob = await buildDispatchImage(rows, { title: data.poNumber || '' });
+      // The edited message from the box above, so anything typed there is
+      // what gets sent - drawn into the image so one paste carries it.
+      const messageText = document.getElementById('dispBody').value.trim();
+      const blob = await buildDispatchImage(rows, {
+        title: data.poNumber || '',
+        caption: messageText
+      });
       try {
-        await copyDispatchImage(blob, notes);
-        showToast(notes ? i18t('imageCopied', 'Order image copied - paste into WeChat')
-                        : i18t('imageCopiedNoText', 'Order image copied'));
+        await copyDispatchImage(blob, messageText);
+        showToast(i18t('orderInfoCopied', 'Copied - paste into WeChat'));
       } catch (clipErr) {
         // Some browsers refuse image writes; offer the file instead of
         // failing outright so the send isn't blocked.
@@ -4348,23 +4431,6 @@ async function openDispatchDialog(orderId, targetKey, onSent) {
     } finally {
       btn.disabled = false;
     }
-  });
-
-  document.getElementById('dispCopyNotes').addEventListener('click', async () => {
-    const notes = (data.order && data.order.productionNotes) || '';
-    if (!notes) return showToast(i18t('noNotesYet', 'No notes yet.'), true);
-    try {
-      await navigator.clipboard.writeText(notes);
-      showToast(i18t('notesCopied', 'Production notes copied'));
-    } catch (e) { showToast(e.message, true); }
-  });
-
-  document.getElementById('dispCopy').addEventListener('click', async () => {
-    const text = `${document.getElementById('dispSubject').value}\n\n${document.getElementById('dispBody').value}`;
-    try {
-      await navigator.clipboard.writeText(text);
-      showToast(i18t('toastLinkCopied', 'Copied'));
-    } catch (e) { showToast(e.message, true); }
   });
 
   document.getElementById('dispSend').addEventListener('click', async () => {
@@ -4385,23 +4451,8 @@ async function openDispatchDialog(orderId, targetKey, onSent) {
           actor: document.getElementById('dispFromName').value || 'Web user'
         })
       });
-      const sentByServer = res && res.delivery && res.delivery.delivered;
-      if (channel === 'email' && !sentByServer) {
-        // Gmail isn't connected for this user, so hand off to their own mail
-        // client with everything pre-filled. Say so plainly - previously this
-        // showed the same "Dispatch recorded" as a real send, which made a
-        // fallback look identical to success.
-        window.open(`mailto:${encodeURIComponent(recipient)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank');
-        showToast(i18t('gmailFellBack', 'Recorded. Gmail is not connected, so this opened your mail client - you still need to press send there.'), true);
-        closeSelf();
-        if (onSent) onSent(res && res.order);
-        return;
-      }
-      if (channel === 'email') {
-        showToast(i18t('gmailSent', 'Email sent from your Gmail'));
-      } else {
-        try { await navigator.clipboard.writeText(`${subject}\n\n${body}`); } catch (e) { /* clipboard may be blocked */ }
-      }
+      /* Recording only. Copying is the other button's job, and email was
+       * removed as a channel - so there's nothing to hand off to here. */
       showToast(i18t('dispatchRecorded', 'Dispatch recorded'));
       closeSelf();
       if (onSent) onSent(res && res.order);
