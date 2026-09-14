@@ -4522,5 +4522,41 @@
   "ofUnitsLogged": {
     "en": "from {n} logged",
     "zh": "共记录 {n} 次"
+  },
+  "fromPurchaseOrder": {
+    "en": "From the purchase order",
+    "zh": "来自采购订单"
+  },
+  "approvedSizeChartFromPo": {
+    "en": "Pulled from Product Dimensions on the purchase order, which is the sizing source of truth for this PO. Edit it there if it needs to change.",
+    "zh": "数据来自采购订单的“产品尺寸”，该表为本订单尺寸的唯一依据。如需修改请在那里调整。"
+  },
+  "noSizingTableTitle": {
+    "en": "No sizing reference on this PO",
+    "zh": "本订单无尺寸参考"
+  },
+  "noSizingTableBody": {
+    "en": "No Golden Sample sizing table reference has been entered for this purchase order, so there is nothing to measure against. The right fix is to add it under Product Dimensions in Order Management - it then flows through to every report on this PO.",
+    "zh": "本采购订单尚未录入金样尺寸表，因此无可对比的基准。建议在订单管理的“产品尺寸”中补充，补充后将自动应用于该订单的所有报告。"
+  },
+  "noSizingTableFallback": {
+    "en": "If the inspection cannot wait, you can enter a chart by hand for this report only. It will not be saved back to the PO.",
+    "zh": "若检验无法等待，可仅为本次报告手动录入尺寸表，该内容不会回写到订单。"
+  },
+  "btnEnterSizingManually": {
+    "en": "Enter manually",
+    "zh": "手动录入"
+  },
+  "manualSizingNotice": {
+    "en": "Entered by hand for this report only - the PO has no sizing table. Add one in Order Management so future reports do not need this.",
+    "zh": "仅为本次报告手动录入——订单尚无尺寸表。请在订单管理中补充，以免后续报告重复录入。"
+  },
+  "noSizingTableToast": {
+    "en": "Add the sizing table on the PO, or choose Enter manually.",
+    "zh": "请在订单中补充尺寸表，或选择“手动录入”。"
+  },
+  "approvalNoPoTable": {
+    "en": "Values entered here establish the approved chart for this sample. Adding a Product Dimensions table in Order Management instead keeps the PO and the approval in step.",
+    "zh": "在此录入的数值将作为本样品的已批准尺寸表。建议改为在订单管理中补充“产品尺寸”，以保持订单与审批一致。"
   }
 }

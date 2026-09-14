@@ -1354,3 +1354,14 @@ td.reference-selectable { outline-offset: -2px; }
 .section-clean-btn.is-on { background: var(--jc-teal); border-style: solid; color: #fff; }
 .section-clean-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 @media (max-width: 480px) { .section-answer-row { flex-direction: column; } }
+
+/* Approved size chart values that come from the PO: shown, not edited. Styled
+   to read as a value rather than a disabled input, which invites clicking. */
+.size-point-locked {
+  padding: 8px 10px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--jc-text);
+  background: var(--jc-mint-light);
+  border-radius: var(--radius-sm);
+}

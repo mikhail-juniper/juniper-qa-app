@@ -1168,3 +1168,20 @@ details.om-handoff-card[open] > summary::after { content: '▾'; }
   .om-setup-backdrop { padding: 0; align-items: flex-end; }
   .om-setup-box { max-width: none; max-height: 92vh; border-radius: 14px 14px 0 0; }
 }
+
+/* Main Component Specifications: the Fabric Code cell carries an extra line
+   (the selected-fabric chips, or "No fabric selected") between its label and
+   its input, which pushed that column's box lower than its neighbours. Making
+   each cell a column with the input pinned to the bottom lines the boxes up
+   however many chips are showing. */
+.om-field-align { display: flex; flex-direction: column; }
+.om-field-align > label { margin-bottom: 4px; }
+.om-field-align > input:last-child,
+.om-field-align > .om-money-wrap:last-child { margin-top: auto; }
+
+/* Belt and braces for .om-field-align: a hidden input at the end of a cell
+   used to win `input:last-child` and defeat the bottom-alignment. Hidden
+   inputs are display:none so they never occupy a row themselves. */
+.om-field-align > input[type="hidden"] { display: none; }
+.om-field-align > input:not([type="hidden"]):last-of-type,
+.om-field-align > .om-money-wrap:last-of-type { margin-top: auto; }

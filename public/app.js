@@ -51,6 +51,8 @@ const state = {
   poDimensions: null,
   productWeightG: '',
   poWeightG: null,
+  poDimensionsTable: null,
+  manualSizingOptIn: false,
   /* Step 6 entries keyed by the Step 6 question id they were logged under.
    * Everything here is minor by definition - see renderAdditionalIssuesStep. */
   sectionIssues: {},
@@ -513,6 +515,13 @@ function checklistDefsForStep(name) {
    * blocked submission outright. The keys still exist in state for the Sizing
    * step's custom-sizing flow, which is why they aren't deleted. */
   if (name === 'inspectionDetails') return [];
+  if (name === 'sizing' && state.category === 'apparel'
+    && !state.poDimensionsTable && !state.manualSizingOptIn && !state.categoryData.fit) {
+    // Nothing has been measured against - make the choice explicit rather
+    // than letting an unmeasured report slide through.
+    showToast(bi('noSizingTableToast', 'Add the sizing table on the PO, or choose Enter manually.').en, true);
+    return false;
+  }
   if (name === 'sizing' && state.category === 'apparel' && state.categoryData.fit === OTHER_FIT_VALUE) {
     return [['generalSizingMatch', 'generalSizingMatch']];
   }
@@ -1527,6 +1536,18 @@ async function submitPoLookup() {
       depth: record.dimensionsLength
     };
     state.poWeightG = record.weightGrams || null;
+
+    /* Apparel sizing comes from the PO's Product Dimensions table, which is
+     * the sizing source of truth for the order. The report used to take the
+     * fit only from the Golden Sample approval, so a PO whose approval hadn't
+     * recorded sizing opened on an empty "Select a fit..." and QA was asked to
+     * choose - which meant they could pick a different standard than the one
+     * the order was placed against. */
+    if (record.fitKey) state.categoryData.fit = record.fitKey;
+    state.poDimensionsTable = record.dimensionsTable || null;
+    if (state.poDimensionsTable && state.poDimensionsTable.standardKey && !record.fitKey) {
+      state.categoryData.fit = state.poDimensionsTable.standardKey;
+    }
     if (['height', 'width', 'depth'].some((k) => poDims[k] !== null && poDims[k] !== undefined && String(poDims[k]).trim())) {
       state.poDimensions = poDims;
       if (!state.approvalSizingData) state.approvalSizingData = { dimensions: poDims };
@@ -2631,10 +2652,49 @@ function renderApprovalSizingReferenceTile() {
   `;
 }
 
+/** Shown when the PO carries no Product Dimensions table for an apparel order. */
+function renderMissingSizingWarning() {
+  return `
+    <div class="card" style="background:var(--jc-warn-bg); border-color:#F0D9A8;">
+      <div class="section-title" style="color:var(--jc-warn);">${escapeHtml(bi('noSizingTableTitle', 'No sizing reference on this PO').en)}</div>
+      <div class="section-help" style="color:var(--jc-warn);">
+        ${escapeHtml(bi('noSizingTableBody', 'No Golden Sample sizing table reference has been entered for this purchase order, so there is nothing to measure against. The right fix is to add it under Product Dimensions in Order Management - it then flows through to every report on this PO.').en)}
+      </div>
+      <div class="section-help" style="color:var(--jc-warn); margin-top:8px;">
+        ${escapeHtml(bi('noSizingTableFallback', 'If the inspection cannot wait, you can enter a chart by hand for this report only. It will not be saved back to the PO.').en)}
+      </div>
+      <button type="button" class="btn btn-secondary" id="btnEnterSizingManually" style="width:auto;padding:9px 16px;margin-top:12px;">
+        ${escapeHtml(bi('btnEnterSizingManually', 'Enter manually').en)}
+      </button>
+    </div>
+  `;
+}
+
+/** Reminder that what follows is a one-off, not the PO's approved chart. */
+function renderManualSizingNotice() {
+  return `
+    <div class="card" style="background:var(--jc-warn-bg); border-color:#F0D9A8; padding:12px 16px;">
+      <div class="section-help" style="color:var(--jc-warn); margin:0;">
+        ${escapeHtml(bi('manualSizingNotice', 'Entered by hand for this report only - the PO has no sizing table. Add one in Order Management so future reports do not need this.').en)}
+      </div>
+    </div>
+  `;
+}
+
 function renderSizingStep() {
   let body = '';
   body += renderApprovalSizingReferenceTile();
   if (state.category === 'apparel') {
+    /* No sizing table on the PO and nobody has opted into entering one by
+     * hand: say so plainly rather than quietly showing an empty fit picker.
+     * A missing table means the PO itself is incomplete, and QA measuring
+     * against a generic template instead of the order's own approved chart is
+     * exactly the silent mismatch this whole chain exists to prevent. */
+    if (!state.poDimensionsTable && !state.manualSizingOptIn && !state.categoryData.fit) {
+      body += renderMissingSizingWarning();
+      return sizingStepShell(body);
+    }
+    if (state.manualSizingOptIn && !state.poDimensionsTable) body += renderManualSizingNotice();
     body += renderFitPicker();
     if (state.categoryData.fit === OTHER_FIT_VALUE) {
       body += renderCustomSizeChart();
@@ -2651,6 +2711,11 @@ function renderSizingStep() {
   // means plush only.
   body += renderWeightField();
 
+  return sizingStepShell(body);
+}
+
+/** Shared wrapper so the early return above renders the same chrome. */
+function sizingStepShell(body) {
   return `
     <div class="step-eyebrow">${biHtml('step', 'Step')} 4 / 7</div>
     <div class="step-title">尺寸<span class="zh">Sizing</span></div>
@@ -2708,6 +2773,29 @@ function anyDimensionOutOfTolerance() {
   return ['height', 'width', 'depth'].some(dimensionOutOfTolerance);
 }
 
+/** Repaint one measurement's out-of-tolerance flag in place.
+ *
+ *  A full render() on every keystroke would tear the input out of the DOM and
+ *  drop focus mid-number, so only the affected field's wrapper and its
+ *  "Approved: ..." line are touched. */
+function refreshToleranceFlag(key) {
+  const isWeight = key === 'weight';
+  const input = isWeight
+    ? document.getElementById('productWeightInput')
+    : document.querySelector(`[data-dimension="${key}"]`);
+  if (!input) return;
+  const bad = isWeight ? weightOutOfTolerance() : dimensionOutOfTolerance(key);
+
+  const field = input.closest('.field');
+  if (field) field.classList.toggle('has-error', bad);
+
+  const standard = document.querySelector(`[data-dim-standard="${key}"]`);
+  if (!standard) return;
+  standard.classList.toggle('dim-standard-fail', bad);
+  const flag = standard.querySelector('[data-dim-flag]');
+  if (flag) flag.textContent = bad ? ` \u2014 ${bi('outOfToleranceShort', 'out of tolerance').en}` : '';
+}
+
 /** Weight tolerance for this category, from Settings. Only plush has one, so
  *  this returns null everywhere else and the weight field isn't rendered. */
 function weightToleranceG() {
@@ -2749,9 +2837,9 @@ function renderWeightField() {
         <input type="number" step="1" inputmode="decimal" id="productWeightInput"
           value="${escapeHtml(String(state.productWeightG || ''))}" placeholder="0" />
         ${std !== null ? `
-          <div class="dim-standard ${bad ? 'dim-standard-fail' : ''}">
+          <div class="dim-standard ${bad ? 'dim-standard-fail' : ''}" data-dim-standard="weight">
             ${escapeHtml(bi('approvedLabel', 'Approved').en)}: ${std} \u00b1${tol} g
-            ${bad ? ` \u2014 ${escapeHtml(bi('outOfToleranceShort', 'out of tolerance').en)}` : ''}
+            <span data-dim-flag>${bad ? ` \u2014 ${escapeHtml(bi('outOfToleranceShort', 'out of tolerance').en)}` : ''}</span>
           </div>
         ` : `<div class="dim-standard">${escapeHtml(bi('noApprovedWeight', 'No approved weight on the PO to compare against.').en)}</div>`}
       </div>
@@ -2771,9 +2859,9 @@ function renderDimensionsFields() {
         <label class="field-label">${biBlockHtml(i18nKey, fallback)}<span class="required">*</span></label>
         <input type="number" step="0.1" inputmode="decimal" data-dimension="${key}" value="${escapeHtml(dims[key])}" placeholder="0.0" />
         ${std !== null ? `
-          <div class="dim-standard ${bad ? 'dim-standard-fail' : ''}">
+          <div class="dim-standard ${bad ? 'dim-standard-fail' : ''}" data-dim-standard="${key}">
             ${escapeHtml(bi('approvedLabel', 'Approved').en)}: ${std}${tol !== null ? ` \u00b1${tol}` : ''} cm
-            ${bad ? ` \u2014 ${escapeHtml(bi('outOfToleranceShort', 'out of tolerance').en)}` : ''}
+            <span data-dim-flag>${bad ? ` \u2014 ${escapeHtml(bi('outOfToleranceShort', 'out of tolerance').en)}` : ''}</span>
           </div>
         ` : ''}
       </div>
@@ -2851,7 +2939,31 @@ function renderCustomSizeChart() {
   `;
 }
 
+/** The PO decided the fit; QA measures against it rather than re-choosing. */
+function fitIsLockedByPo() {
+  return !!(state.poDimensionsTable || (state.categoryData.fit && state.autoFilledForPo));
+}
+
 function renderFitPicker() {
+  if (fitIsLockedByPo() && state.categoryData.fit) {
+    const fitDef = (CONFIG.fits.fits || {})[state.categoryData.fit];
+    const label = fitDef
+      ? (currentLangIsEn() ? fitDef.label_en : (fitDef.label_zh || fitDef.label_en))
+      : state.categoryData.fit;
+    return `
+      <div class="card">
+        <div class="section-title">${biBlockHtml('standardFit', 'Standard Fit')}</div>
+        <div class="review-row" style="border-bottom:0;">
+          <span class="k">${escapeHtml(bi('fromPurchaseOrder', 'From the purchase order').en)}</span>
+          <span class="v">${escapeHtml(label)}</span>
+        </div>
+      </div>
+    `;
+  }
+  return renderFitPickerEditable();
+}
+
+function renderFitPickerEditable() {
   const fits = fitsForCurrentSubcategory();
   const options = Object.keys(fits).map((key) => {
     const f = fits[key];
@@ -2879,7 +2991,24 @@ function renderFitPicker() {
  *  the generic template's standard when no Golden Sample value exists yet
  *  (e.g. Pre-Production being filed before Sample Approval, if that ever
  *  happens) or for a size the Golden Sample didn't cover. */
+/** "Youth S" and "Youth S (6/7 yrs)" are the same size with different
+ *  spellings, so names are compared with the bracketed note stripped. */
+function normalizeSizeKey(v) {
+  return String(v || '').replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
 function establishedStandardFor(sizeName, point, fitDef) {
+  /* The PO's own Product Dimensions table wins: it is the sizing source of
+   * truth for this order, and it's what the factory was given. The Golden
+   * Sample approval refines it below, and the generic standard is the last
+   * resort. */
+  const po = state.poDimensionsTable;
+  if (po && po.sizes) {
+    const row = po.sizes[sizeName]
+      || po.sizes[Object.keys(po.sizes).find((k) => normalizeSizeKey(k) === normalizeSizeKey(sizeName)) || ''];
+    if (row && row[point] !== undefined && row[point] !== '') return row[point];
+  }
+
   const sizing = state.approvalSizingData;
   if (sizing && sizing.fit === state.categoryData.fit && sizing.sizeRows) {
     const row = sizing.sizeRows.find((r) => r.size === sizeName);
@@ -3434,12 +3563,17 @@ function attachStepHandlers(name) {
 
   if (name === 'inspectionDetails') attachInspectionHandlers();
 
+  const manualSizingBtn = document.getElementById('btnEnterSizingManually');
+  if (manualSizingBtn) {
+    manualSizingBtn.addEventListener('click', () => { state.manualSizingOptIn = true; render(); });
+  }
+
   const weightInput = document.getElementById('productWeightInput');
   if (weightInput) {
-    weightInput.addEventListener('input', () => { state.productWeightG = weightInput.value; });
-    // Re-render on blur so the out-of-tolerance flag appears without waiting
-    // for Next, matching how the dimension fields behave.
-    weightInput.addEventListener('change', () => { state.productWeightG = weightInput.value; render(); });
+    weightInput.addEventListener('input', () => {
+      state.productWeightG = weightInput.value;
+      refreshToleranceFlag('weight');
+    });
   }
 
   attachDataBindLiveHandlers(document);
@@ -3541,7 +3675,12 @@ function attachStepHandlers(name) {
     const simpleSizeInput = document.getElementById('simpleSizeInput');
     if (simpleSizeInput) simpleSizeInput.addEventListener('input', (e) => { state.categoryData.simpleSizeValue = e.target.value; });
     document.querySelectorAll('[data-dimension]').forEach((el) => {
-      el.addEventListener('input', (e) => { state.categoryData.dimensions[el.getAttribute('data-dimension')] = e.target.value; });
+      el.addEventListener('input', (e) => {
+        const key = el.getAttribute('data-dimension');
+        state.categoryData.dimensions[key] = e.target.value;
+        // Flag as they type rather than waiting for blur or Next.
+        if (key !== 'notes') refreshToleranceFlag(key);
+      });
     });
     const btnAddCustomSize = document.getElementById('btnAddCustomSize');
     if (btnAddCustomSize) {

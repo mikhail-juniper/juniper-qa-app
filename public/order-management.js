@@ -971,7 +971,7 @@ function openProductForm(product) {
           <option value="other" ${product && product.productLine === 'other' ? 'selected' : ''}>Other</option>
         </select>
       </div>
-      <div><label>${i18('fldUnitPrice', 'Unit Price')} (¥)</label><div class="om-money-wrap"><input id="prodFactoryPrice" type="number" step="0.01" value="${val(product && product.factoryPrice)}" /></div></div>
+      <div class="om-field-align"><label>${i18('fldUnitPrice', 'Unit Price')} (¥)</label><div class="om-money-wrap"><input id="prodFactoryPrice" type="number" step="0.01" value="${val(product && product.factoryPrice)}" /></div></div>
       <div><label>${i18('fldSalesUnitPrice', 'Sales unit price')} (¥)</label><div class="om-money-wrap"><input id="prodSalesUnitPrice" type="number" step="0.01" value="${val(product && product.salesUnitPrice)}" /></div></div>
       <div><label>${i18('fldDimensions', 'Dimensions')}</label><input id="prodDimensions" type="text" placeholder="e.g. 30 x 20 x 5 cm" value="${val(product && product.dimensions)}" /></div>
       <div><label>${i18('fldWeight', 'Weight')}</label><input id="prodWeight" type="text" placeholder="e.g. 450g" value="${val(product && product.weight)}" /></div>
@@ -2500,7 +2500,14 @@ async function openDetailPanel(id, scope) {
            the actual values below, which is what the fields exist for. -->
     </div>
     <div class="om-field-grid om-field-grid-row" style="margin-top:22px;">
-      <div><label>${i18('fldWeightG', 'Weight (g)')}</label><input id="fWeightGrams" type="number" step="1" value="${val(order.mainComponent.weightGrams)}" /></div>
+      <!-- Weight (g) is the figure QA weighs a finished unit against, and only
+           plush has a weight tolerance, so it's hidden for apparel. Keyed off
+           the category as well as the product line: an apparel PO whose
+           productLine was never set was still showing it. Shipping
+           and Volume Weight are logistics figures and stay for every line.
+           The input is still rendered (hidden) so the save handler, which
+           reads it by id, doesn't have to special-case the product line. -->
+      <div${(order.category === 'apparel' || order.productLine === 'clothing') ? ' style="display:none;"' : ''}><label>${i18('fldWeightG', 'Weight (g)')}</label><input id="fWeightGrams" type="number" step="1" value="${val(order.mainComponent.weightGrams)}" /></div>
       <div><label>${i18('fldShippingWeightG', 'Shipping Weight (g)')}</label><input id="fShippingWeightGrams" type="number" step="1" value="${val(order.mainComponent.shippingWeightGrams)}" /></div>
       <div><label>${i18('fldVolumeWeightG', 'Volume Weight (g)')}</label><input id="fVolumeWeightGrams" type="number" step="1" value="${val(order.mainComponent.volumeWeightGrams)}" /></div>
     </div>
@@ -2540,19 +2547,23 @@ async function openDetailPanel(id, scope) {
     <div class="om-section-title">${i18('secMainComponentSpecs', 'Main Component Specifications')}</div>
     <div class="om-field-grid">
       ${order.productLine === 'clothing' ? `
-        <div><label>${i18('fldFabricCode', 'Fabric Code')}</label>
+        <div class="om-field-align"><label>${i18('fldFabricCode', 'Fabric Code')}</label>
           <!-- Multi-select: a garment often uses more than one fabric. The
                chosen fabrics are stored as a comma-separated string in the
                same field as before, so old POs and the Asana sync are
                unaffected. -->
           <div class="om-chip-field" id="fFabricChips"></div>
-          <input id="fFabricInfo" type="text" placeholder="${i18t('fabricAddPlaceholder', 'Type to add a fabric...')}" />
+          <!-- Hidden field FIRST: .om-field-align bottom-aligns using an
+               input:last-child rule, and a trailing hidden input silently won
+               that selector, leaving this cell's box higher than its
+               neighbours. -->
           <input type="hidden" id="fFabricInfoValue" value="${val(order.mainComponent.fabricInfo)}" />
+          <input id="fFabricInfo" type="text" placeholder="${i18t('fabricAddPlaceholder', 'Type to add a fabric...')}" />
         </div>
-        <div><label>${i18('fldFabricType', 'Fabric Type')}</label><input id="fComponent" type="text" placeholder="${i18t('phFabricTypeEg', 'e.g. 100% Cotton')}" value="${val(order.mainComponent.component)}" /></div>
+        <div class="om-field-align"><label>${i18('fldFabricType', 'Fabric Type')}</label><input id="fComponent" type="text" placeholder="${i18t('phFabricTypeEg', 'e.g. 100% Cotton')}" value="${val(order.mainComponent.component)}" /></div>
       ` : ''}
-      <div><label>${i18('fldUnitPrice', 'Unit Price')} (¥)</label><div class="om-money-wrap"><input id="fFactoryPrice" type="number" step="0.01" value="${val(order.mainComponent.factoryPrice)}" /></div></div>
-      <div><label>${i18('fldSupplierAddress', 'Supplier Address')}</label><input id="fSupplierAddress" type="text" value="${val(order.supplier.address)}" placeholder="${i18t('phAutoFillsSupplier', 'Auto-fills from Supplier Name above')}" /></div>
+      <div class="om-field-align"><label>${i18('fldUnitPrice', 'Unit Price')} (¥)</label><div class="om-money-wrap"><input id="fFactoryPrice" type="number" step="0.01" value="${val(order.mainComponent.factoryPrice)}" /></div></div>
+      <div class="om-field-align"><label>${i18('fldSupplierAddress', 'Supplier Address')}</label><input id="fSupplierAddress" type="text" value="${val(order.supplier.address)}" placeholder="${i18t('phAutoFillsSupplier', 'Auto-fills from Supplier Name above')}" /></div>
     </div>
     </div>
 
@@ -3541,7 +3552,40 @@ async function openDetailPanel(id, scope) {
    * covers S/M/L invites measurements being entered against sizes nobody is
    * making. Falls back to the full list when the PO has no distribution.
    */
+  /* Size names don't match exactly between the two lists they come from.
+   * The PO's size picker offers the canonical "Youth S", while a fit standard
+   * keys the same row "Youth S (6/7 yrs)" with the age range appended. An
+   * exact lookup therefore matched every Adult size and silently dropped
+   * every Youth one, so loading a standard onto a PO covering both produced
+   * an adult-only table with no warning.
+   *
+   * Normalising strips the parenthetical, collapses whitespace and lowercases,
+   * so the two spellings meet in the middle. */
+  function normalizeSizeName(name) {
+    return String(name || '')
+      .replace(/\([^)]*\)/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+  }
+
+  /** Find a standard's entry for a PO size, tolerating the spelling gap. */
+  function findStandardSize(allSizes, wantedName) {
+    if (allSizes[wantedName]) return wantedName;
+    const target = normalizeSizeName(wantedName);
+    return Object.keys(allSizes).find((k) => normalizeSizeName(k) === target) || null;
+  }
+
   function poSizes() {
+    /* Read the size rows out of the form, not off the saved order. Sizes typed
+     * into the Size Distribution table but not yet saved were invisible here,
+     * so loading a standard right after adding Youth rows silently scoped them
+     * out and only the previously-saved Adult sizes came through. Falls back to
+     * the saved order when the table isn't on screen. */
+    const live = [...document.querySelectorAll('#omSizeRows .om-size-size')]
+      .map((el) => el.value.trim())
+      .filter(Boolean);
+    if (live.length) return [...new Set(live)];
     const dist = (order.mainComponent && order.mainComponent.sizeDistribution) || [];
     const labels = dist.map((d) => d.size).filter(Boolean);
     return labels.length ? labels : universalSizes;
@@ -3651,7 +3695,10 @@ async function openDetailPanel(id, scope) {
         const wanted = poSizes();
         const scoped = {};
         wanted.forEach((sizeName) => {
-          if (allSizes[sizeName]) scoped[sizeName] = allSizes[sizeName];
+          const match = findStandardSize(allSizes, sizeName);
+          // Key the row by the standard's own spelling, so the measurement
+          // points and labels line up with the rest of the standard.
+          if (match) scoped[match] = allSizes[match];
         });
         dimensionsTableState = {
           standardKey: e.target.value,
@@ -3670,7 +3717,7 @@ async function openDetailPanel(id, scope) {
       // dropdown - never a "New Size" placeholder to type over.
       // Offer the PO's own sizes first, falling back to the canonical list
       // once they're all present.
-      const nextSize = poSizes().find((s) => !dimensionsTableState.sizes[s])
+      const nextSize = poSizes().find((s) => !findStandardSize(dimensionsTableState.sizes, s))
         || universalSizes.find((s) => !dimensionsTableState.sizes[s])
         || `New Size ${Object.keys(dimensionsTableState.sizes).length + 1}`;
       dimensionsTableState.sizes[nextSize] = {};

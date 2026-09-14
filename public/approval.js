@@ -1429,6 +1429,14 @@ function renderApprovalSizeEntryTable(fitDef) {
     approvalState.customPoints = [];
   }
 
+  /* The PO's Product Dimensions table is the sizing source of truth for the
+   * order, so where it exists these values are shown, not edited. Editing them
+   * here meant the approved chart could quietly diverge from what the factory
+   * was actually given on the PO. Change them in Order Management. */
+  const lockedByPo = !!(approvalState.po && approvalState.po.dimensionsTable
+    && approvalState.po.dimensionsTable.sizes
+    && Object.keys(approvalState.po.dimensionsTable.sizes).length);
+
   const cards = approvalState.sizeRows.map((row, ridx) => {
     const standard = fitDef.sizes[row.size] || {};
     const pointFields = fitDef.points.map((p) => {
@@ -1444,8 +1452,10 @@ function renderApprovalSizeEntryTable(fitDef) {
         <div class="size-point-field">
           <label class="size-point-label">${escapeHtml(pl.zh || pl.en)} <span class="zh">${escapeHtml(pl.en)}</span></label>
           <span class="std-val">${escapeHtml(bi('standard').en)}<span class="zh">${escapeHtml(bi('standard').zh)}</span>: ${escapeHtml(formatStandard(std))}</span>
-          <input type="number" step="0.1" inputmode="decimal" value="${escapeHtml(measuredVal)}"
-            data-approval-size-row="${ridx}" data-approval-size-point="${p}" placeholder="0.0" />
+          ${lockedByPo
+            ? `<div class="size-point-locked">${escapeHtml(measuredVal !== '' ? measuredVal : '\u2014')}</div>`
+            : `<input type="number" step="0.1" inputmode="decimal" value="${escapeHtml(measuredVal)}"
+                data-approval-size-row="${ridx}" data-approval-size-point="${p}" placeholder="0.0" />`}
         </div>
       `;
     }).join('');
@@ -1483,17 +1493,27 @@ function renderApprovalSizeEntryTable(fitDef) {
   return `
     <div class="card">
       <div class="section-title">${biBlockHtml('approvedSizeChartTitle', 'Approved Size Chart')}</div>
-      <div class="section-help">${escapeHtml(bi('approvedSizeChartHelp').en)}<br/>${escapeHtml(bi('approvedSizeChartHelp').zh)}</div>
+      ${!lockedByPo ? `
+        <!-- Same fallback as the QA report: the PO has no Product Dimensions
+             table, so this chart is being established here instead of pulled
+             from the order. Worth saying out loud rather than looking like
+             normal behaviour. -->
+        <div class="section-help" style="background:var(--jc-warn-bg); color:var(--jc-warn); padding:10px 12px; border-radius:var(--radius-sm); margin-bottom:10px;">
+          ${escapeHtml(bi('noSizingTableTitle', 'No sizing reference on this PO').en)} \u2014
+          ${escapeHtml(bi('approvalNoPoTable', 'Values entered here establish the approved chart for this sample. Adding a Product Dimensions table in Order Management instead keeps the PO and the approval in step.').en)}
+        </div>
+      ` : ''}
+      <div class="section-help">${lockedByPo
+        ? escapeHtml(bi('approvedSizeChartFromPo', 'Pulled from Product Dimensions on the purchase order, which is the sizing source of truth for this PO. Edit it there if it needs to change.').en)
+        : escapeHtml(bi('approvedSizeChartHelp').en) + ' / ' + escapeHtml(bi('approvedSizeChartHelp').zh)}</div>
       ${cards}
       <div class="custom-columns-editor" style="margin-top:14px;">
         <div class="section-photos-label">${biBlockHtml('additionalColumnsTitle', 'Additional Columns')}</div>
         ${customColumnRows}
         <button type="button" class="add-column-btn" id="btnAddSizeColumn">${escapeHtml(bi('addAdditionalColumn', '+ Add Additional Column').en)} <span class="zh">${escapeHtml(bi('addAdditionalColumn').zh)}</span></button>
       </div>
-      <div class="size-card-photos" style="margin-top:14px;">
-        <div class="section-photos-label">${biBlockHtml('sizingPhotosOverall', 'Photos')}</div>
-        ${renderPhotoSlot('sizechart', 'Photo', '照片')}
-      </div>
+      <!-- Photo slot removed: the sizing chart is a table of numbers, and the
+           sample photos that matter are collected in their own section. -->
     </div>
   `;
 }
