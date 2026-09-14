@@ -428,6 +428,22 @@ div.om-money-wrap::before {
    (same class+element count would tie, and later-in-file would win). */
 div.om-money-wrap input { padding-left: 28px; width: 100%; }
 
+/* ---- Status pills ----
+ * The nine main order statuses run as a deliberate colour ramp: neutral grey
+ * before work starts, amber through the early stages, then warming through
+ * olive and green until Completed lands on solid brand green. The point is
+ * that you can read progress down a column at a glance without reading the
+ * words - the further green it is, the further along the PO is.
+ *
+ * Slugs come from statusSlug() in order-management.js, which lowercases and
+ * hyphenates the status string, so these must match STATUSES in
+ * lib/orderManagementStore.js exactly. A status with no rule here still
+ * renders, just as an unstyled pill - which is what every stage except Order
+ * Placed, In Production and Completed was doing before.
+ *
+ * Accessory statuses reuse the same names where they overlap (New Request,
+ * Order Placed, In Production, In Transportation, Completed) and keep their
+ * own rules below for the three that don't. */
 .om-pill {
   display: inline-block;
   padding: 4px 10px;
@@ -436,13 +452,28 @@ div.om-money-wrap input { padding-left: 28px; width: 100%; }
   font-weight: 700;
   white-space: nowrap;
 }
-.om-pill-new { background: #EFEFEF; color: #555; }
-.om-pill-order-placed { background: #FCEBD8; color: #B9540E; }
-.om-pill-in-production { background: #FCF1DF; color: var(--jc-warn); }
+
+/* 1 - not started yet */
+.om-pill-new,
+.om-pill-new-request              { background: #EFEFEF; color: #555; }
+/* 2-3 - ordered, early checks: amber */
+.om-pill-order-placed             { background: #FCEBD8; color: #B9540E; }
+.om-pill-pp-quality-inspection    { background: #FBEFD3; color: #9A6B10; }
+/* 4-5 - making it: amber cooling towards olive */
+.om-pill-in-production            { background: #FCF1DF; color: var(--jc-warn); }
+.om-pill-bulk-quality-inspection  { background: #F3F1D2; color: #77731A; }
+/* 6-7 - finishing and shipping: green taking over */
+.om-pill-final-production         { background: #E9F2D8; color: #55772A; }
+.om-pill-in-transportation        { background: #DEF0DE; color: #337B47; }
+/* 8 - arrived */
+.om-pill-delivered                { background: #D2EFE2; color: #1C7A5B; }
+/* 9 - done: the only solid fill, so the finish line is unmistakable */
+.om-pill-completed                { background: var(--jc-teal); color: #fff; }
+
+/* Accessory-only statuses */
 .om-pill-during-quality-inspection { background: var(--jc-mint-light); color: var(--jc-teal-dark); }
 .om-pill-during-transport { background: #E4F0FB; color: #1F6FA5; }
 .om-pill-confirm-receipt-of-goods { background: #E9F7EE; color: #2C8A4D; }
-.om-pill-completed { background: var(--jc-teal); color: #fff; }
 
 .om-fab {
   position: fixed;

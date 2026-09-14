@@ -4350,5 +4350,57 @@
   "savingEllipsis": {
     "en": "Saving...",
     "zh": "保存中..."
+  },
+  "titleAdditionalReview": {
+    "en": "Additional Review",
+    "zh": "附加检查"
+  },
+  "helpAdditionalReview": {
+    "en": "Set up for this PO because the product includes these features.",
+    "zh": "因该产品包含这些特性，已为本订单添加。"
+  },
+  "sectionCustomQuestions": {
+    "en": "Custom questions",
+    "zh": "自定义问题"
+  },
+  "unitsAffectedLabel": {
+    "en": "How many units failed?",
+    "zh": "不合格数量？"
+  },
+  "unitsAffectedPlaceholder": {
+    "en": "e.g. 3",
+    "zh": "例如 3"
+  },
+  "evidenceLabel": {
+    "en": "Evidence",
+    "zh": "证据"
+  },
+  "mediaPhotoRequired": {
+    "en": "Photo required",
+    "zh": "需要图片"
+  },
+  "mediaVideoRequired": {
+    "en": "Video required",
+    "zh": "需要视频"
+  },
+  "mediaOnFailRequired": {
+    "en": "Photo or video of the defect required",
+    "zh": "需要缺陷图片或视频"
+  },
+  "answerAllQuestions": {
+    "en": "Please answer every question.",
+    "zh": "请回答所有问题。"
+  },
+  "unitsRequiredOnFail": {
+    "en": "A failed question needs the number of units affected.",
+    "zh": "不合格项需填写受影响数量。"
+  },
+  "evidenceRequired": {
+    "en": "A photo or video is required for this question.",
+    "zh": "该项需上传图片或视频。"
+  },
+  "noQuestionsForProduct": {
+    "en": "No inspection questions are configured for this product type yet.",
+    "zh": "该产品类型尚未配置检验问题。"
   }
 }

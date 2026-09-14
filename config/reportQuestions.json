@@ -1,0 +1,1045 @@
+{
+  "_readme": "The QA/QC report question bank, generated from QA_QC_Question_Bank_DRAFT.xlsx.\n\nQuestions are grouped by product type. A group names its top-level 'category' and the 'subcategories' it covers; an empty subcategories list means the whole category (Bags, Other), which have no subcategory picker. Matching is subcategory-first, then category.\n\nanswer: passFailNa (Step 5), passFail, numeric (plush weight), sizingChart (the existing sizing flow, untouched), defects (Step 6 - the inspector adds one entry per issue found).\nmedia:  on_fail (photo or video required when the answer is Fail), photo_always / video_always (required whatever the answer, because the evidence IS the check), on_entry (every defect entry needs one), none.\n\nSeverity is derived from the step, not chosen by the inspector: a Step 5 fail counts as MAJOR and a Step 6 entry counts as MINOR. Nothing is recorded as critical any more.\n\nRequired directly from the repo like categories.json, so edits here deploy normally. Question ids are stable and are what submitted reports reference - don't renumber them.",
+  "groups": {
+    "apparel_garments": {
+      "category": "apparel",
+      "subcategories": [
+        "hoodie",
+        "tshirt",
+        "sweatshirt",
+        "jacket",
+        "joggers"
+      ],
+      "steps": {
+        "4": [
+          {
+            "id": "apparel_garments.s4.01",
+            "section": "Sizing",
+            "title": "Golden Sample sizing chart",
+            "guidance": "Measure every size in the Golden Sample sizing chart and enter the actual dimensions. Measure flat on a hard surface, smoothed but not stretched. Any measurement more than ±2 cm from the approved standard is flagged as a fail automatically.",
+            "answer": "sizingChart",
+            "media": "none"
+          }
+        ],
+        "5": [
+          {
+            "id": "apparel_garments.s5.01",
+            "section": "Colour & Material",
+            "title": "Fabric colour matches approved sample",
+            "guidance": "Compare against the golden sample. Check the main body and each panel or colour-blocked area separately - shade variation between panels cut from different fabric rolls is a common miss.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "apparel_garments.s5.02",
+            "section": "Colour & Material",
+            "title": "Material matches approved sample",
+            "guidance": "Confirm the fabric type, weight and hand-feel match the approved sample. Check ribbing, lining, interlining and any secondary fabrics as well as the main body.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "apparel_garments.s5.03",
+            "section": "Artwork & Graphics",
+            "title": "Artwork matches the golden sample",
+            "guidance": "Compare the print or embroidery against the golden sample and the approved artwork file. Confirm every colour is present and correct, nothing is missing, and the artwork is not mirrored, rotated or distorted.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "apparel_garments.s5.04",
+            "section": "Artwork & Graphics",
+            "title": "Print / embroidery size and placement",
+            "guidance": "Measure the artwork's width and height, and its distance from a fixed reference point such as the collar seam, centre front or hem. Compare against the approved measurements. Anything more than ±0.5 cm out is a fail. Pay particular attention to placement relative to seams, shoulder straps, pockets, zippers and the garment centreline.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "apparel_garments.s5.05",
+            "section": "Labels & Packaging",
+            "title": "Care / wash label matches approved sample",
+            "guidance": "Check the wash/care label against the approved sample: wording, language, symbols, fibre content, size and position. The reference image attached to the PO is pulled in above for comparison. Confirm it is stitched down straight and fully enclosed.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "apparel_garments.s5.06",
+            "section": "Labels & Packaging",
+            "title": "Correct hang tag and packaging",
+            "guidance": "Confirm the hang tag is the correct version and is attached in the right place with the correct fastening. Check the polybag, header card or box matches the approved packaging spec, including any barcode or SKU sticker.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "apparel_garments.s5.07",
+            "section": "Labels & Packaging",
+            "title": "No damage to packaging",
+            "guidance": "Look over the packaging as it will arrive: crushed corners, tears, scuffing, water marks, or print rubbing off. Check cartons as well as individual packaging.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          }
+        ],
+        "6": [
+          {
+            "id": "apparel_garments.s6.01",
+            "section": "General Workmanship & Appearance",
+            "title": "Workmanship",
+            "guidance": "Look over the whole piece for loose or trailing threads, holes, tears, stains, dirt marks, open seams, skipped stitches and uneven stitching. Add each distinct issue as its own entry so the counts stay accurate.",
+            "answer": "defects",
+            "media": "on_entry"
+          },
+          {
+            "id": "apparel_garments.s6.02",
+            "section": "General Workmanship & Appearance",
+            "title": "Trims and hardware",
+            "guidance": "Zippers, buttons, snaps, drawstrings, cords and toggles. Check each is the correct part, correctly placed and securely attached, then operate it: zips should run smoothly end to end, snaps should engage and hold, drawstrings should pull freely without the cord end pulling through.",
+            "answer": "defects",
+            "media": "on_entry"
+          },
+          {
+            "id": "apparel_garments.s6.03",
+            "section": "General Workmanship & Appearance",
+            "title": "Sewing lines straight and consistent",
+            "guidance": "Check topstitching, hems and seams run straight with an even stitch density. Look for wavering lines, puckering and uneven seam allowance.",
+            "answer": "defects",
+            "media": "on_entry"
+          },
+          {
+            "id": "apparel_garments.s6.04",
+            "section": "Missing Components",
+            "title": "Missing components",
+            "guidance": "Anything that should be in the pack but isn't: a main component, an accessory, an insert card, a spare part, instructions. Record what is missing and how many units were affected.",
+            "answer": "defects",
+            "media": "on_entry"
+          },
+          {
+            "id": "apparel_garments.s6.05",
+            "section": "Additional Issues",
+            "title": "Additional issues",
+            "guidance": "Anything else worth recording that no other section covers. Describe what you found and where.",
+            "answer": "defects",
+            "media": "on_entry"
+          }
+        ]
+      }
+    },
+    "apparel_hat": {
+      "category": "apparel",
+      "subcategories": [
+        "hat"
+      ],
+      "steps": {
+        "4": [
+          {
+            "id": "apparel_hat.s4.01",
+            "section": "Sizing",
+            "title": "Golden Sample sizing chart",
+            "guidance": "Measure every size in the Golden Sample sizing chart and enter the actual dimensions. Measure flat on a hard surface, smoothed but not stretched. Any measurement more than ±2 cm from the approved standard is flagged as a fail automatically.",
+            "answer": "sizingChart",
+            "media": "none"
+          }
+        ],
+        "5": [
+          {
+            "id": "apparel_hat.s5.01",
+            "section": "Colour & Material",
+            "title": "Fabric colour matches approved sample",
+            "guidance": "Compare against the golden sample. Check the main body and each panel or colour-blocked area separately - shade variation between panels cut from different fabric rolls is a common miss.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "apparel_hat.s5.02",
+            "section": "Colour & Material",
+            "title": "Material matches approved sample",
+            "guidance": "Confirm the fabric type, weight and hand-feel match the approved sample. Check ribbing, lining, interlining and any secondary fabrics as well as the main body.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "apparel_hat.s5.03",
+            "section": "Artwork & Graphics",
+            "title": "Artwork matches the golden sample",
+            "guidance": "Compare the print or embroidery against the golden sample and the approved artwork file. Confirm every colour is present and correct, nothing is missing, and the artwork is not mirrored, rotated or distorted. On caps, check the front panel, side panels and any back or underbrim embroidery separately.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "apparel_hat.s5.04",
+            "section": "Artwork & Graphics",
+            "title": "Print / embroidery size and placement",
+            "guidance": "Measure the artwork's width and height, and its distance from a fixed reference point such as the collar seam, centre front or hem. Compare against the approved measurements. Anything more than ±0.5 cm out is a fail. Pay particular attention to placement relative to seams, shoulder straps, pockets, zippers and the garment centreline.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "apparel_hat.s5.05",
+            "section": "Labels & Packaging",
+            "title": "Care / wash label matches approved sample",
+            "guidance": "Check the wash/care label against the approved sample: wording, language, symbols, fibre content, size and position. The reference image attached to the PO is pulled in above for comparison. Confirm it is stitched down straight and fully enclosed.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "apparel_hat.s5.06",
+            "section": "Labels & Packaging",
+            "title": "Correct hang tag and packaging",
+            "guidance": "Confirm the hang tag is the correct version and is attached in the right place with the correct fastening. Check the polybag, header card or box matches the approved packaging spec, including any barcode or SKU sticker.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "apparel_hat.s5.07",
+            "section": "Labels & Packaging",
+            "title": "No damage to packaging",
+            "guidance": "Look over the packaging as it will arrive: crushed corners, tears, scuffing, water marks, or print rubbing off. Check cartons as well as individual packaging.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          }
+        ],
+        "6": [
+          {
+            "id": "apparel_hat.s6.01",
+            "section": "General Workmanship & Appearance",
+            "title": "Workmanship",
+            "guidance": "Look over the whole piece for loose or trailing threads, holes, tears, stains, dirt marks, open seams, skipped stitches and uneven stitching. Add each distinct issue as its own entry so the counts stay accurate.",
+            "answer": "defects",
+            "media": "on_entry"
+          },
+          {
+            "id": "apparel_hat.s6.02",
+            "section": "General Workmanship & Appearance",
+            "title": "Shape and structure",
+            "guidance": "Confirm the overall shape matches the approved sample. Check the brim is not bent or distorted, the crown holds its shape, and panels sit evenly without twisting.",
+            "answer": "defects",
+            "media": "on_entry"
+          },
+          {
+            "id": "apparel_hat.s6.03",
+            "section": "General Workmanship & Appearance",
+            "title": "Closures and hardware",
+            "guidance": "Snapback, buckle, velcro or elastic closure. Check it is the correct part, securely attached, and adjusts and holds through its full range.",
+            "answer": "defects",
+            "media": "on_entry"
+          },
+          {
+            "id": "apparel_hat.s6.04",
+            "section": "General Workmanship & Appearance",
+            "title": "Sewing lines straight and consistent",
+            "guidance": "Check topstitching, hems and seams run straight with an even stitch density. Look for wavering lines, puckering and uneven seam allowance.",
+            "answer": "defects",
+            "media": "on_entry"
+          },
+          {
+            "id": "apparel_hat.s6.05",
+            "section": "Missing Components",
+            "title": "Missing components",
+            "guidance": "Anything that should be in the pack but isn't: a main component, an accessory, an insert card, a spare part, instructions. Record what is missing and how many units were affected.",
+            "answer": "defects",
+            "media": "on_entry"
+          },
+          {
+            "id": "apparel_hat.s6.06",
+            "section": "Additional Issues",
+            "title": "Additional issues",
+            "guidance": "Anything else worth recording that no other section covers. Describe what you found and where.",
+            "answer": "defects",
+            "media": "on_entry"
+          }
+        ]
+      }
+    },
+    "apparel_socks": {
+      "category": "apparel",
+      "subcategories": [
+        "socks"
+      ],
+      "steps": {
+        "4": [
+          {
+            "id": "apparel_socks.s4.01",
+            "section": "Sizing",
+            "title": "Golden Sample sizing chart",
+            "guidance": "Measure every size in the Golden Sample sizing chart and enter the actual dimensions. Measure flat on a hard surface, smoothed but not stretched. Any measurement more than ±2 cm from the approved standard is flagged as a fail automatically.",
+            "answer": "sizingChart",
+            "media": "none"
+          }
+        ],
+        "5": [
+          {
+            "id": "apparel_socks.s5.01",
+            "section": "Colour & Material",
+            "title": "Yarn colours match approved sample",
+            "guidance": "Compare every yarn colour against the approved sample. Check the body, cuff, heel and toe separately - these are often knitted from different yarn lots.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "apparel_socks.s5.02",
+            "section": "Colour & Material",
+            "title": "Material matches approved sample",
+            "guidance": "Confirm the yarn composition, gauge and stretch match the approved sample. Check the cuff elastic recovers properly.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "apparel_socks.s5.03",
+            "section": "Artwork & Graphics",
+            "title": "Knitted pattern uses correct artwork and orientation",
+            "guidance": "Compare the jacquard or knitted pattern against the approved sample. Confirm the design is the right way up, not mirrored, and that all pattern colours are present.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "apparel_socks.s5.04",
+            "section": "Artwork & Graphics",
+            "title": "Pattern alignment and placement",
+            "guidance": "Check the pattern sits at the correct height on the leg and aligns consistently around the sock. More than ±0.5 cm out from the approved placement is a fail.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "apparel_socks.s5.05",
+            "section": "Labels & Packaging",
+            "title": "Correct hang tag and packaging",
+            "guidance": "Confirm the hang tag is the correct version and is attached in the right place with the correct fastening. Check the polybag, header card or box matches the approved packaging spec, including any barcode or SKU sticker.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "apparel_socks.s5.06",
+            "section": "Labels & Packaging",
+            "title": "No damage to packaging",
+            "guidance": "Look over the packaging as it will arrive: crushed corners, tears, scuffing, water marks, or print rubbing off. Check cartons as well as individual packaging.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          }
+        ],
+        "6": [
+          {
+            "id": "apparel_socks.s6.01",
+            "section": "General Workmanship & Appearance",
+            "title": "Workmanship",
+            "guidance": "Look over the whole sock for loose threads, holes, dropped stitches, stains and dirt marks, and uneven knitting. Add each distinct issue as its own entry.",
+            "answer": "defects",
+            "media": "on_entry"
+          },
+          {
+            "id": "apparel_socks.s6.02",
+            "section": "General Workmanship & Appearance",
+            "title": "Pair matching",
+            "guidance": "Check left and right socks match each other in size, colour, pattern placement and cuff length. Mismatched pairs are a common packing error.",
+            "answer": "defects",
+            "media": "on_entry"
+          },
+          {
+            "id": "apparel_socks.s6.03",
+            "section": "Missing Components",
+            "title": "Missing components",
+            "guidance": "Anything that should be in the pack but isn't: a main component, an accessory, an insert card, a spare part, instructions. Record what is missing and how many units were affected.",
+            "answer": "defects",
+            "media": "on_entry"
+          },
+          {
+            "id": "apparel_socks.s6.04",
+            "section": "Additional Issues",
+            "title": "Additional issues",
+            "guidance": "Anything else worth recording that no other section covers. Describe what you found and where.",
+            "answer": "defects",
+            "media": "on_entry"
+          }
+        ]
+      }
+    },
+    "apparel_other": {
+      "category": "apparel",
+      "subcategories": [
+        "other"
+      ],
+      "steps": {
+        "4": [
+          {
+            "id": "apparel_other.s4.01",
+            "section": "Sizing",
+            "title": "Golden Sample sizing chart",
+            "guidance": "Measure every size in the Golden Sample sizing chart and enter the actual dimensions. Measure flat on a hard surface, smoothed but not stretched. Any measurement more than ±2 cm from the approved standard is flagged as a fail automatically.",
+            "answer": "sizingChart",
+            "media": "none"
+          }
+        ],
+        "5": [
+          {
+            "id": "apparel_other.s5.01",
+            "section": "Colour & Material",
+            "title": "Fabric colour matches approved sample",
+            "guidance": "Compare against the golden sample. Check the main body and each panel or colour-blocked area separately - shade variation between panels cut from different fabric rolls is a common miss.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "apparel_other.s5.02",
+            "section": "Colour & Material",
+            "title": "Material matches approved sample",
+            "guidance": "Confirm the fabric type, weight and hand-feel match the approved sample. Check ribbing, lining, interlining and any secondary fabrics as well as the main body.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "apparel_other.s5.03",
+            "section": "Artwork & Graphics",
+            "title": "Artwork matches the golden sample",
+            "guidance": "Compare the print or embroidery against the golden sample and the approved artwork file. Confirm every colour is present and correct, nothing is missing, and the artwork is not mirrored, rotated or distorted.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "apparel_other.s5.04",
+            "section": "Artwork & Graphics",
+            "title": "Print / embroidery size and placement",
+            "guidance": "Measure the artwork's width and height, and its distance from a fixed reference point such as the collar seam, centre front or hem. Compare against the approved measurements. Anything more than ±0.5 cm out is a fail. Pay particular attention to placement relative to seams, shoulder straps, pockets, zippers and the garment centreline.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "apparel_other.s5.05",
+            "section": "Labels & Packaging",
+            "title": "Care / wash label matches approved sample",
+            "guidance": "Check the wash/care label against the approved sample: wording, language, symbols, fibre content, size and position. The reference image attached to the PO is pulled in above for comparison. Confirm it is stitched down straight and fully enclosed.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "apparel_other.s5.06",
+            "section": "Labels & Packaging",
+            "title": "Correct hang tag and packaging",
+            "guidance": "Confirm the hang tag is the correct version and is attached in the right place with the correct fastening. Check the polybag, header card or box matches the approved packaging spec, including any barcode or SKU sticker.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "apparel_other.s5.07",
+            "section": "Labels & Packaging",
+            "title": "No damage to packaging",
+            "guidance": "Look over the packaging as it will arrive: crushed corners, tears, scuffing, water marks, or print rubbing off. Check cartons as well as individual packaging.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          }
+        ],
+        "6": [
+          {
+            "id": "apparel_other.s6.01",
+            "section": "General Workmanship & Appearance",
+            "title": "Workmanship",
+            "guidance": "Look over the whole piece for loose or trailing threads, holes, tears, stains, dirt marks, open seams, skipped stitches and uneven stitching. Add each distinct issue as its own entry so the counts stay accurate.",
+            "answer": "defects",
+            "media": "on_entry"
+          },
+          {
+            "id": "apparel_other.s6.02",
+            "section": "General Workmanship & Appearance",
+            "title": "Trims and hardware",
+            "guidance": "Zippers, buttons, snaps, drawstrings, cords and toggles. Check each is the correct part, correctly placed and securely attached, then operate it: zips should run smoothly end to end, snaps should engage and hold, drawstrings should pull freely without the cord end pulling through.",
+            "answer": "defects",
+            "media": "on_entry"
+          },
+          {
+            "id": "apparel_other.s6.03",
+            "section": "General Workmanship & Appearance",
+            "title": "Sewing lines straight and consistent",
+            "guidance": "Check topstitching, hems and seams run straight with an even stitch density. Look for wavering lines, puckering and uneven seam allowance.",
+            "answer": "defects",
+            "media": "on_entry"
+          },
+          {
+            "id": "apparel_other.s6.04",
+            "section": "Missing Components",
+            "title": "Missing components",
+            "guidance": "Anything that should be in the pack but isn't: a main component, an accessory, an insert card, a spare part, instructions. Record what is missing and how many units were affected.",
+            "answer": "defects",
+            "media": "on_entry"
+          },
+          {
+            "id": "apparel_other.s6.05",
+            "section": "Additional Issues",
+            "title": "Additional issues",
+            "guidance": "Anything else worth recording that no other section covers. Describe what you found and where.",
+            "answer": "defects",
+            "media": "on_entry"
+          }
+        ]
+      }
+    },
+    "plush": {
+      "category": "plush",
+      "subcategories": [
+        "plushToy",
+        "puppet"
+      ],
+      "steps": {
+        "4": [
+          {
+            "id": "plush.s4.01",
+            "section": "Sizing",
+            "title": "Golden Sample sizing chart",
+            "guidance": "Measure every size in the Golden Sample sizing chart and enter the actual dimensions. Measure flat on a hard surface, smoothed but not stretched. Any measurement more than ±1 cm from the approved standard is flagged as a fail automatically.",
+            "answer": "sizingChart",
+            "media": "none"
+          },
+          {
+            "id": "plush.s4.02",
+            "section": "Sizing",
+            "title": "Product weight",
+            "guidance": "Weigh a finished unit on a calibrated scale and record the weight in grams. The approved weight is taken from the golden sample. More than ±5 g out is a fail.",
+            "answer": "numeric",
+            "media": "on_fail"
+          }
+        ],
+        "5": [
+          {
+            "id": "plush.s5.01",
+            "section": "Overall Appearance",
+            "title": "Overall shape and features match approved sample",
+            "guidance": "Compare the finished plush side by side with the golden sample. Confirm the silhouette matches and that facial features, embroidery and key design elements sit in the correct positions. Eye and mouth spacing is the most common failure.",
+            "answer": "passFailNa",
+            "media": "photo_always"
+          },
+          {
+            "id": "plush.s5.02",
+            "section": "Artwork & Graphics",
+            "title": "Artwork matches the golden sample",
+            "guidance": "Compare the print or embroidery against the golden sample and the approved artwork file. Confirm every colour is present and correct, nothing is missing, and the artwork is not mirrored, rotated or distorted.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "plush.s5.03",
+            "section": "Artwork & Graphics",
+            "title": "Print / embroidery size and placement",
+            "guidance": "Measure the artwork's size and its distance from a fixed reference point on the body. Anything more than ±0.5 cm from the approved measurement is a fail.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "plush.s5.04",
+            "section": "Labels & Packaging",
+            "title": "Care / wash label matches approved sample",
+            "guidance": "Check the wash/care label against the approved sample: wording, language, symbols, fibre content, size and position. The reference image attached to the PO is pulled in above for comparison. Confirm it is stitched down straight and fully enclosed.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "plush.s5.05",
+            "section": "Labels & Packaging",
+            "title": "Correct hang tag and packaging",
+            "guidance": "Confirm the hang tag is the correct version and is attached in the right place with the correct fastening. Check the polybag, header card or box matches the approved packaging spec, including any barcode or SKU sticker.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "plush.s5.06",
+            "section": "Labels & Packaging",
+            "title": "No damage to packaging",
+            "guidance": "Look over the packaging as it will arrive: crushed corners, tears, scuffing, water marks, or print rubbing off. Check cartons as well as individual packaging.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          }
+        ],
+        "6": [
+          {
+            "id": "plush.s6.01",
+            "section": "General Workmanship & Appearance",
+            "title": "Workmanship",
+            "guidance": "Look over the whole piece for loose or trailing threads, holes, tears, stains, dirt marks, open seams, skipped stitches and uneven stitching. Add each distinct issue as its own entry so the counts stay accurate.",
+            "answer": "defects",
+            "media": "on_entry"
+          },
+          {
+            "id": "plush.s6.02",
+            "section": "General Workmanship & Appearance",
+            "title": "Sewing lines straight and consistent",
+            "guidance": "Check topstitching, hems and seams run straight with an even stitch density. Look for wavering lines, puckering and uneven seam allowance.",
+            "answer": "defects",
+            "media": "on_entry"
+          },
+          {
+            "id": "plush.s6.03",
+            "section": "General Workmanship & Appearance",
+            "title": "Shape and symmetry",
+            "guidance": "Minor deformation only - a plush whose shape is clearly wrong against the golden sample is a Step 5 fail. Here, record lopsided limbs, uneven ears, a leaning head or a flattened face.",
+            "answer": "defects",
+            "media": "on_entry"
+          },
+          {
+            "id": "plush.s6.04",
+            "section": "General Workmanship & Appearance",
+            "title": "Stuffing",
+            "guidance": "Press over the whole body. Stuffing should be evenly distributed and firm to the same degree as the golden sample. Record lumps, hollow or empty areas, over-stuffed seams and sagging.",
+            "answer": "defects",
+            "media": "on_entry"
+          },
+          {
+            "id": "plush.s6.05",
+            "section": "Missing Components",
+            "title": "Missing components",
+            "guidance": "Anything that should be in the pack but isn't: a main component, an accessory, an insert card, a spare part, instructions. Record what is missing and how many units were affected.",
+            "answer": "defects",
+            "media": "on_entry"
+          },
+          {
+            "id": "plush.s6.06",
+            "section": "Additional Issues",
+            "title": "Additional issues",
+            "guidance": "Anything else worth recording that no other section covers. Describe what you found and where.",
+            "answer": "defects",
+            "media": "on_entry"
+          }
+        ]
+      }
+    },
+    "bags": {
+      "category": "bags",
+      "subcategories": [],
+      "steps": {
+        "4": [
+          {
+            "id": "bags.s4.01",
+            "section": "Sizing",
+            "title": "Golden Sample sizing chart",
+            "guidance": "Measure every size in the Golden Sample sizing chart and enter the actual dimensions. Measure flat on a hard surface, smoothed but not stretched. Any measurement more than ±2 cm from the approved standard is flagged as a fail automatically.",
+            "answer": "sizingChart",
+            "media": "none"
+          }
+        ],
+        "5": [
+          {
+            "id": "bags.s5.01",
+            "section": "Colour & Material",
+            "title": "Fabric colour matches approved sample",
+            "guidance": "Compare against the golden sample. Check the main body and each panel or colour-blocked area separately - shade variation between panels cut from different fabric rolls is a common miss.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "bags.s5.02",
+            "section": "Colour & Material",
+            "title": "Material matches approved sample",
+            "guidance": "Confirm the fabric type, weight, coating and hand-feel match the approved sample. Check the lining and any trim or base material as well as the main body.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "bags.s5.03",
+            "section": "Artwork & Graphics",
+            "title": "Artwork matches the golden sample",
+            "guidance": "Compare the print or embroidery against the golden sample and the approved artwork file. Confirm every colour is present and correct, nothing is missing, and the artwork is not mirrored, rotated or distorted.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "bags.s5.04",
+            "section": "Artwork & Graphics",
+            "title": "Print / embroidery size and placement",
+            "guidance": "Measure the artwork's size and its distance from a fixed reference point. Anything more than ±0.5 cm out is a fail. Pay particular attention to placement relative to seams, straps, pockets and zippers.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "bags.s5.05",
+            "section": "Labels & Packaging",
+            "title": "Care / wash label matches approved sample",
+            "guidance": "Check the wash/care label against the approved sample: wording, language, symbols, fibre content, size and position. The reference image attached to the PO is pulled in above for comparison. Confirm it is stitched down straight and fully enclosed.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "bags.s5.06",
+            "section": "Labels & Packaging",
+            "title": "Correct hang tag and packaging",
+            "guidance": "Confirm the hang tag is the correct version and is attached in the right place with the correct fastening. Check the polybag, header card or box matches the approved packaging spec, including any barcode or SKU sticker.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "bags.s5.07",
+            "section": "Labels & Packaging",
+            "title": "No damage to packaging",
+            "guidance": "Look over the packaging as it will arrive: crushed corners, tears, scuffing, water marks, or print rubbing off. Check cartons as well as individual packaging.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "bags.s5.08",
+            "section": "Straps & Handles",
+            "title": "Straps and handles correctly placed",
+            "guidance": "Confirm straps and handles are attached at the positions shown on the approved sample, are the correct length, and are even side to side.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "bags.s5.09",
+            "section": "Straps & Handles",
+            "title": "Straps and handles securely attached",
+            "guidance": "Pull-test each attachment point with firm steady pressure. Check bar-tacks, rivets and stitching for movement, loose threads or fabric puckering. Any give at the joint is a fail.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          }
+        ],
+        "6": [
+          {
+            "id": "bags.s6.01",
+            "section": "General Workmanship & Appearance",
+            "title": "Workmanship",
+            "guidance": "Look over the whole piece for loose or trailing threads, holes, tears, stains, dirt marks, open seams, skipped stitches and uneven stitching. Add each distinct issue as its own entry so the counts stay accurate.",
+            "answer": "defects",
+            "media": "on_entry"
+          },
+          {
+            "id": "bags.s6.02",
+            "section": "General Workmanship & Appearance",
+            "title": "Sewing lines straight and consistent",
+            "guidance": "Check topstitching, hems and seams run straight with an even stitch density. Look for wavering lines, puckering and uneven seam allowance.",
+            "answer": "defects",
+            "media": "on_entry"
+          },
+          {
+            "id": "bags.s6.03",
+            "section": "General Workmanship & Appearance",
+            "title": "Overall shape",
+            "guidance": "Confirm the bag holds the shape of the approved sample when empty and when lightly filled. Record leaning, collapsing panels and a base that will not sit flat.",
+            "answer": "defects",
+            "media": "on_entry"
+          },
+          {
+            "id": "bags.s6.04",
+            "section": "General Workmanship & Appearance",
+            "title": "Zippers, closures and hardware",
+            "guidance": "Zips, buttons, snaps, drawstrings and strap hardware. Check each is correct, correctly placed and securely attached. Zips should open and close smoothly with no sticking, catching or broken teeth.",
+            "answer": "defects",
+            "media": "on_entry"
+          },
+          {
+            "id": "bags.s6.05",
+            "section": "General Workmanship & Appearance",
+            "title": "Pockets, lining and special hardware",
+            "guidance": "Check pockets and compartments are the right size and in the right place, the lining is cleanly fitted with no twisting or exposed raw edges, and any buckles, clips or feet are correct and secure.",
+            "answer": "defects",
+            "media": "on_entry"
+          },
+          {
+            "id": "bags.s6.06",
+            "section": "Missing Components",
+            "title": "Missing components",
+            "guidance": "Anything that should be in the pack but isn't: a main component, an accessory, an insert card, a spare part, instructions. Record what is missing and how many units were affected.",
+            "answer": "defects",
+            "media": "on_entry"
+          },
+          {
+            "id": "bags.s6.07",
+            "section": "Additional Issues",
+            "title": "Additional issues",
+            "guidance": "Anything else worth recording that no other section covers. Describe what you found and where.",
+            "answer": "defects",
+            "media": "on_entry"
+          }
+        ]
+      }
+    },
+    "accessories": {
+      "category": "accessories",
+      "subcategories": [
+        "acrylicStandee",
+        "keychain",
+        "pin"
+      ],
+      "steps": {
+        "4": [
+          {
+            "id": "accessories.s4.01",
+            "section": "Sizing",
+            "title": "Golden Sample sizing chart",
+            "guidance": "Measure every size in the Golden Sample sizing chart and enter the actual dimensions. Measure flat on a hard surface, smoothed but not stretched. Any measurement more than ±0.5 cm from the approved standard is flagged as a fail automatically.",
+            "answer": "sizingChart",
+            "media": "none"
+          }
+        ],
+        "5": [
+          {
+            "id": "accessories.s5.01",
+            "section": "Colour & Material",
+            "title": "Colours and orientation match approved sample",
+            "guidance": "Compare against the approved sample. Confirm every colour matches and the artwork is the right way up and not mirrored.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "accessories.s5.02",
+            "section": "Artwork & Graphics",
+            "title": "Artwork matches approved sample",
+            "guidance": "Compare the print or embroidery against the approved sample and the approved artwork file. Confirm every colour is present and correct, nothing is missing, and the artwork is not mirrored, rotated or distorted.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "accessories.s5.03",
+            "section": "Appearance",
+            "title": "No scratches, cracks, chips or deformation",
+            "guidance": "Inspect the face and edges under good light, including through any protective film. Check for scratches, hairline cracks, chipped corners, bubbles in the acrylic and any warping or bending.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "accessories.s5.04",
+            "section": "Labels & Packaging",
+            "title": "Correct packaging",
+            "guidance": "Confirm the colour box, backing card and protective film match the approved packaging spec where applicable, including any barcode or SKU sticker.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "accessories.s5.05",
+            "section": "Labels & Packaging",
+            "title": "No damage to packaging",
+            "guidance": "Look over the packaging as it will arrive: crushed corners, tears, scuffing, water marks, or print rubbing off. Check cartons as well as individual packaging.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          }
+        ],
+        "6": [
+          {
+            "id": "accessories.s6.01",
+            "section": "Missing Components",
+            "title": "Missing components",
+            "guidance": "Anything that should be in the pack but isn't: a main component, an accessory, an insert card, a spare part, instructions. Record what is missing and how many units were affected.",
+            "answer": "defects",
+            "media": "on_entry"
+          },
+          {
+            "id": "accessories.s6.02",
+            "section": "Additional Issues",
+            "title": "Additional issues",
+            "guidance": "Anything else worth recording that no other section covers. Describe what you found and where.",
+            "answer": "defects",
+            "media": "on_entry"
+          }
+        ]
+      }
+    },
+    "paper_bound": {
+      "category": "paperGoods",
+      "subcategories": [
+        "notebook",
+        "book"
+      ],
+      "steps": {
+        "4": [
+          {
+            "id": "paper_bound.s4.01",
+            "section": "Sizing",
+            "title": "Golden Sample sizing chart",
+            "guidance": "Measure every size in the Golden Sample sizing chart and enter the actual dimensions. Measure flat on a hard surface, smoothed but not stretched. Any measurement more than ±0.5 cm from the approved standard is flagged as a fail automatically.",
+            "answer": "sizingChart",
+            "media": "none"
+          }
+        ],
+        "5": [
+          {
+            "id": "paper_bound.s5.01",
+            "section": "Print Quality",
+            "title": "Colours and orientation match approved sample",
+            "guidance": "Compare printed colours against the approved sample or proof. Confirm the artwork is the right way up and not mirrored on the cover and interior.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "paper_bound.s5.02",
+            "section": "Print Quality",
+            "title": "No missing print, misalignment or print defects",
+            "guidance": "Check for missing or faint print, registration that is out of alignment, banding, streaking, ink smudging and set-off between pages.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "paper_bound.s5.03",
+            "section": "Pages",
+            "title": "Correct page sequence and orientation",
+            "guidance": "Flick through the whole block. Confirm pages run in the correct order, none are upside-down, duplicated or missing, and front/back orientation is correct throughout.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "paper_bound.s5.04",
+            "section": "Labels & Packaging",
+            "title": "Correct packaging",
+            "guidance": "Confirm the hang tag is the correct version and is attached in the right place with the correct fastening. Check the polybag, header card or box matches the approved packaging spec, including any barcode or SKU sticker.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "paper_bound.s5.05",
+            "section": "Labels & Packaging",
+            "title": "No damage to packaging",
+            "guidance": "Look over the packaging as it will arrive: crushed corners, tears, scuffing, water marks, or print rubbing off. Check cartons as well as individual packaging.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          }
+        ],
+        "6": [
+          {
+            "id": "paper_bound.s6.01",
+            "section": "General Workmanship & Appearance",
+            "title": "Appearance",
+            "guidance": "Check the cover and pages for scratches, scuffing, stains, tears, dog-eared corners and unwanted folds or creases.",
+            "answer": "defects",
+            "media": "on_entry"
+          },
+          {
+            "id": "paper_bound.s6.02",
+            "section": "General Workmanship & Appearance",
+            "title": "Binding",
+            "guidance": "Confirm the binding is secure and aligned, the spine is straight, and no pages are loose, detached or bound in crooked. Open the book flat and check nothing works free.",
+            "answer": "defects",
+            "media": "on_entry"
+          },
+          {
+            "id": "paper_bound.s6.03",
+            "section": "Missing Components",
+            "title": "Missing components",
+            "guidance": "Anything that should be in the pack but isn't: a main component, an accessory, an insert card, a spare part, instructions. Record what is missing and how many units were affected.",
+            "answer": "defects",
+            "media": "on_entry"
+          },
+          {
+            "id": "paper_bound.s6.04",
+            "section": "Additional Issues",
+            "title": "Additional issues",
+            "guidance": "Anything else worth recording that no other section covers. Describe what you found and where.",
+            "answer": "defects",
+            "media": "on_entry"
+          }
+        ]
+      }
+    },
+    "paper_poster": {
+      "category": "paperGoods",
+      "subcategories": [
+        "poster"
+      ],
+      "steps": {
+        "4": [
+          {
+            "id": "paper_poster.s4.01",
+            "section": "Sizing",
+            "title": "Golden Sample sizing chart",
+            "guidance": "Measure every size in the Golden Sample sizing chart and enter the actual dimensions. Measure flat on a hard surface, smoothed but not stretched. Any measurement more than ±0.5 cm from the approved standard is flagged as a fail automatically.",
+            "answer": "sizingChart",
+            "media": "none"
+          }
+        ],
+        "5": [
+          {
+            "id": "paper_poster.s5.01",
+            "section": "Print Quality",
+            "title": "Colours and orientation match approved sample",
+            "guidance": "Compare printed colours against the approved sample or proof. Confirm the artwork is the right way up and not mirrored.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "paper_poster.s5.02",
+            "section": "Print Quality",
+            "title": "No missing print, misalignment or print defects",
+            "guidance": "Check for missing or faint print, registration out of alignment, banding, streaking and ink smudging across the full sheet including the edges.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          }
+        ],
+        "6": [
+          {
+            "id": "paper_poster.s6.01",
+            "section": "General Workmanship & Appearance",
+            "title": "Appearance",
+            "guidance": "Check the full sheet for scratches, scuffing, stains, tears, dog-eared corners and unwanted folds or creases, including the edges and reverse.",
+            "answer": "defects",
+            "media": "on_entry"
+          },
+          {
+            "id": "paper_poster.s6.02",
+            "section": "Missing Components",
+            "title": "Missing components",
+            "guidance": "Anything that should be in the pack but isn't: a main component, an accessory, an insert card, a spare part, instructions. Record what is missing and how many units were affected.",
+            "answer": "defects",
+            "media": "on_entry"
+          },
+          {
+            "id": "paper_poster.s6.03",
+            "section": "Additional Issues",
+            "title": "Additional issues",
+            "guidance": "Anything else worth recording that no other section covers. Describe what you found and where.",
+            "answer": "defects",
+            "media": "on_entry"
+          }
+        ]
+      }
+    },
+    "other": {
+      "category": "other",
+      "subcategories": [],
+      "steps": {
+        "4": [
+          {
+            "id": "other.s4.01",
+            "section": "Sizing",
+            "title": "Golden Sample sizing chart",
+            "guidance": "Measure every size in the Golden Sample sizing chart and enter the actual dimensions. Measure flat on a hard surface, smoothed but not stretched. Any measurement more than ±2 cm from the approved standard is flagged as a fail automatically.",
+            "answer": "sizingChart",
+            "media": "none"
+          }
+        ],
+        "5": [
+          {
+            "id": "other.s5.01",
+            "section": "Colour & Material",
+            "title": "Colours and orientation match approved sample",
+            "guidance": "Compare against the approved sample. Confirm every colour matches and the artwork is correctly oriented.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "other.s5.02",
+            "section": "Labels & Packaging",
+            "title": "Correct hang tag and packaging",
+            "guidance": "Confirm the hang tag is the correct version and is attached in the right place with the correct fastening. Check the polybag, header card or box matches the approved packaging spec, including any barcode or SKU sticker.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          },
+          {
+            "id": "other.s5.03",
+            "section": "Labels & Packaging",
+            "title": "No damage to packaging",
+            "guidance": "Look over the packaging as it will arrive: crushed corners, tears, scuffing, water marks, or print rubbing off. Check cartons as well as individual packaging.",
+            "answer": "passFailNa",
+            "media": "on_fail"
+          }
+        ],
+        "6": [
+          {
+            "id": "other.s6.01",
+            "section": "Missing Components",
+            "title": "Missing components",
+            "guidance": "Anything that should be in the pack but isn't: a main component, an accessory, an insert card, a spare part, instructions. Record what is missing and how many units were affected.",
+            "answer": "defects",
+            "media": "on_entry"
+          },
+          {
+            "id": "other.s6.02",
+            "section": "Additional Issues",
+            "title": "Additional issues",
+            "guidance": "Anything else worth recording that no other section covers. Describe what you found and where.",
+            "answer": "defects",
+            "media": "on_entry"
+          }
+        ]
+      }
+    }
+  }
+}

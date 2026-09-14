@@ -43,6 +43,12 @@ const state = {
   productRisk: 'medium', actualUnitsChecked: '', preProductionUnitsChecked: '',
   autoFilledForPo: null, _productRiskTouched: false,
   materials: '', printingMethod: '',
+  /* Step 5 answers keyed by question id from config/reportQuestions.json,
+   * plus the conditional/custom questions from the PO's report-link setup.
+   * Created lazily by answerFor() so a question added to the config later
+   * doesn't need a migration. */
+  answers: {},
+  qaSetup: null,
   categoryData: {
     fit: '',
     sizeRows: [],
@@ -66,7 +72,9 @@ const state = {
 };
 
 let step = 0;
-const STEPS = ['poLookup', 'orderInfo', 'productionNotes', 'inspectionDetails', 'sizing', 'issues', 'review'];
+// Sizing sits at Step 4 and Inspection Details at Step 5 (swapped Sept 2026):
+// the inspector measures first, then judges the piece against what they found.
+const STEPS = ['poLookup', 'orderInfo', 'productionNotes', 'sizing', 'inspectionDetails', 'issues', 'review'];
 // Display order for the category pickers. Any category key missing from this
 // list is filtered OUT of both pickers entirely (see the .filter calls in
 // renderNewPoScreen / the category step), so a new category in
@@ -503,7 +511,25 @@ function validateStep(s) {
     }
     if (!ok) showToast('Please fill in all required fields / 请填写所有必填项', true);
   } else if (name === 'inspectionDetails') {
-    ok = validateChecklistStepGeneric(name);
+    /* Step 5 is config-driven now, so it validates against the question bank
+     * rather than the old fixed checklist keys. */
+    const problems = inspectionStepProblems();
+    if (problems.length) {
+      ok = false;
+      problems.forEach((pb) => {
+        const row = document.querySelector(`[data-question="${pb.id}"]`);
+        if (row) row.classList.add('has-error');
+      });
+      const first = problems[0];
+      const msg = first.why === 'status'
+        ? bi('answerAllQuestions', 'Please answer every question.')
+        : first.why === 'units'
+          ? bi('unitsRequiredOnFail', 'A failed question needs the number of units affected.')
+          : bi('evidenceRequired', 'A photo or video is required for this question.');
+      showToast(msg.en + ' / ' + msg.zh, true);
+      const row = document.querySelector(`[data-question="${first.id}"]`);
+      if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
   } else if (name === 'sizing') {
     if (state.category === 'apparel' && state.categoryData.fit !== OTHER_FIT_VALUE) {
       if (apparelSizingIncomplete()) {
@@ -679,6 +705,7 @@ function getPhotoArray(fieldId) {
   if (fieldId.startsWith('customsizerow:')) return state.categoryData.customSizeRows[parseInt(fieldId.split(':')[1], 10)].photos;
   if (fieldId === 'chartphotos') return state.categoryData.chartPhotos;
   if (fieldId === 'simplesize') return state.categoryData.simpleSizePhotos;
+  if (fieldId.startsWith('q:')) return answerFor(fieldId.slice(2)).media;
   if (fieldId.startsWith('defect:')) {
     const d = findDefectById(fieldId.split(':')[1]);
     return d ? d.photos : [];
@@ -1317,6 +1344,10 @@ async function submitPoLookup() {
     state.poQuantity = record.orderQuantity ? String(record.orderQuantity) : '';
     state.poSizesIncluded = sortSizesCanonically(record.sizesIncluded || []);
     if (record.productRisk) state.productRisk = record.productRisk;
+    // Whichever stage this report is for. Null when Setup Report Link was
+    // never run, which means no additional questions - the safe default.
+    const setupStage = state.qaType === 'production' ? 'bulk' : 'preProduction';
+    state.qaSetup = (record.qaSetup && record.qaSetup[setupStage]) || null;
 
     // Pull Factory Code / Product Risk / sizing standard from QA/QC Approval's
     // Sample Approval, if it's been completed for this PO. Also gather
@@ -2033,38 +2064,164 @@ function segOption(groupName, value, i18nKey, current) {
 }
 
 /* ---- Step 2: Inspection Details ---- */
-function renderInspectionDetailsStep() {
-  const cd = state.categoryData;
-  let body = `
-    <div class="card">
-      <div class="section-title">${biBlockHtml('materials', 'Fabric / Material(s)')}</div>
-      <div class="field">
-        <textarea data-bind="materials" placeholder="${escapeHtml(bi('materialsPlaceholder').en)}">${escapeHtml(state.materials)}</textarea>
+/* ============================================================
+ * Step 5: Inspection Details (config-driven)
+ * ============================================================
+ * Questions come from config/reportQuestions.json, chosen by the product's
+ * subcategory (falling back to its category), so a plush report asks plush
+ * questions and a poster report asks poster ones.
+ *
+ * Every question is Pass / Fail / N-A. A Fail always needs the quantity
+ * affected and a photo or video - severity is no longer chosen by the
+ * inspector, it's derived from the step: a Step 5 fail is MAJOR.
+ *
+ * Anything Chloe ticked in Setup Report Link is appended as an Additional
+ * Review section at the bottom. */
+
+/** The question group matching this product. Subcategory wins; a group with an
+ *  empty subcategory list covers its whole category (Bags, Other). */
+function questionGroupForProduct() {
+  const groups = ((CONFIG.reportQuestions || {}).groups) || {};
+  const bySub = Object.values(groups).find((g) =>
+    g.category === state.category && (g.subcategories || []).includes(state.subcategory));
+  if (bySub) return bySub;
+  return Object.values(groups).find((g) =>
+    g.category === state.category && !(g.subcategories || []).length) || null;
+}
+
+function questionsForStep(stepNumber) {
+  const g = questionGroupForProduct();
+  return (g && g.steps && g.steps[String(stepNumber)]) || [];
+}
+
+/** Lazily created so a question added to the config later needs no migration. */
+function answerFor(id) {
+  if (!state.answers[id]) state.answers[id] = { status: '', unitsAffected: '', media: [] };
+  return state.answers[id];
+}
+
+/** The extra questions Chloe ticked at PO setup, flattened into one list.
+ *  Conditional checks are Pass/Fail with no N-A - a trigger is only ticked
+ *  when the feature is actually present, so "not applicable" can't arise. */
+function additionalReviewQuestions() {
+  const setup = state.qaSetup;
+  if (!setup) return [];
+  const defs = (((CONFIG.conditionalChecks || {}).byCategory) || {})[state.category] || [];
+  const out = [];
+  (setup.checks || []).forEach((triggerKey) => {
+    const trigger = defs.find((t) => t.key === triggerKey);
+    if (!trigger) return;
+    trigger.questions.forEach((q) => out.push({
+      id: `cond.${triggerKey}.${q.key}`,
+      section: currentLangIsEn() ? trigger.label_en : (trigger.label_zh || trigger.label_en),
+      title: currentLangIsEn() ? q.text_en : (q.text_zh || q.text_en),
+      guidance: '',
+      answer: 'passFail',
+      media: q.media
+    }));
+  });
+  (setup.custom || []).forEach((c) => out.push({
+    id: `custom.${c.id}`,
+    section: bi('sectionCustomQuestions', 'Custom questions').en,
+    title: c.text,
+    guidance: '',
+    answer: 'passFail',
+    // A custom question can demand a photo, a video, or neither - in which
+    // case a fail still needs evidence like every other question.
+    media: c.requireVideo ? 'video_always' : (c.requirePhoto ? 'photo_always' : 'on_fail')
+  }));
+  return out;
+}
+
+function currentLangIsEn() {
+  return ((window.JuniperLang && window.JuniperLang.get && window.JuniperLang.get()) || 'zh') === 'en';
+}
+
+/** What evidence this question needs right now, given its answer. */
+function mediaRequirementFor(q, status) {
+  if (q.media === 'photo_always') return { required: true, label: bi('mediaPhotoRequired', 'Photo required').en };
+  if (q.media === 'video_always') return { required: true, label: bi('mediaVideoRequired', 'Video required').en };
+  if (q.media === 'on_fail' && status === 'fail') {
+    return { required: true, label: bi('mediaOnFailRequired', 'Photo or video of the defect required').en };
+  }
+  return { required: false, label: '' };
+}
+
+function renderQuestionCard(q) {
+  const a = answerFor(q.id);
+  const options = q.answer === 'passFail' ? ['pass', 'fail'] : ['pass', 'fail', 'na'];
+  const media = mediaRequirementFor(q, a.status);
+  const showMedia = media.required || (a.media && a.media.length);
+
+  return `
+    <div class="checklist-row q-row ${a.status === 'fail' ? 'q-row-fail' : ''}" data-question="${escapeHtml(q.id)}">
+      <div class="checklist-question">${escapeHtml(q.title)}</div>
+      ${q.guidance ? `<div class="q-guidance">${escapeHtml(q.guidance)}</div>` : ''}
+      <div class="segmented">
+        ${options.map((s) => {
+          const sl = bi(s);
+          const sel = a.status === s ? 'selected status-' + s : '';
+          return `<div class="segmented-option ${sel}" data-q-status="${escapeHtml(q.id)}" data-val="${s}">${escapeHtml(sl.en)}</div>`;
+        }).join('')}
       </div>
-      <div class="section-title" style="margin-top:10px;">${biBlockHtml('printingMethod', 'Printing Method(s)')}</div>
-      <div class="field">
-        <textarea data-bind="printingMethod" placeholder="${escapeHtml(bi('printingMethodPlaceholder').en)}">${escapeHtml(state.printingMethod)}</textarea>
-      </div>
+      ${a.status === 'fail' ? `
+        <div class="q-fail-block">
+          <label class="field-label">${escapeHtml(bi('unitsAffectedLabel', 'How many units failed?').en)}<span class="required">*</span></label>
+          <input type="number" min="1" class="input" data-q-units="${escapeHtml(q.id)}"
+            value="${escapeHtml(String(a.unitsAffected || ''))}"
+            placeholder="${escapeHtml(bi('unitsAffectedPlaceholder', 'e.g. 3').en)}" />
+        </div>
+      ` : ''}
+      ${showMedia ? `
+        <div class="q-media-block">
+          <div class="section-photos-label">
+            ${escapeHtml(bi('evidenceLabel', 'Evidence').en)}
+            ${media.required ? `<span class="required">*</span> <span class="q-media-hint">${escapeHtml(media.label)}</span>` : ''}
+          </div>
+          ${photoGrid('q:' + q.id, true)}
+        </div>
+      ` : ''}
     </div>
   `;
+}
 
-  body += checklistCard('fabricSection', [['fabricColorMatch', 'fabricColorMatch'], ['fabricWeightMatch', 'fabricWeightMatch']], 'fabric');
-  body += checklistCard('embroiderySection', [['embroideryColorMatch', 'embroideryColorMatch'], ['embroideryDimMatch', 'embroideryDimMatch']], 'embroidery');
-  body += checklistCard('printingSection', [['printColorMatch', 'printColorMatch'], ['printDimMatch', 'printDimMatch']], 'printing');
-  body += checklistCard('washTagSection', [['washTagMatch', 'washTagMatch']], 'washTag');
-  body += checklistCard('packagingSection', [['packagingCardMatch', 'packagingCardMatch'], ['bagTagsCorrect', 'bagTagsCorrect']], 'packaging');
+/** Groups consecutive questions under their section heading. */
+function renderQuestionSections(questions) {
+  const sections = [];
+  questions.forEach((q) => {
+    const last = sections[sections.length - 1];
+    if (last && last.name === q.section) last.items.push(q);
+    else sections.push({ name: q.section, items: [q] });
+  });
+  return sections.map((sec) => `
+    <div class="card">
+      <div class="section-title">${escapeHtml(sec.name)}</div>
+      ${sec.items.map(renderQuestionCard).join('')}
+    </div>
+  `).join('');
+}
 
-  if (state.category === 'other') {
-    body += `<div class="card">
-      <div class="section-title">${biBlockHtml('customNotes', 'Additional Notes')}</div>
-      <div class="field">
-        <textarea data-bind="cd.customNotes" placeholder="${escapeHtml(bi('customNotesPlaceholder').en)}">${escapeHtml(cd.customNotes)}</textarea>
-      </div>
-    </div>`;
+function renderInspectionDetailsStep() {
+  const questions = questionsForStep(5);
+  const extras = additionalReviewQuestions();
+
+  let body = '';
+  if (!questions.length) {
+    body += `<div class="card"><div class="section-help">${escapeHtml(bi('noQuestionsForProduct', 'No inspection questions are configured for this product type yet.').en)}</div></div>`;
+  } else {
+    body += renderQuestionSections(questions);
+  }
+
+  if (extras.length) {
+    body += `
+      <div class="step-subhead">${escapeHtml(bi('titleAdditionalReview', 'Additional Review').en)}</div>
+      <div class="section-help" style="margin:-6px 0 10px;">${escapeHtml(bi('helpAdditionalReview', 'Set up for this PO because the product includes these features.').en)}</div>
+      ${renderQuestionSections(extras)}
+    `;
   }
 
   return `
-    <div class="step-eyebrow">${biHtml('step', 'Step')} 4 / 7</div>
+    <div class="step-eyebrow">${biHtml('step', 'Step')} 5 / 7</div>
     <div class="step-title">检验详情<span class="zh">Inspection Details</span></div>
     ${body}
     <div class="nav-buttons">
@@ -2074,6 +2231,40 @@ function renderInspectionDetailsStep() {
   `;
 }
 
+/** Every question answered; a fail needs a quantity; required evidence present. */
+function inspectionStepProblems() {
+  const all = questionsForStep(5).concat(additionalReviewQuestions());
+  const problems = [];
+  all.forEach((q) => {
+    const a = answerFor(q.id);
+    if (!a.status) { problems.push({ id: q.id, why: 'status' }); return; }
+    if (a.status === 'fail' && !(parseInt(a.unitsAffected, 10) > 0)) problems.push({ id: q.id, why: 'units' });
+    if (mediaRequirementFor(q, a.status).required && !(a.media && a.media.length)) {
+      problems.push({ id: q.id, why: 'media' });
+    }
+  });
+  return problems;
+}
+
+function attachInspectionHandlers() {
+  document.querySelectorAll('[data-q-status]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const a = answerFor(el.dataset.qStatus);
+      a.status = el.dataset.val;
+      // Clearing a fail's quantity keeps a stale number from being submitted
+      // if the inspector changes their mind back to pass.
+      if (a.status !== 'fail') a.unitsAffected = '';
+      render();
+    });
+  });
+  document.querySelectorAll('[data-q-units]').forEach((el) => {
+    el.addEventListener('input', () => { answerFor(el.dataset.qUnits).unitsAffected = el.value; });
+  });
+}
+
+/* Restored: still used by the Sizing step's custom-sizing checklist and by
+ * the Step 6 additional-issues list. Step 5 no longer uses these - it renders
+ * from config/reportQuestions.json instead. */
 function checklistItem(key, i18nKey) {
   const entry = state.categoryData[key];
   const l = bi(i18nKey);
@@ -2138,7 +2329,6 @@ function defectCard(d, ownerKey) {
     </div>
   `;
 }
-
 function checklistCard(sectionKey, rows, photoSectionKey) {
   return `
     <div class="card">
@@ -2212,7 +2402,7 @@ function renderSizingStep() {
   }
 
   return `
-    <div class="step-eyebrow">${biHtml('step', 'Step')} 5 / 7</div>
+    <div class="step-eyebrow">${biHtml('step', 'Step')} 4 / 7</div>
     <div class="step-title">尺寸<span class="zh">Sizing</span></div>
     ${body}
     <div class="nav-buttons">
@@ -2721,6 +2911,8 @@ function attachStepHandlers(name) {
     const evt = (el.tagName === 'SELECT') ? 'change' : 'input';
     el.addEventListener(evt, (e) => setStateValue(el.getAttribute('data-bind'), e.target.value));
   });
+
+  if (name === 'inspectionDetails') attachInspectionHandlers();
 
   attachDataBindLiveHandlers(document);
   attachUnitsCheckedHandler(document);

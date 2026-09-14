@@ -74,6 +74,7 @@ let fits = require('./config/fits.json');
 const i18n = require('./config/i18n.json');
 const categories = require('./config/categories.json');
 const conditionalChecks = require('./config/conditionalChecks.json');
+const reportQuestions = require('./config/reportQuestions.json');
 const aqlTable = require('./config/aql.json');
 
 /**
@@ -1259,7 +1260,8 @@ app.get('/api/config', (req, res) => {
     aqlRecommendation: loadJson(AQL_RECOMMENDATION_PATH),
     unitCosts: loadJson(UNIT_COSTS_PATH),
     tolerances: loadTolerances(),
-    conditionalChecks
+    conditionalChecks,
+    reportQuestions
   });
 });
 

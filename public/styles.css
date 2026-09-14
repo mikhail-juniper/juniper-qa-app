@@ -1309,3 +1309,21 @@ td.reference-selectable { outline-offset: -2px; }
   flex: 0 0 auto;
 }
 .pick-actions .btn { flex: 0 0 auto; width: auto; padding: 10px 18px; }
+
+/* ---- Step 5 config-driven questions ----
+   One card per section, one .q-row per question. The fail block and evidence
+   grid appear only when the answer calls for them, so a clean pass stays a
+   single line. */
+.q-row { padding: 14px 0; border-bottom: 1px solid var(--jc-border); }
+.q-row:last-child { border-bottom: 0; padding-bottom: 4px; }
+.q-row-fail { background: rgba(192, 57, 43, 0.03); }
+.q-guidance {
+  font-size: 12.5px; line-height: 1.5; color: var(--jc-muted);
+  margin: 4px 0 10px;
+}
+.q-fail-block { margin-top: 10px; }
+.q-media-block { margin-top: 12px; }
+.q-media-hint { font-weight: 400; color: var(--jc-muted); text-transform: none; letter-spacing: 0; }
+.step-subhead {
+  margin: 26px 0 10px; font-size: 15px; font-weight: 700; color: var(--jc-teal-dark);
+}
