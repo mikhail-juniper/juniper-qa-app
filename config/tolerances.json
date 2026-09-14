@@ -1,0 +1,35 @@
+{
+  "_readme": "Tolerance settings, editable in Settings > Tolerances. Lives on the persistent disk like the other editable configs, so the repo copy here is only a SEED for a fresh install. NOTE: the numeric apparel tolerance is NOT here - it stays as 'toleranceCm' in fits.json, which is where passFail.js, pdfBuilder.js, app.js and approval.js all already read it from. The Tolerances card in Settings edits both, writing each value to its own file, so there is exactly one source of truth for each. 'guidance' is the advisory text shown on the Sizing step; a category with empty en+zh shows no guidance card at all.",
+  "guidance": {
+    "apparel": {
+      "label_en": "Apparel",
+      "en": "",
+      "zh": ""
+    },
+    "plush": {
+      "label_en": "Plush Toys",
+      "en": "Placeholder guidance: general dimensions (height, width) should be within about ±1.3 cm of the approved sample. Please confirm the real tolerance with your team.",
+      "zh": "占位参考：整体尺寸（高度、宽度）应与已批准样品相差不超过约1.3厘米。请与团队确认真实公差标准。"
+    },
+    "bags": {
+      "label_en": "Bags",
+      "en": "Placeholder guidance: overall dimensions should be within about ±1.3 cm of the approved sample; strap/handle length within about ±0.6 cm. Please confirm the real tolerance with your team.",
+      "zh": "占位参考：整体尺寸应与已批准样品相差不超过约1.3厘米；背带/提手长度相差不超过约0.6厘米。请与团队确认真实公差标准。"
+    },
+    "accessories": {
+      "label_en": "Accessories",
+      "en": "Placeholder guidance: dimensions should be within about ±0.3 cm of the approved sample. Please confirm the real tolerance with your team.",
+      "zh": "占位参考：尺寸应与已批准样品相差不超过约0.3厘米。请与团队确认真实公差标准。"
+    },
+    "paperGoods": {
+      "label_en": "Paper Goods",
+      "en": "Placeholder guidance: trim size and print placement should be within about ±0.3 cm of the approved sample. Please confirm the real tolerance with your team.",
+      "zh": "占位参考：成品尺寸与印刷位置应与已批准样品相差不超过约0.3厘米。请与团队确认真实公差标准。"
+    },
+    "other": {
+      "label_en": "Other",
+      "en": "No standard tolerance defined yet for this category - use your judgment and compare against the approved sample.",
+      "zh": "该类别尚无标准公差参考，请凭经验并与已批准样品进行比对。"
+    }
+  }
+}

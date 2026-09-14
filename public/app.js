@@ -2450,13 +2450,28 @@ function renderSizeEntryTable() {
 }
 function renderToleranceGuidance() {
   const catDef = currentCategoryDef();
-  const key = catDef && catDef.toleranceGuidanceKey;
-  if (!key) return '';
-  const text = bi(key);
+  if (!catDef) return '';
+
+  // Editable in Settings > Tolerances (config/tolerances.json). Falls back to
+  // the original i18n string if the config hasn't been seeded yet, so an older
+  // data disk still shows the guidance it always did.
+  const fromConfig = ((CONFIG.tolerances && CONFIG.tolerances.guidance) || {})[state.category];
+  const lang = (window.JuniperLang && window.JuniperLang.get()) || 'zh';
+  let text = '';
+  if (fromConfig) {
+    text = lang === 'en' ? (fromConfig.en || fromConfig.zh) : (fromConfig.zh || fromConfig.en);
+  } else if (catDef.toleranceGuidanceKey) {
+    text = bi(catDef.toleranceGuidanceKey).en;
+  }
+
+  // Blanking a category's guidance in Settings is a deliberate way to hide
+  // this card, so an empty string renders nothing rather than an empty box.
+  if (!text || !String(text).trim()) return '';
+
   return `
     <div class="card" style="background:var(--jc-warn-bg); border-color:#F0D9A8;">
       <div class="section-title" style="color:var(--jc-warn);">${biBlockHtml('toleranceReferenceTitle', 'Tolerance Reference')}</div>
-      <div class="section-help" style="color:var(--jc-warn);">${escapeHtml(text.en)}<br/>${escapeHtml(text.zh)}</div>
+      <div class="section-help" style="color:var(--jc-warn);">${escapeHtml(text)}</div>
     </div>
   `;
 }

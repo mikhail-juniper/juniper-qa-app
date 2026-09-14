@@ -115,6 +115,7 @@ const CREATOR_TIERS_PATH = userConfigPath('creatorTiers.json');
 const AQL_RECOMMENDATION_PATH = userConfigPath('aqlRecommendation.json');
 const UNIT_COSTS_PATH = userConfigPath('unitCosts.json');
 const FITS_PATH = userConfigPath('fits.json');
+const TOLERANCES_PATH = userConfigPath('tolerances.json');
 const EDITABLE_OPTION_LISTS = ['creators', 'factoryCodes', 'qaLeads', 'productDevelopmentLeads', 'sourcers'];
 
 function loadJson(p) { return JSON.parse(fs.readFileSync(p, 'utf8')); }
@@ -1255,8 +1256,68 @@ app.get('/api/config', (req, res) => {
     aql: aqlTable,
     creatorTiers: loadJson(CREATOR_TIERS_PATH),
     aqlRecommendation: loadJson(AQL_RECOMMENDATION_PATH),
-    unitCosts: loadJson(UNIT_COSTS_PATH)
+    unitCosts: loadJson(UNIT_COSTS_PATH),
+    tolerances: loadTolerances()
   });
+});
+
+// ---- Settings: tolerances ----
+/* Two values with one editing surface. The numeric apparel tolerance stays in
+ * fits.json, because passFail.js, pdfBuilder.js, app.js and approval.js all
+ * already read `fits.toleranceCm` and duplicating it would invite the two
+ * copies drifting apart. The per-category guidance text lives in
+ * tolerances.json. Each value therefore has exactly one home; this endpoint
+ * just presents them together and writes each back where it belongs. */
+function loadTolerances() {
+  try {
+    const t = loadJson(TOLERANCES_PATH);
+    return { toleranceCm: (fits && fits.toleranceCm) || 1.27, guidance: t.guidance || {} };
+  } catch (err) {
+    // A missing/corrupt file must not take the app down - the sizing step
+    // simply falls back to the i18n guidance strings.
+    console.error('Could not read tolerances.json:', err.message || err);
+    return { toleranceCm: (fits && fits.toleranceCm) || 1.27, guidance: {} };
+  }
+}
+
+app.get('/api/tolerances', (req, res) => res.json(loadTolerances()));
+
+app.post('/api/tolerances', requirePermission('settings:write'), (req, res) => {
+  try {
+    const body = req.body || {};
+
+    if (body.toleranceCm !== undefined) {
+      const n = parseFloat(body.toleranceCm);
+      // An out-of-range tolerance silently changes every apparel pass/fail
+      // verdict, so bound it rather than trusting the input.
+      if (isNaN(n) || n <= 0 || n > 25) {
+        return res.status(400).json({ error: 'toleranceCm must be a number greater than 0 and no more than 25' });
+      }
+      const currentFits = loadJson(FITS_PATH);
+      currentFits.toleranceCm = n;
+      saveJson(FITS_PATH, currentFits);
+      fits = currentFits; // keep the in-memory copy live without a restart
+    }
+
+    if (body.guidance && typeof body.guidance === 'object') {
+      const current = loadJson(TOLERANCES_PATH);
+      current.guidance = current.guidance || {};
+      Object.entries(body.guidance).forEach(([cat, val]) => {
+        if (!val || typeof val !== 'object') return;
+        // Only categories that already exist in the file are writable, so a
+        // stale or hand-crafted payload can't invent new ones.
+        if (!current.guidance[cat]) return;
+        if (typeof val.en === 'string') current.guidance[cat].en = val.en.trim();
+        if (typeof val.zh === 'string') current.guidance[cat].zh = val.zh.trim();
+      });
+      saveJson(TOLERANCES_PATH, current);
+    }
+
+    res.json({ ok: true, tolerances: loadTolerances() });
+  } catch (err) {
+    console.error('Failed to save tolerances:', err);
+    res.status(500).json({ error: 'Failed to save tolerances' });
+  }
 });
 
 // ---- Settings: creator tiers (name -> 1/2/3) ----

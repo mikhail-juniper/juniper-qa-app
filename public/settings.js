@@ -5,6 +5,7 @@ let currentOptions = { creators: [], factoryCodes: [], qaLeads: [], pointCheckRa
 let currentCreatorTiers = { defaultTier: 2, tiers: {} };
 let currentAqlRecommendation = null;
 let currentUnitCosts = null;
+let currentTolerances = null;
 let dirty = false;
 let backupStatus = null;
 let scheduledBackups = [];
@@ -23,7 +24,9 @@ const CATEGORY_LABELS = {
   apparel: { en: 'Apparel', zh: '服装' },
   bags: { en: 'Bags', zh: '箱包' },
   accessories: { en: 'Accessories', zh: '配件' },
-  plush: { en: 'Plush Toys', zh: '毛绒玩具' }
+  plush: { en: 'Plush Toys', zh: '毛绒玩具' },
+  paperGoods: { en: 'Paper Goods', zh: '纸制品' },
+  other: { en: 'Other', zh: '其他' }
 };
 
 /* One active language at a time, chosen with the header toggle (see
@@ -58,12 +61,13 @@ function showToast(msg, isError = false) {
 
 async function loadEverything() {
   try {
-    const [configRes, optionsRes, tiersRes, recRes, costsRes, backupStatusRes, scheduledBackupsRes] = await Promise.all([
+    const [configRes, optionsRes, tiersRes, recRes, costsRes, tolRes, backupStatusRes, scheduledBackupsRes] = await Promise.all([
       fetch('/api/config'),
       fetch('/api/options'),
       fetch('/api/creator-tiers'),
       fetch('/api/aql-recommendation'),
       fetch('/api/unit-costs'),
+      fetch('/api/tolerances'),
       fetch('/api/backup/status'),
       fetch('/api/backup/scheduled')
     ]);
@@ -73,6 +77,7 @@ async function loadEverything() {
     currentCreatorTiers = await tiersRes.json();
     currentAqlRecommendation = await recRes.json();
     currentUnitCosts = await costsRes.json();
+    currentTolerances = await tolRes.json();
     backupStatus = await backupStatusRes.json();
     scheduledBackups = (await scheduledBackupsRes.json()).backups || [];
   } catch (e) {
@@ -442,6 +447,7 @@ function render() {
     <div id="tplCard"></div>
     ${renderAqlTableCard()}
     ${renderUnitCostsCard()}
+    ${renderTolerancesCard()}
     <div class="card">
       <div class="section-title">Apparel Sizing Charts</div>
       <div class="section-help">Moved to its own page under Product Information, since it's now the shared source of truth for sizing standards across Order Management too, not just QA/QC reporting.</div>
@@ -569,6 +575,61 @@ function renderUnitCostsCard() {
   `;
 }
 
+/* ---- Tolerances ----
+ * Two things in one card because they're one idea to the person editing them:
+ * the numeric apparel measurement tolerance (stored in fits.json, drives
+ * pass/fail on every size row) and the advisory guidance text shown on the
+ * Sizing step for each category (stored in tolerances.json). The server
+ * writes each back to its own file - see /api/tolerances. */
+function renderTolerancesCard() {
+  if (!currentTolerances) return '';
+  const g = currentTolerances.guidance || {};
+  const cm = currentTolerances.toleranceCm;
+
+  const blocks = Object.keys(g).map((cat) => {
+    const label = CATEGORY_LABELS[cat] || { en: g[cat].label_en || cat, zh: '' };
+    const name = langIsEn() ? (label.en || label.zh) : (label.zh || label.en);
+    return `
+      <div style="margin-top:14px;">
+        <div class="section-photos-label">${escapeHtml(name)}</div>
+        <textarea data-tol-guidance="${escapeHtml(cat)}|en" rows="2"
+          placeholder="English guidance - leave blank to hide the card for this category"
+          style="width:100%; margin-bottom:6px;">${escapeHtml(g[cat].en || '')}</textarea>
+        <textarea data-tol-guidance="${escapeHtml(cat)}|zh" rows="2"
+          placeholder="中文说明 - 留空则不显示此类别的提示"
+          style="width:100%;">${escapeHtml(g[cat].zh || '')}</textarea>
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <div class="card">
+      <div class="section-title">Tolerances<span class="zh">公差设置</span></div>
+      <div class="section-help">
+        The measurement tolerance decides pass/fail on apparel size rows. The guidance text
+        below is advisory only - it appears on the Sizing step of a QA report for the matching
+        category, and is not used in any pass/fail calculation.
+      </div>
+
+      <div class="field-row" style="margin-top:12px; align-items:center;">
+        <span style="flex:1; font-size:13.5px;">Apparel measurement tolerance <span class="zh">服装尺寸公差</span></span>
+        <span style="margin-right:4px;">±</span>
+        <input type="number" min="0.1" max="25" step="0.01" value="${escapeHtml(String(cm))}" id="toleranceCmInput" style="width:90px;" />
+        <span style="margin-left:4px;">cm</span>
+      </div>
+      <div class="section-help" style="margin-top:6px; padding:8px 10px; background:var(--jc-warn-bg); border-radius:var(--radius-sm); color:var(--jc-warn);">
+        Changing this re-scores every apparel measurement from here on - a bigger number passes
+        more garments. It does not alter reports that were already submitted. The default, 1.27 cm,
+        is half an inch.
+      </div>
+
+      <div class="section-photos-label" style="margin-top:18px;">Guidance text by category</div>
+      <div class="section-help">Shown on the Sizing step. Leave both boxes blank to hide it for that category.</div>
+      ${blocks}
+    </div>
+  `;
+}
+
 function attachHandlers() {
   document.querySelectorAll('[data-remove-item]').forEach((el) => {
     el.addEventListener('click', () => {
@@ -611,6 +672,32 @@ function attachHandlers() {
     });
   });
   const otherFlatInput = document.getElementById('otherCategoryFlatInput');
+
+  // Tolerances
+  const tolCmInput = document.getElementById('toleranceCmInput');
+  if (tolCmInput) {
+    tolCmInput.addEventListener('change', (e) => {
+      const n = parseFloat(e.target.value);
+      // Mirrors the server's bounds so a bad value is caught before saving
+      // rather than failing the whole Save (which posts several configs at once).
+      if (isNaN(n) || n <= 0 || n > 25) {
+        showToast('Tolerance must be between 0 and 25 cm', true);
+        e.target.value = currentTolerances.toleranceCm;
+        return;
+      }
+      currentTolerances.toleranceCm = n;
+      dirty = true;
+    });
+  }
+  document.querySelectorAll('[data-tol-guidance]').forEach((el) => {
+    el.addEventListener('input', () => {
+      const [cat, lang] = el.getAttribute('data-tol-guidance').split('|');
+      if (!currentTolerances.guidance[cat]) return;
+      currentTolerances.guidance[cat][lang] = el.value;
+      dirty = true;
+    });
+  });
+
   if (otherFlatInput) {
     otherFlatInput.addEventListener('change', (e) => {
       const n = parseFloat(e.target.value);
@@ -697,6 +784,10 @@ async function saveSettings() {
       fetch('/api/unit-costs', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ categories: currentUnitCosts.categories, otherCategoryFlat: currentUnitCosts.otherCategoryFlat, rmbToUsdRate: currentUnitCosts.rmbToUsdRate })
+      }),
+      fetch('/api/tolerances', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toleranceCm: currentTolerances.toleranceCm, guidance: currentTolerances.guidance })
       })
     ]);
     if (results.some((r) => !r.ok)) throw new Error('Save failed');
