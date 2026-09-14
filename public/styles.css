@@ -13,7 +13,53 @@
   --jc-warn-bg: #FCF1DF;
   --radius: 14px;
   --radius-sm: 9px;
+
+  /* --- Layout gutters (single site-wide knob) ---
+     --page-gutter is the horizontal breathing room between the browser
+     edge and the content column, applied once on .form-root (app-shell.css)
+     which every page's <main> carries. --card-pad-x / --card-pad-y are the
+     inner padding of every .card tile.
+
+     Because these are plain custom properties, the responsive behaviour is
+     handled by overriding the THREE values in a media query rather than by
+     restating padding rules per page or per component. If you ever want
+     content truly edge-to-edge, set --page-gutter to 0 - don't add new
+     padding rules to individual pages. */
+  --page-gutter: 40px;
+  --card-pad-x: 16px;
+  --card-pad-y: 18px;
+
   font-size: 16px;
+}
+
+/* --- Responsive gutter tiers -------------------------------------------
+   THE ONE PLACE to change how much breathing room content gets at any
+   screen size. Every page's <main> carries .form-root and every tile uses
+   .card, and both read these tokens, so changing a number here changes
+   QA/QC Reporting, Approval, Order Management, Reports, Analytics,
+   Settings, Users, Clients, Sizing Charts and the Supplier portal at once.
+   Do not add page-specific width or padding rules; adjust a tier instead.
+
+   Phones previously lost ~104px of a ~390px screen to a 24px centring
+   margin (a wide-screen-only concern) plus 40px of padding each side,
+   leaving only ~62% of the viewport usable. These tiers bring that to
+   ~89% and make the gutters symmetrical.
+
+   For true edge-to-edge on phones, set --page-gutter to 0 below. */
+@media (max-width: 860px) {
+  /* Tablets and large phones. 20px matches the visual weight of the
+     desktop gutter at this narrower measure. */
+  :root { --page-gutter: 20px; --card-pad-x: 16px; --card-pad-y: 16px; }
+}
+@media (max-width: 640px) {
+  /* Phones. 12px lines the content column up with the app header, which
+     switches to 12px side padding at 860px (see app-shell.css). */
+  :root { --page-gutter: 12px; --card-pad-x: 14px; --card-pad-y: 16px; }
+}
+@media (max-width: 400px) {
+  /* Small phones - 320px floor up through the common 360/375/390 widths.
+     Every px of measure counts, so the gutter tightens once more. */
+  :root { --page-gutter: 8px; --card-pad-x: 12px; --card-pad-y: 14px; }
 }
 
 * { box-sizing: border-box; }
@@ -131,14 +177,17 @@ html, body {
   transition: width 0.25s ease;
 }
 
-.form-root { padding: 16px; }
+/* Fallback for any page not loading app-shell.css. app-shell.css restates
+   this with the full centring/max-width treatment; both read the same
+   --page-gutter token so they can't drift apart. */
+.form-root { padding: 16px var(--page-gutter); }
 
 /* --- Cards / sections --- */
 .card {
   background: #fff;
   border-radius: var(--radius);
   border: 1px solid var(--jc-border);
-  padding: 18px 16px;
+  padding: var(--card-pad-y) var(--card-pad-x);
   margin-bottom: 14px;
   box-shadow: 0 1px 2px rgba(20,40,20,0.04);
 }

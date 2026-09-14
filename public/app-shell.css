@@ -86,11 +86,15 @@
    rule lives inside <main>, whose local x=0 already starts after the
    sidebar). Clamped to a sane minimum so it never goes negative on
    in-between widths. */
+/* The horizontal padding here is driven by --page-gutter (defined in
+   styles.css :root) so the content width for EVERY page is controlled from
+   one place. The 24px floor in margin-left is likewise the gutter, so the
+   left offset and the padding stay in step at narrow widths. */
 .form-root {
   max-width: 1700px;
   margin-left: max(24px, calc((100vw - 1700px) / 2 - 220px));
   margin-right: auto;
-  padding: 28px 40px 80px 40px;
+  padding: 28px var(--page-gutter) 80px var(--page-gutter);
   box-sizing: border-box;
 }
 
@@ -187,6 +191,27 @@
 
   /* Drawer is an overlay, so the content keeps the full width. */
   .app-main { width: 100%; min-width: 0; }
+
+  /* --- Mobile content width ---
+     On a phone the desktop layout was costing ~104px of a ~390px screen:
+     a 24px left margin (the floor of the centring calc, which only has a
+     job on wide screens) plus 40px of padding on each side. Combined with
+     the card's own 16px that left roughly 120px of the viewport unusable
+     for actual content, which is why tiles looked narrow and inset.
+
+     The gutter values themselves live in one tiered block in styles.css
+     (search "--page-gutter"); this rule only has to undo the wide-screen
+     centring maths. */
+  .form-root,
+  .form-root.no-sidebar {
+    max-width: none;
+    /* The centring calc is a wide-screen concern only - at this width it
+       always resolves to its 24px floor, which is just wasted space. */
+    margin-left: 0;
+    margin-right: 0;
+    padding-top: 16px;
+    padding-bottom: 56px;
+  }
 
   body.app-nav-open .app-menu-toggle span:nth-child(1) { transform: translateY(6px) rotate(45deg); }
   body.app-nav-open .app-menu-toggle span:nth-child(2) { opacity: 0; }
