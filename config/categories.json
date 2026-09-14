@@ -1,5 +1,5 @@
 {
-  "_readme": "Product category tree. Each top-level category may have subcategories. 'fitGroup' (only on apparel subcategories) links a subcategory to the matching group of fits in config/fits.json, so the Sizing step only shows relevant fits. Categories with no 'subcategories' key (Bags, Other) skip the subcategory picker entirely. NOTE: adding a top-level category also needs its key adding to CATEGORY_ORDER in public/app.js, a cost entry in config/unitCosts.json, and a toleranceGuidance* key in config/i18n.json.",
+  "_readme": "Product category tree. Each top-level category may have subcategories. 'fitGroup' (only on apparel subcategories) links a subcategory to the matching group of fits in config/fits.json, so the Sizing step only shows relevant fits. Categories with no 'subcategories' key (Bags, Other) skip the subcategory picker entirely. NOTE: adding a top-level category also needs its key adding to CATEGORY_ORDER in public/app.js, a cost entry in config/unitCosts.json,. Tolerances live in config/tolerances.json and are edited in Settings.",
   "categories": {
     "apparel": {
       "label_en": "Apparel",
@@ -73,14 +73,12 @@
           "label_zh": "\u624b\u5076",
           "fitGroup": null
         }
-      ],
-      "toleranceGuidanceKey": "toleranceGuidancePlush"
+      ]
     },
     "bags": {
       "label_en": "Bags",
       "label_zh": "\u7bb1\u5305",
-      "icon": "\ud83c\udf92",
-      "toleranceGuidanceKey": "toleranceGuidanceBags"
+      "icon": "\ud83c\udf92"
     },
     "accessories": {
       "label_en": "Accessories",
@@ -105,8 +103,7 @@
           "label_zh": "\u5fbd\u7ae0",
           "fitGroup": null
         }
-      ],
-      "toleranceGuidanceKey": "toleranceGuidanceAccessories"
+      ]
     },
     "paperGoods": {
       "label_en": "Paper Goods",
@@ -131,15 +128,13 @@
           "label_zh": "\u6d77\u62a5",
           "fitGroup": null
         }
-      ],
-      "toleranceGuidanceKey": "toleranceGuidancePaperGoods"
+      ]
     },
     "other": {
       "label_en": "Other",
       "label_zh": "\u5176\u4ed6",
       "icon": "\ud83d\udce6",
-      "subcategories": [],
-      "toleranceGuidanceKey": "toleranceGuidanceOther"
+      "subcategories": []
     }
   }
 }

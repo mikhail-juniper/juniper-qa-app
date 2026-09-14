@@ -1918,36 +1918,6 @@ function renderPdNotesSection() {
   `;
 }
 
-function renderRestOfOrderInfo() {
-  return `
-    <div class="card">
-      ${state.autoFilledForPo ? `<div class="section-help" style="margin-bottom:10px; color:var(--jc-teal-dark);">${escapeHtml(bi('prefilledNotice').en)}<br/>${escapeHtml(bi('prefilledNotice').zh)}</div>` : ''}
-      <!-- Supplier/factory code removed: it belongs to the purchase order,
-           and asking QA to re-enter it here invited it drifting out of step
-           with the PO. It's still carried on the report via the PO. -->
-      <div class="field-row">
-        <div style="flex:1">${dateField('date', 'date', state.date, { required: true })}</div>
-      </div>
-      ${selectFieldWithOther('qaLead', 'qaLead', state.qaLead, OPTIONS.qaLeads || [], { required: true })}
-      <div class="field-row">
-        <div style="flex:1">${selectFieldWithOther('creator', 'creator', state.creator, OPTIONS.creators || [], {})}</div>
-        <div style="flex:1">${textField('productTitle', 'productTitle', state.productTitle, {})}</div>
-      </div>
-      ${numberField('poQuantity', 'poQuantity', state.poQuantity, { required: true, placeholderKey: 'poQuantityPlaceholder' })}
-      <div class="field">
-        <label class="field-label">${biBlockHtml('productRisk', 'Product Complexity/Risk')}</label>
-        <div class="segmented">
-          ${['high', 'medium', 'low'].map((r) => `<div class="segmented-option ${state.productRisk === r ? 'selected' : ''}" data-seg="productRisk" data-val="${r}">${escapeHtml(bi('risk' + r.charAt(0).toUpperCase() + r.slice(1)).en)}<span class="zh">${escapeHtml(bi('risk' + r.charAt(0).toUpperCase() + r.slice(1)).zh)}</span></div>`).join('')}
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-/** The whole conditional AQL card - hidden for Pre-Production, full recommendation
- *  + reference + actual-spot-check flow for Production. Re-rendered into
- *  #aqlSection whenever PO Quantity / Risk / Creator / QA Type / AQL settings change,
- *  without a full page re-render (keeps focus/scroll stable while typing). */
 function renderAqlSection() {
   if (state.qaType === 'pre_production') {
     return `
@@ -2220,9 +2190,20 @@ function questionGroupForProduct() {
     g.category === state.category && !(g.subcategories || []).length) || null;
 }
 
+/** Questions with section/title/guidance already resolved to the header
+ *  language. Falls back to English if a translation is blank, so a question
+ *  added to the config without Chinese still renders rather than vanishing. */
 function questionsForStep(stepNumber) {
   const g = questionGroupForProduct();
-  return (g && g.steps && g.steps[String(stepNumber)]) || [];
+  const raw = (g && g.steps && g.steps[String(stepNumber)]) || [];
+  const en = currentLangIsEn();
+  const pick = (e, zh) => (en ? (e || zh) : (zh || e)) || '';
+  return raw.map((q) => ({
+    ...q,
+    section: pick(q.section, q.section_zh),
+    title: pick(q.title, q.title_zh),
+    guidance: pick(q.guidance, q.guidance_zh)
+  }));
 }
 
 /** Lazily created so a question added to the config later needs no migration. */

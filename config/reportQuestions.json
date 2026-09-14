@@ -1,5 +1,5 @@
 {
-  "_readme": "The QA/QC report question bank, generated from QA_QC_Question_Bank_DRAFT.xlsx.\n\nQuestions are grouped by product type. A group names its top-level 'category' and the 'subcategories' it covers; an empty subcategories list means the whole category (Bags, Other), which have no subcategory picker. Matching is subcategory-first, then category.\n\nanswer: passFailNa (Step 5), passFail, numeric (plush weight), sizingChart (the existing sizing flow, untouched), defects (Step 6 - the inspector adds one entry per issue found).\nmedia:  on_fail (photo or video required when the answer is Fail), photo_always / video_always (required whatever the answer, because the evidence IS the check), on_entry (every defect entry needs one), none.\n\nSeverity is derived from the step, not chosen by the inspector: a Step 5 fail counts as MAJOR and a Step 6 entry counts as MINOR. Nothing is recorded as critical any more.\n\nRequired directly from the repo like categories.json, so edits here deploy normally. Question ids are stable and are what submitted reports reference - don't renumber them.",
+  "_readme": "The QA/QC report question bank, generated from QA_QC_Question_Bank_DRAFT.xlsx.\n\nQuestions are grouped by product type. A group names its top-level 'category' and the 'subcategories' it covers; an empty subcategories list means the whole category (Bags, Other), which have no subcategory picker. Matching is subcategory-first, then category.\n\nanswer: passFailNa (Step 5), passFail, numeric (plush weight), sizingChart (the existing sizing flow, untouched), defects (Step 6 - the inspector adds one entry per issue found).\nmedia:  on_fail (photo or video required when the answer is Fail), photo_always / video_always (required whatever the answer, because the evidence IS the check), on_entry (every defect entry needs one), none.\n\nSeverity is derived from the step, not chosen by the inspector: a Step 5 fail counts as MAJOR and a Step 6 entry counts as MINOR. Nothing is recorded as critical any more.\n\nRequired directly from the repo like categories.json, so edits here deploy normally. Question ids are stable and are what submitted reports reference - don't renumber them.\n\nBilingual: every section/title/guidance has a *_zh twin. The report renders whichever matches the header language toggle and falls back to English if a translation is blank.",
   "groups": {
     "apparel_garments": {
       "category": "apparel",
@@ -15,8 +15,11 @@
           {
             "id": "apparel_garments.s4.01",
             "section": "Sizing",
+            "section_zh": "尺寸",
             "title": "Golden Sample sizing chart",
+            "title_zh": "金样尺寸表",
             "guidance": "Measure every size in the Golden Sample sizing chart and enter the actual dimensions. Measure flat on a hard surface, smoothed but not stretched. Any measurement more than ±2 cm from the approved standard is flagged as a fail automatically.",
+            "guidance_zh": "测量金样尺寸表中的每一个尺码并填入实际数值。请将产品平放于硬质台面，抚平但不得拉伸。任何与已批准标准相差超过 ±2 厘米的数值都会自动判为不合格。",
             "answer": "sizingChart",
             "media": "none"
           }
@@ -25,56 +28,77 @@
           {
             "id": "apparel_garments.s5.01",
             "section": "Colour & Material",
+            "section_zh": "颜色与材质",
             "title": "Fabric colour matches approved sample",
+            "title_zh": "面料颜色与已批准样品一致",
             "guidance": "Compare against the golden sample. Check the main body and each panel or colour-blocked area separately - shade variation between panels cut from different fabric rolls is a common miss.",
+            "guidance_zh": "与金样比对。主体与各拼片、撞色区域需分别检查——不同布卷裁出的拼片之间存在色差是常见的漏检点。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "apparel_garments.s5.02",
             "section": "Colour & Material",
+            "section_zh": "颜色与材质",
             "title": "Material matches approved sample",
+            "title_zh": "材质与已批准样品一致",
             "guidance": "Confirm the fabric type, weight and hand-feel match the approved sample. Check ribbing, lining, interlining and any secondary fabrics as well as the main body.",
+            "guidance_zh": "确认面料种类、克重与手感与已批准样品一致。除主体外，还需检查罗纹、里布、衬料及其他辅助面料。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "apparel_garments.s5.03",
             "section": "Artwork & Graphics",
+            "section_zh": "图案与印花",
             "title": "Artwork matches the golden sample",
+            "title_zh": "图案与金样一致",
             "guidance": "Compare the print or embroidery against the golden sample and the approved artwork file. Confirm every colour is present and correct, nothing is missing, and the artwork is not mirrored, rotated or distorted.",
+            "guidance_zh": "将印花或刺绣与金样及已批准图稿文件比对。确认所有颜色齐全且正确、无遗漏，图案未镜像、未旋转、未变形。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "apparel_garments.s5.04",
             "section": "Artwork & Graphics",
+            "section_zh": "图案与印花",
             "title": "Print / embroidery size and placement",
+            "title_zh": "印花/刺绣尺寸与位置",
             "guidance": "Measure the artwork's width and height, and its distance from a fixed reference point such as the collar seam, centre front or hem. Compare against the approved measurements. Anything more than ±0.5 cm out is a fail. Pay particular attention to placement relative to seams, shoulder straps, pockets, zippers and the garment centreline.",
+            "guidance_zh": "测量图案的宽度与高度，以及其与领缝、前中或下摆等固定基准点的距离，并与已批准数值比对。相差超过 ±0.5 厘米即为不合格。请特别注意图案相对于缝线、肩带、口袋、拉链及衣身中线的位置。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "apparel_garments.s5.05",
             "section": "Labels & Packaging",
+            "section_zh": "标签与包装",
             "title": "Care / wash label matches approved sample",
+            "title_zh": "洗标与已批准样品一致",
             "guidance": "Check the wash/care label against the approved sample: wording, language, symbols, fibre content, size and position. The reference image attached to the PO is pulled in above for comparison. Confirm it is stitched down straight and fully enclosed.",
+            "guidance_zh": "对照已批准样品检查洗标：文字、语言、符号、成分、尺寸与位置。上方已调取采购订单附带的参考图片以供比对。确认车缝顺直且完全封边。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "apparel_garments.s5.06",
             "section": "Labels & Packaging",
+            "section_zh": "标签与包装",
             "title": "Correct hang tag and packaging",
+            "title_zh": "吊牌与包装正确",
             "guidance": "Confirm the hang tag is the correct version and is attached in the right place with the correct fastening. Check the polybag, header card or box matches the approved packaging spec, including any barcode or SKU sticker.",
+            "guidance_zh": "确认吊牌版本正确、悬挂位置正确且使用正确的连接件。检查胶袋、插卡或纸盒是否符合已批准的包装规格，包括条形码或 SKU 贴纸。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "apparel_garments.s5.07",
             "section": "Labels & Packaging",
+            "section_zh": "标签与包装",
             "title": "No damage to packaging",
+            "title_zh": "包装无破损",
             "guidance": "Look over the packaging as it will arrive: crushed corners, tears, scuffing, water marks, or print rubbing off. Check cartons as well as individual packaging.",
+            "guidance_zh": "按客户收到的状态检查包装：压角、破损、磨损、水渍或印刷掉色。外箱与单件包装均需检查。",
             "answer": "passFailNa",
             "media": "on_fail"
           }
@@ -83,40 +107,55 @@
           {
             "id": "apparel_garments.s6.01",
             "section": "General Workmanship & Appearance",
+            "section_zh": "整体做工与外观",
             "title": "Workmanship",
+            "title_zh": "做工",
             "guidance": "Look over the whole piece for loose or trailing threads, holes, tears, stains, dirt marks, open seams, skipped stitches and uneven stitching. Add each distinct issue as its own entry so the counts stay accurate.",
+            "guidance_zh": "通检整件产品，查看是否有线头、脱线、破洞、撕裂、污渍、脏点、爆缝、跳针及针距不均。每个独立问题请单独记录一条，以保证数量统计准确。",
             "answer": "defects",
             "media": "on_entry"
           },
           {
             "id": "apparel_garments.s6.02",
             "section": "General Workmanship & Appearance",
+            "section_zh": "整体做工与外观",
             "title": "Trims and hardware",
+            "title_zh": "辅料与五金",
             "guidance": "Zippers, buttons, snaps, drawstrings, cords and toggles. Check each is the correct part, correctly placed and securely attached, then operate it: zips should run smoothly end to end, snaps should engage and hold, drawstrings should pull freely without the cord end pulling through.",
+            "guidance_zh": "拉链、纽扣、四合扣、抽绳、绳带与绳扣。逐一检查部件是否正确、位置是否正确、安装是否牢固，并实际操作：拉链应全程顺滑，四合扣应扣合牢固，抽绳应可自由抽拉且绳头不会被抽脱。",
             "answer": "defects",
             "media": "on_entry"
           },
           {
             "id": "apparel_garments.s6.03",
             "section": "General Workmanship & Appearance",
+            "section_zh": "整体做工与外观",
             "title": "Sewing lines straight and consistent",
+            "title_zh": "车缝线顺直均匀",
             "guidance": "Check topstitching, hems and seams run straight with an even stitch density. Look for wavering lines, puckering and uneven seam allowance.",
+            "guidance_zh": "检查明线、卷边与缝合线是否顺直、针距均匀。注意是否有跑线、起皱或缝份不均。",
             "answer": "defects",
             "media": "on_entry"
           },
           {
             "id": "apparel_garments.s6.04",
             "section": "Missing Components",
+            "section_zh": "缺件",
             "title": "Missing components",
+            "title_zh": "缺件",
             "guidance": "Anything that should be in the pack but isn't: a main component, an accessory, an insert card, a spare part, instructions. Record what is missing and how many units were affected.",
+            "guidance_zh": "应随包装配齐但缺失的任何物品：主体部件、配件、插卡、备件、说明书等。请记录缺失内容及受影响件数。",
             "answer": "defects",
             "media": "on_entry"
           },
           {
             "id": "apparel_garments.s6.05",
             "section": "Additional Issues",
+            "section_zh": "其他问题",
             "title": "Additional issues",
+            "title_zh": "其他问题",
             "guidance": "Anything else worth recording that no other section covers. Describe what you found and where.",
+            "guidance_zh": "其他各部分未涵盖、但值得记录的问题。请说明发现的内容及其位置。",
             "answer": "defects",
             "media": "on_entry"
           }
@@ -133,8 +172,11 @@
           {
             "id": "apparel_hat.s4.01",
             "section": "Sizing",
+            "section_zh": "尺寸",
             "title": "Golden Sample sizing chart",
+            "title_zh": "金样尺寸表",
             "guidance": "Measure every size in the Golden Sample sizing chart and enter the actual dimensions. Measure flat on a hard surface, smoothed but not stretched. Any measurement more than ±2 cm from the approved standard is flagged as a fail automatically.",
+            "guidance_zh": "测量金样尺寸表中的每一个尺码并填入实际数值。请将产品平放于硬质台面，抚平但不得拉伸。任何与已批准标准相差超过 ±2 厘米的数值都会自动判为不合格。",
             "answer": "sizingChart",
             "media": "none"
           }
@@ -143,56 +185,77 @@
           {
             "id": "apparel_hat.s5.01",
             "section": "Colour & Material",
+            "section_zh": "颜色与材质",
             "title": "Fabric colour matches approved sample",
+            "title_zh": "面料颜色与已批准样品一致",
             "guidance": "Compare against the golden sample. Check the main body and each panel or colour-blocked area separately - shade variation between panels cut from different fabric rolls is a common miss.",
+            "guidance_zh": "与金样比对。主体与各拼片、撞色区域需分别检查——不同布卷裁出的拼片之间存在色差是常见的漏检点。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "apparel_hat.s5.02",
             "section": "Colour & Material",
+            "section_zh": "颜色与材质",
             "title": "Material matches approved sample",
+            "title_zh": "材质与已批准样品一致",
             "guidance": "Confirm the fabric type, weight and hand-feel match the approved sample. Check ribbing, lining, interlining and any secondary fabrics as well as the main body.",
+            "guidance_zh": "确认面料种类、克重与手感与已批准样品一致。除主体外，还需检查罗纹、里布、衬料及其他辅助面料。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "apparel_hat.s5.03",
             "section": "Artwork & Graphics",
+            "section_zh": "图案与印花",
             "title": "Artwork matches the golden sample",
+            "title_zh": "图案与金样一致",
             "guidance": "Compare the print or embroidery against the golden sample and the approved artwork file. Confirm every colour is present and correct, nothing is missing, and the artwork is not mirrored, rotated or distorted. On caps, check the front panel, side panels and any back or underbrim embroidery separately.",
+            "guidance_zh": "将印花或刺绣与金样及已批准图稿文件比对。确认所有颜色齐全且正确、无遗漏，图案未镜像、未旋转、未变形。帽类需分别检查前片、侧片，以及后片或帽檐内侧的刺绣。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "apparel_hat.s5.04",
             "section": "Artwork & Graphics",
+            "section_zh": "图案与印花",
             "title": "Print / embroidery size and placement",
+            "title_zh": "印花/刺绣尺寸与位置",
             "guidance": "Measure the artwork's width and height, and its distance from a fixed reference point such as the collar seam, centre front or hem. Compare against the approved measurements. Anything more than ±0.5 cm out is a fail. Pay particular attention to placement relative to seams, shoulder straps, pockets, zippers and the garment centreline.",
+            "guidance_zh": "测量图案的宽度与高度，以及其与领缝、前中或下摆等固定基准点的距离，并与已批准数值比对。相差超过 ±0.5 厘米即为不合格。请特别注意图案相对于缝线、肩带、口袋、拉链及衣身中线的位置。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "apparel_hat.s5.05",
             "section": "Labels & Packaging",
+            "section_zh": "标签与包装",
             "title": "Care / wash label matches approved sample",
+            "title_zh": "洗标与已批准样品一致",
             "guidance": "Check the wash/care label against the approved sample: wording, language, symbols, fibre content, size and position. The reference image attached to the PO is pulled in above for comparison. Confirm it is stitched down straight and fully enclosed.",
+            "guidance_zh": "对照已批准样品检查洗标：文字、语言、符号、成分、尺寸与位置。上方已调取采购订单附带的参考图片以供比对。确认车缝顺直且完全封边。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "apparel_hat.s5.06",
             "section": "Labels & Packaging",
+            "section_zh": "标签与包装",
             "title": "Correct hang tag and packaging",
+            "title_zh": "吊牌与包装正确",
             "guidance": "Confirm the hang tag is the correct version and is attached in the right place with the correct fastening. Check the polybag, header card or box matches the approved packaging spec, including any barcode or SKU sticker.",
+            "guidance_zh": "确认吊牌版本正确、悬挂位置正确且使用正确的连接件。检查胶袋、插卡或纸盒是否符合已批准的包装规格，包括条形码或 SKU 贴纸。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "apparel_hat.s5.07",
             "section": "Labels & Packaging",
+            "section_zh": "标签与包装",
             "title": "No damage to packaging",
+            "title_zh": "包装无破损",
             "guidance": "Look over the packaging as it will arrive: crushed corners, tears, scuffing, water marks, or print rubbing off. Check cartons as well as individual packaging.",
+            "guidance_zh": "按客户收到的状态检查包装：压角、破损、磨损、水渍或印刷掉色。外箱与单件包装均需检查。",
             "answer": "passFailNa",
             "media": "on_fail"
           }
@@ -201,48 +264,66 @@
           {
             "id": "apparel_hat.s6.01",
             "section": "General Workmanship & Appearance",
+            "section_zh": "整体做工与外观",
             "title": "Workmanship",
+            "title_zh": "做工",
             "guidance": "Look over the whole piece for loose or trailing threads, holes, tears, stains, dirt marks, open seams, skipped stitches and uneven stitching. Add each distinct issue as its own entry so the counts stay accurate.",
+            "guidance_zh": "通检整件产品，查看是否有线头、脱线、破洞、撕裂、污渍、脏点、爆缝、跳针及针距不均。每个独立问题请单独记录一条，以保证数量统计准确。",
             "answer": "defects",
             "media": "on_entry"
           },
           {
             "id": "apparel_hat.s6.02",
             "section": "General Workmanship & Appearance",
+            "section_zh": "整体做工与外观",
             "title": "Shape and structure",
+            "title_zh": "形状与版型",
             "guidance": "Confirm the overall shape matches the approved sample. Check the brim is not bent or distorted, the crown holds its shape, and panels sit evenly without twisting.",
+            "guidance_zh": "确认整体外形与已批准样品一致。检查帽檐无弯折变形、帽顶挺括、各片平整无扭曲。",
             "answer": "defects",
             "media": "on_entry"
           },
           {
             "id": "apparel_hat.s6.03",
             "section": "General Workmanship & Appearance",
+            "section_zh": "整体做工与外观",
             "title": "Closures and hardware",
+            "title_zh": "闭合件与五金",
             "guidance": "Snapback, buckle, velcro or elastic closure. Check it is the correct part, securely attached, and adjusts and holds through its full range.",
+            "guidance_zh": "后扣、插扣、魔术贴或松紧闭合件。检查部件是否正确、安装牢固，并在整个调节范围内可正常调节并保持固定。",
             "answer": "defects",
             "media": "on_entry"
           },
           {
             "id": "apparel_hat.s6.04",
             "section": "General Workmanship & Appearance",
+            "section_zh": "整体做工与外观",
             "title": "Sewing lines straight and consistent",
+            "title_zh": "车缝线顺直均匀",
             "guidance": "Check topstitching, hems and seams run straight with an even stitch density. Look for wavering lines, puckering and uneven seam allowance.",
+            "guidance_zh": "检查明线、卷边与缝合线是否顺直、针距均匀。注意是否有跑线、起皱或缝份不均。",
             "answer": "defects",
             "media": "on_entry"
           },
           {
             "id": "apparel_hat.s6.05",
             "section": "Missing Components",
+            "section_zh": "缺件",
             "title": "Missing components",
+            "title_zh": "缺件",
             "guidance": "Anything that should be in the pack but isn't: a main component, an accessory, an insert card, a spare part, instructions. Record what is missing and how many units were affected.",
+            "guidance_zh": "应随包装配齐但缺失的任何物品：主体部件、配件、插卡、备件、说明书等。请记录缺失内容及受影响件数。",
             "answer": "defects",
             "media": "on_entry"
           },
           {
             "id": "apparel_hat.s6.06",
             "section": "Additional Issues",
+            "section_zh": "其他问题",
             "title": "Additional issues",
+            "title_zh": "其他问题",
             "guidance": "Anything else worth recording that no other section covers. Describe what you found and where.",
+            "guidance_zh": "其他各部分未涵盖、但值得记录的问题。请说明发现的内容及其位置。",
             "answer": "defects",
             "media": "on_entry"
           }
@@ -259,8 +340,11 @@
           {
             "id": "apparel_socks.s4.01",
             "section": "Sizing",
+            "section_zh": "尺寸",
             "title": "Golden Sample sizing chart",
+            "title_zh": "金样尺寸表",
             "guidance": "Measure every size in the Golden Sample sizing chart and enter the actual dimensions. Measure flat on a hard surface, smoothed but not stretched. Any measurement more than ±2 cm from the approved standard is flagged as a fail automatically.",
+            "guidance_zh": "测量金样尺寸表中的每一个尺码并填入实际数值。请将产品平放于硬质台面，抚平但不得拉伸。任何与已批准标准相差超过 ±2 厘米的数值都会自动判为不合格。",
             "answer": "sizingChart",
             "media": "none"
           }
@@ -269,48 +353,66 @@
           {
             "id": "apparel_socks.s5.01",
             "section": "Colour & Material",
+            "section_zh": "颜色与材质",
             "title": "Yarn colours match approved sample",
+            "title_zh": "纱线颜色与已批准样品一致",
             "guidance": "Compare every yarn colour against the approved sample. Check the body, cuff, heel and toe separately - these are often knitted from different yarn lots.",
+            "guidance_zh": "逐一将纱线颜色与已批准样品比对。袜身、袜口、后跟与袜头需分别检查——这些部位常使用不同批次的纱线。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "apparel_socks.s5.02",
             "section": "Colour & Material",
+            "section_zh": "颜色与材质",
             "title": "Material matches approved sample",
+            "title_zh": "材质与已批准样品一致",
             "guidance": "Confirm the yarn composition, gauge and stretch match the approved sample. Check the cuff elastic recovers properly.",
+            "guidance_zh": "确认纱线成分、织物密度与弹性与已批准样品一致。检查袜口松紧回弹是否正常。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "apparel_socks.s5.03",
             "section": "Artwork & Graphics",
+            "section_zh": "图案与印花",
             "title": "Knitted pattern uses correct artwork and orientation",
+            "title_zh": "织花图案与方向正确",
             "guidance": "Compare the jacquard or knitted pattern against the approved sample. Confirm the design is the right way up, not mirrored, and that all pattern colours are present.",
+            "guidance_zh": "将提花或织花图案与已批准样品比对。确认图案正立、未镜像，且所有图案颜色齐全。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "apparel_socks.s5.04",
             "section": "Artwork & Graphics",
+            "section_zh": "图案与印花",
             "title": "Pattern alignment and placement",
+            "title_zh": "图案对位与位置",
             "guidance": "Check the pattern sits at the correct height on the leg and aligns consistently around the sock. More than ±0.5 cm out from the approved placement is a fail.",
+            "guidance_zh": "检查图案在袜筒上的高度是否正确，并沿一圈对位一致。与已批准位置相差超过 ±0.5 厘米即为不合格。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "apparel_socks.s5.05",
             "section": "Labels & Packaging",
+            "section_zh": "标签与包装",
             "title": "Correct hang tag and packaging",
+            "title_zh": "吊牌与包装正确",
             "guidance": "Confirm the hang tag is the correct version and is attached in the right place with the correct fastening. Check the polybag, header card or box matches the approved packaging spec, including any barcode or SKU sticker.",
+            "guidance_zh": "确认吊牌版本正确、悬挂位置正确且使用正确的连接件。检查胶袋、插卡或纸盒是否符合已批准的包装规格，包括条形码或 SKU 贴纸。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "apparel_socks.s5.06",
             "section": "Labels & Packaging",
+            "section_zh": "标签与包装",
             "title": "No damage to packaging",
+            "title_zh": "包装无破损",
             "guidance": "Look over the packaging as it will arrive: crushed corners, tears, scuffing, water marks, or print rubbing off. Check cartons as well as individual packaging.",
+            "guidance_zh": "按客户收到的状态检查包装：压角、破损、磨损、水渍或印刷掉色。外箱与单件包装均需检查。",
             "answer": "passFailNa",
             "media": "on_fail"
           }
@@ -319,32 +421,44 @@
           {
             "id": "apparel_socks.s6.01",
             "section": "General Workmanship & Appearance",
+            "section_zh": "整体做工与外观",
             "title": "Workmanship",
+            "title_zh": "做工",
             "guidance": "Look over the whole sock for loose threads, holes, dropped stitches, stains and dirt marks, and uneven knitting. Add each distinct issue as its own entry.",
+            "guidance_zh": "通检整只袜子，查看是否有线头、破洞、漏针、污渍、脏点及织造不均。每个独立问题请单独记录一条。",
             "answer": "defects",
             "media": "on_entry"
           },
           {
             "id": "apparel_socks.s6.02",
             "section": "General Workmanship & Appearance",
+            "section_zh": "整体做工与外观",
             "title": "Pair matching",
+            "title_zh": "左右配对",
             "guidance": "Check left and right socks match each other in size, colour, pattern placement and cuff length. Mismatched pairs are a common packing error.",
+            "guidance_zh": "检查左右两只袜子在尺寸、颜色、图案位置与袜口长度上是否一致。配对错误是常见的包装失误。",
             "answer": "defects",
             "media": "on_entry"
           },
           {
             "id": "apparel_socks.s6.03",
             "section": "Missing Components",
+            "section_zh": "缺件",
             "title": "Missing components",
+            "title_zh": "缺件",
             "guidance": "Anything that should be in the pack but isn't: a main component, an accessory, an insert card, a spare part, instructions. Record what is missing and how many units were affected.",
+            "guidance_zh": "应随包装配齐但缺失的任何物品：主体部件、配件、插卡、备件、说明书等。请记录缺失内容及受影响件数。",
             "answer": "defects",
             "media": "on_entry"
           },
           {
             "id": "apparel_socks.s6.04",
             "section": "Additional Issues",
+            "section_zh": "其他问题",
             "title": "Additional issues",
+            "title_zh": "其他问题",
             "guidance": "Anything else worth recording that no other section covers. Describe what you found and where.",
+            "guidance_zh": "其他各部分未涵盖、但值得记录的问题。请说明发现的内容及其位置。",
             "answer": "defects",
             "media": "on_entry"
           }
@@ -361,8 +475,11 @@
           {
             "id": "apparel_other.s4.01",
             "section": "Sizing",
+            "section_zh": "尺寸",
             "title": "Golden Sample sizing chart",
+            "title_zh": "金样尺寸表",
             "guidance": "Measure every size in the Golden Sample sizing chart and enter the actual dimensions. Measure flat on a hard surface, smoothed but not stretched. Any measurement more than ±2 cm from the approved standard is flagged as a fail automatically.",
+            "guidance_zh": "测量金样尺寸表中的每一个尺码并填入实际数值。请将产品平放于硬质台面，抚平但不得拉伸。任何与已批准标准相差超过 ±2 厘米的数值都会自动判为不合格。",
             "answer": "sizingChart",
             "media": "none"
           }
@@ -371,56 +488,77 @@
           {
             "id": "apparel_other.s5.01",
             "section": "Colour & Material",
+            "section_zh": "颜色与材质",
             "title": "Fabric colour matches approved sample",
+            "title_zh": "面料颜色与已批准样品一致",
             "guidance": "Compare against the golden sample. Check the main body and each panel or colour-blocked area separately - shade variation between panels cut from different fabric rolls is a common miss.",
+            "guidance_zh": "与金样比对。主体与各拼片、撞色区域需分别检查——不同布卷裁出的拼片之间存在色差是常见的漏检点。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "apparel_other.s5.02",
             "section": "Colour & Material",
+            "section_zh": "颜色与材质",
             "title": "Material matches approved sample",
+            "title_zh": "材质与已批准样品一致",
             "guidance": "Confirm the fabric type, weight and hand-feel match the approved sample. Check ribbing, lining, interlining and any secondary fabrics as well as the main body.",
+            "guidance_zh": "确认面料种类、克重与手感与已批准样品一致。除主体外，还需检查罗纹、里布、衬料及其他辅助面料。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "apparel_other.s5.03",
             "section": "Artwork & Graphics",
+            "section_zh": "图案与印花",
             "title": "Artwork matches the golden sample",
+            "title_zh": "图案与金样一致",
             "guidance": "Compare the print or embroidery against the golden sample and the approved artwork file. Confirm every colour is present and correct, nothing is missing, and the artwork is not mirrored, rotated or distorted.",
+            "guidance_zh": "将印花或刺绣与金样及已批准图稿文件比对。确认所有颜色齐全且正确、无遗漏，图案未镜像、未旋转、未变形。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "apparel_other.s5.04",
             "section": "Artwork & Graphics",
+            "section_zh": "图案与印花",
             "title": "Print / embroidery size and placement",
+            "title_zh": "印花/刺绣尺寸与位置",
             "guidance": "Measure the artwork's width and height, and its distance from a fixed reference point such as the collar seam, centre front or hem. Compare against the approved measurements. Anything more than ±0.5 cm out is a fail. Pay particular attention to placement relative to seams, shoulder straps, pockets, zippers and the garment centreline.",
+            "guidance_zh": "测量图案的宽度与高度，以及其与领缝、前中或下摆等固定基准点的距离，并与已批准数值比对。相差超过 ±0.5 厘米即为不合格。请特别注意图案相对于缝线、肩带、口袋、拉链及衣身中线的位置。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "apparel_other.s5.05",
             "section": "Labels & Packaging",
+            "section_zh": "标签与包装",
             "title": "Care / wash label matches approved sample",
+            "title_zh": "洗标与已批准样品一致",
             "guidance": "Check the wash/care label against the approved sample: wording, language, symbols, fibre content, size and position. The reference image attached to the PO is pulled in above for comparison. Confirm it is stitched down straight and fully enclosed.",
+            "guidance_zh": "对照已批准样品检查洗标：文字、语言、符号、成分、尺寸与位置。上方已调取采购订单附带的参考图片以供比对。确认车缝顺直且完全封边。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "apparel_other.s5.06",
             "section": "Labels & Packaging",
+            "section_zh": "标签与包装",
             "title": "Correct hang tag and packaging",
+            "title_zh": "吊牌与包装正确",
             "guidance": "Confirm the hang tag is the correct version and is attached in the right place with the correct fastening. Check the polybag, header card or box matches the approved packaging spec, including any barcode or SKU sticker.",
+            "guidance_zh": "确认吊牌版本正确、悬挂位置正确且使用正确的连接件。检查胶袋、插卡或纸盒是否符合已批准的包装规格，包括条形码或 SKU 贴纸。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "apparel_other.s5.07",
             "section": "Labels & Packaging",
+            "section_zh": "标签与包装",
             "title": "No damage to packaging",
+            "title_zh": "包装无破损",
             "guidance": "Look over the packaging as it will arrive: crushed corners, tears, scuffing, water marks, or print rubbing off. Check cartons as well as individual packaging.",
+            "guidance_zh": "按客户收到的状态检查包装：压角、破损、磨损、水渍或印刷掉色。外箱与单件包装均需检查。",
             "answer": "passFailNa",
             "media": "on_fail"
           }
@@ -429,40 +567,55 @@
           {
             "id": "apparel_other.s6.01",
             "section": "General Workmanship & Appearance",
+            "section_zh": "整体做工与外观",
             "title": "Workmanship",
+            "title_zh": "做工",
             "guidance": "Look over the whole piece for loose or trailing threads, holes, tears, stains, dirt marks, open seams, skipped stitches and uneven stitching. Add each distinct issue as its own entry so the counts stay accurate.",
+            "guidance_zh": "通检整件产品，查看是否有线头、脱线、破洞、撕裂、污渍、脏点、爆缝、跳针及针距不均。每个独立问题请单独记录一条，以保证数量统计准确。",
             "answer": "defects",
             "media": "on_entry"
           },
           {
             "id": "apparel_other.s6.02",
             "section": "General Workmanship & Appearance",
+            "section_zh": "整体做工与外观",
             "title": "Trims and hardware",
+            "title_zh": "辅料与五金",
             "guidance": "Zippers, buttons, snaps, drawstrings, cords and toggles. Check each is the correct part, correctly placed and securely attached, then operate it: zips should run smoothly end to end, snaps should engage and hold, drawstrings should pull freely without the cord end pulling through.",
+            "guidance_zh": "拉链、纽扣、四合扣、抽绳、绳带与绳扣。逐一检查部件是否正确、位置是否正确、安装是否牢固，并实际操作：拉链应全程顺滑，四合扣应扣合牢固，抽绳应可自由抽拉且绳头不会被抽脱。",
             "answer": "defects",
             "media": "on_entry"
           },
           {
             "id": "apparel_other.s6.03",
             "section": "General Workmanship & Appearance",
+            "section_zh": "整体做工与外观",
             "title": "Sewing lines straight and consistent",
+            "title_zh": "车缝线顺直均匀",
             "guidance": "Check topstitching, hems and seams run straight with an even stitch density. Look for wavering lines, puckering and uneven seam allowance.",
+            "guidance_zh": "检查明线、卷边与缝合线是否顺直、针距均匀。注意是否有跑线、起皱或缝份不均。",
             "answer": "defects",
             "media": "on_entry"
           },
           {
             "id": "apparel_other.s6.04",
             "section": "Missing Components",
+            "section_zh": "缺件",
             "title": "Missing components",
+            "title_zh": "缺件",
             "guidance": "Anything that should be in the pack but isn't: a main component, an accessory, an insert card, a spare part, instructions. Record what is missing and how many units were affected.",
+            "guidance_zh": "应随包装配齐但缺失的任何物品：主体部件、配件、插卡、备件、说明书等。请记录缺失内容及受影响件数。",
             "answer": "defects",
             "media": "on_entry"
           },
           {
             "id": "apparel_other.s6.05",
             "section": "Additional Issues",
+            "section_zh": "其他问题",
             "title": "Additional issues",
+            "title_zh": "其他问题",
             "guidance": "Anything else worth recording that no other section covers. Describe what you found and where.",
+            "guidance_zh": "其他各部分未涵盖、但值得记录的问题。请说明发现的内容及其位置。",
             "answer": "defects",
             "media": "on_entry"
           }
@@ -480,16 +633,22 @@
           {
             "id": "plush.s4.01",
             "section": "Sizing",
+            "section_zh": "尺寸",
             "title": "Golden Sample sizing chart",
+            "title_zh": "金样尺寸表",
             "guidance": "Measure every size in the Golden Sample sizing chart and enter the actual dimensions. Measure flat on a hard surface, smoothed but not stretched. Any measurement more than ±1 cm from the approved standard is flagged as a fail automatically.",
+            "guidance_zh": "测量金样尺寸表中的每一个尺码并填入实际数值。请将产品平放于硬质台面，抚平但不得拉伸。任何与已批准标准相差超过 ±1 厘米的数值都会自动判为不合格。",
             "answer": "sizingChart",
             "media": "none"
           },
           {
             "id": "plush.s4.02",
             "section": "Sizing",
+            "section_zh": "尺寸",
             "title": "Product weight",
+            "title_zh": "产品重量",
             "guidance": "Weigh a finished unit on a calibrated scale and record the weight in grams. The approved weight is taken from the golden sample. More than ±5 g out is a fail.",
+            "guidance_zh": "使用经校准的电子秤称量成品，以克为单位记录重量。已批准重量取自金样。相差超过 ±5 克即为不合格。",
             "answer": "numeric",
             "media": "on_fail"
           }
@@ -498,48 +657,66 @@
           {
             "id": "plush.s5.01",
             "section": "Overall Appearance",
+            "section_zh": "整体外观",
             "title": "Overall shape and features match approved sample",
+            "title_zh": "整体形状与五官特征与已批准样品一致",
             "guidance": "Compare the finished plush side by side with the golden sample. Confirm the silhouette matches and that facial features, embroidery and key design elements sit in the correct positions. Eye and mouth spacing is the most common failure.",
+            "guidance_zh": "将成品毛绒与金样并排比对。确认外形轮廓一致，五官、刺绣及关键设计元素位置正确。眼距与嘴部间距是最常见的不合格项。",
             "answer": "passFailNa",
             "media": "photo_always"
           },
           {
             "id": "plush.s5.02",
             "section": "Artwork & Graphics",
+            "section_zh": "图案与印花",
             "title": "Artwork matches the golden sample",
+            "title_zh": "图案与金样一致",
             "guidance": "Compare the print or embroidery against the golden sample and the approved artwork file. Confirm every colour is present and correct, nothing is missing, and the artwork is not mirrored, rotated or distorted.",
+            "guidance_zh": "将印花或刺绣与金样及已批准图稿文件比对。确认所有颜色齐全且正确、无遗漏，图案未镜像、未旋转、未变形。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "plush.s5.03",
             "section": "Artwork & Graphics",
+            "section_zh": "图案与印花",
             "title": "Print / embroidery size and placement",
+            "title_zh": "印花/刺绣尺寸与位置",
             "guidance": "Measure the artwork's size and its distance from a fixed reference point on the body. Anything more than ±0.5 cm from the approved measurement is a fail.",
+            "guidance_zh": "测量图案尺寸及其与主体上某一固定基准点的距离。与已批准数值相差超过 ±0.5 厘米即为不合格。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "plush.s5.04",
             "section": "Labels & Packaging",
+            "section_zh": "标签与包装",
             "title": "Care / wash label matches approved sample",
+            "title_zh": "洗标与已批准样品一致",
             "guidance": "Check the wash/care label against the approved sample: wording, language, symbols, fibre content, size and position. The reference image attached to the PO is pulled in above for comparison. Confirm it is stitched down straight and fully enclosed.",
+            "guidance_zh": "对照已批准样品检查洗标：文字、语言、符号、成分、尺寸与位置。上方已调取采购订单附带的参考图片以供比对。确认车缝顺直且完全封边。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "plush.s5.05",
             "section": "Labels & Packaging",
+            "section_zh": "标签与包装",
             "title": "Correct hang tag and packaging",
+            "title_zh": "吊牌与包装正确",
             "guidance": "Confirm the hang tag is the correct version and is attached in the right place with the correct fastening. Check the polybag, header card or box matches the approved packaging spec, including any barcode or SKU sticker.",
+            "guidance_zh": "确认吊牌版本正确、悬挂位置正确且使用正确的连接件。检查胶袋、插卡或纸盒是否符合已批准的包装规格，包括条形码或 SKU 贴纸。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "plush.s5.06",
             "section": "Labels & Packaging",
+            "section_zh": "标签与包装",
             "title": "No damage to packaging",
+            "title_zh": "包装无破损",
             "guidance": "Look over the packaging as it will arrive: crushed corners, tears, scuffing, water marks, or print rubbing off. Check cartons as well as individual packaging.",
+            "guidance_zh": "按客户收到的状态检查包装：压角、破损、磨损、水渍或印刷掉色。外箱与单件包装均需检查。",
             "answer": "passFailNa",
             "media": "on_fail"
           }
@@ -548,48 +725,66 @@
           {
             "id": "plush.s6.01",
             "section": "General Workmanship & Appearance",
+            "section_zh": "整体做工与外观",
             "title": "Workmanship",
+            "title_zh": "做工",
             "guidance": "Look over the whole piece for loose or trailing threads, holes, tears, stains, dirt marks, open seams, skipped stitches and uneven stitching. Add each distinct issue as its own entry so the counts stay accurate.",
+            "guidance_zh": "通检整件产品，查看是否有线头、脱线、破洞、撕裂、污渍、脏点、爆缝、跳针及针距不均。每个独立问题请单独记录一条，以保证数量统计准确。",
             "answer": "defects",
             "media": "on_entry"
           },
           {
             "id": "plush.s6.02",
             "section": "General Workmanship & Appearance",
+            "section_zh": "整体做工与外观",
             "title": "Sewing lines straight and consistent",
+            "title_zh": "车缝线顺直均匀",
             "guidance": "Check topstitching, hems and seams run straight with an even stitch density. Look for wavering lines, puckering and uneven seam allowance.",
+            "guidance_zh": "检查明线、卷边与缝合线是否顺直、针距均匀。注意是否有跑线、起皱或缝份不均。",
             "answer": "defects",
             "media": "on_entry"
           },
           {
             "id": "plush.s6.03",
             "section": "General Workmanship & Appearance",
+            "section_zh": "整体做工与外观",
             "title": "Shape and symmetry",
+            "title_zh": "形状与对称性",
             "guidance": "Minor deformation only - a plush whose shape is clearly wrong against the golden sample is a Step 5 fail. Here, record lopsided limbs, uneven ears, a leaning head or a flattened face.",
+            "guidance_zh": "仅记录轻微变形——若整体外形与金样明显不符，应在第 5 步判为不合格。此处记录四肢歪斜、双耳不对称、头部倾斜或脸部塌陷等问题。",
             "answer": "defects",
             "media": "on_entry"
           },
           {
             "id": "plush.s6.04",
             "section": "General Workmanship & Appearance",
+            "section_zh": "整体做工与外观",
             "title": "Stuffing",
+            "title_zh": "填充",
             "guidance": "Press over the whole body. Stuffing should be evenly distributed and firm to the same degree as the golden sample. Record lumps, hollow or empty areas, over-stuffed seams and sagging.",
+            "guidance_zh": "按压整个玩偶。填充应分布均匀，软硬度与金样一致。记录结块、空洞、缺棉、缝口过度撑胀及塌陷等问题。",
             "answer": "defects",
             "media": "on_entry"
           },
           {
             "id": "plush.s6.05",
             "section": "Missing Components",
+            "section_zh": "缺件",
             "title": "Missing components",
+            "title_zh": "缺件",
             "guidance": "Anything that should be in the pack but isn't: a main component, an accessory, an insert card, a spare part, instructions. Record what is missing and how many units were affected.",
+            "guidance_zh": "应随包装配齐但缺失的任何物品：主体部件、配件、插卡、备件、说明书等。请记录缺失内容及受影响件数。",
             "answer": "defects",
             "media": "on_entry"
           },
           {
             "id": "plush.s6.06",
             "section": "Additional Issues",
+            "section_zh": "其他问题",
             "title": "Additional issues",
+            "title_zh": "其他问题",
             "guidance": "Anything else worth recording that no other section covers. Describe what you found and where.",
+            "guidance_zh": "其他各部分未涵盖、但值得记录的问题。请说明发现的内容及其位置。",
             "answer": "defects",
             "media": "on_entry"
           }
@@ -604,8 +799,11 @@
           {
             "id": "bags.s4.01",
             "section": "Sizing",
+            "section_zh": "尺寸",
             "title": "Golden Sample sizing chart",
+            "title_zh": "金样尺寸表",
             "guidance": "Measure every size in the Golden Sample sizing chart and enter the actual dimensions. Measure flat on a hard surface, smoothed but not stretched. Any measurement more than ±2 cm from the approved standard is flagged as a fail automatically.",
+            "guidance_zh": "测量金样尺寸表中的每一个尺码并填入实际数值。请将产品平放于硬质台面，抚平但不得拉伸。任何与已批准标准相差超过 ±2 厘米的数值都会自动判为不合格。",
             "answer": "sizingChart",
             "media": "none"
           }
@@ -614,72 +812,99 @@
           {
             "id": "bags.s5.01",
             "section": "Colour & Material",
+            "section_zh": "颜色与材质",
             "title": "Fabric colour matches approved sample",
+            "title_zh": "面料颜色与已批准样品一致",
             "guidance": "Compare against the golden sample. Check the main body and each panel or colour-blocked area separately - shade variation between panels cut from different fabric rolls is a common miss.",
+            "guidance_zh": "与金样比对。主体与各拼片、撞色区域需分别检查——不同布卷裁出的拼片之间存在色差是常见的漏检点。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "bags.s5.02",
             "section": "Colour & Material",
+            "section_zh": "颜色与材质",
             "title": "Material matches approved sample",
+            "title_zh": "材质与已批准样品一致",
             "guidance": "Confirm the fabric type, weight, coating and hand-feel match the approved sample. Check the lining and any trim or base material as well as the main body.",
+            "guidance_zh": "确认面料种类、克重、涂层与手感与已批准样品一致。除主体外，还需检查里布、包边及底料。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "bags.s5.03",
             "section": "Artwork & Graphics",
+            "section_zh": "图案与印花",
             "title": "Artwork matches the golden sample",
+            "title_zh": "图案与金样一致",
             "guidance": "Compare the print or embroidery against the golden sample and the approved artwork file. Confirm every colour is present and correct, nothing is missing, and the artwork is not mirrored, rotated or distorted.",
+            "guidance_zh": "将印花或刺绣与金样及已批准图稿文件比对。确认所有颜色齐全且正确、无遗漏，图案未镜像、未旋转、未变形。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "bags.s5.04",
             "section": "Artwork & Graphics",
+            "section_zh": "图案与印花",
             "title": "Print / embroidery size and placement",
+            "title_zh": "印花/刺绣尺寸与位置",
             "guidance": "Measure the artwork's size and its distance from a fixed reference point. Anything more than ±0.5 cm out is a fail. Pay particular attention to placement relative to seams, straps, pockets and zippers.",
+            "guidance_zh": "测量图案尺寸及其与固定基准点的距离。相差超过 ±0.5 厘米即为不合格。请特别注意图案相对于缝线、背带、口袋与拉链的位置。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "bags.s5.05",
             "section": "Labels & Packaging",
+            "section_zh": "标签与包装",
             "title": "Care / wash label matches approved sample",
+            "title_zh": "洗标与已批准样品一致",
             "guidance": "Check the wash/care label against the approved sample: wording, language, symbols, fibre content, size and position. The reference image attached to the PO is pulled in above for comparison. Confirm it is stitched down straight and fully enclosed.",
+            "guidance_zh": "对照已批准样品检查洗标：文字、语言、符号、成分、尺寸与位置。上方已调取采购订单附带的参考图片以供比对。确认车缝顺直且完全封边。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "bags.s5.06",
             "section": "Labels & Packaging",
+            "section_zh": "标签与包装",
             "title": "Correct hang tag and packaging",
+            "title_zh": "吊牌与包装正确",
             "guidance": "Confirm the hang tag is the correct version and is attached in the right place with the correct fastening. Check the polybag, header card or box matches the approved packaging spec, including any barcode or SKU sticker.",
+            "guidance_zh": "确认吊牌版本正确、悬挂位置正确且使用正确的连接件。检查胶袋、插卡或纸盒是否符合已批准的包装规格，包括条形码或 SKU 贴纸。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "bags.s5.07",
             "section": "Labels & Packaging",
+            "section_zh": "标签与包装",
             "title": "No damage to packaging",
+            "title_zh": "包装无破损",
             "guidance": "Look over the packaging as it will arrive: crushed corners, tears, scuffing, water marks, or print rubbing off. Check cartons as well as individual packaging.",
+            "guidance_zh": "按客户收到的状态检查包装：压角、破损、磨损、水渍或印刷掉色。外箱与单件包装均需检查。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "bags.s5.08",
             "section": "Straps & Handles",
+            "section_zh": "背带与提手",
             "title": "Straps and handles correctly placed",
+            "title_zh": "背带与提手位置正确",
             "guidance": "Confirm straps and handles are attached at the positions shown on the approved sample, are the correct length, and are even side to side.",
+            "guidance_zh": "确认背带与提手的安装位置与已批准样品一致、长度正确，且左右对称一致。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "bags.s5.09",
             "section": "Straps & Handles",
+            "section_zh": "背带与提手",
             "title": "Straps and handles securely attached",
+            "title_zh": "背带与提手牢固",
             "guidance": "Pull-test each attachment point with firm steady pressure. Check bar-tacks, rivets and stitching for movement, loose threads or fabric puckering. Any give at the joint is a fail.",
+            "guidance_zh": "对每个连接点施加稳定的拉力测试。检查套结、铆钉与车缝是否有松动、线头或面料起皱。接合处一旦出现松动即为不合格。",
             "answer": "passFailNa",
             "media": "on_fail"
           }
@@ -688,56 +913,77 @@
           {
             "id": "bags.s6.01",
             "section": "General Workmanship & Appearance",
+            "section_zh": "整体做工与外观",
             "title": "Workmanship",
+            "title_zh": "做工",
             "guidance": "Look over the whole piece for loose or trailing threads, holes, tears, stains, dirt marks, open seams, skipped stitches and uneven stitching. Add each distinct issue as its own entry so the counts stay accurate.",
+            "guidance_zh": "通检整件产品，查看是否有线头、脱线、破洞、撕裂、污渍、脏点、爆缝、跳针及针距不均。每个独立问题请单独记录一条，以保证数量统计准确。",
             "answer": "defects",
             "media": "on_entry"
           },
           {
             "id": "bags.s6.02",
             "section": "General Workmanship & Appearance",
+            "section_zh": "整体做工与外观",
             "title": "Sewing lines straight and consistent",
+            "title_zh": "车缝线顺直均匀",
             "guidance": "Check topstitching, hems and seams run straight with an even stitch density. Look for wavering lines, puckering and uneven seam allowance.",
+            "guidance_zh": "检查明线、卷边与缝合线是否顺直、针距均匀。注意是否有跑线、起皱或缝份不均。",
             "answer": "defects",
             "media": "on_entry"
           },
           {
             "id": "bags.s6.03",
             "section": "General Workmanship & Appearance",
+            "section_zh": "整体做工与外观",
             "title": "Overall shape",
+            "title_zh": "整体形状",
             "guidance": "Confirm the bag holds the shape of the approved sample when empty and when lightly filled. Record leaning, collapsing panels and a base that will not sit flat.",
+            "guidance_zh": "确认空袋及轻微装填时，包型与已批准样品一致。记录歪斜、侧片塌陷以及底部不能平放等问题。",
             "answer": "defects",
             "media": "on_entry"
           },
           {
             "id": "bags.s6.04",
             "section": "General Workmanship & Appearance",
+            "section_zh": "整体做工与外观",
             "title": "Zippers, closures and hardware",
+            "title_zh": "拉链、闭合件与五金",
             "guidance": "Zips, buttons, snaps, drawstrings and strap hardware. Check each is correct, correctly placed and securely attached. Zips should open and close smoothly with no sticking, catching or broken teeth.",
+            "guidance_zh": "拉链、纽扣、四合扣、抽绳与背带五金。逐一检查部件是否正确、位置是否正确、安装是否牢固。拉链应开合顺滑，无卡滞、刮齿或断齿。",
             "answer": "defects",
             "media": "on_entry"
           },
           {
             "id": "bags.s6.05",
             "section": "General Workmanship & Appearance",
+            "section_zh": "整体做工与外观",
             "title": "Pockets, lining and special hardware",
+            "title_zh": "口袋、里布与特殊五金",
             "guidance": "Check pockets and compartments are the right size and in the right place, the lining is cleanly fitted with no twisting or exposed raw edges, and any buckles, clips or feet are correct and secure.",
+            "guidance_zh": "检查口袋与隔层尺寸、位置是否正确；里布服帖、无扭曲、无外露毛边；扣具、卡扣与底钉是否正确且牢固。",
             "answer": "defects",
             "media": "on_entry"
           },
           {
             "id": "bags.s6.06",
             "section": "Missing Components",
+            "section_zh": "缺件",
             "title": "Missing components",
+            "title_zh": "缺件",
             "guidance": "Anything that should be in the pack but isn't: a main component, an accessory, an insert card, a spare part, instructions. Record what is missing and how many units were affected.",
+            "guidance_zh": "应随包装配齐但缺失的任何物品：主体部件、配件、插卡、备件、说明书等。请记录缺失内容及受影响件数。",
             "answer": "defects",
             "media": "on_entry"
           },
           {
             "id": "bags.s6.07",
             "section": "Additional Issues",
+            "section_zh": "其他问题",
             "title": "Additional issues",
+            "title_zh": "其他问题",
             "guidance": "Anything else worth recording that no other section covers. Describe what you found and where.",
+            "guidance_zh": "其他各部分未涵盖、但值得记录的问题。请说明发现的内容及其位置。",
             "answer": "defects",
             "media": "on_entry"
           }
@@ -756,8 +1002,11 @@
           {
             "id": "accessories.s4.01",
             "section": "Sizing",
+            "section_zh": "尺寸",
             "title": "Golden Sample sizing chart",
+            "title_zh": "金样尺寸表",
             "guidance": "Measure every size in the Golden Sample sizing chart and enter the actual dimensions. Measure flat on a hard surface, smoothed but not stretched. Any measurement more than ±0.5 cm from the approved standard is flagged as a fail automatically.",
+            "guidance_zh": "测量金样尺寸表中的每一个尺码并填入实际数值。请将产品平放于硬质台面，抚平但不得拉伸。任何与已批准标准相差超过 ±0.5 厘米的数值都会自动判为不合格。",
             "answer": "sizingChart",
             "media": "none"
           }
@@ -766,40 +1015,55 @@
           {
             "id": "accessories.s5.01",
             "section": "Colour & Material",
+            "section_zh": "颜色与材质",
             "title": "Colours and orientation match approved sample",
+            "title_zh": "颜色与方向与已批准样品一致",
             "guidance": "Compare against the approved sample. Confirm every colour matches and the artwork is the right way up and not mirrored.",
+            "guidance_zh": "与已批准样品比对。确认所有颜色一致，图案正立且未镜像。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "accessories.s5.02",
             "section": "Artwork & Graphics",
+            "section_zh": "图案与印花",
             "title": "Artwork matches approved sample",
+            "title_zh": "图案与已批准样品一致",
             "guidance": "Compare the print or embroidery against the approved sample and the approved artwork file. Confirm every colour is present and correct, nothing is missing, and the artwork is not mirrored, rotated or distorted.",
+            "guidance_zh": "将印花或刺绣与已批准样品及已批准图稿文件比对。确认所有颜色齐全且正确、无遗漏，图案未镜像、未旋转、未变形。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "accessories.s5.03",
             "section": "Appearance",
+            "section_zh": "外观",
             "title": "No scratches, cracks, chips or deformation",
+            "title_zh": "无划痕、裂纹、崩缺或变形",
             "guidance": "Inspect the face and edges under good light, including through any protective film. Check for scratches, hairline cracks, chipped corners, bubbles in the acrylic and any warping or bending.",
+            "guidance_zh": "在良好光线下检查正面与边缘（含隔着保护膜观察）。检查是否有划痕、细微裂纹、崩角、亚克力内气泡以及翘曲或弯折。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "accessories.s5.04",
             "section": "Labels & Packaging",
+            "section_zh": "标签与包装",
             "title": "Correct packaging",
+            "title_zh": "包装正确",
             "guidance": "Confirm the colour box, backing card and protective film match the approved packaging spec where applicable, including any barcode or SKU sticker.",
+            "guidance_zh": "确认彩盒、背卡与保护膜（如适用）符合已批准的包装规格，包括条形码或 SKU 贴纸。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "accessories.s5.05",
             "section": "Labels & Packaging",
+            "section_zh": "标签与包装",
             "title": "No damage to packaging",
+            "title_zh": "包装无破损",
             "guidance": "Look over the packaging as it will arrive: crushed corners, tears, scuffing, water marks, or print rubbing off. Check cartons as well as individual packaging.",
+            "guidance_zh": "按客户收到的状态检查包装：压角、破损、磨损、水渍或印刷掉色。外箱与单件包装均需检查。",
             "answer": "passFailNa",
             "media": "on_fail"
           }
@@ -808,16 +1072,22 @@
           {
             "id": "accessories.s6.01",
             "section": "Missing Components",
+            "section_zh": "缺件",
             "title": "Missing components",
+            "title_zh": "缺件",
             "guidance": "Anything that should be in the pack but isn't: a main component, an accessory, an insert card, a spare part, instructions. Record what is missing and how many units were affected.",
+            "guidance_zh": "应随包装配齐但缺失的任何物品：主体部件、配件、插卡、备件、说明书等。请记录缺失内容及受影响件数。",
             "answer": "defects",
             "media": "on_entry"
           },
           {
             "id": "accessories.s6.02",
             "section": "Additional Issues",
+            "section_zh": "其他问题",
             "title": "Additional issues",
+            "title_zh": "其他问题",
             "guidance": "Anything else worth recording that no other section covers. Describe what you found and where.",
+            "guidance_zh": "其他各部分未涵盖、但值得记录的问题。请说明发现的内容及其位置。",
             "answer": "defects",
             "media": "on_entry"
           }
@@ -835,8 +1105,11 @@
           {
             "id": "paper_bound.s4.01",
             "section": "Sizing",
+            "section_zh": "尺寸",
             "title": "Golden Sample sizing chart",
+            "title_zh": "金样尺寸表",
             "guidance": "Measure every size in the Golden Sample sizing chart and enter the actual dimensions. Measure flat on a hard surface, smoothed but not stretched. Any measurement more than ±0.5 cm from the approved standard is flagged as a fail automatically.",
+            "guidance_zh": "测量金样尺寸表中的每一个尺码并填入实际数值。请将产品平放于硬质台面，抚平但不得拉伸。任何与已批准标准相差超过 ±0.5 厘米的数值都会自动判为不合格。",
             "answer": "sizingChart",
             "media": "none"
           }
@@ -845,40 +1118,55 @@
           {
             "id": "paper_bound.s5.01",
             "section": "Print Quality",
+            "section_zh": "印刷质量",
             "title": "Colours and orientation match approved sample",
+            "title_zh": "颜色与方向与已批准样品一致",
             "guidance": "Compare printed colours against the approved sample or proof. Confirm the artwork is the right way up and not mirrored on the cover and interior.",
+            "guidance_zh": "将印刷颜色与已批准样品或打样比对。确认封面与内页的图案均正立且未镜像。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "paper_bound.s5.02",
             "section": "Print Quality",
+            "section_zh": "印刷质量",
             "title": "No missing print, misalignment or print defects",
+            "title_zh": "无漏印、套印偏移或印刷缺陷",
             "guidance": "Check for missing or faint print, registration that is out of alignment, banding, streaking, ink smudging and set-off between pages.",
+            "guidance_zh": "检查是否有漏印、印色偏淡、套印偏移、条纹、拉丝、油墨蹭脏，以及页与页之间的粘脏。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "paper_bound.s5.03",
             "section": "Pages",
+            "section_zh": "内页",
             "title": "Correct page sequence and orientation",
+            "title_zh": "页码顺序与正反方向正确",
             "guidance": "Flick through the whole block. Confirm pages run in the correct order, none are upside-down, duplicated or missing, and front/back orientation is correct throughout.",
+            "guidance_zh": "逐页翻查整本。确认页序正确，无倒置、重复或缺页，且全书正反面方向一致。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "paper_bound.s5.04",
             "section": "Labels & Packaging",
+            "section_zh": "标签与包装",
             "title": "Correct packaging",
+            "title_zh": "包装正确",
             "guidance": "Confirm the hang tag is the correct version and is attached in the right place with the correct fastening. Check the polybag, header card or box matches the approved packaging spec, including any barcode or SKU sticker.",
+            "guidance_zh": "确认吊牌版本正确、悬挂位置正确且使用正确的连接件。检查胶袋、插卡或纸盒是否符合已批准的包装规格，包括条形码或 SKU 贴纸。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "paper_bound.s5.05",
             "section": "Labels & Packaging",
+            "section_zh": "标签与包装",
             "title": "No damage to packaging",
+            "title_zh": "包装无破损",
             "guidance": "Look over the packaging as it will arrive: crushed corners, tears, scuffing, water marks, or print rubbing off. Check cartons as well as individual packaging.",
+            "guidance_zh": "按客户收到的状态检查包装：压角、破损、磨损、水渍或印刷掉色。外箱与单件包装均需检查。",
             "answer": "passFailNa",
             "media": "on_fail"
           }
@@ -887,32 +1175,44 @@
           {
             "id": "paper_bound.s6.01",
             "section": "General Workmanship & Appearance",
+            "section_zh": "整体做工与外观",
             "title": "Appearance",
+            "title_zh": "外观",
             "guidance": "Check the cover and pages for scratches, scuffing, stains, tears, dog-eared corners and unwanted folds or creases.",
+            "guidance_zh": "检查封面与内页是否有划痕、磨损、污渍、破损、卷角以及不应有的折痕。",
             "answer": "defects",
             "media": "on_entry"
           },
           {
             "id": "paper_bound.s6.02",
             "section": "General Workmanship & Appearance",
+            "section_zh": "整体做工与外观",
             "title": "Binding",
+            "title_zh": "装订",
             "guidance": "Confirm the binding is secure and aligned, the spine is straight, and no pages are loose, detached or bound in crooked. Open the book flat and check nothing works free.",
+            "guidance_zh": "确认装订牢固、对齐，书脊顺直，无松页、脱页或装订歪斜。将书本摊平检查是否有散落。",
             "answer": "defects",
             "media": "on_entry"
           },
           {
             "id": "paper_bound.s6.03",
             "section": "Missing Components",
+            "section_zh": "缺件",
             "title": "Missing components",
+            "title_zh": "缺件",
             "guidance": "Anything that should be in the pack but isn't: a main component, an accessory, an insert card, a spare part, instructions. Record what is missing and how many units were affected.",
+            "guidance_zh": "应随包装配齐但缺失的任何物品：主体部件、配件、插卡、备件、说明书等。请记录缺失内容及受影响件数。",
             "answer": "defects",
             "media": "on_entry"
           },
           {
             "id": "paper_bound.s6.04",
             "section": "Additional Issues",
+            "section_zh": "其他问题",
             "title": "Additional issues",
+            "title_zh": "其他问题",
             "guidance": "Anything else worth recording that no other section covers. Describe what you found and where.",
+            "guidance_zh": "其他各部分未涵盖、但值得记录的问题。请说明发现的内容及其位置。",
             "answer": "defects",
             "media": "on_entry"
           }
@@ -929,8 +1229,11 @@
           {
             "id": "paper_poster.s4.01",
             "section": "Sizing",
+            "section_zh": "尺寸",
             "title": "Golden Sample sizing chart",
+            "title_zh": "金样尺寸表",
             "guidance": "Measure every size in the Golden Sample sizing chart and enter the actual dimensions. Measure flat on a hard surface, smoothed but not stretched. Any measurement more than ±0.5 cm from the approved standard is flagged as a fail automatically.",
+            "guidance_zh": "测量金样尺寸表中的每一个尺码并填入实际数值。请将产品平放于硬质台面，抚平但不得拉伸。任何与已批准标准相差超过 ±0.5 厘米的数值都会自动判为不合格。",
             "answer": "sizingChart",
             "media": "none"
           }
@@ -939,16 +1242,22 @@
           {
             "id": "paper_poster.s5.01",
             "section": "Print Quality",
+            "section_zh": "印刷质量",
             "title": "Colours and orientation match approved sample",
+            "title_zh": "颜色与方向与已批准样品一致",
             "guidance": "Compare printed colours against the approved sample or proof. Confirm the artwork is the right way up and not mirrored.",
+            "guidance_zh": "将印刷颜色与已批准样品或打样比对。确认图案正立且未镜像。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "paper_poster.s5.02",
             "section": "Print Quality",
+            "section_zh": "印刷质量",
             "title": "No missing print, misalignment or print defects",
+            "title_zh": "无漏印、套印偏移或印刷缺陷",
             "guidance": "Check for missing or faint print, registration out of alignment, banding, streaking and ink smudging across the full sheet including the edges.",
+            "guidance_zh": "检查整张（含边缘）是否有漏印、印色偏淡、套印偏移、条纹、拉丝或油墨蹭脏。",
             "answer": "passFailNa",
             "media": "on_fail"
           }
@@ -957,24 +1266,33 @@
           {
             "id": "paper_poster.s6.01",
             "section": "General Workmanship & Appearance",
+            "section_zh": "整体做工与外观",
             "title": "Appearance",
+            "title_zh": "外观",
             "guidance": "Check the full sheet for scratches, scuffing, stains, tears, dog-eared corners and unwanted folds or creases, including the edges and reverse.",
+            "guidance_zh": "检查整张（含边缘与背面）是否有划痕、磨损、污渍、破损、卷角以及不应有的折痕。",
             "answer": "defects",
             "media": "on_entry"
           },
           {
             "id": "paper_poster.s6.02",
             "section": "Missing Components",
+            "section_zh": "缺件",
             "title": "Missing components",
+            "title_zh": "缺件",
             "guidance": "Anything that should be in the pack but isn't: a main component, an accessory, an insert card, a spare part, instructions. Record what is missing and how many units were affected.",
+            "guidance_zh": "应随包装配齐但缺失的任何物品：主体部件、配件、插卡、备件、说明书等。请记录缺失内容及受影响件数。",
             "answer": "defects",
             "media": "on_entry"
           },
           {
             "id": "paper_poster.s6.03",
             "section": "Additional Issues",
+            "section_zh": "其他问题",
             "title": "Additional issues",
+            "title_zh": "其他问题",
             "guidance": "Anything else worth recording that no other section covers. Describe what you found and where.",
+            "guidance_zh": "其他各部分未涵盖、但值得记录的问题。请说明发现的内容及其位置。",
             "answer": "defects",
             "media": "on_entry"
           }
@@ -989,8 +1307,11 @@
           {
             "id": "other.s4.01",
             "section": "Sizing",
+            "section_zh": "尺寸",
             "title": "Golden Sample sizing chart",
+            "title_zh": "金样尺寸表",
             "guidance": "Measure every size in the Golden Sample sizing chart and enter the actual dimensions. Measure flat on a hard surface, smoothed but not stretched. Any measurement more than ±2 cm from the approved standard is flagged as a fail automatically.",
+            "guidance_zh": "测量金样尺寸表中的每一个尺码并填入实际数值。请将产品平放于硬质台面，抚平但不得拉伸。任何与已批准标准相差超过 ±2 厘米的数值都会自动判为不合格。",
             "answer": "sizingChart",
             "media": "none"
           }
@@ -999,24 +1320,33 @@
           {
             "id": "other.s5.01",
             "section": "Colour & Material",
+            "section_zh": "颜色与材质",
             "title": "Colours and orientation match approved sample",
+            "title_zh": "颜色与方向与已批准样品一致",
             "guidance": "Compare against the approved sample. Confirm every colour matches and the artwork is correctly oriented.",
+            "guidance_zh": "与已批准样品比对。确认所有颜色一致且图案方向正确。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "other.s5.02",
             "section": "Labels & Packaging",
+            "section_zh": "标签与包装",
             "title": "Correct hang tag and packaging",
+            "title_zh": "吊牌与包装正确",
             "guidance": "Confirm the hang tag is the correct version and is attached in the right place with the correct fastening. Check the polybag, header card or box matches the approved packaging spec, including any barcode or SKU sticker.",
+            "guidance_zh": "确认吊牌版本正确、悬挂位置正确且使用正确的连接件。检查胶袋、插卡或纸盒是否符合已批准的包装规格，包括条形码或 SKU 贴纸。",
             "answer": "passFailNa",
             "media": "on_fail"
           },
           {
             "id": "other.s5.03",
             "section": "Labels & Packaging",
+            "section_zh": "标签与包装",
             "title": "No damage to packaging",
+            "title_zh": "包装无破损",
             "guidance": "Look over the packaging as it will arrive: crushed corners, tears, scuffing, water marks, or print rubbing off. Check cartons as well as individual packaging.",
+            "guidance_zh": "按客户收到的状态检查包装：压角、破损、磨损、水渍或印刷掉色。外箱与单件包装均需检查。",
             "answer": "passFailNa",
             "media": "on_fail"
           }
@@ -1025,16 +1355,22 @@
           {
             "id": "other.s6.01",
             "section": "Missing Components",
+            "section_zh": "缺件",
             "title": "Missing components",
+            "title_zh": "缺件",
             "guidance": "Anything that should be in the pack but isn't: a main component, an accessory, an insert card, a spare part, instructions. Record what is missing and how many units were affected.",
+            "guidance_zh": "应随包装配齐但缺失的任何物品：主体部件、配件、插卡、备件、说明书等。请记录缺失内容及受影响件数。",
             "answer": "defects",
             "media": "on_entry"
           },
           {
             "id": "other.s6.02",
             "section": "Additional Issues",
+            "section_zh": "其他问题",
             "title": "Additional issues",
+            "title_zh": "其他问题",
             "guidance": "Anything else worth recording that no other section covers. Describe what you found and where.",
+            "guidance_zh": "其他各部分未涵盖、但值得记录的问题。请说明发现的内容及其位置。",
             "answer": "defects",
             "media": "on_entry"
           }
