@@ -1,5 +1,5 @@
 {
-  "_readme": "Product category tree. Each top-level category may have subcategories. 'fitGroup' (only on apparel subcategories) links a subcategory to the matching group of fits in config/fits.json, so the Sizing step only shows relevant fits. Categories without subcategories (Other) skip the subcategory picker entirely.",
+  "_readme": "Product category tree. Each top-level category may have subcategories. 'fitGroup' (only on apparel subcategories) links a subcategory to the matching group of fits in config/fits.json, so the Sizing step only shows relevant fits. Categories with no 'subcategories' key (Bags, Other) skip the subcategory picker entirely. NOTE: adding a top-level category also needs its key adding to CATEGORY_ORDER in public/app.js, a cost entry in config/unitCosts.json, and a toleranceGuidance* key in config/i18n.json.",
   "categories": {
     "apparel": {
       "label_en": "Apparel",
@@ -62,21 +62,15 @@
       "icon": "\ud83e\uddf8",
       "subcategories": [
         {
-          "key": "standard",
-          "label_en": "Standard",
-          "label_zh": "\u6807\u51c6\u6b3e",
+          "key": "plushToy",
+          "label_en": "Plush Toy",
+          "label_zh": "\u6bdb\u7ed2\u73a9\u5177",
           "fitGroup": null
         },
         {
-          "key": "mini",
-          "label_en": "Mini",
-          "label_zh": "\u8ff7\u4f60\u6b3e",
-          "fitGroup": null
-        },
-        {
-          "key": "electronic",
-          "label_en": "Electronic (talking)",
-          "label_zh": "\u7535\u5b50\u53d1\u58f0\u6b3e",
+          "key": "puppet",
+          "label_en": "Puppet",
+          "label_zh": "\u624b\u5076",
           "fitGroup": null
         }
       ],
@@ -86,38 +80,6 @@
       "label_en": "Bags",
       "label_zh": "\u7bb1\u5305",
       "icon": "\ud83c\udf92",
-      "subcategories": [
-        {
-          "key": "backpack",
-          "label_en": "Backpack",
-          "label_zh": "\u53cc\u80a9\u5305",
-          "fitGroup": null
-        },
-        {
-          "key": "lunchbox",
-          "label_en": "Lunchbox",
-          "label_zh": "\u5348\u9910\u76d2",
-          "fitGroup": null
-        },
-        {
-          "key": "purse",
-          "label_en": "Sling Bag",
-          "label_zh": "\u659c\u630e\u5305",
-          "fitGroup": null
-        },
-        {
-          "key": "tote",
-          "label_en": "Tote",
-          "label_zh": "\u6258\u7279\u5305",
-          "fitGroup": null
-        },
-        {
-          "key": "other",
-          "label_en": "Other",
-          "label_zh": "\u5176\u4ed6",
-          "fitGroup": null
-        }
-      ],
       "toleranceGuidanceKey": "toleranceGuidanceBags"
     },
     "accessories": {
@@ -125,6 +87,12 @@
       "label_zh": "\u914d\u4ef6",
       "icon": "\ud83d\udd11",
       "subcategories": [
+        {
+          "key": "acrylicStandee",
+          "label_en": "Acrylic Standee",
+          "label_zh": "\u4e9a\u514b\u529b\u7acb\u724c",
+          "fitGroup": null
+        },
         {
           "key": "keychain",
           "label_en": "Keychain",
@@ -136,21 +104,35 @@
           "label_en": "Pin",
           "label_zh": "\u5fbd\u7ae0",
           "fitGroup": null
-        },
-        {
-          "key": "notebook",
-          "label_en": "Notebook / Sketchbook",
-          "label_zh": "\u7b14\u8bb0\u672c / \u7d20\u63cf\u672c",
-          "fitGroup": null
-        },
-        {
-          "key": "other",
-          "label_en": "Other",
-          "label_zh": "\u5176\u4ed6",
-          "fitGroup": null
         }
       ],
       "toleranceGuidanceKey": "toleranceGuidanceAccessories"
+    },
+    "paperGoods": {
+      "label_en": "Paper Goods",
+      "label_zh": "\u7eb8\u5236\u54c1",
+      "icon": "\ud83d\udcd2",
+      "subcategories": [
+        {
+          "key": "notebook",
+          "label_en": "Notebook",
+          "label_zh": "\u7b14\u8bb0\u672c",
+          "fitGroup": null
+        },
+        {
+          "key": "book",
+          "label_en": "Book",
+          "label_zh": "\u4e66\u7c4d",
+          "fitGroup": null
+        },
+        {
+          "key": "poster",
+          "label_en": "Poster",
+          "label_zh": "\u6d77\u62a5",
+          "fitGroup": null
+        }
+      ],
+      "toleranceGuidanceKey": "toleranceGuidancePaperGoods"
     },
     "other": {
       "label_en": "Other",

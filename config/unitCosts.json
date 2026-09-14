@@ -20,12 +20,22 @@
       "keychain": 4,
       "pin": 2,
       "notebook": 8,
-      "other": 8
+      "other": 8,
+      "acrylicStandee": 6
     },
     "plush": {
       "standard": 8,
       "mini": 5,
-      "electronic": 9
+      "electronic": 9,
+      "other": 8,
+      "plushToy": 8,
+      "puppet": 9
+    },
+    "paperGoods": {
+      "notebook": 8,
+      "book": 8,
+      "poster": 4,
+      "other": 8
     }
   },
   "otherCategoryFlat": 15,

@@ -31,12 +31,56 @@
     }
   }
 
+  /* Pages that can redraw themselves from in-memory state register a handler
+   * here (see onChange). Without one we fall back to a full reload, which is
+   * still the right call for pages whose labels are baked in at load time. */
+  let rerenderHandler = null;
+
+  /** Opt a page out of the reload-on-language-change behaviour.
+   *
+   *  The QA/QC report wizard holds an entire in-progress inspection in memory
+   *  - including photo File objects, which cannot be serialised to storage and
+   *  so cannot survive a reload by any save/restore trick. Reloading mid-report
+   *  therefore threw the whole thing away and dropped the user back on step 1.
+   *  That wizard rebuilds every label from the live language on each render, so
+   *  it passes its render() in here and switches language in place instead. */
+  function onChange(fn) {
+    rerenderHandler = typeof fn === 'function' ? fn : null;
+  }
+
+  /** Repaint the bits of the header we own, for the in-place path - on the
+   *  reload path the markup is simply rebuilt with the new language. */
+  function refreshHeaderChrome(lang) {
+    document.querySelectorAll('.lang-opt').forEach(function (b) {
+      b.classList.toggle('active', b.dataset.lang === lang);
+    });
+    const out = document.querySelector('.logout-btn');
+    if (out) out.textContent = lang === 'en' ? 'Log out' : '\u9000\u51fa\u767b\u5f55';
+  }
+
   function set(lang) {
     if (lang !== 'en' && lang !== 'zh') return;
     try { localStorage.setItem(STORAGE_KEY, lang); } catch (e) { /* non-fatal */ }
-    // A full reload is deliberate: labels are baked into template strings all
-    // over the app, so reloading with the new preference is far more reliable
-    // than trying to re-render every open view in place.
+
+    if (rerenderHandler) {
+      refreshHeaderChrome(lang);
+      // Keep the reader where they were - a re-render resets scroll to the top
+      // otherwise, which is disorienting halfway down a long checklist.
+      const y = window.scrollY;
+      try {
+        rerenderHandler(lang);
+        window.scrollTo(0, y);
+        return;
+      } catch (e) {
+        // If a page's re-render throws we must not leave it half-translated,
+        // so fall through to the reload rather than swallowing the error.
+        console.error('In-place language switch failed, reloading instead:', e);
+      }
+    }
+
+    // Default: a full reload. Labels are baked into template strings on pages
+    // that haven't opted in, so reloading with the new preference is far more
+    // reliable than trying to re-render every open view in place.
     location.reload();
   }
 
@@ -98,7 +142,8 @@
   }
 
   global.JuniperLang = {
-    get: get, set: set, mountToggle: mountToggle, mountLogout: mountLogout,
+    get: get, set: set, onChange: onChange,
+    mountToggle: mountToggle, mountLogout: mountLogout,
     STORAGE_KEY: STORAGE_KEY
   };
 

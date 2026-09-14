@@ -55,12 +55,17 @@ const ASANA_FIELD_MAP_PATH = path.join(__dirname, 'config', 'asanaFieldMap.json'
 function loadAsanaFieldMap() { return loadJson(ASANA_FIELD_MAP_PATH); }
 
 /** Picks the right named photo-slot set for a product: apparel and plush by
- *  top-level category, "book" for Notebook/Sketchbook (an accessories
- *  subcategory), everything else falls back to the default set. */
+ *  top-level category, "book" for everything in Paper Goods, everything else
+ *  falls back to the default set.
+ *
+ *  The bare `subcategory === 'notebook'` check is kept alongside the category
+ *  check on purpose: Notebook used to live under Accessories before Paper
+ *  Goods existed, so historical records still carry that pairing and would
+ *  otherwise silently drop to the default set. */
 function resolvePhotoSet(category, subcategory) {
   if (category === 'apparel') return approvalPhotoSets.sets.apparel;
   if (category === 'plush') return approvalPhotoSets.sets.plush;
-  if (subcategory === 'notebook') return approvalPhotoSets.sets.book;
+  if (category === 'paperGoods' || subcategory === 'notebook') return approvalPhotoSets.sets.book;
   return approvalPhotoSets.sets.default;
 }
 const analytics = require('./lib/analytics');
@@ -2594,6 +2599,37 @@ async function runHandoffImport(order, driveToken, drive) {
     }
   };
 
+  /**
+   * Record imported artwork against the component definition for this SKU.
+   *
+   * This is what makes the import a one-time cost per product rather than
+   * per PO: the hang tag artwork is stored against (SKU, "Hang Tag"), so a
+   * reorder inherits it without anyone re-running the import or the file
+   * being fetched from Drive a second time.
+   *
+   * Also written onto this PO's own matching sub-component row, so the part
+   * carries its artwork where people actually look at it.
+   */
+  const recordOnDefinition = (label, url) => {
+    const sku = order.mainComponent && order.mainComponent.sku;
+    if (!sku || !label || !url) return;
+    try {
+      componentDefinitions.upsertFromAccessory(sku, { partName: label, designDocUrl: url }, IMPORT_TAG);
+      // Attach it to this PO's matching sub-component, if it has one.
+      const fresh = orderManagementStore.getOrderById(order.id);
+      const accessories = (fresh && fresh.accessories) || [];
+      const match = accessories.find((a) => componentDefinitions.keyFor(sku, a.partName)
+        === componentDefinitions.keyFor(sku, label));
+      if (match && !match.designDocUrl) {
+        const next = accessories.map((a) => (a.id === match.id ? { ...a, designDocUrl: url } : a));
+        orderManagementStore.updateOrder(order.id, { accessories: next }, IMPORT_TAG, 'Handoff import');
+      }
+    } catch (err) {
+      // The definition library is a convenience - never fail an import for it.
+      console.error('Could not record artwork on the component definition:', err.message || err);
+    }
+  };
+
   const found = await discoverHandoffItems(order.asanaTaskGid);
   if (!found.ok || !found.handoffTaskGid) {
     return { ok: false, reason: 'no handoff task linked from Sample Link', results };
@@ -2628,6 +2664,7 @@ async function runHandoffImport(order, driveToken, drive) {
           const url = await saveDriveFile(access, meta, 'Design document');
           const slot = docSlotFor(it.label);
           setSlot(slot, url);
+          recordOnDefinition(it.label, url);
           results.push({ label: it.label, status: 'imported', files: 1, as: slot ? `Product Documentation - ${it.label}` : 'PO file (slot already filled)' });
         } else {
           const listed = await driveClient.listFolder(access, it.drvFolder[1]);
@@ -2681,6 +2718,7 @@ async function runHandoffImport(order, driveToken, drive) {
           }
           const slot = docSlotFor(it.label);
           setSlot(slot, url);
+          recordOnDefinition(it.label, url);
           results.push({ label: it.label, status: 'imported', files: listed.length,
             as: slot ? `Product Documentation - ${it.label}${listed.length > 1 ? ' (zip)' : ''}` : 'PO file (slot already filled)' });
         }

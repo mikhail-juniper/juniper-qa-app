@@ -67,7 +67,11 @@ const state = {
 
 let step = 0;
 const STEPS = ['poLookup', 'orderInfo', 'productionNotes', 'inspectionDetails', 'sizing', 'issues', 'review'];
-const CATEGORY_ORDER = ['apparel', 'plush', 'bags', 'accessories', 'other'];
+// Display order for the category pickers. Any category key missing from this
+// list is filtered OUT of both pickers entirely (see the .filter calls in
+// renderNewPoScreen / the category step), so a new category in
+// config/categories.json must be added here too or it silently won't appear.
+const CATEGORY_ORDER = ['apparel', 'plush', 'bags', 'accessories', 'paperGoods', 'other'];
 // Fixed industry-standard AQL values (Major 2.5%, Minor 4.0%) - not user-editable.
 // Critical is always zero-tolerance (Ac=0/Re=1), handled directly in the plan functions.
 const DEFAULT_MAJOR_AQL = 2.5;
@@ -1689,6 +1693,31 @@ function renderPriorReportCard() {
 }
 
 /* ---- Step 1: Order Info (+ AQL setup) ---- */
+
+/** Creator/PO Quantity render as read-only prefilled rows when the purchase
+ *  order actually supplied them, and fall back to their editable controls
+ *  when it didn't - see the comment in renderOrderInfoStep. */
+function creatorIsPrefilled() {
+  return !!(state.creator && String(state.creator).trim());
+}
+function poQuantityIsPrefilled() {
+  // Mirrors the step's own validation (required, >= 2) so a quantity that
+  // would fail validation stays editable rather than locking the user out.
+  const n = parseInt(state.poQuantity, 10);
+  return !isNaN(n) && n >= 2;
+}
+/** Thousands separators so a locked-in 5000 reads as 5,000 - it's display
+ *  only now that the field isn't an editable number input. */
+function formatQty(v) {
+  const n = parseInt(v, 10);
+  return isNaN(n) ? String(v || '') : n.toLocaleString('en-US');
+}
+/** Translated label for a risk key, for the read-only risk row. */
+function riskLabel(risk) {
+  const key = 'risk' + String(risk || 'medium').charAt(0).toUpperCase() + String(risk || 'medium').slice(1);
+  return bi(key, risk || 'medium').en;
+}
+
 function renderOrderInfoStep() {
   const catDef = currentCategoryDef();
   const catLabel = catDef ? { en: catDef.label_zh, zh: catDef.label_en } : { en: '', zh: '' };
@@ -1708,18 +1737,37 @@ function renderOrderInfoStep() {
       <!-- Supplier/factory code removed: it belongs to the purchase order,
            and asking QA to re-enter it here invited it drifting out of step
            with the PO. It's still carried on the report via the PO. -->
+      <!-- Creator, PO Quantity and Product Complexity/Risk all come from the
+           purchase order, so they read as prefilled review rows rather than
+           inputs - same treatment as Category/SKU/Title above. Change them on
+           the PO, not here, so the report can't drift out of step with it.
+
+           Each one falls back to its original editable control if the PO
+           didn't supply a usable value, so a PO with a missing creator or
+           quantity can still be completed instead of dead-ending. PO Quantity
+           is validated as required and >= 2, so without that fallback a blank
+           one would be an unfixable error. -->
+      ${creatorIsPrefilled()
+        ? `<div class="review-row"><span class="k">${escapeHtml(bi('creator').en)}</span><span class="v">${escapeHtml(state.creator)}</span></div>`
+        : ''}
+      ${poQuantityIsPrefilled()
+        ? `<div class="review-row"><span class="k">${escapeHtml(bi('poQuantity').en)}</span><span class="v">${escapeHtml(formatQty(state.poQuantity))}</span></div>`
+        : ''}
+      <div class="review-row"><span class="k">${escapeHtml(bi('productRisk', 'Product Complexity/Risk').en)}</span><span class="v">${escapeHtml(riskLabel(state.productRisk))}</span></div>
+
+      <!-- Everything below this line is editable. Keeping the fallback inputs
+           down here with the date - rather than inline where their read-only
+           row would have gone - means the card always reads as one block of
+           prefilled rows followed by one block of inputs, instead of an input
+           sandwiched between two grey rows. -->
+      ${creatorIsPrefilled() ? '' : `<div class="field-row"><div style="flex:1">${selectFieldWithOther('creator', 'creator', state.creator, OPTIONS.creators || [], {})}</div></div>`}
+      ${poQuantityIsPrefilled() ? '' : numberField('poQuantity', 'poQuantity', state.poQuantity, { required: true, placeholderKey: 'poQuantityPlaceholder' })}
+
+      <!-- Date stays editable (the inspection date is genuinely a property of
+           this inspection, not of the PO) but sits last so the block reads as
+           a run of prefilled rows followed by the one thing QA sets here. -->
       <div class="field-row">
         <div style="flex:1">${dateField('date', 'date', state.date, { required: true })}</div>
-      </div>
-      <div class="field-row">
-        <div style="flex:1">${selectFieldWithOther('creator', 'creator', state.creator, OPTIONS.creators || [], {})}</div>
-      </div>
-      ${numberField('poQuantity', 'poQuantity', state.poQuantity, { required: true, placeholderKey: 'poQuantityPlaceholder' })}
-      <div class="field">
-        <label class="field-label">${biBlockHtml('productRisk', 'Product Complexity/Risk')}</label>
-        <div class="segmented">
-          ${['high', 'medium', 'low'].map((r) => `<div class="segmented-option ${state.productRisk === r ? 'selected' : ''}" data-seg="productRisk" data-val="${r}">${escapeHtml(bi('risk' + r.charAt(0).toUpperCase() + r.slice(1)).en)}<span class="zh">${escapeHtml(bi('risk' + r.charAt(0).toUpperCase() + r.slice(1)).zh)}</span></div>`).join('')}
-        </div>
       </div>
     </div>
 
@@ -3074,6 +3122,16 @@ function resetApp() {
 
 (async function init() {
   await loadConfig();
+
+  // Switch language in place instead of reloading. render() rebuilds the
+  // current screen entirely from `state`/`step`/`appMode`, and every label
+  // goes through bi()/catLabel() which read the live language at call time,
+  // so a plain re-render is all that's needed. Reloading here used to discard
+  // the in-progress report and bounce the user back to step 1.
+  if (window.JuniperLang && window.JuniperLang.onChange) {
+    window.JuniperLang.onChange(() => { render(); });
+  }
+
   const params = new URLSearchParams(location.search);
   if (params.get('mode') === 'newPO') {
     appMode = 'newPO';
