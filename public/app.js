@@ -2449,24 +2449,21 @@ function renderSizeEntryTable() {
   `;
 }
 function renderToleranceGuidance() {
-  const catDef = currentCategoryDef();
-  if (!catDef) return '';
+  if (!currentCategoryDef()) return '';
 
-  // Editable in Settings > Tolerances (config/tolerances.json). Falls back to
-  // the original i18n string if the config hasn't been seeded yet, so an older
-  // data disk still shows the guidance it always did.
-  const fromConfig = ((CONFIG.tolerances && CONFIG.tolerances.guidance) || {})[state.category];
-  const lang = (window.JuniperLang && window.JuniperLang.get()) || 'zh';
-  let text = '';
-  if (fromConfig) {
-    text = lang === 'en' ? (fromConfig.en || fromConfig.zh) : (fromConfig.zh || fromConfig.en);
-  } else if (catDef.toleranceGuidanceKey) {
-    text = bi(catDef.toleranceGuidanceKey).en;
-  }
+  // Per-category tolerance, editable in Settings > Tolerances. Apparel's value
+  // is the live pass/fail threshold; the rest are reference figures only.
+  const cats = (CONFIG.tolerances && CONFIG.tolerances.categories) || {};
+  const cm = cats[state.category];
 
-  // Blanking a category's guidance in Settings is a deliberate way to hide
-  // this card, so an empty string renders nothing rather than an empty box.
-  if (!text || !String(text).trim()) return '';
+  // A blank tolerance in Settings means none is defined for this category, so
+  // no reference card is shown at all.
+  if (cm === null || cm === undefined || cm === '') return '';
+  const n = parseFloat(cm);
+  if (isNaN(n)) return '';
+
+  const text = bi('toleranceReferenceValue', 'Measurements should be within \u00b1{cm} cm of the approved sample.')
+    .en.replace('{cm}', String(n));
 
   return `
     <div class="card" style="background:var(--jc-warn-bg); border-color:#F0D9A8;">

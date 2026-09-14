@@ -1262,57 +1262,71 @@ app.get('/api/config', (req, res) => {
 });
 
 // ---- Settings: tolerances ----
-/* Two values with one editing surface. The numeric apparel tolerance stays in
- * fits.json, because passFail.js, pdfBuilder.js, app.js and approval.js all
- * already read `fits.toleranceCm` and duplicating it would invite the two
- * copies drifting apart. The per-category guidance text lives in
- * tolerances.json. Each value therefore has exactly one home; this endpoint
- * just presents them together and writes each back where it belongs. */
+/* One editable number per category. Apparel is special: its value is the
+ * pass/fail threshold for apparel size rows and lives as `toleranceCm` in
+ * fits.json, which passFail.js, pdfBuilder.js, app.js and approval.js all
+ * already read. Rather than duplicate it, the apparel entry in
+ * tolerances.json is ignored on read and overwritten from fits.json here, and
+ * saving apparel writes back to fits.json. Every other category is a
+ * reference figure shown to the inspector and used in no calculation. */
+const TOLERANCE_MIN_CM = 0;
+const TOLERANCE_MAX_CM = 25;
+
 function loadTolerances() {
+  let categories = {};
   try {
-    const t = loadJson(TOLERANCES_PATH);
-    return { toleranceCm: (fits && fits.toleranceCm) || 1.27, guidance: t.guidance || {} };
+    categories = Object.assign({}, (loadJson(TOLERANCES_PATH) || {}).categories || {});
   } catch (err) {
-    // A missing/corrupt file must not take the app down - the sizing step
-    // simply falls back to the i18n guidance strings.
+    // A missing/corrupt file must not take the app down - the Sizing step
+    // simply shows no tolerance reference.
     console.error('Could not read tolerances.json:', err.message || err);
-    return { toleranceCm: (fits && fits.toleranceCm) || 1.27, guidance: {} };
   }
+  categories.apparel = (fits && fits.toleranceCm) || 1.27;
+  return { categories };
 }
 
 app.get('/api/tolerances', (req, res) => res.json(loadTolerances()));
 
 app.post('/api/tolerances', requirePermission('settings:write'), (req, res) => {
   try {
-    const body = req.body || {};
+    const incoming = (req.body && req.body.categories) || {};
+    if (typeof incoming !== 'object') return res.status(400).json({ error: 'categories must be an object' });
 
-    if (body.toleranceCm !== undefined) {
-      const n = parseFloat(body.toleranceCm);
-      // An out-of-range tolerance silently changes every apparel pass/fail
-      // verdict, so bound it rather than trusting the input.
-      if (isNaN(n) || n <= 0 || n > 25) {
-        return res.status(400).json({ error: 'toleranceCm must be a number greater than 0 and no more than 25' });
+    const current = loadJson(TOLERANCES_PATH);
+    current.categories = current.categories || {};
+
+    for (const [cat, raw] of Object.entries(incoming)) {
+      // Only categories already in the file are writable, so a stale or
+      // hand-crafted payload can't invent new ones.
+      if (!(cat in current.categories) && cat !== 'apparel') continue;
+
+      // null/'' clears the tolerance - valid for every category except
+      // apparel, which must always have a number to score against.
+      if (raw === null || raw === '') {
+        if (cat === 'apparel') {
+          return res.status(400).json({ error: 'The apparel tolerance cannot be blank - it decides pass/fail on every size row.' });
+        }
+        current.categories[cat] = null;
+        continue;
       }
-      const currentFits = loadJson(FITS_PATH);
-      currentFits.toleranceCm = n;
-      saveJson(FITS_PATH, currentFits);
-      fits = currentFits; // keep the in-memory copy live without a restart
+
+      const n = parseFloat(raw);
+      if (isNaN(n) || n <= TOLERANCE_MIN_CM || n > TOLERANCE_MAX_CM) {
+        return res.status(400).json({ error: `Tolerance for "${cat}" must be greater than ${TOLERANCE_MIN_CM} and no more than ${TOLERANCE_MAX_CM} cm` });
+      }
+
+      if (cat === 'apparel') {
+        const currentFits = loadJson(FITS_PATH);
+        currentFits.toleranceCm = n;
+        saveJson(FITS_PATH, currentFits);
+        fits = currentFits; // keep the in-memory copy live without a restart
+        current.categories.apparel = n; // mirrored for readability of the file only
+      } else {
+        current.categories[cat] = n;
+      }
     }
 
-    if (body.guidance && typeof body.guidance === 'object') {
-      const current = loadJson(TOLERANCES_PATH);
-      current.guidance = current.guidance || {};
-      Object.entries(body.guidance).forEach(([cat, val]) => {
-        if (!val || typeof val !== 'object') return;
-        // Only categories that already exist in the file are writable, so a
-        // stale or hand-crafted payload can't invent new ones.
-        if (!current.guidance[cat]) return;
-        if (typeof val.en === 'string') current.guidance[cat].en = val.en.trim();
-        if (typeof val.zh === 'string') current.guidance[cat].zh = val.zh.trim();
-      });
-      saveJson(TOLERANCES_PATH, current);
-    }
-
+    saveJson(TOLERANCES_PATH, current);
     res.json({ ok: true, tolerances: loadTolerances() });
   } catch (err) {
     console.error('Failed to save tolerances:', err);

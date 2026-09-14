@@ -871,6 +871,10 @@
     "en": "Placeholder guidance: trim size and print placement should be within about ±0.3 cm of the approved sample. Please confirm the real tolerance with your team.",
     "zh": "占位参考：成品尺寸与印刷位置应与已批准样品相差不超过约0.3厘米。请与团队确认真实公差标准。"
   },
+  "toleranceReferenceValue": {
+    "en": "Measurements should be within ±{cm} cm of the approved sample.",
+    "zh": "尺寸应与已批准样品相差不超过 ±{cm} 厘米。"
+  },
   "toleranceGuidanceOther": {
     "en": "No standard tolerance defined yet for this category - use your judgment and compare against the approved sample.",
     "zh": "该类别尚无标准公差参考，请凭经验并与已批准样品进行比对。"
