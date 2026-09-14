@@ -1290,17 +1290,60 @@ function migrateToleranceEntry(raw) {
   return { sizingCm: num(raw.sizingCm), printCm: num(raw.printCm), weightG: num(raw.weightG) };
 }
 
+/* The shipped defaults, used to fill any category the disk copy is missing.
+ * Disk-seeded configs are never re-seeded, so an install that first ran on an
+ * early version of this file keeps whatever shape it seeded with - and the
+ * very first version had no `categories` key at all, only guidance text. That
+ * left the Settings table empty and, more quietly, meant nothing was ever
+ * scored against a tolerance. Merging the shipped defaults underneath the disk
+ * copy heals that without discarding anyone's edits. */
+const SHIPPED_TOLERANCES = require('./config/tolerances.json');
+
 function loadTolerances() {
-  let categories = {};
+  const categories = {};
+  const shipped = (SHIPPED_TOLERANCES && SHIPPED_TOLERANCES.categories) || {};
+  Object.entries(shipped).forEach(([cat, val]) => { categories[cat] = migrateToleranceEntry(val); });
+
+  let onDisk = {};
   try {
-    const raw = (loadJson(TOLERANCES_PATH) || {}).categories || {};
-    Object.entries(raw).forEach(([cat, val]) => { categories[cat] = migrateToleranceEntry(val); });
+    onDisk = (loadJson(TOLERANCES_PATH) || {}).categories || {};
   } catch (err) {
-    // A missing or corrupt file must not take the app down - the Sizing step
-    // simply shows no tolerance reference.
-    console.error('Could not read tolerances.json:', err.message || err);
+    // A missing or corrupt file must not take the app down - the shipped
+    // defaults above still apply.
+    console.error('Could not read tolerances.json, using shipped defaults:', err.message || err);
   }
+
+  Object.entries(onDisk).forEach(([cat, val]) => {
+    const entry = migrateToleranceEntry(val);
+    const base = categories[cat] || { sizingCm: null, printCm: null, weightG: null };
+    // Field-by-field: an early file that only carried sizingCm shouldn't wipe
+    // the shipped print and weight figures.
+    categories[cat] = {
+      sizingCm: entry.sizingCm === null ? base.sizingCm : entry.sizingCm,
+      printCm: entry.printCm === null ? base.printCm : entry.printCm,
+      weightG: entry.weightG === null ? base.weightG : entry.weightG
+    };
+  });
+
   return { categories };
+}
+
+/** Write the merged result back once, so the disk copy stops being a partial
+ *  file and Settings saves behave normally from then on. */
+function healTolerancesOnDisk() {
+  try {
+    const current = loadJson(TOLERANCES_PATH);
+    const merged = loadTolerances().categories;
+    const before = JSON.stringify((current && current.categories) || {});
+    if (before === JSON.stringify(merged)) return false;
+    current.categories = merged;
+    delete current.guidance; // retired in favour of the numeric tolerances
+    saveJson(TOLERANCES_PATH, current);
+    return true;
+  } catch (err) {
+    console.error('Could not heal tolerances.json:', err.message || err);
+    return false;
+  }
 }
 
 /** Keep fits.toleranceCm in step with the apparel sizing tolerance. */
@@ -1312,6 +1355,11 @@ function syncApparelToleranceToFits(sizingCm) {
   saveJson(FITS_PATH, currentFits);
   fits = currentFits; // keep the in-memory copy live without a restart
   return true;
+}
+
+// Repair a partial or early-format tolerances.json before anything reads it.
+if (healTolerancesOnDisk()) {
+  console.log('Filled in missing tolerance categories on the data disk from the shipped defaults.');
 }
 
 // Reconcile once at boot so a hand-edited or stale fits.json can't quietly
