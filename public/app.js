@@ -621,6 +621,12 @@ function validateStep(s) {
         missing.forEach((k) => markError(k));
         showToast(bi('dimensionsRequired').en + ' / ' + bi('dimensionsRequired').zh, true);
         ok = false;
+      } else if (anyDimensionOutOfTolerance()) {
+        /* Out of tolerance is a real finding, not a typo, so it stops the step
+         * the same way an out-of-tolerance apparel measurement does. */
+        ['height', 'width', 'depth'].forEach((k) => { if (dimensionOutOfTolerance(k)) markError(k); });
+        showToast(bi('dimensionsOutOfTolerance').en + ' / ' + bi('dimensionsOutOfTolerance').zh, true);
+        ok = false;
       }
     }
   }
@@ -686,6 +692,7 @@ function getAllValidationProblems() {
   if (state.category !== 'apparel') {
     const dims = state.categoryData.dimensions;
     if (!dims.height || !dims.width || !dims.depth) problems.push(bi('dimensionsRequired'));
+    else if (anyDimensionOutOfTolerance()) problems.push(bi('dimensionsOutOfTolerance'));
   }
 
   return problems;
@@ -697,6 +704,10 @@ function computeOverallResult() {
   const reasons = [];
   const cd = state.categoryData;
   const tol = CONFIG.fits.toleranceCm || 1.27;
+
+  // Non-apparel: the recorded dimensions are the sizing check, so a box
+  // outside tolerance fails the report just as a garment would.
+  if (state.category !== 'apparel' && anyDimensionOutOfTolerance()) reasons.push('tolerance');
 
   if (state.category === 'apparel' && cd.fit && CONFIG.fits.fits[cd.fit]) {
     const fitDef = CONFIG.fits.fits[cd.fit];
@@ -2530,17 +2541,73 @@ function isSimplifiedCustomSizing(subcategory) {
   return subcategory === 'hat' || subcategory === 'socks';
 }
 
+/** The sizing tolerance for this product's category, from Settings. */
+function sizingToleranceCm() {
+  const cats = (CONFIG.tolerances && CONFIG.tolerances.categories) || {};
+  const t = cats[state.category];
+  const n = t ? parseFloat(t.sizingCm) : NaN;
+  return isNaN(n) ? null : n;
+}
+
+/** The approved dimension for one axis, taken from the Golden Sample sizing
+ *  carried over on the PO. Null when nothing was approved to compare against. */
+function approvedDimension(key) {
+  const d = state.approvalSizingData && state.approvalSizingData.dimensions;
+  if (!d) return null;
+  const n = parseFloat(d[key]);
+  return isNaN(n) ? null : n;
+}
+
+/**
+ * Whether a measured dimension is outside tolerance.
+ *
+ * Non-apparel sizing was previously recorded but never scored, which is why an
+ * out-of-tolerance box passed silently while an out-of-tolerance garment
+ * failed. It now uses the same rule as apparel size rows, against the
+ * per-category tolerance in Settings rather than the apparel figure.
+ */
+function dimensionOutOfTolerance(key) {
+  const tol = sizingToleranceCm();
+  const std = approvedDimension(key);
+  if (tol === null || std === null) return false; // nothing to compare against
+  const raw = state.categoryData.dimensions[key];
+  if (raw === '' || raw === null || raw === undefined) return false; // empty is a separate error
+  const measured = parseFloat(raw);
+  if (isNaN(measured)) return false;
+  return Math.abs(measured - std) > tol;
+}
+
+function anyDimensionOutOfTolerance() {
+  return ['height', 'width', 'depth'].some(dimensionOutOfTolerance);
+}
+
 function renderDimensionsFields() {
   const dims = state.categoryData.dimensions;
-  const field = (key, i18nKey, fallback) => `
-    <div class="field" style="flex:1;">
-      <label class="field-label">${biBlockHtml(i18nKey, fallback)}<span class="required">*</span></label>
-      <input type="number" step="0.1" inputmode="decimal" data-dimension="${key}" value="${escapeHtml(dims[key])}" placeholder="0.0" />
-    </div>
-  `;
+  const tol = sizingToleranceCm();
+
+  const field = (key, i18nKey, fallback) => {
+    const std = approvedDimension(key);
+    const bad = dimensionOutOfTolerance(key);
+    return `
+      <div class="field ${bad ? 'has-error' : ''}" style="flex:1;">
+        <label class="field-label">${biBlockHtml(i18nKey, fallback)}<span class="required">*</span></label>
+        <input type="number" step="0.1" inputmode="decimal" data-dimension="${key}" value="${escapeHtml(dims[key])}" placeholder="0.0" />
+        ${std !== null ? `
+          <div class="dim-standard ${bad ? 'dim-standard-fail' : ''}">
+            ${escapeHtml(bi('approvedLabel', 'Approved').en)}: ${std}${tol !== null ? ` \u00b1${tol}` : ''} cm
+            ${bad ? ` \u2014 ${escapeHtml(bi('outOfToleranceShort', 'out of tolerance').en)}` : ''}
+          </div>
+        ` : ''}
+      </div>
+    `;
+  };
+
   return `
     <div class="card">
       <div class="section-title">${biBlockHtml('sizingTitle', 'Sizing')}</div>
+      <!-- No tolerance line here on purpose: the Tolerance Reference card
+           above already states it, and each field below repeats the figure it
+           is measured against. A third copy was just noise. -->
       <div class="field-row">
         ${field('height', 'dimensionHeight', 'Height (cm)')}
         ${field('width', 'dimensionWidth', 'Width (cm)')}

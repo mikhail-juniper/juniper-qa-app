@@ -1432,8 +1432,8 @@
     "zh": "已批准样品"
   },
   "approvalSizingReferenceTitle": {
-    "en": "Sizing (from QA/QC Approval)",
-    "zh": "尺寸信息（来自质检审批）"
+    "en": "Approved Sizing",
+    "zh": "已批准尺寸"
   },
   "preProductionSampleLabel": {
     "en": "Pre-Production Sample",
@@ -4434,5 +4434,21 @@
   "checkedNoIssues": {
     "en": "Checked with no issues found",
     "zh": "已检查，未发现问题"
+  },
+  "approvedLabel": {
+    "en": "Approved",
+    "zh": "已批准"
+  },
+  "outOfToleranceShort": {
+    "en": "out of tolerance",
+    "zh": "超出公差"
+  },
+  "sizingToleranceNote": {
+    "en": "Anything more than ±{v} cm from the approved sample is a fail.",
+    "zh": "与已批准样品相差超过 ±{v} 厘米即为不合格。"
+  },
+  "dimensionsOutOfTolerance": {
+    "en": "A measurement is outside tolerance. Check it, and log a defect if it's correct.",
+    "zh": "有尺寸超出公差。请复核，若数值无误请记录缺陷。"
   }
 }

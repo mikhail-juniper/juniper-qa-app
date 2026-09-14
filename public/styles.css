@@ -1331,3 +1331,8 @@ td.reference-selectable { outline-offset: -2px; }
 /* Recap: the percentage sits beside its count, quieter than the number, so
    the tally reads first and the rate reads second. */
 .recap-pct { color: var(--jc-muted); font-weight: 400; font-size: 11.5px; }
+
+/* The approved figure sits under its measurement field so the inspector can
+   see what they're measuring against without leaving the row. */
+.dim-standard { font-size: 11.5px; color: var(--jc-muted); margin-top: 4px; }
+.dim-standard-fail { color: var(--jc-fail); font-weight: 600; }
