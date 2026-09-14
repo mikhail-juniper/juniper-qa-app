@@ -440,15 +440,12 @@ function back() {
 /* ---------------- VALIDATION ---------------- */
 
 function checklistDefsForStep(name) {
-  if (name === 'inspectionDetails') {
-    return [
-      ['fabricColorMatch', 'fabricColorMatch'], ['fabricWeightMatch', 'fabricWeightMatch'],
-      ['embroideryColorMatch', 'embroideryColorMatch'], ['embroideryDimMatch', 'embroideryDimMatch'],
-      ['printColorMatch', 'printColorMatch'], ['printDimMatch', 'printDimMatch'],
-      ['washTagMatch', 'washTagMatch'],
-      ['packagingCardMatch', 'packagingCardMatch'], ['bagTagsCorrect', 'bagTagsCorrect']
-    ];
-  }
+  /* Step 5 no longer uses the fixed checklist keys - it renders from
+   * config/reportQuestions.json and validates via inspectionStepProblems().
+   * Returning the old list here left nine keys nobody could ever answer, which
+   * blocked submission outright. The keys still exist in state for the Sizing
+   * step's custom-sizing flow, which is why they aren't deleted. */
+  if (name === 'inspectionDetails') return [];
   if (name === 'sizing' && state.category === 'apparel' && state.categoryData.fit === OTHER_FIT_VALUE) {
     return [['generalSizingMatch', 'generalSizingMatch']];
   }
@@ -665,6 +662,17 @@ function getAllValidationProblems() {
 
   const missingStatus = allDefs.filter(([key]) => !state.categoryData[key].status);
   if (missingStatus.length) problems.push(bi('allChecksRequired'));
+
+  // Step 5 and Step 6, which validate against the question bank rather than
+  // the fixed keys above.
+  const q = inspectionStepProblems();
+  if (q.some((x) => x.why === 'status')) problems.push(bi('answerAllQuestions', 'Please answer every question.'));
+  if (q.some((x) => x.why === 'units')) problems.push(bi('unitsRequiredOnFail', 'A failed question needs the number of units affected.'));
+  if (q.some((x) => x.why === 'media')) problems.push(bi('evidenceRequired', 'A photo or video is required for this question.'));
+  const si = sectionIssueProblems();
+  if (si.some((x) => x.why === 'description')) problems.push(bi('descriptionRequiredForDefect'));
+  if (si.some((x) => x.why === 'units')) problems.push(bi('unitsRequiredOnFail', 'A failed question needs the number of units affected.'));
+  if (si.some((x) => x.why === 'media')) problems.push(bi('photoRequiredForDefect'));
 
   const missingDefects = allDefs.filter(([key]) => {
     const entry = state.categoryData[key];
