@@ -48,6 +48,9 @@ const state = {
    * Created lazily by answerFor() so a question added to the config later
    * doesn't need a migration. */
   answers: {},
+  /* Step 6 entries keyed by the Step 6 question id they were logged under.
+   * Everything here is minor by definition - see renderAdditionalIssuesStep. */
+  sectionIssues: {},
   qaSetup: null,
   categoryData: {
     fit: '',
@@ -326,13 +329,35 @@ function computeActualAqlPlan() {
 
 /* ---------------- DEFECT COLLECTION (mirrors lib/passFail.js) ---------------- */
 
+/* Severity is derived from where an issue was recorded, not chosen by the
+ * inspector: a Step 5 question answered Fail is MAJOR, and everything logged
+ * in Step 6 is MINOR. Nothing is recorded as critical any more. */
 function collectAllDefects() {
   const all = [];
+
+  // Step 5: one major defect per failed question, sized by units affected.
+  questionsForStep(5).concat(additionalReviewQuestions()).forEach((q) => {
+    const a = state.answers[q.id];
+    if (!a || a.status !== 'fail') return;
+    all.push({
+      id: q.id,
+      description: q.title,
+      severity: 'major',
+      unitsAffected: parseInt(a.unitsAffected, 10) || 1,
+      photos: a.media || []
+    });
+  });
+
+  // Step 6: everything logged per section, always minor.
+  allSectionIssues().forEach((d) => all.push(d));
+
+  // Legacy: the fixed checklist keys still used by the Sizing step's
+  // custom-sizing flow, plus any older in-progress report.
   CHECKLIST_KEYS.forEach((key) => {
     const item = state.categoryData[key];
     if (item && Array.isArray(item.defects)) item.defects.forEach((d) => all.push(d));
   });
-  state.additionalIssues.forEach((d) => all.push(d));
+  (state.additionalIssues || []).forEach((d) => all.push(d));
   return all;
 }
 function sumDefectsBySeverity(defects) {
@@ -510,6 +535,26 @@ function validateStep(s) {
       ok = false;
     }
     if (!ok) showToast('Please fill in all required fields / 请填写所有必填项', true);
+  } else if (name === 'issues') {
+    /* An empty section is a valid "found nothing" - only entries that were
+     * actually started get validated. */
+    const problems = sectionIssueProblems();
+    if (problems.length) {
+      ok = false;
+      problems.forEach((pb) => {
+        const card = document.querySelector(`[data-section-issue="${pb.id}"]`);
+        if (card) card.classList.add('has-error');
+      });
+      const first = problems[0];
+      const msg = first.why === 'description'
+        ? bi('descriptionRequiredForDefect')
+        : first.why === 'units'
+          ? bi('unitsRequiredOnFail', 'A failed question needs the number of units affected.')
+          : bi('photoRequiredForDefect');
+      showToast(msg.en + ' / ' + msg.zh, true);
+      const card = document.querySelector(`[data-section-issue="${first.id}"]`);
+      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
   } else if (name === 'inspectionDetails') {
     /* Step 5 is config-driven now, so it validates against the question bank
      * rather than the old fixed checklist keys. */
@@ -706,6 +751,10 @@ function getPhotoArray(fieldId) {
   if (fieldId === 'chartphotos') return state.categoryData.chartPhotos;
   if (fieldId === 'simplesize') return state.categoryData.simpleSizePhotos;
   if (fieldId.startsWith('q:')) return answerFor(fieldId.slice(2)).media;
+  if (fieldId.startsWith('issue:')) {
+    const i = findSectionIssueById(fieldId.slice(6));
+    return i ? i.media : [];
+  }
   if (fieldId.startsWith('defect:')) {
     const d = findDefectById(fieldId.split(':')[1]);
     return d ? d.photos : [];
@@ -2732,19 +2781,93 @@ function photoGrid(fieldId, compact, mini) {
 }
 
 /* ---- Step 5: Additional Issues (catch-all) ---- */
+/* ============================================================
+ * Step 6: Additional Issues (config-driven, minor only)
+ * ============================================================
+ * One section per Step 6 question in config/reportQuestions.json, each an
+ * "add defect" prompt rather than a pass/fail. Nothing has to be added - a
+ * clean inspection leaves every section empty.
+ *
+ * Everything logged here counts as MINOR. Severity is derived from the step
+ * now, so there's no minor/major selector: Step 5 fails are the major ones,
+ * and these are the scattered per-unit issues found while checking. */
+function sectionIssuesFor(id) {
+  if (!state.sectionIssues[id]) state.sectionIssues[id] = [];
+  return state.sectionIssues[id];
+}
+
+function emptySectionIssue() {
+  return { id: genId(), description: '', unitsAffected: 1, media: [] };
+}
+
+/** Every Step 6 entry across all sections, flattened, shaped like the defects
+ *  the AQL tally and PDF already understand. */
+function allSectionIssues() {
+  const out = [];
+  Object.keys(state.sectionIssues || {}).forEach((sectionId) => {
+    (state.sectionIssues[sectionId] || []).forEach((issue) => {
+      out.push({
+        ...issue,
+        sectionId,
+        severity: 'minor',   // always - see the note above
+        photos: issue.media  // the tally and PDF both look for `photos`
+      });
+    });
+  });
+  return out;
+}
+
+function renderSectionIssueCard(issue, sectionId) {
+  return `
+    <div class="defect-card" data-section-issue="${escapeHtml(issue.id)}" data-section-id="${escapeHtml(sectionId)}">
+      <div class="field">
+        <label class="field-label">${escapeHtml(bi('issueDescription', 'What did you find?').en)}<span class="required">*</span></label>
+        <textarea data-issue-desc="${escapeHtml(issue.id)}" rows="2"
+          placeholder="${escapeHtml(bi('issueDescriptionPlaceholder', 'Describe the issue and where on the product it is').en)}">${escapeHtml(issue.description || '')}</textarea>
+      </div>
+      <div class="field">
+        <label class="field-label">${escapeHtml(bi('unitsAffectedLabel', 'How many units failed?').en)}<span class="required">*</span></label>
+        <input type="number" min="1" class="input" data-issue-units="${escapeHtml(issue.id)}"
+          value="${escapeHtml(String(issue.unitsAffected || ''))}" />
+      </div>
+      <div class="q-media-block">
+        <div class="section-photos-label">
+          ${escapeHtml(bi('evidenceLabel', 'Evidence').en)}<span class="required">*</span>
+          <span class="q-media-hint">${escapeHtml(bi('mediaOnFailRequired', 'Photo or video of the defect required').en)}</span>
+        </div>
+        ${photoGrid('issue:' + issue.id, true)}
+      </div>
+      <button type="button" class="remove-defect-btn" data-remove-issue="${escapeHtml(issue.id)}">${escapeHtml(bi('removeIssue').en)}</button>
+    </div>
+  `;
+}
+
 function renderAdditionalIssuesStep() {
-  const issuesHtml = state.additionalIssues.map((issue) => defectCard(issue, null)).join('');
+  const questions = questionsForStep(6);
+
+  const sections = questions.map((q) => {
+    const issues = sectionIssuesFor(q.id);
+    return `
+      <div class="card">
+        <div class="section-title">${escapeHtml(q.title)}</div>
+        ${q.guidance ? `<div class="q-guidance">${escapeHtml(q.guidance)}</div>` : ''}
+        ${issues.length
+          ? issues.map((i) => renderSectionIssueCard(i, q.id)).join('')
+          : `<div class="no-issues-note" style="margin:6px 0;">${escapeHtml(bi('noIssuesInSection', 'No issues logged here.').en)}</div>`}
+        <button type="button" class="add-defect-btn" data-add-section-issue="${escapeHtml(q.id)}">
+          ${escapeHtml(bi('addDefect').en)}
+        </button>
+      </div>
+    `;
+  }).join('');
 
   return `
     <div class="step-eyebrow">${biHtml('step', 'Step')} 6 / 7</div>
     <div class="step-title">${biBlockHtml('additionalIssuesSection', 'Additional Issues')}</div>
-    <div class="section-help" style="margin-bottom:14px;">${escapeHtml(bi('additionalIssuesHelp').en)}<br/>${escapeHtml(bi('additionalIssuesHelp').zh)}</div>
-    <div class="card" style="background:var(--jc-mint-light); border-color:var(--jc-teal); margin-bottom:16px;">
-      <div class="section-title" style="font-size:14px;">${biBlockHtml('severityGuideTitle', 'How to classify an issue')}</div>
-      <div class="section-help">${escapeHtml(bi('severityGuideText').en)}<br/>${escapeHtml(bi('severityGuideText').zh)}</div>
+    <div class="section-help" style="margin-bottom:14px;">
+      ${escapeHtml(bi('additionalIssuesHelpMinor', 'Minor issues found on individual units while checking. Add one entry per distinct issue, with the number of units affected. Leave a section empty if you found nothing.').en)}
     </div>
-    ${state.additionalIssues.length === 0 ? `<div class="no-issues-note">${escapeHtml(bi('noIssues').en)}</div>` : issuesHtml}
-    <button class="add-issue-btn" id="btnAddIssue">${escapeHtml(bi('addDefect').en)}</button>
+    ${sections || `<div class="card"><div class="section-help">${escapeHtml(bi('noQuestionsForProduct', 'No inspection questions are configured for this product type yet.').en)}</div></div>`}
     <div id="issuesAqlLive">${renderAqlTallyCard()}</div>
     <div class="nav-buttons">
       <button class="btn btn-secondary" id="btnBack">${biBlockHtml('back', 'Back')}</button>
@@ -2752,6 +2875,60 @@ function renderAdditionalIssuesStep() {
     </div>
   `;
 }
+
+/** Only entries that exist are validated - an empty section is a valid
+ *  "nothing found", which is the normal case. */
+function sectionIssueProblems() {
+  const problems = [];
+  allSectionIssues().forEach((i) => {
+    if (!i.description || !i.description.trim()) problems.push({ id: i.id, why: 'description' });
+    else if (!(parseInt(i.unitsAffected, 10) > 0)) problems.push({ id: i.id, why: 'units' });
+    else if (!i.media || !i.media.length) problems.push({ id: i.id, why: 'media' });
+  });
+  return problems;
+}
+
+function findSectionIssueById(id) {
+  for (const sectionId of Object.keys(state.sectionIssues || {})) {
+    const hit = (state.sectionIssues[sectionId] || []).find((i) => i.id === id);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+function attachSectionIssueHandlers() {
+  document.querySelectorAll('[data-add-section-issue]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      sectionIssuesFor(btn.dataset.addSectionIssue).push(emptySectionIssue());
+      render();
+      const cards = document.querySelectorAll('[data-section-issue]');
+      const last = cards[cards.length - 1];
+      if (last) last.querySelector('textarea').focus();
+    });
+  });
+  document.querySelectorAll('[data-remove-issue]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.removeIssue;
+      Object.keys(state.sectionIssues).forEach((k) => {
+        state.sectionIssues[k] = state.sectionIssues[k].filter((i) => i.id !== id);
+      });
+      render();
+    });
+  });
+  document.querySelectorAll('[data-issue-desc]').forEach((el) => {
+    el.addEventListener('input', () => {
+      const i = findSectionIssueById(el.dataset.issueDesc);
+      if (i) i.description = el.value;
+    });
+  });
+  document.querySelectorAll('[data-issue-units]').forEach((el) => {
+    el.addEventListener('input', () => {
+      const i = findSectionIssueById(el.dataset.issueUnits);
+      if (i) i.unitsAffected = el.value;
+    });
+  });
+}
+
 function renderAqlTallyCard() {
   const result = computeOverallResult();
   const aql = result.aql;
@@ -3043,11 +3220,9 @@ function attachStepHandlers(name) {
   if (name === 'photos') attachPhotoHandlers();
 
   if (name === 'issues') {
-    const addBtn = document.getElementById('btnAddIssue');
-    if (addBtn) addBtn.addEventListener('click', () => {
-      state.additionalIssues.push(emptyDefect());
-      render();
-    });
+    // Step 6 is per-section now; attachDefectHandlers is still called for the
+    // legacy defect cards the Sizing step's custom-sizing flow can create.
+    attachSectionIssueHandlers();
     attachDefectHandlers();
     attachPhotoHandlers();
   }

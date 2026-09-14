@@ -4402,5 +4402,13 @@
   "noQuestionsForProduct": {
     "en": "No inspection questions are configured for this product type yet.",
     "zh": "该产品类型尚未配置检验问题。"
+  },
+  "noIssuesInSection": {
+    "en": "No issues logged here.",
+    "zh": "此处未记录问题。"
+  },
+  "additionalIssuesHelpMinor": {
+    "en": "Minor issues found on individual units while checking. Add one entry per distinct issue, with the number of units affected. Leave a section empty if you found nothing.",
+    "zh": "检查过程中在单个产品上发现的轻微问题。每个问题单独添加一条并填写受影响数量。未发现问题则留空。"
   }
 }
