@@ -25,6 +25,12 @@
           "fitGroup": "crewnecks"
         },
         {
+          "key": "jacket",
+          "label_en": "Jacket",
+          "label_zh": "\u5939\u514b",
+          "fitGroup": "jacket"
+        },
+        {
           "key": "joggers",
           "label_en": "Joggers",
           "label_zh": "\u675f\u811a\u88e4",
