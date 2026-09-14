@@ -1097,11 +1097,12 @@ function componentsCategoryBlock(productLine, components) {
       ${components.length ? `
         <div class="om-table-wrap">
           <table class="om-table">
-            <thead><tr><th>${i18i('thPartName', 'Part name')}</th><th>${i18i('thMaterial', 'Material')}</th><th>${i18i('thSupplier', 'Supplier')}</th><th>${i18i('thUnitPrice', 'Unit price')}</th><th>${i18i('thNumUses', '# uses')}</th></tr></thead>
+            <thead><tr><th>${i18i('thPartName', 'Part name')}</th><th>${i18i('thPartType', 'Type')}</th><th>${i18i('thMaterial', 'Material')}</th><th>${i18i('thSupplier', 'Supplier')}</th><th>${i18i('thUnitPrice', 'Unit price')}</th><th>${i18i('thNumUses', '# uses')}</th></tr></thead>
             <tbody>
               ${components.map((c) => `
                 <tr data-id="${escapeHtml(c.id)}">
                   <td><strong>${escapeHtml(c.partName)}</strong></td>
+                  <td>${escapeHtml(c.partType || '—')}</td>
                   <td>${escapeHtml(c.material || '—')}</td>
                   <td>${escapeHtml(c.supplierName || '—')}</td>
                   <td>${fmtMoney(c.unitPrice)}</td>
@@ -5560,9 +5561,27 @@ function openAccessoryRelinkPicker(order, row) {
     .map((slot) => ({ ...slot, url: mc[slot.field] }));
 
   const partName = (row.querySelector('.om-acc-name') || {}).value || '';
-  // The row's own name is the best guess at which file it wants, so a row
+  /* Part names are stored product-qualified ("Test Plush Hang Tag"), so strip
+   * the product name before matching. The slot patterns are anchored on the
+   * type word, and testing them against the qualified name would just never
+   * match - silently, with the suggestion quietly never appearing. */
+  const product = String((order && order.mainComponent && order.mainComponent.name) || '').trim();
+  const norm = (v) => String(v).toLowerCase().replace(/\s+/g, ' ');
+  let partType = partName.trim();
+  if (product) {
+    // Mirrors stripProductPrefix in lib/orderManagementStore.js. Longest
+    // separator first, and the bare space is kept for names saved under the
+    // older convention.
+    for (const sep of [' - ', ' -', '- ', ' ']) {
+      const prefix = norm(product) + sep;
+      if (!norm(partType).startsWith(prefix)) continue;
+      const stripped = partType.slice(prefix.length).trim();
+      if (stripped) { partType = stripped; break; }
+    }
+  }
+  // The row's own type is the best guess at which file it wants, so a row
   // called "Hang Tag" opens with the hang tag already highlighted.
-  const suggested = available.find((s) => s.match.test(partName.trim()));
+  const suggested = available.find((s) => s.match.test(partType));
 
   const back = document.createElement('div');
   back.className = 'om-setup-backdrop';
