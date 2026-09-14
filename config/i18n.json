@@ -4486,5 +4486,41 @@
   "sectionsUnanswered": {
     "en": "Every section needs either No Defects or at least one defect logged.",
     "zh": "每个部分均需选择“无缺陷”或至少记录一条缺陷。"
+  },
+  "thPartType": {
+    "en": "Type",
+    "zh": "类型"
+  },
+  "productWeightLabel": {
+    "en": "Product weight",
+    "zh": "产品重量"
+  },
+  "productWeightG": {
+    "en": "Weight (g)",
+    "zh": "重量（克）"
+  },
+  "productWeightHelp": {
+    "en": "Weigh a finished unit on a calibrated scale and record the weight in grams.",
+    "zh": "使用经校准的电子秤称量成品，以克为单位记录。"
+  },
+  "productWeightRequired": {
+    "en": "Please record the product weight.",
+    "zh": "请记录产品重量。"
+  },
+  "noApprovedWeight": {
+    "en": "No approved weight on the PO to compare against.",
+    "zh": "订单上没有可对比的已批准重量。"
+  },
+  "issuesLoggedLabel": {
+    "en": "Issues",
+    "zh": "问题数"
+  },
+  "unitsAffectedHeader": {
+    "en": "Units affected",
+    "zh": "受影响件数"
+  },
+  "ofUnitsLogged": {
+    "en": "from {n} logged",
+    "zh": "共记录 {n} 次"
   }
 }

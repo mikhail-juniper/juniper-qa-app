@@ -49,6 +49,8 @@ const state = {
    * doesn't need a migration. */
   answers: {},
   poDimensions: null,
+  productWeightG: '',
+  poWeightG: null,
   /* Step 6 entries keyed by the Step 6 question id they were logged under.
    * Everything here is minor by definition - see renderAdditionalIssuesStep. */
   sectionIssues: {},
@@ -352,6 +354,31 @@ function collectAllDefects() {
     });
   });
 
+  // Sizing: each measurement outside tolerance is a major issue in its own
+  // right, so it lands in the tally and on the PDF rather than only tipping
+  // the overall verdict.
+  if (state.category !== 'apparel') {
+    ['height', 'width', 'depth'].forEach((k) => {
+      if (!dimensionOutOfTolerance(k)) return;
+      all.push({
+        id: `dimension_${k}`,
+        description: `${bi('dimension' + k.charAt(0).toUpperCase() + k.slice(1)).en}: ${state.categoryData.dimensions[k]} cm (${bi('approvedLabel', 'Approved').en} ${approvedDimension(k)} \u00b1${sizingToleranceCm()} cm)`,
+        severity: 'major',
+        unitsAffected: 1,
+        photos: []
+      });
+    });
+  }
+  if (weightOutOfTolerance()) {
+    all.push({
+      id: 'product_weight',
+      description: `${bi('productWeightLabel', 'Product weight').en}: ${state.productWeightG} g (${bi('approvedLabel', 'Approved').en} ${approvedWeightG()} \u00b1${weightToleranceG()} g)`,
+      severity: 'major',
+      unitsAffected: 1,
+      photos: []
+    });
+  }
+
   // Step 6: everything logged per section, always minor.
   allSectionIssues().forEach((d) => all.push(d));
 
@@ -372,6 +399,42 @@ function sumDefectsBySeverity(defects) {
     if (sums[d.severity] !== undefined) sums[d.severity] += qty;
   });
   return sums;
+}
+
+/**
+ * Two different things get called a "defect count", and conflating them was
+ * producing nonsense like "10 minor issues" from a sample of 5 units.
+ *
+ *   entries  - how many distinct issues were logged (2)
+ *   units    - the sum of units-affected across those issues (5 + 5 = 10)
+ *   defectiveUnits - how many actual units are bad
+ *
+ * The third can't be derived by adding: if issue A affected 5 units and issue
+ * B affected 5 units out of 5 checked, those are the same 5 units, not 10.
+ * Nothing in the form records which unit each issue was found on, so the
+ * honest answer is a bound rather than a figure - it can never exceed the
+ * number of units actually inspected. That bound is what the rates and the
+ * whole-PO assumption are based on, because a rate over 100% is meaningless.
+ */
+function countDefects(defects, unitsChecked) {
+  const out = {
+    critical: { entries: 0, units: 0 },
+    major: { entries: 0, units: 0 },
+    minor: { entries: 0, units: 0 }
+  };
+  defects.forEach((d) => {
+    const bucket = out[d.severity];
+    if (!bucket) return;
+    const n = parseInt(d.unitsAffected, 10);
+    bucket.entries += 1;
+    bucket.units += isNaN(n) || n < 1 ? 1 : n;
+  });
+  const cap = (v) => (unitsChecked ? Math.min(v, unitsChecked) : v);
+  ['critical', 'major', 'minor'].forEach((k) => { out[k].defectiveUnits = cap(out[k].units); });
+  // Across all severities: still bounded by what was inspected.
+  out.totalDefectiveUnits = cap(out.critical.units + out.major.units + out.minor.units);
+  out.unitsChecked = unitsChecked || null;
+  return out;
 }
 function findDefectById(id) {
   for (const key of CHECKLIST_KEYS) {
@@ -625,16 +688,20 @@ function validateStep(s) {
       // Non-apparel: Height/Width/Length are the sizing record now.
       const dims = state.categoryData.dimensions;
       const missing = ['height', 'width', 'depth'].filter((k) => !dims[k] || !String(dims[k]).trim());
+      if (weightToleranceG() !== null && !String(state.productWeightG || '').trim()) {
+        markError('productWeightInput');
+        showToast(bi('productWeightRequired', 'Please record the product weight.').en, true);
+        ok = false;
+      }
       if (missing.length) {
         missing.forEach((k) => markError(k));
         showToast(bi('dimensionsRequired').en + ' / ' + bi('dimensionsRequired').zh, true);
         ok = false;
-      } else if (anyDimensionOutOfTolerance()) {
-        /* Out of tolerance is a real finding, not a typo, so it stops the step
-         * the same way an out-of-tolerance apparel measurement does. */
-        ['height', 'width', 'depth'].forEach((k) => { if (dimensionOutOfTolerance(k)) markError(k); });
-        showToast(bi('dimensionsOutOfTolerance').en + ' / ' + bi('dimensionsOutOfTolerance').zh, true);
-        ok = false;
+        /* Out of tolerance deliberately does NOT block. Entering the
+         * measurement IS logging it, exactly as an apparel size row works:
+         * the field goes red, the inspector carries on, and the report records
+         * it as a major issue. Blocking here just made them delete the real
+         * number to get past the step. */
       }
     }
   }
@@ -711,7 +778,8 @@ function getAllValidationProblems() {
   if (state.category !== 'apparel') {
     const dims = state.categoryData.dimensions;
     if (!dims.height || !dims.width || !dims.depth) problems.push(bi('dimensionsRequired'));
-    else if (anyDimensionOutOfTolerance()) problems.push(bi('dimensionsOutOfTolerance'));
+    // Out of tolerance is a finding, not an incomplete field, so it isn't
+    // listed here as something to fix before submitting.
   }
 
   return problems;
@@ -727,6 +795,7 @@ function computeOverallResult() {
   // Non-apparel: the recorded dimensions are the sizing check, so a box
   // outside tolerance fails the report just as a garment would.
   if (state.category !== 'apparel' && anyDimensionOutOfTolerance()) reasons.push('tolerance');
+  if (weightOutOfTolerance()) reasons.push('tolerance');
 
   if (state.category === 'apparel' && cd.fit && CONFIG.fits.fits[cd.fit]) {
     const fitDef = CONFIG.fits.fits[cd.fit];
@@ -748,18 +817,35 @@ function computeOverallResult() {
   let aql;
   if (state.qaType === 'pre_production') {
     const preQty = parseInt(state.preProductionUnitsChecked, 10);
+    const checked = isNaN(preQty) || preQty < 1 ? null : preQty;
+    const counts = countDefects(allDefects, checked);
+
+    /* Pre-production used to build this object and push no fail reason at
+     * all, so a sample report passed no matter what was found. A first-article
+     * check with defects is precisely the thing that should not pass. */
+    if (majorCount + criticalCount >= 1) reasons.push('major');
+    // Every unit inspected had something wrong with it. Same rule the bulk
+    // branch already applies, just applied here too.
+    if (checked && counts.totalDefectiveUnits >= checked) reasons.push('allRejected');
+
     aql = {
-      criticalCount, majorCount, minorCount, isFallback: true, isPreProduction: true,
-      quantityChecked: isNaN(preQty) ? null : preQty,
+      criticalCount, majorCount, minorCount, counts,
+      isFallback: true, isPreProduction: true,
+      quantityChecked: checked,
       poSize: parseInt(state.poQuantity, 10) || null
     };
   } else {
     const checked = parseInt(state.actualUnitsChecked, 10);
     if (!isNaN(checked) && checked >= 1) {
+      const counts = countDefects(allDefects, checked);
       const rejected = Math.min(checked, majorCount + criticalCount);
       const recap = { poSize: parseInt(state.poQuantity, 10) || null, quantityChecked: checked, quantityRejected: rejected, quantityApproved: checked - rejected };
       if (rejected >= checked) reasons.push('allRejected');
-      aql = { criticalCount, majorCount, minorCount, isFallback: false, isActual: true, recap };
+      // Minors alone never rejected a bulk report, so an order where every
+      // inspected unit had a minor issue still passed. Bounded defective
+      // units close that gap without changing the AQL treatment of minors.
+      if (counts.totalDefectiveUnits >= checked) reasons.push('allRejected');
+      aql = { criticalCount, majorCount, minorCount, counts, isFallback: false, isActual: true, recap };
     } else {
       if (minorCount >= 3) reasons.push('minor');
       if (majorCount + criticalCount >= 1) reasons.push('major');
@@ -767,7 +853,9 @@ function computeOverallResult() {
     }
   }
 
-  return { overall: reasons.length ? 'fail' : 'pass', reasons, aql };
+  // 'allRejected' can be pushed twice by the bulk branch; de-duplicate so the
+  // reason list reads cleanly on the review screen.
+  return { overall: reasons.length ? 'fail' : 'pass', reasons: [...new Set(reasons)], aql };
 }
 
 /* ---------------- PHOTO STORAGE HELPERS ---------------- */
@@ -1438,6 +1526,7 @@ async function submitPoLookup() {
       width: record.dimensionsWidth,
       depth: record.dimensionsLength
     };
+    state.poWeightG = record.weightGrams || null;
     if (['height', 'width', 'depth'].some((k) => poDims[k] !== null && poDims[k] !== undefined && String(poDims[k]).trim())) {
       state.poDimensions = poDims;
       if (!state.approvalSizingData) state.approvalSizingData = { dimensions: poDims };
@@ -2055,12 +2144,21 @@ function foundAcceptedTableHtml(aql) {
   const checked = unitsCheckedForRecap();
   const poQty = parseInt(state.poQuantity, 10) || null;
 
-  const row = (labelKey, count, accepted) => {
-    const ex = extrapolate(count, checked, poQty);
+  const counts = (aql && aql.counts) || countDefects(collectAllDefects(), checked);
+
+  const row = (labelKey, sev, accepted) => {
+    const c = counts[sev] || { entries: 0, units: 0, defectiveUnits: 0 };
+    /* Rates are based on defectiveUnits, not the raw sum. Two issues each
+     * affecting all 5 checked units is 5 bad units out of 5, not 10 out of 5 -
+     * and a 200% defect rate would extrapolate to nonsense. */
+    const ex = extrapolate(c.defectiveUnits, checked, poQty);
     return `
       <tr>
         <td>${escapeHtml(bi(labelKey).en)}</td>
-        <td>${count}${ex ? ` <span class="recap-pct">${escapeHtml(fmtPct(ex.pct))}</span>` : ''}</td>
+        <td>${c.entries}</td>
+        <td>${c.defectiveUnits}${c.units > c.defectiveUnits
+            ? ` <span class="recap-pct">${escapeHtml(bi('ofUnitsLogged', 'from {n} logged').en.replace('{n}', String(c.units)))}</span>`
+            : ''}${ex ? ` <span class="recap-pct">${escapeHtml(fmtPct(ex.pct))}</span>` : ''}</td>
         <td>${ex ? `${ex.assumed} <span class="recap-pct">${escapeHtml(fmtPct(ex.pct))}</span>` : '-'}</td>
         <td>${accepted}</td>
       </tr>
@@ -2072,15 +2170,16 @@ function foundAcceptedTableHtml(aql) {
       <thead>
         <tr>
           <th></th>
-          <th>${escapeHtml(bi('foundLabel').en)}</th>
+          <th>${escapeHtml(bi('issuesLoggedLabel', 'Issues').en)}</th>
+          <th>${escapeHtml(bi('unitsAffectedHeader', 'Units affected').en)}</th>
           <th>${escapeHtml(bi('totalPoAssumption', 'Total PO assumption').en)}</th>
           <th>${escapeHtml(bi('acceptedLabel').en)}</th>
         </tr>
       </thead>
       <tbody>
-        ${row('aqlCritical', aql.criticalCount, 0)}
-        ${row('aqlMajor', aql.majorCount, 0)}
-        ${row('aqlMinor', aql.minorCount, aql.minorCount)}
+        ${row('aqlCritical', 'critical', 0)}
+        ${row('aqlMajor', 'major', 0)}
+        ${row('aqlMinor', 'minor', counts.minor.defectiveUnits)}
       </tbody>
     </table>
     ${checked && poQty ? `
@@ -2548,6 +2647,9 @@ function renderSizingStep() {
     body += renderToleranceGuidance();
     body += renderDimensionsFields();
   }
+  // Only rendered where the category has a weight tolerance set, which today
+  // means plush only.
+  body += renderWeightField();
 
   return `
     <div class="step-eyebrow">${biHtml('step', 'Step')} 4 / 7</div>
@@ -2604,6 +2706,57 @@ function dimensionOutOfTolerance(key) {
 
 function anyDimensionOutOfTolerance() {
   return ['height', 'width', 'depth'].some(dimensionOutOfTolerance);
+}
+
+/** Weight tolerance for this category, from Settings. Only plush has one, so
+ *  this returns null everywhere else and the weight field isn't rendered. */
+function weightToleranceG() {
+  const cats = (CONFIG.tolerances && CONFIG.tolerances.categories) || {};
+  const t = cats[state.category];
+  const n = t ? parseFloat(t.weightG) : NaN;
+  return isNaN(n) ? null : n;
+}
+
+/** Approved finished weight from the PO's Product Documentation. */
+function approvedWeightG() {
+  const n = parseFloat(state.poWeightG);
+  return isNaN(n) ? null : n;
+}
+
+function weightOutOfTolerance() {
+  const tol = weightToleranceG();
+  const std = approvedWeightG();
+  if (tol === null || std === null) return false;
+  const raw = state.productWeightG;
+  if (raw === '' || raw === null || raw === undefined) return false;
+  const measured = parseFloat(raw);
+  if (isNaN(measured)) return false;
+  return Math.abs(measured - std) > tol;
+}
+
+/** Weighed on the Sizing step, and only where a weight tolerance is set. */
+function renderWeightField() {
+  const tol = weightToleranceG();
+  if (tol === null) return '';
+  const std = approvedWeightG();
+  const bad = weightOutOfTolerance();
+  return `
+    <div class="card">
+      <div class="section-title">${escapeHtml(bi('productWeightLabel', 'Product weight').en)}</div>
+      <div class="section-help">${escapeHtml(bi('productWeightHelp', 'Weigh a finished unit on a calibrated scale and record the weight in grams.').en)}</div>
+      <div class="field ${bad ? 'has-error' : ''}" style="max-width:280px;margin-top:8px;">
+        <label class="field-label">${escapeHtml(bi('productWeightG', 'Weight (g)').en)}<span class="required">*</span></label>
+        <input type="number" step="1" inputmode="decimal" id="productWeightInput"
+          value="${escapeHtml(String(state.productWeightG || ''))}" placeholder="0" />
+        ${std !== null ? `
+          <div class="dim-standard ${bad ? 'dim-standard-fail' : ''}">
+            ${escapeHtml(bi('approvedLabel', 'Approved').en)}: ${std} \u00b1${tol} g
+            ${bad ? ` \u2014 ${escapeHtml(bi('outOfToleranceShort', 'out of tolerance').en)}` : ''}
+          </div>
+        ` : `<div class="dim-standard">${escapeHtml(bi('noApprovedWeight', 'No approved weight on the PO to compare against.').en)}</div>`}
+      </div>
+    </div>
+  `;
 }
 
 function renderDimensionsFields() {
@@ -3173,7 +3326,9 @@ function renderReviewStep() {
   const result = computeOverallResult();
   const reasonKeyMap = {
     tolerance: 'resultReasonTolerance', minor: 'resultReasonMinor', major: 'resultReasonMajor',
-    aqlCritical: 'resultReasonAqlCritical', aqlMajor: 'resultReasonAqlMajor', aqlMinor: 'resultReasonAqlMinor'
+    aqlCritical: 'resultReasonAqlCritical', aqlMajor: 'resultReasonAqlMajor', aqlMinor: 'resultReasonAqlMinor',
+    // Was missing, so this reason rendered blank on the review banner.
+    allRejected: 'resultReasonAllRejected'
   };
   const resultLabel = result.overall === 'pass' ? bi('resultPass') : bi('resultFail');
   const problems = getAllValidationProblems();
@@ -3278,6 +3433,14 @@ function attachStepHandlers(name) {
   });
 
   if (name === 'inspectionDetails') attachInspectionHandlers();
+
+  const weightInput = document.getElementById('productWeightInput');
+  if (weightInput) {
+    weightInput.addEventListener('input', () => { state.productWeightG = weightInput.value; });
+    // Re-render on blur so the out-of-tolerance flag appears without waiting
+    // for Next, matching how the dimension fields behave.
+    weightInput.addEventListener('change', () => { state.productWeightG = weightInput.value; render(); });
+  }
 
   attachDataBindLiveHandlers(document);
   attachUnitsCheckedHandler(document);
