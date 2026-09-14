@@ -48,9 +48,13 @@ const state = {
    * Created lazily by answerFor() so a question added to the config later
    * doesn't need a migration. */
   answers: {},
+  poDimensions: null,
   /* Step 6 entries keyed by the Step 6 question id they were logged under.
    * Everything here is minor by definition - see renderAdditionalIssuesStep. */
   sectionIssues: {},
+  /* Sections the inspector explicitly marked "No Defects". Separate from an
+   * empty sectionIssues list, which just means untouched. */
+  sectionCleared: {},
   qaSetup: null,
   categoryData: {
     fit: '',
@@ -539,18 +543,25 @@ function validateStep(s) {
     if (problems.length) {
       ok = false;
       problems.forEach((pb) => {
-        const card = document.querySelector(`[data-section-issue="${pb.id}"]`);
-        if (card) card.classList.add('has-error');
+        const card = pb.why === 'unanswered'
+          ? document.querySelector(`[data-clean-section="${pb.id}"]`)
+          : document.querySelector(`[data-section-issue="${pb.id}"]`);
+        const target = pb.why === 'unanswered' ? (card && card.closest('.card')) : card;
+        if (target) target.classList.add('has-error');
       });
       const first = problems[0];
-      const msg = first.why === 'description'
-        ? bi('descriptionRequiredForDefect')
-        : first.why === 'units'
-          ? bi('unitsRequiredOnFail', 'A failed question needs the number of units affected.')
-          : bi('photoRequiredForDefect');
+      const msg = first.why === 'unanswered'
+        ? bi('sectionsUnanswered', 'Every section needs either No Defects or at least one defect logged.')
+        : first.why === 'description'
+          ? bi('descriptionRequiredForDefect')
+          : first.why === 'units'
+            ? bi('unitsRequiredOnFail', 'A failed question needs the number of units affected.')
+            : bi('photoRequiredForDefect');
       showToast(msg.en + ' / ' + msg.zh, true);
-      const card = document.querySelector(`[data-section-issue="${first.id}"]`);
-      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const focus = first.why === 'unanswered'
+        ? document.querySelector(`[data-clean-section="${first.id}"]`)
+        : document.querySelector(`[data-section-issue="${first.id}"]`);
+      if (focus) focus.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   } else if (name === 'inspectionDetails') {
     /* Step 5 is config-driven now, so it validates against the question bank
@@ -1412,6 +1423,25 @@ async function submitPoLookup() {
     state.poQuantity = record.orderQuantity ? String(record.orderQuantity) : '';
     state.poSizesIncluded = sortSizesCanonically(record.sizesIncluded || []);
     if (record.productRisk) state.productRisk = record.productRisk;
+
+    /* The PO's own Product Dimensions are the approved sizing for non-apparel.
+     * Previously the report only read sizing from the Golden Sample approval,
+     * so a PO whose dimensions were filled in afterwards (or whose approval
+     * never recorded sizing) showed no reference at all - and the tolerance
+     * check silently had nothing to compare against. The approval still wins
+     * when it has sizing; this is the fallback.
+     *
+     * Order Management calls the front-to-back axis Length; the report calls it
+     * Depth. Same measurement, so it maps straight across. */
+    const poDims = {
+      height: record.dimensionsHeight,
+      width: record.dimensionsWidth,
+      depth: record.dimensionsLength
+    };
+    if (['height', 'width', 'depth'].some((k) => poDims[k] !== null && poDims[k] !== undefined && String(poDims[k]).trim())) {
+      state.poDimensions = poDims;
+      if (!state.approvalSizingData) state.approvalSizingData = { dimensions: poDims };
+    }
     // Whichever stage this report is for. Null when Setup Report Link was
     // never run, which means no additional questions - the safe default.
     const setupStage = state.qaType === 'production' ? 'bulk' : 'preProduction';
@@ -1430,7 +1460,13 @@ async function submitPoLookup() {
           state.factoryCode = sample.data.factoryCode || '';
           state.productRisk = sample.data.productRisk || 'medium';
           if (sample.data.sizing) {
-            state.approvalSizingData = sample.data.sizing;
+            // Keep the PO's dimensions if the approval recorded none of its own.
+            const poDims = state.poDimensions;
+            const hasOwnDims = sample.data.sizing.dimensions
+              && ['height', 'width', 'depth'].some((k) => String(sample.data.sizing.dimensions[k] || '').trim());
+            state.approvalSizingData = (!hasOwnDims && poDims)
+              ? { ...sample.data.sizing, dimensions: poDims }
+              : sample.data.sizing;
             if (state.category === 'apparel') state.categoryData.fit = sample.data.sizing.fit || '';
           }
         }
@@ -2966,16 +3002,30 @@ function renderAdditionalIssuesStep() {
 
   const sections = questions.map((q) => {
     const issues = sectionIssuesFor(q.id);
+    const cleared = !!state.sectionCleared[q.id];
     return `
       <div class="card">
         <div class="section-title">${escapeHtml(q.title)}</div>
         ${q.guidance ? `<div class="q-guidance">${escapeHtml(q.guidance)}</div>` : ''}
         ${issues.length
           ? issues.map((i) => renderSectionIssueCard(i, q.id)).join('')
-          : `<div class="no-issues-note" style="margin:6px 0;">${escapeHtml(bi('noIssuesInSection', 'No issues logged here.').en)}</div>`}
-        <button type="button" class="add-defect-btn" data-add-section-issue="${escapeHtml(q.id)}">
-          ${escapeHtml(bi('addDefect').en)}
-        </button>
+          : `<div class="no-issues-note" style="margin:6px 0;">${cleared
+              ? escapeHtml(bi('sectionMarkedClean', 'Marked as no defects.').en)
+              : escapeHtml(bi('noIssuesInSection', 'No issues logged here.').en)}</div>`}
+        <!-- Two buttons, not one. A single "Add Defect" let a section be
+             skipped and an untouched section looked identical to one that had
+             been checked and found clean. Now every section has to be answered
+             one way or the other. -->
+        <div class="section-answer-row">
+          <button type="button" class="section-clean-btn ${cleared ? 'is-on' : ''}"
+            data-clean-section="${escapeHtml(q.id)}" ${issues.length ? 'disabled' : ''}
+            title="${issues.length ? escapeHtml(bi('removeIssuesFirst', 'Remove the logged issues first.').en) : ''}">
+            ${cleared ? '\u2713 ' : ''}${escapeHtml(bi('btnNoDefects', 'No Defects').en)}
+          </button>
+          <button type="button" class="add-defect-btn" data-add-section-issue="${escapeHtml(q.id)}">
+            ${escapeHtml(bi('addDefect').en)}
+          </button>
+        </div>
       </div>
     `;
   }).join('');
@@ -2997,8 +3047,17 @@ function renderAdditionalIssuesStep() {
 
 /** Only entries that exist are validated - an empty section is a valid
  *  "nothing found", which is the normal case. */
+/** Sections neither marked clean nor given an entry. */
+function unansweredSections() {
+  return questionsForStep(6).filter((q) => {
+    const issues = state.sectionIssues[q.id] || [];
+    return !issues.length && !state.sectionCleared[q.id];
+  });
+}
+
 function sectionIssueProblems() {
   const problems = [];
+  unansweredSections().forEach((q) => problems.push({ id: q.id, why: 'unanswered', sectionId: q.id }));
   allSectionIssues().forEach((i) => {
     if (!i.description || !i.description.trim()) problems.push({ id: i.id, why: 'description' });
     else if (!(parseInt(i.unitsAffected, 10) > 0)) problems.push({ id: i.id, why: 'units' });
@@ -3016,8 +3075,18 @@ function findSectionIssueById(id) {
 }
 
 function attachSectionIssueHandlers() {
+  document.querySelectorAll('[data-clean-section]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.cleanSection;
+      // Toggle, so a mis-click can be undone without reloading.
+      state.sectionCleared[id] = !state.sectionCleared[id];
+      render();
+    });
+  });
   document.querySelectorAll('[data-add-section-issue]').forEach((btn) => {
     btn.addEventListener('click', () => {
+      // Logging an issue contradicts "no defects", so clear the flag.
+      state.sectionCleared[btn.dataset.addSectionIssue] = false;
       sectionIssuesFor(btn.dataset.addSectionIssue).push(emptySectionIssue());
       render();
       const cards = document.querySelectorAll('[data-section-issue]');

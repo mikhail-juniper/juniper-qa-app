@@ -2522,9 +2522,14 @@ async function openDetailPanel(id, scope) {
       <div style="margin-top:28px;">
         <label style="margin:0;">${i18('fldProductDimensions', 'Product Dimensions')}</label>
         <div class="om-field-grid om-field-grid-row" style="margin-top:8px;">
-          <div><label>${i18('fldLengthCm', 'Length (cm)')}</label><input id="fDimensionsLength" type="number" step="0.1" value="${val(order.mainComponent.dimensionsLength)}" /></div>
-          <div><label>${i18('fldWidthCm', 'Width (cm)')}</label><input id="fDimensionsWidth" type="number" step="0.1" value="${val(order.mainComponent.dimensionsWidth)}" /></div>
+          <!-- Height / Width / Depth, in that order, to match the QA report.
+               The stored field is still dimensionsLength: it's the same
+               front-to-back measurement, only ever called Length here, and
+               renaming the field would break every existing PO. Only the
+               label and the column order changed. -->
           <div><label>${i18('fldHeightCm', 'Height (cm)')}</label><input id="fDimensionsHeight" type="number" step="0.1" value="${val(order.mainComponent.dimensionsHeight)}" /></div>
+          <div><label>${i18('fldWidthCm', 'Width (cm)')}</label><input id="fDimensionsWidth" type="number" step="0.1" value="${val(order.mainComponent.dimensionsWidth)}" /></div>
+          <div><label>${i18('fldDepthCm', 'Depth (cm)')}</label><input id="fDimensionsLength" type="number" step="0.1" value="${val(order.mainComponent.dimensionsLength)}" /></div>
         </div>
       </div>
     `}
@@ -2556,7 +2561,7 @@ async function openDetailPanel(id, scope) {
         <table class="om-table om-table-editable">
           <thead>
             <tr>
-              <th>${i18i('thComponentName', 'Component Name')}</th><th>${i18i('thPhoto', 'Photo')}</th><th>${i18i('thViewPo', 'View PO')}</th><th>${i18i('thLength', 'Length')}</th><th>${i18i('thWidth', 'Width')}</th><th>${i18i('thHeight', 'Height')}</th><th>${i18i('thQuantity', 'Quantity')}</th><th>${i18i('thSupplier', 'Supplier')}</th>
+              <th>${i18i('thComponentName', 'Component Name')}</th><th>${i18i('thPhoto', 'Photo')}</th><th>${i18i('thViewPo', 'View PO')}</th><th>${i18i('thHeight', 'Height')}</th><th>${i18i('thWidth', 'Width')}</th><th>${i18i('thDepth', 'Depth')}</th><th>${i18i('thQuantity', 'Quantity')}</th><th>${i18i('thSupplier', 'Supplier')}</th>
               <th>${i18i('thPrice', 'Price')} (¥)</th><th>${i18i('thShippingCost', 'Total Shipping Cost')} (¥)</th><th>${i18i('thSupplierContact', 'Supplier Contact')}</th><th>${i18i('thDeliveryDate', 'Delivery Date')}</th><th>${i18i('thComponentDeliveryAddress', 'Component Delivery Address')}</th>
               <th>${i18i('thManufacturingDrawing', 'Manufacturing Drawing')}</th><th></th>
             </tr>
@@ -2813,6 +2818,9 @@ async function openDetailPanel(id, scope) {
         openAccessoryDetailPanel(order.id, viewPoBtn.dataset.viewAccessory);
       });
     }
+    const relinkBtn = row.querySelector('.om-acc-image-relink-btn');
+    if (relinkBtn) relinkBtn.addEventListener('click', () => openAccessoryRelinkPicker(order, row));
+
     const imageInput = row.querySelector('.om-acc-image-file');
     row.querySelector('.om-acc-image-upload-btn').addEventListener('click', () => imageInput.click());
     imageInput.addEventListener('change', () => {
@@ -5268,15 +5276,22 @@ function accessoryRowHtml(idx, data, mainAddress) {
         <input type="hidden" class="om-acc-image-url" value="${escapeHtml(data.imageUrl || '')}" />
         <input type="file" class="om-acc-image-file" accept="image/*,application/pdf" style="display:none;" />
         <button type="button" class="om-table-upload-btn om-acc-image-upload-btn">${i18('btnUpload', 'Upload')}</button>
+        <!-- Most sub-component photos already exist as Product Documentation on
+             the PO: the hang tag artwork, the washing tag, the packaging
+             layout. Re-uploading them was duplicating the same file per row and
+             letting the copies drift apart when one was replaced. -->
+        <button type="button" class="om-table-upload-btn om-acc-image-relink-btn">${i18('btnLinkExisting', 'Link')}</button>
       </td>
       <td class="om-acc-viewpo-cell">
         ${data.id
           ? `<button type="button" class="om-table-upload-btn om-acc-view-po-btn" data-view-accessory="${escapeHtml(data.id)}">${i18('btnViewPo', 'View PO')}</button>`
           : `<span style="color:var(--jc-muted);font-size:11.5px;" title="${escapeHtml(i18t('viewPoSaveFirst', 'Save the PO first to open this component'))}">—</span>`}
       </td>
-      <td><input type="number" step="0.01" class="om-acc-length" placeholder="L" value="${escapeHtml(data.dimensionsLength ?? '')}" style="min-width:56px;" /></td>
-      <td><input type="number" step="0.01" class="om-acc-width" placeholder="W" value="${escapeHtml(data.dimensionsWidth ?? '')}" style="min-width:56px;" /></td>
+      <!-- Height / Width / Depth to match the QA report. The class stays
+           om-acc-length because the stored field is dimensionsLength. -->
       <td><input type="number" step="0.01" class="om-acc-height" placeholder="H" value="${escapeHtml(data.dimensionsHeight ?? '')}" style="min-width:56px;" /></td>
+      <td><input type="number" step="0.01" class="om-acc-width" placeholder="W" value="${escapeHtml(data.dimensionsWidth ?? '')}" style="min-width:56px;" /></td>
+      <td><input type="number" step="0.01" class="om-acc-length" placeholder="D" value="${escapeHtml(data.dimensionsLength ?? '')}" style="min-width:56px;" /></td>
       <td><input type="number" class="om-acc-qty" value="${escapeHtml(data.quantity ?? '')}" /></td>
       <td style="min-width:160px;"><input type="text" id="accSupplier${idx}" class="om-acc-supplier" value="${escapeHtml(data.supplierName || '')}" style="width:100%;" /></td>
       <td><input type="number" step="0.01" class="om-acc-unit-price" value="${escapeHtml(data.unitPrice ?? '')}" /></td>
@@ -5522,4 +5537,103 @@ async function openQaSetupDialog(order, stage) {
   document.addEventListener('keydown', onKey);
   document.body.appendChild(back);
   draw();
+}
+
+/* ============================================================
+ * Link an existing Product Documentation file to a sub-component
+ * ============================================================
+ * The hang tag artwork, washing tag and packaging layout are already attached
+ * to the PO under Product Documentation. Re-uploading the same file per
+ * sub-component row created duplicate copies that drifted apart whenever one
+ * was replaced, so a row can now point at the PO's file instead. */
+const ACCESSORY_DOC_SLOTS = [
+  { field: 'manufacturingDrawing', label: 'Manufacturing Drawing', match: /^manufacturing\s*drawing/i },
+  { field: 'washingTagUrl', label: 'Washing Tag', match: /^washing\s*tag/i },
+  { field: 'hangTagUrl', label: 'Hang Tag', match: /^(hang\s*tag|hangtag|swing\s*tag)/i },
+  { field: 'packagingUrl', label: 'Packaging', match: /^(packaging|.*\bbag\b|.*\bcard\b|.*\bsleeve\b|.*\bbox\b|.*\binsert\b)/i }
+];
+
+function openAccessoryRelinkPicker(order, row) {
+  const mc = (order && order.mainComponent) || {};
+  const available = ACCESSORY_DOC_SLOTS
+    .filter((slot) => mc[slot.field] && String(mc[slot.field]).trim())
+    .map((slot) => ({ ...slot, url: mc[slot.field] }));
+
+  const partName = (row.querySelector('.om-acc-name') || {}).value || '';
+  // The row's own name is the best guess at which file it wants, so a row
+  // called "Hang Tag" opens with the hang tag already highlighted.
+  const suggested = available.find((s) => s.match.test(partName.trim()));
+
+  const back = document.createElement('div');
+  back.className = 'om-setup-backdrop';
+  back.innerHTML = `
+    <div class="om-setup-box" style="max-width:460px;" role="dialog" aria-modal="true">
+      <div class="om-setup-head">
+        <div class="om-setup-title">${escapeHtml(i18t('titleLinkExistingFile', 'Link an existing file'))}</div>
+        <div class="om-setup-sub">${escapeHtml(partName || i18t('labelSubComponent', 'Sub-component'))}</div>
+      </div>
+      <div class="om-setup-body">
+        ${available.length ? `
+          <div class="section-help">${escapeHtml(i18t('helpLinkExistingFile', 'Point this row at a file already attached to the PO under Product Documentation, instead of uploading another copy.'))}</div>
+          <div class="om-setup-list">
+            ${available.map((s) => `
+              <label class="om-setup-check ${suggested && suggested.field === s.field ? 'is-on' : ''}">
+                <input type="radio" name="omRelinkPick" value="${escapeHtml(s.url)}" ${suggested && suggested.field === s.field ? 'checked' : ''} />
+                <span>
+                  <span class="om-setup-check-label">${escapeHtml(s.label)}</span>
+                  ${suggested && suggested.field === s.field
+                    ? `<span class="om-setup-check-count">${escapeHtml(i18t('labelMatchesRowName', 'matches this row\\u2019s name'))}</span>` : ''}
+                </span>
+              </label>
+            `).join('')}
+          </div>
+        ` : `<div class="om-empty" style="padding:10px 0;">${escapeHtml(i18t('emptyNoDocsToLink', 'This PO has no Product Documentation files to link yet. Upload one there first.'))}</div>`}
+      </div>
+      <div class="om-setup-foot">
+        <button type="button" class="btn btn-secondary" id="omRelinkCancel" style="width:auto;padding:9px 18px;">${escapeHtml(i18t('btnCancel', 'Cancel'))}</button>
+        ${available.length ? `<button type="button" class="btn btn-primary" id="omRelinkSave" style="width:auto;padding:9px 18px;">${escapeHtml(i18t('btnLinkFile', 'Link file'))}</button>` : ''}
+      </div>
+    </div>
+  `;
+
+  const close = () => { document.removeEventListener('keydown', onKey); back.remove(); };
+  function onKey(e) { if (e.key === 'Escape') close(); }
+  back.addEventListener('click', (e) => { if (e.target === back) close(); });
+  back.querySelector('#omRelinkCancel').addEventListener('click', close);
+
+  const saveBtn = back.querySelector('#omRelinkSave');
+  if (saveBtn) saveBtn.addEventListener('click', () => {
+    const picked = back.querySelector('input[name="omRelinkPick"]:checked');
+    if (!picked) { showToast(i18t('pickAFileFirst', 'Choose a file first'), true); return; }
+    applyAccessoryImageUrl(row, picked.value);
+    close();
+    showToast(i18t('toastFileLinked', 'File linked. Save the PO to keep it.'));
+  });
+
+  document.addEventListener('keydown', onKey);
+  document.body.appendChild(back);
+}
+
+/** Point a sub-component row's photo cell at a URL, redrawing the preview.
+ *  Shared by the relink picker and the upload handler so the two can't render
+ *  the cell differently. */
+function applyAccessoryImageUrl(row, url) {
+  const cell = row.querySelector('.om-acc-image-cell');
+  row.querySelector('.om-acc-image-url').value = url || '';
+  cell.querySelectorAll('img.om-table-thumb, a.om-acc-image-link').forEach((el) => el.remove());
+  if (!url) return;
+  const first = cell.firstChild;
+  if (isPdfFile(url)) {
+    const link = document.createElement('a');
+    link.className = 'om-acc-image-link';
+    link.href = url; link.target = '_blank'; link.rel = 'noopener';
+    link.style.cssText = 'display:block;font-size:11.5px;margin-bottom:4px;';
+    link.textContent = i18t('btnViewFile', 'View file');
+    cell.insertBefore(link, first);
+  } else {
+    const img = document.createElement('img');
+    img.className = 'om-table-thumb';
+    img.src = url; img.alt = '';
+    cell.insertBefore(img, first);
+  }
 }

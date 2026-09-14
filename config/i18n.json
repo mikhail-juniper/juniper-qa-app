@@ -4388,8 +4388,8 @@
     "zh": "此处未记录问题。"
   },
   "additionalIssuesHelpMinor": {
-    "en": "Minor issues found on individual units while checking. Add one entry per distinct issue, with the number of units affected. Leave a section empty if you found nothing.",
-    "zh": "检查过程中在单个产品上发现的轻微问题。每个问题单独添加一条并填写受影响数量。未发现问题则留空。"
+    "en": "Minor issues found on individual units while checking. Every section must be answered: mark it No Defects, or add one entry per distinct issue with the number of units affected.",
+    "zh": "检查过程中在单个产品上发现的轻微问题。每个部分均需作答：选择“无缺陷”，或每个问题单独添加一条并填写受影响数量。"
   },
   "totalPoAssumption": {
     "en": "Total PO assumption",
@@ -4426,5 +4426,65 @@
   "dimensionsOutOfTolerance": {
     "en": "A measurement is outside tolerance. Check it, and log a defect if it's correct.",
     "zh": "有尺寸超出公差。请复核，若数值无误请记录缺陷。"
+  },
+  "btnLinkExisting": {
+    "en": "Link",
+    "zh": "关联"
+  },
+  "titleLinkExistingFile": {
+    "en": "Link an existing file",
+    "zh": "关联已有文件"
+  },
+  "labelSubComponent": {
+    "en": "Sub-component",
+    "zh": "子部件"
+  },
+  "helpLinkExistingFile": {
+    "en": "Point this row at a file already attached to the PO under Product Documentation, instead of uploading another copy.",
+    "zh": "将本行指向订单“产品文档”中已有的文件，无需重复上传。"
+  },
+  "labelMatchesRowName": {
+    "en": "matches this row’s name",
+    "zh": "与本行名称匹配"
+  },
+  "emptyNoDocsToLink": {
+    "en": "This PO has no Product Documentation files to link yet. Upload one there first.",
+    "zh": "该订单尚无可关联的产品文档，请先在那里上传。"
+  },
+  "btnLinkFile": {
+    "en": "Link file",
+    "zh": "关联文件"
+  },
+  "pickAFileFirst": {
+    "en": "Choose a file first",
+    "zh": "请先选择文件"
+  },
+  "toastFileLinked": {
+    "en": "File linked. Save the PO to keep it.",
+    "zh": "已关联文件，请保存订单。"
+  },
+  "fldDepthCm": {
+    "en": "Depth (cm)",
+    "zh": "深度（厘米）"
+  },
+  "thDepth": {
+    "en": "Depth",
+    "zh": "深"
+  },
+  "btnNoDefects": {
+    "en": "No Defects",
+    "zh": "无缺陷"
+  },
+  "sectionMarkedClean": {
+    "en": "Marked as no defects.",
+    "zh": "已标记为无缺陷。"
+  },
+  "removeIssuesFirst": {
+    "en": "Remove the logged issues first.",
+    "zh": "请先删除已记录的问题。"
+  },
+  "sectionsUnanswered": {
+    "en": "Every section needs either No Defects or at least one defect logged.",
+    "zh": "每个部分均需选择“无缺陷”或至少记录一条缺陷。"
   }
 }

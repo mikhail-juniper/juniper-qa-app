@@ -1336,3 +1336,21 @@ td.reference-selectable { outline-offset: -2px; }
    see what they're measuring against without leaving the row. */
 .dim-standard { font-size: 11.5px; color: var(--jc-muted); margin-top: 4px; }
 .dim-standard-fail { color: var(--jc-fail); font-weight: 600; }
+
+/* Step 6: every section is answered one way or the other, so the two choices
+   sit side by side rather than a single Add Defect that could be skipped. */
+.section-answer-row { display: flex; gap: 10px; margin-top: 8px; }
+.section-answer-row > * { flex: 1; margin-top: 0 !important; }
+.section-clean-btn {
+  padding: 11px 14px;
+  border: 1px dashed var(--jc-teal);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--jc-teal-dark);
+  font-weight: 700;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+.section-clean-btn.is-on { background: var(--jc-teal); border-style: solid; color: #fff; }
+.section-clean-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+@media (max-width: 480px) { .section-answer-row { flex-direction: column; } }
