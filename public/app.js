@@ -3425,6 +3425,58 @@ function serializeDefect(d) {
   return { id: d.id, description: d.description, severity: d.severity, unitsAffected: d.unitsAffected };
 }
 
+
+/* ---- Payload builders for the config-driven steps ---- */
+
+/** Step 5 grouped exactly as rendered: section name, then each question with
+ *  the answer given. Titles are baked in - see the note in submitReport. */
+function buildInspectionSectionsForPayload() {
+  const all = questionsForStep(5).concat(additionalReviewQuestions());
+  const sections = [];
+  all.forEach((q) => {
+    const a = state.answers[q.id] || {};
+    const last = sections[sections.length - 1];
+    const row = {
+      id: q.id,
+      title: q.title,
+      status: a.status || 'na',
+      unitsAffected: a.status === 'fail' ? (parseInt(a.unitsAffected, 10) || 0) : 0,
+      photoCount: (a.media || []).length
+    };
+    if (last && last.name === q.section) last.questions.push(row);
+    else sections.push({ name: q.section, questions: [row] });
+  });
+  return sections;
+}
+
+/** Step 6, one block per section, empty ones included so the report shows
+ *  what was checked and found clean rather than silently omitting it. */
+function buildIssueSectionsForPayload() {
+  return questionsForStep(6).map((q) => ({
+    id: q.id,
+    name: q.title,
+    issues: (state.sectionIssues[q.id] || []).map((i) => ({
+      id: i.id,
+      description: i.description,
+      unitsAffected: parseInt(i.unitsAffected, 10) || 0,
+      severity: 'minor'
+    }))
+  }));
+}
+
+/** The sample-to-PO extrapolation, computed here so the PDF prints the same
+ *  numbers the inspector signed off on rather than recalculating. */
+function buildRecapForPayload() {
+  const checked = unitsCheckedForRecap();
+  const poQty = parseInt(state.poQuantity, 10) || null;
+  const sums = sumDefectsBySeverity(collectAllDefects());
+  const out = { unitsChecked: checked, poQuantity: poQty, severities: {} };
+  ['critical', 'major', 'minor'].forEach((sev) => {
+    out.severities[sev] = extrapolate(sums[sev], checked, poQty) || { found: sums[sev], pct: null, assumed: null };
+  });
+  return out;
+}
+
 async function submitReport() {
   const problems = getAllValidationProblems();
   if (problems.length) {
@@ -3469,7 +3521,17 @@ async function submitReport() {
         }])),
         customNotes: cd.customNotes
       },
-      additionalIssues: state.additionalIssues.map(serializeDefect)
+      additionalIssues: state.additionalIssues.map(serializeDefect),
+      /* The new config-driven steps, sent as the inspector actually saw them
+       * rather than as bare ids. The report is an audit document, so it has to
+       * still read correctly years later even if the question bank has moved
+       * on - resolving titles at render time from the live config would
+       * silently rewrite history. */
+      inspection: {
+        sections: buildInspectionSectionsForPayload(),
+        issueSections: buildIssueSectionsForPayload(),
+        recap: buildRecapForPayload()
+      }
     };
 
     const formData = new FormData();
@@ -3482,7 +3544,20 @@ async function submitReport() {
       });
     });
 
+    /* Step 5 evidence uploads under its question id whatever the answer was:
+     * a photo_always question (the plush comparison shot, a glow-in-the-dark
+     * photo) passes and still owes its picture, and the defect loop below only
+     * walks failures. */
+    const answerPhotoIds = new Set();
+    questionsForStep(5).concat(additionalReviewQuestions()).forEach((q) => {
+      const a = state.answers[q.id];
+      if (!a || !(a.media || []).length) return;
+      answerPhotoIds.add(q.id);
+      a.media.forEach((f) => formData.append(`photo_q_${q.id}`, f, f.name));
+    });
+
     collectAllDefects().forEach((d) => {
+      if (answerPhotoIds.has(d.id)) return; // already sent as photo_q_*
       (d.photos || []).forEach((f) => formData.append(`photo_defect_${d.id}`, f, f.name));
     });
     (state.categoryData.sizeRows || []).forEach((row, ridx) => {

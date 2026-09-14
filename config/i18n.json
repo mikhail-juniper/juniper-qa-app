@@ -4426,5 +4426,13 @@
   "recapNeedsCounts": {
     "en": "Enter the PO quantity and the units checked to see the whole-PO assumption.",
     "zh": "请填写订单数量与已检数量，以显示全单推算。"
+  },
+  "unitsAffectedShort": {
+    "en": "units",
+    "zh": "件"
+  },
+  "checkedNoIssues": {
+    "en": "Checked with no issues found",
+    "zh": "已检查，未发现问题"
   }
 }
