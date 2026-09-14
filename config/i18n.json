@@ -4410,5 +4410,21 @@
   "additionalIssuesHelpMinor": {
     "en": "Minor issues found on individual units while checking. Add one entry per distinct issue, with the number of units affected. Leave a section empty if you found nothing.",
     "zh": "检查过程中在单个产品上发现的轻微问题。每个问题单独添加一条并填写受影响数量。未发现问题则留空。"
+  },
+  "totalPoAssumption": {
+    "en": "Total PO assumption",
+    "zh": "全单推算"
+  },
+  "recapChecked": {
+    "en": "checked",
+    "zh": "已检"
+  },
+  "recapBasisNote": {
+    "en": "Assumption scales what was found in the sample across the whole PO.",
+    "zh": "推算值根据抽检结果按比例推算至全单。"
+  },
+  "recapNeedsCounts": {
+    "en": "Enter the PO quantity and the units checked to see the whole-PO assumption.",
+    "zh": "请填写订单数量与已检数量，以显示全单推算。"
   }
 }

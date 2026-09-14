@@ -1994,17 +1994,80 @@ function renderUnitsCheckedDerived() {
 /** Critical/Major/Minor table showing Found vs Accepted (no Accept/Reject thresholds -
  *  Major/Critical finds are simply rejected on a per-unit basis; Minor finds stay
  *  accepted, since minor issues don't make a unit unsaleable). */
+/* How many units were actually looked at. Bulk reports record it explicitly;
+ * a pre-production report checks the sample it was sent. */
+function unitsCheckedForRecap() {
+  const n = parseInt(state.qaType === 'production' ? state.actualUnitsChecked : state.preProductionUnitsChecked, 10);
+  return isNaN(n) || n < 1 ? null : n;
+}
+
+/**
+ * Scale a defect count found in the sample up to the whole PO.
+ *
+ * Finding 10 bad units in a 100-unit sample of a 1,000-unit PO means 10% of
+ * what was checked, so the working assumption is 10% of the PO - about 100
+ * units. It's an estimate from a sample, not a count, which is why the recap
+ * labels it an assumption and shows the percentage it came from.
+ */
+function extrapolate(foundUnits, checked, poQuantity) {
+  if (!checked || !poQuantity || foundUnits === null || foundUnits === undefined) return null;
+  const pct = (foundUnits / checked) * 100;
+  return {
+    found: foundUnits,
+    pct,
+    // Never claim more affected units than the PO contains, which a small
+    // sample with a high defect rate could otherwise produce after rounding.
+    assumed: Math.min(poQuantity, Math.round((foundUnits / checked) * poQuantity))
+  };
+}
+
+function fmtPct(pct) {
+  if (pct === null || pct === undefined || isNaN(pct)) return '-';
+  return (pct >= 10 || pct === 0 ? Math.round(pct) : Math.round(pct * 10) / 10) + '%';
+}
+
 function foundAcceptedTableHtml(aql) {
-  const row = (labelKey, count, accepted) => `<tr><td>${escapeHtml(bi(labelKey).en)}</td><td>${count}</td><td>${accepted}</td></tr>`;
+  const checked = unitsCheckedForRecap();
+  const poQty = parseInt(state.poQuantity, 10) || null;
+
+  const row = (labelKey, count, accepted) => {
+    const ex = extrapolate(count, checked, poQty);
+    return `
+      <tr>
+        <td>${escapeHtml(bi(labelKey).en)}</td>
+        <td>${count}${ex ? ` <span class="recap-pct">${escapeHtml(fmtPct(ex.pct))}</span>` : ''}</td>
+        <td>${ex ? `${ex.assumed} <span class="recap-pct">${escapeHtml(fmtPct(ex.pct))}</span>` : '-'}</td>
+        <td>${accepted}</td>
+      </tr>
+    `;
+  };
+
   return `
     <table class="aql-preview-table" style="margin-top:10px;">
-      <thead><tr><th></th><th>${escapeHtml(bi('foundLabel').en)}</th><th>${escapeHtml(bi('acceptedLabel').en)}</th></tr></thead>
+      <thead>
+        <tr>
+          <th></th>
+          <th>${escapeHtml(bi('foundLabel').en)}</th>
+          <th>${escapeHtml(bi('totalPoAssumption', 'Total PO assumption').en)}</th>
+          <th>${escapeHtml(bi('acceptedLabel').en)}</th>
+        </tr>
+      </thead>
       <tbody>
         ${row('aqlCritical', aql.criticalCount, 0)}
         ${row('aqlMajor', aql.majorCount, 0)}
         ${row('aqlMinor', aql.minorCount, aql.minorCount)}
       </tbody>
     </table>
+    ${checked && poQty ? `
+      <div class="section-help" style="margin-top:8px;">
+        ${escapeHtml(bi('recapBasisNote', 'Assumption scales what was found in the sample across the whole PO.').en)}
+        ${checked} / ${poQty} ${escapeHtml(bi('recapChecked', 'checked').en)} (${escapeHtml(fmtPct((checked / poQty) * 100))}).
+      </div>
+    ` : `
+      <div class="section-help" style="margin-top:8px;">
+        ${escapeHtml(bi('recapNeedsCounts', 'Enter the PO quantity and the units checked to see the whole-PO assumption.').en)}
+      </div>
+    `}
   `;
 }
 

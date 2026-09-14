@@ -1327,3 +1327,7 @@ td.reference-selectable { outline-offset: -2px; }
 .step-subhead {
   margin: 26px 0 10px; font-size: 15px; font-weight: 700; color: var(--jc-teal-dark);
 }
+
+/* Recap: the percentage sits beside its count, quieter than the number, so
+   the tally reads first and the rate reads second. */
+.recap-pct { color: var(--jc-muted); font-weight: 400; font-size: 11.5px; }
