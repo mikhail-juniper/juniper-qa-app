@@ -871,9 +871,17 @@
     "en": "Placeholder guidance: trim size and print placement should be within about ±0.3 cm of the approved sample. Please confirm the real tolerance with your team.",
     "zh": "占位参考：成品尺寸与印刷位置应与已批准样品相差不超过约0.3厘米。请与团队确认真实公差标准。"
   },
-  "toleranceReferenceValue": {
-    "en": "Measurements should be within ±{cm} cm of the approved sample.",
-    "zh": "尺寸应与已批准样品相差不超过 ±{cm} 厘米。"
+  "toleranceRefSizing": {
+    "en": "Measurements: ±{v} cm of the approved sample.",
+    "zh": "尺寸：与已批准样品相差不超过 ±{v} 厘米。"
+  },
+  "toleranceRefPrint": {
+    "en": "Print / embroidery size and placement: ±{v} cm.",
+    "zh": "印花/刺绣尺寸与位置：±{v} 厘米。"
+  },
+  "toleranceRefWeight": {
+    "en": "Finished weight: ±{v} g.",
+    "zh": "成品重量：±{v} 克。"
   },
   "toleranceGuidanceOther": {
     "en": "No standard tolerance defined yet for this category - use your judgment and compare against the approved sample.",
@@ -4278,5 +4286,69 @@
   "btnReimportHandoff": {
     "en": "Re-import files from Asana",
     "zh": "重新从 Asana 导入文件"
+  },
+  "btnSetupReportLink": {
+    "en": "Setup Report Link",
+    "zh": "设置报告链接"
+  },
+  "btnEditReportSetup": {
+    "en": "Edit questions",
+    "zh": "编辑问题"
+  },
+  "titleSetupReport": {
+    "en": "Set up report link",
+    "zh": "设置报告链接"
+  },
+  "helpSetupReport": {
+    "en": "Tick anything this product includes. Each one adds its questions to an Additional Review section at the end of the report. Leave everything unticked if none apply.",
+    "zh": "勾选该产品包含的项目。每项都会在报告末尾的“附加检查”部分增加相应问题。若均不适用，可全部不选。"
+  },
+  "noteSetupInherited": {
+    "en": "Pre-filled from the other report stage for this PO - change anything that differs.",
+    "zh": "已根据该订单另一阶段的设置预填充，如有不同请修改。"
+  },
+  "titleCustomQuestions": {
+    "en": "Custom questions",
+    "zh": "自定义问题"
+  },
+  "btnOtherQuestion": {
+    "en": "Other question",
+    "zh": "其他问题"
+  },
+  "phCustomQuestion": {
+    "en": "Describe what QA should check",
+    "zh": "请说明需要检查的内容"
+  },
+  "lblRequirePicture": {
+    "en": "Require picture",
+    "zh": "需要图片"
+  },
+  "lblRequireVideo": {
+    "en": "Require video",
+    "zh": "需要视频"
+  },
+  "btnSaveSetup": {
+    "en": "Save and enable link",
+    "zh": "保存并启用链接"
+  },
+  "toastReportSetupSaved": {
+    "en": "Report link is ready to share",
+    "zh": "报告链接已可分享"
+  },
+  "emptyNoConditionalChecks": {
+    "en": "No conditional checks are defined for this product category.",
+    "zh": "该产品类别尚未设定条件检查项。"
+  },
+  "wordQuestion": {
+    "en": "question",
+    "zh": "个问题"
+  },
+  "wordQuestions": {
+    "en": "questions",
+    "zh": "个问题"
+  },
+  "savingEllipsis": {
+    "en": "Saving...",
+    "zh": "保存中..."
   }
 }

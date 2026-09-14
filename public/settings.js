@@ -576,10 +576,15 @@ function renderUnitCostsCard() {
 }
 
 /* ---- Tolerances ----
- * One row per category, one editable number each. Apparel is the only row
- * that scores anything (it's the pass/fail threshold for apparel size rows,
- * stored in fits.json); the rest are reference figures shown to the inspector
- * on the Sizing step. See /api/tolerances. */
+ * Three numbers per category. Apparel's sizing tolerance is the only one that
+ * scores anything today (it's the pass/fail threshold for apparel size rows);
+ * the rest are reference figures shown to the inspector. See /api/tolerances. */
+const TOLERANCE_COLS = [
+  { key: 'sizingCm', label: 'Sizing', unit: 'cm', step: '0.01', max: 25 },
+  { key: 'printCm', label: 'Print / embroidery', unit: 'cm', step: '0.01', max: 25 },
+  { key: 'weightG', label: 'Weight', unit: 'g', step: '1', max: 5000 }
+];
+
 function renderTolerancesCard() {
   if (!currentTolerances) return '';
   const cats = currentTolerances.categories || {};
@@ -587,23 +592,33 @@ function renderTolerancesCard() {
   const rows = Object.keys(cats).map((cat) => {
     const label = CATEGORY_LABELS[cat] || { en: cat, zh: '' };
     const name = langIsEn() ? (label.en || label.zh) : (label.zh || label.en);
-    const val = cats[cat];
+    const vals = cats[cat] || {};
     const isApparel = cat === 'apparel';
+
+    const cells = TOLERANCE_COLS.map((col) => {
+      const v = vals[col.key];
+      // Apparel sizing is the live pass/fail threshold and can't be cleared.
+      const required = isApparel && col.key === 'sizingCm';
+      return `
+        <td style="white-space:nowrap;">
+          ±
+          <input type="number" min="0.01" max="${col.max}" step="${col.step}"
+            value="${v === null || v === undefined ? '' : escapeHtml(String(v))}"
+            data-tolerance="${escapeHtml(cat)}|${col.key}"
+            placeholder="${required ? '' : 'none'}"
+            style="width:78px;" />
+          ${escapeHtml(col.unit)}
+        </td>
+      `;
+    }).join('');
+
     return `
       <tr>
         <td class="size-name">
           ${escapeHtml(name)}
-          ${isApparel ? '<div style="font-size:11.5px; font-weight:400; color:var(--jc-muted);">Sets pass/fail</div>' : ''}
+          ${isApparel ? '<div style="font-size:11.5px; font-weight:400; color:var(--jc-muted);">Sizing sets pass/fail</div>' : ''}
         </td>
-        <td style="white-space:nowrap;">
-          ±
-          <input type="number" min="0.01" max="25" step="0.01"
-            value="${val === null || val === undefined ? '' : escapeHtml(String(val))}"
-            data-tolerance="${escapeHtml(cat)}"
-            placeholder="${isApparel ? '' : 'none'}"
-            style="width:90px;" />
-          cm
-        </td>
+        ${cells}
       </tr>
     `;
   }).join('');
@@ -612,21 +627,26 @@ function renderTolerancesCard() {
     <div class="card">
       <div class="section-title">Tolerances<span class="zh">公差设置</span></div>
       <div class="section-help">
-        How far a measurement may differ from the approved sample. Apparel is the only one that
-        decides pass/fail - the rest are reference figures shown to the inspector on the Sizing
-        step of a QA report, and are not used in any calculation. Leave a row blank for no
-        tolerance, and no reference is shown for that category.
+        How far a measurement may differ from the approved sample. <strong>Sizing</strong> applies to the Golden
+        Sample sizing chart, <strong>print / embroidery</strong> to artwork size and placement, and
+        <strong>weight</strong> to the finished product. Leave a box blank where a tolerance doesn't apply.
       </div>
       <div class="size-table-wrap" style="margin-top:12px;">
         <table class="size-table">
-          <thead><tr><th>Category</th><th>Tolerance</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Category</th>
+              ${TOLERANCE_COLS.map((c) => `<th>${escapeHtml(c.label)}</th>`).join('')}
+            </tr>
+          </thead>
           <tbody>${rows}</tbody>
         </table>
       </div>
       <div class="section-help" style="margin-top:10px; padding:8px 10px; background:var(--jc-warn-bg); border-radius:var(--radius-sm); color:var(--jc-warn);">
-        Changing Apparel re-scores every apparel measurement from here on - a bigger number passes
-        more garments. It does not alter reports that were already submitted. The default, 1.27 cm,
-        is half an inch.
+        Apparel sizing is the only tolerance scored automatically right now - changing it re-scores every
+        apparel measurement from here on, and a bigger number passes more garments. It does not alter reports
+        that were already submitted. The other figures are shown to the inspector as a reference until the
+        Step 4 rework wires up per-category scoring.
       </div>
     </div>
   `;
@@ -678,18 +698,21 @@ function attachHandlers() {
   // Tolerances
   document.querySelectorAll('[data-tolerance]').forEach((el) => {
     el.addEventListener('change', (e) => {
-      const cat = el.getAttribute('data-tolerance');
+      const [cat, field] = el.getAttribute('data-tolerance').split('|');
+      const col = TOLERANCE_COLS.find((c) => c.key === field);
+      if (!currentTolerances.categories[cat] || !col) return;
       const raw = String(e.target.value).trim();
-      const prev = currentTolerances.categories[cat];
+      const prev = currentTolerances.categories[cat][field];
+      const revert = () => { e.target.value = prev === null || prev === undefined ? '' : prev; };
 
       if (raw === '') {
-        // Apparel must always have a number - it decides pass/fail.
-        if (cat === 'apparel') {
-          showToast('The apparel tolerance cannot be blank', true);
-          e.target.value = prev;
+        // Apparel sizing is the live pass/fail threshold.
+        if (cat === 'apparel' && field === 'sizingCm') {
+          showToast('The apparel sizing tolerance cannot be blank', true);
+          revert();
           return;
         }
-        currentTolerances.categories[cat] = null;
+        currentTolerances.categories[cat][field] = null;
         dirty = true;
         return;
       }
@@ -697,12 +720,12 @@ function attachHandlers() {
       const n = parseFloat(raw);
       // Mirrors the server's bounds so a bad value is caught here rather than
       // failing the whole Save, which posts several configs at once.
-      if (isNaN(n) || n <= 0 || n > 25) {
-        showToast('Tolerance must be between 0 and 25 cm', true);
-        e.target.value = prev === null || prev === undefined ? '' : prev;
+      if (isNaN(n) || n <= 0 || n > col.max) {
+        showToast(`${col.label} must be between 0 and ${col.max} ${col.unit}`, true);
+        revert();
         return;
       }
-      currentTolerances.categories[cat] = n;
+      currentTolerances.categories[cat][field] = n;
       dirty = true;
     });
   });

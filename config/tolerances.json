@@ -1,11 +1,35 @@
 {
-  "_readme": "Per-category measurement tolerance in centimetres, editable in Settings > Tolerances. Lives on the persistent disk like the other editable configs, so this repo copy is only a SEED for a fresh install.\n\nAPPAREL IS THE ONLY ONE THAT SCORES ANYTHING. Its value is the pass/fail threshold for every apparel size-chart row, and it is stored as 'toleranceCm' in fits.json (where passFail.js, pdfBuilder.js, app.js and approval.js all already read it) - NOT here. The apparel entry below is ignored on read; /api/tolerances substitutes the live fits.json value so there is exactly one source of truth. Saving the apparel row writes back to fits.json.\n\nEvery other category is a reference figure only: non-apparel dimensions are recorded but never compared against a standard, so these numbers are shown to the inspector on the Sizing step and used in no calculation. null means no tolerance is defined and no reference card is shown.",
+  "_readme": "Measurement tolerances by category, editable in Settings > Tolerances. Lives on the persistent disk like the other editable configs, so this repo copy is only a SEED for a fresh install.\n\nsizingCm  - how far a measurement may differ from the Golden Sample sizing chart.\nprintCm   - how far print/embroidery size and placement may differ from the approved artwork.\nweightG   - finished product weight tolerance in grams. null where weight is not checked.\n\nTHIS FILE IS THE SOURCE OF TRUTH for all three. For backwards compatibility the apparel sizingCm is ALSO written through to 'toleranceCm' in fits.json, because passFail.js, pdfBuilder.js, app.js and approval.js all read it from there to score apparel size rows. The write-through happens on save and is reconciled at startup, so the two cannot drift; never edit fits.toleranceCm by hand.\n\nOnly apparel size rows are scored automatically today. The other categories' sizingCm values are shown to the inspector as a reference until the Step 4 rework wires up per-category scoring.",
   "categories": {
-    "apparel": 1.27,
-    "plush": 1.3,
-    "bags": 1.3,
-    "accessories": 0.3,
-    "paperGoods": 0.3,
-    "other": null
+    "apparel": {
+      "sizingCm": 2,
+      "printCm": 0.5,
+      "weightG": null
+    },
+    "plush": {
+      "sizingCm": 1,
+      "printCm": 0.5,
+      "weightG": 5
+    },
+    "bags": {
+      "sizingCm": 2,
+      "printCm": 0.5,
+      "weightG": null
+    },
+    "accessories": {
+      "sizingCm": 0.5,
+      "printCm": 0.5,
+      "weightG": null
+    },
+    "paperGoods": {
+      "sizingCm": 0.5,
+      "printCm": 0.5,
+      "weightG": null
+    },
+    "other": {
+      "sizingCm": 2,
+      "printCm": 0.5,
+      "weightG": null
+    }
   }
 }

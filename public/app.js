@@ -2451,24 +2451,31 @@ function renderSizeEntryTable() {
 function renderToleranceGuidance() {
   if (!currentCategoryDef()) return '';
 
-  // Per-category tolerance, editable in Settings > Tolerances. Apparel's value
-  // is the live pass/fail threshold; the rest are reference figures only.
+  // Per-category tolerances, editable in Settings > Tolerances.
   const cats = (CONFIG.tolerances && CONFIG.tolerances.categories) || {};
-  const cm = cats[state.category];
+  const t = cats[state.category];
+  if (!t) return '';
 
-  // A blank tolerance in Settings means none is defined for this category, so
-  // no reference card is shown at all.
-  if (cm === null || cm === undefined || cm === '') return '';
-  const n = parseFloat(cm);
-  if (isNaN(n)) return '';
+  const num = (v) => {
+    const n = parseFloat(v);
+    return v === null || v === undefined || v === '' || isNaN(n) ? null : n;
+  };
+  const lines = [
+    ['toleranceRefSizing', 'Measurements: \u00b1{v} cm of the approved sample.', num(t.sizingCm)],
+    ['toleranceRefPrint', 'Print / embroidery size and placement: \u00b1{v} cm.', num(t.printCm)],
+    ['toleranceRefWeight', 'Finished weight: \u00b1{v} g.', num(t.weightG)]
+  ]
+    // A blank tolerance in Settings means none applies to this category, so
+    // that line is left out rather than shown as an empty figure.
+    .filter(([, , v]) => v !== null)
+    .map(([key, fallback, v]) => escapeHtml(bi(key, fallback).en.replace('{v}', String(v))));
 
-  const text = bi('toleranceReferenceValue', 'Measurements should be within \u00b1{cm} cm of the approved sample.')
-    .en.replace('{cm}', String(n));
+  if (!lines.length) return '';
 
   return `
     <div class="card" style="background:var(--jc-warn-bg); border-color:#F0D9A8;">
       <div class="section-title" style="color:var(--jc-warn);">${biBlockHtml('toleranceReferenceTitle', 'Tolerance Reference')}</div>
-      <div class="section-help" style="color:var(--jc-warn);">${escapeHtml(text)}</div>
+      <div class="section-help" style="color:var(--jc-warn);">${lines.join('<br/>')}</div>
     </div>
   `;
 }

@@ -2436,7 +2436,26 @@ async function openDetailPanel(id, scope) {
           <select class="om-report-status-select" data-report-stage="${stage}" data-report-status="${escapeHtml(rep.status || 'Pending')}">
             ${['Pending', 'In Progress', 'Completed'].map((s) => `<option value="${s}" ${s === (rep.status || 'Pending') ? 'selected' : ''}>${tStatusText(s)}</option>`).join('')}
           </select>
-          <button type="button" class="btn btn-secondary om-copy-link-btn" style="width:100%;margin-top:10px;padding:9px 16px;" data-copy-url="${escapeHtml(`${location.origin}/reporting.html?mode=${mode}&po=${order.poNumber}`)}">${i18('btnCopyReportLink', 'Copy Report Link')}</button>
+          ${(() => {
+            /* Before the report link is set up we need Chloe to choose which
+             * conditional checks apply to this product, so the button opens the
+             * setup dialog. Once that's saved it becomes a plain copy button. */
+            const url = `${location.origin}/reporting.html?mode=${mode}&po=${order.poNumber}`;
+            const isSetUp = !!(rep.setup && rep.setup.configuredAt);
+            const extras = isSetUp
+              ? (rep.setup.checks || []).length + (rep.setup.custom || []).length
+              : 0;
+            return `
+              ${isSetUp ? `
+                <button type="button" class="btn btn-secondary om-copy-link-btn" style="width:100%;margin-top:10px;padding:9px 16px;" data-copy-url="${escapeHtml(url)}">${i18('btnCopyReportLink', 'Copy Report Link')}</button>
+                <button type="button" class="btn btn-secondary om-setup-link-btn" style="width:100%;margin-top:8px;padding:7px 16px;font-size:12.5px;" data-setup-stage="${stage}">
+                  ${i18('btnEditReportSetup', 'Edit questions')} (${extras})
+                </button>
+              ` : `
+                <button type="button" class="btn btn-secondary om-setup-link-btn" style="width:100%;margin-top:10px;padding:9px 16px;" data-setup-stage="${stage}">${i18('btnSetupReportLink', 'Setup Report Link')}</button>
+              `}
+            `;
+          })()}
           ${stage === 'preProduction' ? `
             <!-- Same action as Skip on the PD Approval page, so a PO that
                  needs no pre-production sample can move on without leaving
@@ -2652,6 +2671,15 @@ async function openDetailPanel(id, scope) {
         btn.disabled = false;
       }
     });
+  });
+
+  /* ---- Setup Report Link ----
+   * Picks the conditional checks that apply to this product before the link is
+   * handed out. Everything ticked here is added to an Additional Review section
+   * at the bottom of Step 5 of the QA report. A report opened before setup has
+   * run simply has no additional questions. */
+  panel.querySelectorAll('.om-setup-link-btn').forEach((btn) => {
+    btn.addEventListener('click', () => openQaSetupDialog(order, btn.dataset.setupStage));
   });
 
   panel.querySelectorAll('.om-copy-link-btn').forEach((btn) => {
@@ -5316,3 +5344,182 @@ function collectAccessoryRows(container) {
   await Promise.all([loadStatuses(), loadAccessoryStatuses(), loadFileCategories()]);
   render();
 })();
+
+/* ============================================================
+ * Setup Report Link dialog
+ * ============================================================
+ * Chloe ticks whichever conditional checks apply to this product, and can add
+ * one-off custom questions. Saved against the PO stage, then every question
+ * belonging to a ticked trigger is appended to an "Additional Review" section
+ * at the bottom of Step 5 of the QA report.
+ *
+ * The trigger list is filtered by the PO's top-level category, so a plush PO
+ * never offers strap checks. */
+let conditionalChecksCache = null;
+
+/** Fetched once on first use. This page doesn't load /api/config, and pulling
+ *  it just for this would drag the whole i18n dictionary along. */
+async function loadConditionalChecks() {
+  if (conditionalChecksCache) return conditionalChecksCache;
+  try {
+    conditionalChecksCache = await api('/api/conditional-checks');
+  } catch (e) {
+    console.error('Could not load conditional checks:', e);
+    conditionalChecksCache = { byCategory: {} };
+  }
+  return conditionalChecksCache;
+}
+
+function qaTriggersForCategory(category) {
+  return (((conditionalChecksCache || {}).byCategory || {})[category] || []);
+}
+
+async function openQaSetupDialog(order, stage) {
+  await loadConditionalChecks();
+  const rep = (order.qaReports && order.qaReports[stage]) || {};
+  const triggers = qaTriggersForCategory(order.category);
+
+  // Re-opening shows what was saved. Setting up Bulk after Pre-Production
+  // starts from the Pre-Production picks, since it's the same product - Chloe
+  // can still change them before saving.
+  const other = stage === 'bulk' ? 'preProduction' : 'bulk';
+  const seed = rep.setup
+    || ((order.qaReports && order.qaReports[other] && order.qaReports[other].setup) || null);
+  const chosen = new Set((seed && seed.checks) || []);
+  let custom = ((seed && seed.custom) || []).map((c, i) => ({ ...c, id: c.id || `custom_${i + 1}` }));
+  const inheriting = !rep.setup && !!seed;
+
+  const back = document.createElement('div');
+  back.className = 'om-setup-backdrop';
+
+  function customRow(c) {
+    return `
+      <div class="om-setup-custom" data-custom-id="${escapeHtml(c.id)}">
+        <textarea rows="2" data-custom-text placeholder="${escapeHtml(i18('phCustomQuestion', 'Describe what QA should check'))}">${escapeHtml(c.text || '')}</textarea>
+        <div class="om-setup-custom-opts">
+          <label><input type="checkbox" data-custom-photo ${c.requirePhoto ? 'checked' : ''}/> ${escapeHtml(i18('lblRequirePicture', 'Require picture'))}</label>
+          <label><input type="checkbox" data-custom-video ${c.requireVideo ? 'checked' : ''}/> ${escapeHtml(i18('lblRequireVideo', 'Require video'))}</label>
+          <button type="button" class="om-setup-remove" data-remove-custom>${escapeHtml(i18('btnRemove', 'Remove'))}</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function draw() {
+    back.innerHTML = `
+      <div class="om-setup-box" role="dialog" aria-modal="true">
+        <div class="om-setup-head">
+          <div class="om-setup-title">${escapeHtml(i18('titleSetupReport', 'Set up report link'))}</div>
+          <div class="om-setup-sub">
+            ${escapeHtml(order.poNumber)} &middot;
+            ${escapeHtml(stage === 'preProduction'
+              ? i18('titlePreProductionReport', 'Pre-Production Report')
+              : i18('titleBulkProductionReport', 'Bulk Production Report'))}
+          </div>
+        </div>
+        <div class="om-setup-body">
+          <div class="section-help">${escapeHtml(i18('helpSetupReport', 'Tick anything this product includes. Each one adds its questions to an Additional Review section at the end of the report. Leave everything unticked if none apply.'))}</div>
+          ${inheriting ? `<div class="om-setup-note">${escapeHtml(i18('noteSetupInherited', 'Pre-filled from the other report stage for this PO - change anything that differs.'))}</div>` : ''}
+
+          ${triggers.length ? `
+            <div class="om-setup-list">
+              ${triggers.map((t) => `
+                <label class="om-setup-check ${chosen.has(t.key) ? 'is-on' : ''}">
+                  <input type="checkbox" data-trigger="${escapeHtml(t.key)}" ${chosen.has(t.key) ? 'checked' : ''} />
+                  <span>
+                    <span class="om-setup-check-label">${escapeHtml(currentLang() === 'en' ? t.label_en : (t.label_zh || t.label_en))}</span>
+                    <span class="om-setup-check-count">${t.questions.length} ${t.questions.length === 1 ? escapeHtml(i18('wordQuestion', 'question')) : escapeHtml(i18('wordQuestions', 'questions'))}</span>
+                  </span>
+                </label>
+              `).join('')}
+            </div>
+          ` : `<div class="om-empty" style="padding:10px 0;">${escapeHtml(i18('emptyNoConditionalChecks', 'No conditional checks are defined for this product category.'))}</div>`}
+
+          <div class="om-setup-subtitle">${escapeHtml(i18('titleCustomQuestions', 'Custom questions'))}</div>
+          <div id="omSetupCustomList">${custom.map(customRow).join('')}</div>
+          <button type="button" class="btn btn-secondary" id="omSetupAddCustom" style="width:auto;padding:8px 14px;margin-top:8px;">+ ${escapeHtml(i18('btnOtherQuestion', 'Other question'))}</button>
+        </div>
+        <div class="om-setup-foot">
+          <button type="button" class="btn btn-secondary" id="omSetupCancel" style="width:auto;padding:9px 18px;">${escapeHtml(i18('btnCancel', 'Cancel'))}</button>
+          <button type="button" class="btn btn-primary" id="omSetupSave" style="width:auto;padding:9px 18px;">${escapeHtml(i18('btnSaveSetup', 'Save and enable link'))}</button>
+        </div>
+      </div>
+    `;
+    wire();
+  }
+
+  /** Read the custom rows out of the DOM so typing isn't lost on re-render. */
+  function harvestCustom() {
+    custom = [...back.querySelectorAll('.om-setup-custom')].map((row) => ({
+      id: row.dataset.customId,
+      text: row.querySelector('[data-custom-text]').value.trim(),
+      requirePhoto: row.querySelector('[data-custom-photo]').checked,
+      requireVideo: row.querySelector('[data-custom-video]').checked
+    }));
+  }
+
+  function wire() {
+    back.querySelectorAll('[data-trigger]').forEach((cb) => {
+      cb.addEventListener('change', () => {
+        if (cb.checked) chosen.add(cb.dataset.trigger); else chosen.delete(cb.dataset.trigger);
+        cb.closest('.om-setup-check').classList.toggle('is-on', cb.checked);
+      });
+    });
+    back.querySelector('#omSetupAddCustom').addEventListener('click', () => {
+      harvestCustom();
+      custom.push({ id: `custom_${Date.now()}`, text: '', requirePhoto: false, requireVideo: false });
+      draw();
+      const rows = back.querySelectorAll('.om-setup-custom textarea');
+      if (rows.length) rows[rows.length - 1].focus();
+    });
+    back.querySelectorAll('[data-remove-custom]').forEach((b) => {
+      b.addEventListener('click', () => {
+        harvestCustom();
+        const id = b.closest('.om-setup-custom').dataset.customId;
+        custom = custom.filter((c) => c.id !== id);
+        draw();
+      });
+    });
+    back.querySelector('#omSetupCancel').addEventListener('click', close);
+    back.querySelector('#omSetupSave').addEventListener('click', save);
+  }
+
+  function close() {
+    document.removeEventListener('keydown', onKey);
+    back.remove();
+  }
+  function onKey(e) { if (e.key === 'Escape') close(); }
+  back.addEventListener('click', (e) => { if (e.target === back) close(); });
+
+  async function save() {
+    harvestCustom();
+    // A custom question with no text is just an empty row someone left behind.
+    const cleaned = custom.filter((c) => c.text);
+    const btn = back.querySelector('#omSetupSave');
+    btn.disabled = true;
+    const label = btn.textContent;
+    btn.textContent = i18('savingEllipsis', 'Saving...');
+    try {
+      await api(`/api/order-management/orders/${encodeURIComponent(order.id)}/qa-setup`, {
+        method: 'POST',
+        body: JSON.stringify({ stage, checks: [...chosen], custom: cleaned })
+      });
+      close();
+      showToast(i18('toastReportSetupSaved', 'Report link is ready to share'));
+      // Reopen the panel so the button flips to Copy Report Link and the
+      // status shows In Progress - same sequence the Skip button uses.
+      const id = order.id;
+      closePanel();
+      refreshCurrentView();
+      openDetailPanel(id, 'full');
+    } catch (e) {
+      showToast(e.message || 'Could not save the report setup', true);
+      btn.disabled = false;
+      btn.textContent = label;
+    }
+  }
+
+  document.addEventListener('keydown', onKey);
+  document.body.appendChild(back);
+  draw();
+}

@@ -1,0 +1,236 @@
+{
+  "_readme": "Conditional checks offered at PO setup, per top-level product category.\n\nChloe ticks the ones that apply when she sets up the report link in Order Management. The chosen triggers are stored on the PO under qaReports.<stage>.setup, and every question belonging to a ticked trigger is added to an 'Additional Review' section at the bottom of Step 5 of the QA report.\n\nmedia: 'on_fail' = photo or video required only when the answer is Fail. 'photo_always' / 'video_always' = required whatever the answer, because the evidence IS the check.\n\nEvery question is answered Pass / Fail with no N/A - a trigger is only ticked when the feature is actually present - and a Fail always requires the quantity affected.\n\nThis file is required directly from the repo (like categories.json), so edits here deploy normally.",
+  "answerFormat": "passFail",
+  "byCategory": {
+    "apparel": [
+      {
+        "key": "gitd",
+        "label_en": "Includes Glow-In-The-Dark effect",
+        "label_zh": "含夜光效果",
+        "questions": [
+          {
+            "key": "gitd_works",
+            "text_en": "Confirm the glow-in-the-dark effect works as expected",
+            "text_zh": "确认夜光效果正常",
+            "media": "photo_always"
+          }
+        ]
+      },
+      {
+        "key": "colourChanging",
+        "label_en": "Includes colour-changing effect",
+        "label_zh": "含变色效果",
+        "questions": [
+          {
+            "key": "cc_works",
+            "text_en": "Confirm the colour-changing effect works as expected",
+            "text_zh": "确认变色效果正常",
+            "media": "video_always"
+          }
+        ]
+      }
+    ],
+    "plush": [
+      {
+        "key": "soundModule",
+        "label_en": "Includes voice box / sound module",
+        "label_zh": "含发声器/音效模块",
+        "questions": [
+          {
+            "key": "sound_works",
+            "text_en": "Confirm the sound module powers on and plays as expected",
+            "text_zh": "确认发声器可正常开启并播放",
+            "media": "video_always"
+          }
+        ]
+      },
+      {
+        "key": "magnets",
+        "label_en": "Includes magnets",
+        "label_zh": "含磁铁",
+        "questions": [
+          {
+            "key": "mag_present",
+            "text_en": "Confirm the magnet is present and in the correct position",
+            "text_zh": "确认磁铁存在且位置正确",
+            "media": "on_fail"
+          },
+          {
+            "key": "mag_secure",
+            "text_en": "Confirm the magnet stays securely in place",
+            "text_zh": "确认磁铁牢固不脱落",
+            "media": "on_fail"
+          },
+          {
+            "key": "mag_strength",
+            "text_en": "Confirm the magnetic connection is strong and holds properly",
+            "text_zh": "确认磁吸连接牢固有效",
+            "media": "on_fail"
+          }
+        ]
+      },
+      {
+        "key": "accessories",
+        "label_en": "Includes accessories",
+        "label_zh": "含配件",
+        "questions": [
+          {
+            "key": "acc_included",
+            "text_en": "Confirm the correct accessories are included",
+            "text_zh": "确认配件齐全且正确",
+            "media": "on_fail"
+          },
+          {
+            "key": "acc_attached",
+            "text_en": "Confirm accessories are securely attached and correctly positioned",
+            "text_zh": "确认配件牢固且位置正确",
+            "media": "on_fail"
+          }
+        ]
+      },
+      {
+        "key": "gitd",
+        "label_en": "Includes Glow-In-The-Dark effect",
+        "label_zh": "含夜光效果",
+        "questions": [
+          {
+            "key": "gitd_works",
+            "text_en": "Confirm the glow-in-the-dark effect works as expected",
+            "text_zh": "确认夜光效果正常",
+            "media": "photo_always"
+          }
+        ]
+      },
+      {
+        "key": "otherFunction",
+        "label_en": "Includes other electronic or mechanical functions",
+        "label_zh": "含其他电子/机械功能",
+        "questions": [
+          {
+            "key": "otherfn_works",
+            "text_en": "Confirm the function works as expected",
+            "text_zh": "确认功能正常",
+            "media": "video_always"
+          }
+        ]
+      }
+    ],
+    "bags": [
+      {
+        "key": "gitd",
+        "label_en": "Includes Glow-In-The-Dark effect",
+        "label_zh": "含夜光效果",
+        "questions": [
+          {
+            "key": "gitd_works",
+            "text_en": "Confirm the glow-in-the-dark effect works as expected",
+            "text_zh": "确认夜光效果正常",
+            "media": "photo_always"
+          }
+        ]
+      },
+      {
+        "key": "magnets",
+        "label_en": "Includes magnets",
+        "label_zh": "含磁铁",
+        "questions": [
+          {
+            "key": "mag_present",
+            "text_en": "Confirm the magnet is present and in the correct position",
+            "text_zh": "确认磁铁存在且位置正确",
+            "media": "on_fail"
+          },
+          {
+            "key": "mag_secure",
+            "text_en": "Confirm the magnet stays securely in place",
+            "text_zh": "确认磁铁牢固不脱落",
+            "media": "on_fail"
+          },
+          {
+            "key": "mag_strength",
+            "text_en": "Confirm the magnetic connection is strong and holds properly",
+            "text_zh": "确认磁吸连接牢固有效",
+            "media": "on_fail"
+          }
+        ]
+      },
+      {
+        "key": "accessories",
+        "label_en": "Includes accessories",
+        "label_zh": "含配件",
+        "questions": [
+          {
+            "key": "acc_included",
+            "text_en": "Confirm the correct accessories are included",
+            "text_zh": "确认配件齐全且正确",
+            "media": "on_fail"
+          },
+          {
+            "key": "acc_attached",
+            "text_en": "Confirm accessories are securely attached and correctly positioned",
+            "text_zh": "确认配件牢固且位置正确",
+            "media": "on_fail"
+          }
+        ]
+      }
+    ],
+    "accessories": [
+      {
+        "key": "gitd",
+        "label_en": "Includes Glow-In-The-Dark effect",
+        "label_zh": "含夜光效果",
+        "questions": [
+          {
+            "key": "gitd_works",
+            "text_en": "Confirm the glow-in-the-dark effect works as expected",
+            "text_zh": "确认夜光效果正常",
+            "media": "photo_always"
+          }
+        ]
+      }
+    ],
+    "paperGoods": [
+      {
+        "key": "gitd",
+        "label_en": "Includes Glow-In-The-Dark effect",
+        "label_zh": "含夜光效果",
+        "questions": [
+          {
+            "key": "gitd_works",
+            "text_en": "Confirm the glow-in-the-dark effect works as expected",
+            "text_zh": "确认夜光效果正常",
+            "media": "photo_always"
+          }
+        ]
+      }
+    ],
+    "other": [
+      {
+        "key": "gitd",
+        "label_en": "Includes Glow-In-The-Dark effect",
+        "label_zh": "含夜光效果",
+        "questions": [
+          {
+            "key": "gitd_works",
+            "text_en": "Confirm the glow-in-the-dark effect works as expected",
+            "text_zh": "确认夜光效果正常",
+            "media": "photo_always"
+          }
+        ]
+      },
+      {
+        "key": "otherFunction",
+        "label_en": "Includes other electronic or mechanical functions",
+        "label_zh": "含其他电子/机械功能",
+        "questions": [
+          {
+            "key": "otherfn_works",
+            "text_en": "Confirm the function works as expected",
+            "text_zh": "确认功能正常",
+            "media": "video_always"
+          }
+        ]
+      }
+    ]
+  }
+}

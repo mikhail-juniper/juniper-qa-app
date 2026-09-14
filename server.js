@@ -73,6 +73,7 @@ const analytics = require('./lib/analytics');
 let fits = require('./config/fits.json');
 const i18n = require('./config/i18n.json');
 const categories = require('./config/categories.json');
+const conditionalChecks = require('./config/conditionalChecks.json');
 const aqlTable = require('./config/aql.json');
 
 /**
@@ -1257,33 +1258,75 @@ app.get('/api/config', (req, res) => {
     creatorTiers: loadJson(CREATOR_TIERS_PATH),
     aqlRecommendation: loadJson(AQL_RECOMMENDATION_PATH),
     unitCosts: loadJson(UNIT_COSTS_PATH),
-    tolerances: loadTolerances()
+    tolerances: loadTolerances(),
+    conditionalChecks
   });
 });
 
 // ---- Settings: tolerances ----
-/* One editable number per category. Apparel is special: its value is the
- * pass/fail threshold for apparel size rows and lives as `toleranceCm` in
- * fits.json, which passFail.js, pdfBuilder.js, app.js and approval.js all
- * already read. Rather than duplicate it, the apparel entry in
- * tolerances.json is ignored on read and overwritten from fits.json here, and
- * saving apparel writes back to fits.json. Every other category is a
- * reference figure shown to the inspector and used in no calculation. */
-const TOLERANCE_MIN_CM = 0;
-const TOLERANCE_MAX_CM = 25;
+/* Three numbers per category: sizingCm, printCm and weightG. tolerances.json
+ * is the source of truth for all of them.
+ *
+ * The one wrinkle is apparel's sizingCm, which is also the pass/fail threshold
+ * for apparel size rows. passFail.js, pdfBuilder.js, app.js and approval.js all
+ * read that from `fits.toleranceCm`, so rather than rewrite four consumers we
+ * write it through to fits.json on save and reconcile at startup. tolerances.json
+ * always wins, so the two can't drift. */
+const TOLERANCE_FIELDS = {
+  sizingCm: { min: 0, max: 25, required: true },
+  printCm: { min: 0, max: 25, required: false },
+  weightG: { min: 0, max: 5000, required: false }
+};
+
+/* The first version of this file stored a single bare number per category.
+ * Anything already deployed has that shape on its data disk, and a disk-seeded
+ * file is never re-seeded, so migrate it on read instead. */
+function migrateToleranceEntry(raw) {
+  if (typeof raw === 'number') return { sizingCm: raw, printCm: 0.5, weightG: null };
+  if (!raw || typeof raw !== 'object') return { sizingCm: null, printCm: null, weightG: null };
+  const num = (v) => (v === null || v === undefined || v === '' ? null : Number(v));
+  return { sizingCm: num(raw.sizingCm), printCm: num(raw.printCm), weightG: num(raw.weightG) };
+}
 
 function loadTolerances() {
   let categories = {};
   try {
-    categories = Object.assign({}, (loadJson(TOLERANCES_PATH) || {}).categories || {});
+    const raw = (loadJson(TOLERANCES_PATH) || {}).categories || {};
+    Object.entries(raw).forEach(([cat, val]) => { categories[cat] = migrateToleranceEntry(val); });
   } catch (err) {
-    // A missing/corrupt file must not take the app down - the Sizing step
+    // A missing or corrupt file must not take the app down - the Sizing step
     // simply shows no tolerance reference.
     console.error('Could not read tolerances.json:', err.message || err);
   }
-  categories.apparel = (fits && fits.toleranceCm) || 1.27;
   return { categories };
 }
+
+/** Keep fits.toleranceCm in step with the apparel sizing tolerance. */
+function syncApparelToleranceToFits(sizingCm) {
+  if (typeof sizingCm !== 'number' || isNaN(sizingCm)) return false;
+  if (fits && fits.toleranceCm === sizingCm) return false;
+  const currentFits = loadJson(FITS_PATH);
+  currentFits.toleranceCm = sizingCm;
+  saveJson(FITS_PATH, currentFits);
+  fits = currentFits; // keep the in-memory copy live without a restart
+  return true;
+}
+
+// Reconcile once at boot so a hand-edited or stale fits.json can't quietly
+// score apparel against a different number than Settings displays.
+try {
+  const bootApparel = loadTolerances().categories.apparel;
+  if (bootApparel && syncApparelToleranceToFits(bootApparel.sizingCm)) {
+    console.log(`Synced fits.toleranceCm to the apparel sizing tolerance (${bootApparel.sizingCm} cm).`);
+  }
+} catch (err) {
+  console.error('Could not reconcile the apparel tolerance at startup:', err.message || err);
+}
+
+/* Just the conditional-check definitions. Order Management needs these for the
+ * Setup Report Link dialog and has no reason to pull the whole /api/config
+ * payload, which carries the entire i18n dictionary and fits table with it. */
+app.get('/api/conditional-checks', (req, res) => res.json(conditionalChecks));
 
 app.get('/api/tolerances', (req, res) => res.json(loadTolerances()));
 
@@ -1295,38 +1338,36 @@ app.post('/api/tolerances', requirePermission('settings:write'), (req, res) => {
     const current = loadJson(TOLERANCES_PATH);
     current.categories = current.categories || {};
 
-    for (const [cat, raw] of Object.entries(incoming)) {
+    for (const [cat, vals] of Object.entries(incoming)) {
       // Only categories already in the file are writable, so a stale or
       // hand-crafted payload can't invent new ones.
-      if (!(cat in current.categories) && cat !== 'apparel') continue;
+      if (!current.categories[cat] || !vals || typeof vals !== 'object') continue;
+      current.categories[cat] = migrateToleranceEntry(current.categories[cat]);
 
-      // null/'' clears the tolerance - valid for every category except
-      // apparel, which must always have a number to score against.
-      if (raw === null || raw === '') {
-        if (cat === 'apparel') {
-          return res.status(400).json({ error: 'The apparel tolerance cannot be blank - it decides pass/fail on every size row.' });
+      for (const [field, rule] of Object.entries(TOLERANCE_FIELDS)) {
+        if (!(field in vals)) continue;
+        const raw = vals[field];
+
+        if (raw === null || raw === '' || raw === undefined) {
+          // Apparel's sizing tolerance is the live pass/fail threshold, so
+          // clearing it would silently stop scoring every garment.
+          if (rule.required && cat === 'apparel') {
+            return res.status(400).json({ error: 'The apparel sizing tolerance cannot be blank - it decides pass/fail on every size row.' });
+          }
+          current.categories[cat][field] = null;
+          continue;
         }
-        current.categories[cat] = null;
-        continue;
-      }
 
-      const n = parseFloat(raw);
-      if (isNaN(n) || n <= TOLERANCE_MIN_CM || n > TOLERANCE_MAX_CM) {
-        return res.status(400).json({ error: `Tolerance for "${cat}" must be greater than ${TOLERANCE_MIN_CM} and no more than ${TOLERANCE_MAX_CM} cm` });
-      }
-
-      if (cat === 'apparel') {
-        const currentFits = loadJson(FITS_PATH);
-        currentFits.toleranceCm = n;
-        saveJson(FITS_PATH, currentFits);
-        fits = currentFits; // keep the in-memory copy live without a restart
-        current.categories.apparel = n; // mirrored for readability of the file only
-      } else {
-        current.categories[cat] = n;
+        const n = parseFloat(raw);
+        if (isNaN(n) || n <= rule.min || n > rule.max) {
+          return res.status(400).json({ error: `${field} for "${cat}" must be greater than ${rule.min} and no more than ${rule.max}` });
+        }
+        current.categories[cat][field] = n;
       }
     }
 
     saveJson(TOLERANCES_PATH, current);
+    syncApparelToleranceToFits(migrateToleranceEntry(current.categories.apparel).sizingCm);
     res.json({ ok: true, tolerances: loadTolerances() });
   } catch (err) {
     console.error('Failed to save tolerances:', err);
@@ -2037,6 +2078,46 @@ app.delete('/api/order-management/orders/:id', requirePermission('orders:delete'
   const removed = orderManagementStore.deleteOrder(req.params.id, req.body && req.body.actor || req.get('X-Actor'));
   if (!removed) return res.status(404).json({ error: 'Order not found' });
   res.json({ ok: true, deleted: { id: removed.id, poNumber: removed.poNumber } });
+});
+
+/* Save the report-link setup for one stage: which conditional checks apply to
+ * this product plus any custom one-off questions. Also moves a Pending stage to
+ * In Progress, since a link has now been handed out. */
+app.post('/api/order-management/orders/:id/qa-setup', requirePermission('orders:write'), (req, res) => {
+  try {
+    const { stage, checks, custom } = req.body || {};
+    if (stage !== 'preProduction' && stage !== 'bulk') {
+      return res.status(400).json({ error: 'stage must be preProduction or bulk' });
+    }
+    const order = orderManagementStore.getOrderById(req.params.id);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+
+    // Only triggers defined for this PO's category are accepted, so a stale
+    // dialog can't attach questions that don't belong to the product.
+    const allowed = new Set(((conditionalChecks.byCategory || {})[order.category] || []).map((t) => t.key));
+    const cleanChecks = (Array.isArray(checks) ? checks : []).filter((k) => allowed.has(k));
+
+    const cleanCustom = (Array.isArray(custom) ? custom : [])
+      .map((c) => ({
+        id: String((c && c.id) || '').trim(),
+        text: String((c && c.text) || '').trim().slice(0, 500),
+        requirePhoto: !!(c && c.requirePhoto),
+        requireVideo: !!(c && c.requireVideo)
+      }))
+      .filter((c) => c.text)
+      .slice(0, 20);
+
+    const updated = orderManagementStore.setQaReportSetup(
+      req.params.id, stage,
+      { checks: cleanChecks, custom: cleanCustom },
+      (req.body && req.body.actor) || req.get('X-Actor')
+    );
+    if (!updated) return res.status(400).json({ error: 'Could not save the report setup' });
+    res.json({ ok: true, order: updated });
+  } catch (err) {
+    console.error('Failed to save QA report setup:', err);
+    res.status(500).json({ error: 'Failed to save the report setup' });
+  }
 });
 
 app.post('/api/order-management/orders/:id/status', requirePermission('orders:write'), (req, res) => {
