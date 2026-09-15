@@ -42,9 +42,6 @@ const userStore = require('./lib/userStore');
 const supplierAccess = require('./lib/supplierAccess');
 const googleAuth = require('./lib/googleAuth');
 const gmailSend = require('./lib/gmailSend');
-const wechatAuth = require('./lib/wechatAuth');
-const wecomAuth = require('./lib/wecomAuth');
-const wecomCallback = require('./lib/wecomCallback');
 const os = require('os');
 const driveClient = require('./lib/driveClient');
 const filePreview = require('./lib/filePreview');
@@ -195,7 +192,7 @@ app.use(express.json({ limit: '5mb' }));
 //     access, so deploying this change never locks anybody out. It maps to a
 //     synthetic "shared access" admin identity.
 //  2. Per-user accounts (lib/userStore) with roles and permissions. These
-//     are what Google and WeChat sign-in will attach to later - each of
+//     are what Google sign-in attaches to - each of
 //     those just resolves to a user record and issues the same session.
 //
 // The session cookie carries a signed payload rather than a bare token, so
@@ -263,7 +260,7 @@ const SHARED_SESSION = { kind: 'shared', role: 'admin', name: 'Shared access' };
  * any role, including admin. Its value is that the choice lives in the
  * signed session and is enforced server-side, so supplier scoping and
  * permission checks are genuinely exercised while the role-based views get
- * built. Real per-user accounts (and later Google/WeChat) are what actually
+ * built. Real per-user accounts (and Google sign-in) are what actually
  * restrict anyone.
  */
 function currentUser(req) {
@@ -322,22 +319,18 @@ function currentUser(req) {
 // Paths that must stay reachable without being logged in yet, so the login
 // page itself can load and submit.
 /**
- * Domain-ownership verification files. WeCom (WW_verify_*.txt) and WeChat
- * Official Accounts (MP_verify_*.txt) confirm you control a domain by
- * fetching a file from its root - anonymously. Behind the site password
- * they'd 401 and verification would always fail, so they're matched by
- * pattern rather than being listed one by one.
+ * Domain-ownership verification files. A provider confirms you control a
+ * domain by fetching a file from its root, anonymously. Behind the site
+ * password those would 401 and verification would always fail, so they're
+ * matched by pattern rather than listed one by one.
  */
 function isDomainVerificationFile(pathname) {
-  return /^\/(WW|MP)_verify_[A-Za-z0-9]+\.txt$/.test(pathname);
+  return /^\/[A-Za-z0-9]{2}_verify_[A-Za-z0-9]+\.txt$/.test(pathname);
 }
 
 const AUTH_ALLOWLIST = new Set([
   '/login.html', '/api/login', '/api/login-options', '/favicon.ico',
   '/auth/google', '/auth/google/callback', '/auth/google/gmail', '/auth/google/drive',
-  '/auth/wechat', '/auth/wechat/callback',
-  '/auth/wecom', '/auth/wecom/callback',
-  '/wecom/callback'
 ]);
 
 /**
@@ -504,133 +497,9 @@ app.get('/a/:token', (req, res) => {
   res.redirect(`/approval.html?po=${encodeURIComponent(order.id)}`);
 });
 
-// ---- WeChat sign-in ----
-// Dormant unless WECHAT_APP_ID/SECRET are set. Official Account mode only
-// works inside WeChat's browser; the login page hides the button elsewhere.
-const WECHAT_STATE_COOKIE = 'juniper_wxstate';
-
-app.get('/auth/wechat', (req, res) => {
-  if (!wechatAuth.isConfigured()) return res.redirect('/login.html?error=wechat_not_configured');
-  const state = wechatAuth.makeState();
-  res.cookie(WECHAT_STATE_COOKIE, state, { httpOnly: true, sameSite: 'lax', maxAge: 10 * 60 * 1000 });
-  res.redirect(wechatAuth.authUrl(req, state));
-});
-
-app.get('/auth/wechat/callback', async (req, res) => {
-  const fail = (msg) => res.redirect(`/login.html?error=${encodeURIComponent(msg)}`);
-  if (!wechatAuth.isConfigured()) return fail('WeChat sign-in is not configured.');
-  const expected = parseCookies(req)[WECHAT_STATE_COOKIE];
-  res.clearCookie(WECHAT_STATE_COOKIE);
-  if (!req.query.state || !expected || req.query.state !== expected) {
-    return fail('Sign-in expired or was interrupted. Please try again.');
-  }
-  if (!req.query.code) return fail('WeChat did not return an authorization code.');
-
-  try {
-    const identity = await wechatAuth.completeSignIn(req.query.code);
-    // Match on unionId first (stable across apps), then openId.
-    const user = (identity.unionId && userStore.findByIdentity('wechatUnionId', identity.unionId))
-      || userStore.findByIdentity('wechatOpenId', identity.openId);
-    if (!user) {
-      // No auto-provisioning: a WeChat identity carries no verifiable
-      // company domain, so an admin has to link it deliberately. The
-      // OpenID is shown so they can paste it into the Users page.
-      return fail(`No Juniper account is linked to that WeChat yet. Ask an admin to link it (ID: ${identity.openId}).`);
-    }
-    if (!user.active) return fail('That account has been deactivated.');
-    // Backfill whichever identifier we didn't match on.
-    const patch = {};
-    if (!user.wechatOpenId) patch.wechatOpenId = identity.openId;
-    if (identity.unionId && !user.wechatUnionId) patch.wechatUnionId = identity.unionId;
-    if (Object.keys(patch).length) userStore.updateUser(user.id, patch);
-
-    userStore.recordLogin(user.id);
-    issueSession(res, { kind: 'user', userId: user.id });
-    return res.redirect(userStore.landingPageFor(user));
-  } catch (err) {
-    console.error('WeChat sign-in failed:', err);
-    return fail(err.message || 'WeChat sign-in failed.');
-  }
-});
-
-/**
- * WeCom message-callback URL. Configuring this is what unlocks the Trusted
- * IP setting when the trusted-domain route is unavailable.
- *
- * GET  - WeCom's one-time URL verification. Must reply with the decrypted
- *        echostr as bare text, no JSON, no wrapper.
- * POST - Where WeCom would deliver events. Nothing consumes them yet, so it
- *        acknowledges and discards; replying with an empty 200 is how WeCom
- *        expects "received, no reply needed".
- *
- * Outside the auth gate: WeCom calls it unauthenticated, and the signature
- * check is what actually protects it.
- */
-app.get('/wecom/callback', (req, res) => {
-  try {
-    const echo = wecomCallback.verifyUrl(req.query);
-    res.type('text/plain').send(echo);
-  } catch (err) {
-    console.error('WeCom callback verification failed:', err.message || err);
-    res.status(400).type('text/plain').send('verification failed');
-  }
-});
-
-app.post('/wecom/callback', (req, res) => {
-  // Acknowledge immediately. WeCom retries on anything other than a fast
-  // 200, and we have no event handling to do yet.
-  res.status(200).send('');
-});
-
-// ---- WeCom (企业微信) sign-in ----
-const WECOM_STATE_COOKIE = 'juniper_wcstate';
-
-app.get('/auth/wecom', (req, res) => {
-  if (!wecomAuth.isConfigured()) return res.redirect('/login.html?error=wecom_not_configured');
-  const state = wecomAuth.makeState();
-  res.cookie(WECOM_STATE_COOKIE, state, { httpOnly: true, sameSite: 'lax', maxAge: 10 * 60 * 1000 });
-  res.redirect(wecomAuth.authUrl(req, state));
-});
-
-app.get('/auth/wecom/callback', async (req, res) => {
-  const fail = (msg) => res.redirect(`/login.html?error=${encodeURIComponent(msg)}`);
-  if (!wecomAuth.isConfigured()) return fail('WeCom sign-in is not configured.');
-  const expected = parseCookies(req)[WECOM_STATE_COOKIE];
-  res.clearCookie(WECOM_STATE_COOKIE);
-  if (!req.query.state || !expected || req.query.state !== expected) {
-    return fail('Sign-in expired or was interrupted. Please try again.');
-  }
-  if (!req.query.code) return fail('WeCom did not return an authorization code.');
-
-  try {
-    const identity = await wecomAuth.completeSignIn(req.query.code);
-
-    let user = userStore.findByIdentity('wecomUserId', identity.userId)
-      || (identity.email ? userStore.findByEmail(identity.email) : null);
-
-    if (user) {
-      if (!user.wecomUserId) userStore.updateUser(user.id, { wecomUserId: identity.userId });
-      if (!user.active) return fail('That account has been deactivated.');
-    } else {
-      // Safe to auto-provision: WeCom only issues a userid to a member of
-      // this company's own organisation, so membership is already verified
-      // by WeCom itself - the same reasoning as a Workspace domain.
-      user = userStore.createUser({
-        name: identity.name || identity.userId,
-        email: identity.email || `${identity.userId}@wecom.local`,
-        role: 'internal',
-        wecomUserId: identity.userId
-      });
-      console.log(`Provisioned WeCom member ${identity.userId} as ${user.role}`);
-    }
-    userStore.recordLogin(user.id);
-    issueSession(res, { kind: 'user', userId: user.id });
-    return res.redirect(userStore.landingPageFor(user));
-  } catch (err) {
-    console.error('WeCom sign-in failed:', err);
-    return fail(err.message || 'WeCom sign-in failed.');
-  }
-});
+/* WeChat and WeCom sign-in were removed in Sept 2026 - never offered in the
+ * UI, never configured, and not part of how the team signs in. Google OAuth
+ * and the shared site password are the only routes. */
 
 app.get('/s/:token', (req, res) => {
   const supplier = supplierAccess.supplierForToken(req.params.token);
@@ -832,20 +701,6 @@ app.get('/api/login-options', (req, res) => {
     ok: true,
     roles: userStore.ROLES,
     suppliers: supplierStore.listSuppliers().map((s2) => s2.name).filter(Boolean).sort(),
-    wecom: {
-      enabled: wecomAuth.isConfigured(),
-      // Unlike consumer WeChat, this works everywhere - in the WeCom app
-      // it's silent, on desktop it's a QR scan.
-      inApp: wecomAuth.isWeComBrowser(req)
-    },
-    wechat: {
-      enabled: wechatAuth.isConfigured(),
-      mode: wechatAuth.mode(),
-      // Official Account auth only works in WeChat's own browser, so the
-      // button is pointless (and confusing) anywhere else.
-      usable: wechatAuth.isConfigured()
-        && (wechatAuth.mode() === 'qr' || wechatAuth.isWeChatBrowser(req))
-    },
     google: {
       enabled: googleAuth.isConfigured(),
       domain: googleAuth.allowedDomain() || null,
@@ -3073,15 +2928,22 @@ app.get('/api/order-management/orders/:id/dispatch-targets', (req, res) => {
  * The fields the "copy order image" table needs. Kept in one place so the
  * single-component dialog and batch sending draw identical rows.
  */
+/* The row the factory sees in the copied PO image. It describes the component
+ * THIS supplier is making, not the order's main product: a hang-tag supplier
+ * was being sent the plush photo, the plush quantity and the plush delivery
+ * date, none of which is their job. Only the SKU and order date are shared,
+ * since those identify the order itself. */
 function dispatchImageRow(order, target) {
   const mc = order.mainComponent || {};
+  const isAccessory = target && target.kind === 'accessory';
   return {
-    productName: mc.name || (target && target.componentName) || '',
+    productName: (target && target.componentName) || mc.name || '',
     sku: mc.sku || '',
-    quantity: mc.purchaseQuantity ?? null,
-    photoReference: mc.photoReference || '',
+    quantity: (target && target.quantity != null ? target.quantity : mc.purchaseQuantity) ?? null,
+    photoReference: (target && target.photoReference)
+      || (isAccessory ? '' : (mc.photoReference || '')),
     orderDate: order.orderPlacementDate || null,
-    deliveryDate: order.manufacturerDeliveryDate || null,
+    deliveryDate: (target && target.deliveryDate) || order.manufacturerDeliveryDate || null,
     productionNotes: order.productionNotes || ''
   };
 }
