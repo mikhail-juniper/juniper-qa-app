@@ -2491,10 +2491,14 @@ async function openDetailPanel(id, scope) {
     <div class="om-panel-card">
     <div class="om-section-title">${i18('secProductDocumentation', 'Product Documentation')}</div>
     <div class="om-field-grid om-field-grid-row">
-      ${uploadFieldHtml('fManufacturingDrawing', i18t('fldManufacturingDrawing', 'Manufacturing Drawing'), order.mainComponent.manufacturingDrawing, true)}
-      ${uploadFieldHtml('fWashingTagUrl', i18t('fldWashingTag', 'Washing Tag'), order.mainComponent.washingTagUrl, true)}
-      ${uploadFieldHtml('fHangTagUrl', i18t('fldHangTag', 'Hang Tag'), order.mainComponent.hangTagUrl, true)}
-      ${uploadFieldHtml('fPackagingUrl', i18t('fldPackaging', 'Packaging'), order.mainComponent.packagingUrl, true)}
+      ${uploadFieldHtml('fManufacturingDrawing', i18t('fldManufacturingDrawing', 'Manufacturing Drawing'), order.mainComponent.manufacturingDrawing, true, (order.mainComponent.docSourceUrls || {}).manufacturingDrawing)}
+      <input type="hidden" id="fManufacturingDrawingSource" value="${val((order.mainComponent.docSourceUrls || {}).manufacturingDrawing)}" />
+      ${uploadFieldHtml('fWashingTagUrl', i18t('fldWashingTag', 'Washing Tag'), order.mainComponent.washingTagUrl, true, (order.mainComponent.docSourceUrls || {}).washingTagUrl)}
+      <input type="hidden" id="fWashingTagUrlSource" value="${val((order.mainComponent.docSourceUrls || {}).washingTagUrl)}" />
+      ${uploadFieldHtml('fHangTagUrl', i18t('fldHangTag', 'Hang Tag'), order.mainComponent.hangTagUrl, true, (order.mainComponent.docSourceUrls || {}).hangTagUrl)}
+      <input type="hidden" id="fHangTagUrlSource" value="${val((order.mainComponent.docSourceUrls || {}).hangTagUrl)}" />
+      ${uploadFieldHtml('fPackagingUrl', i18t('fldPackaging', 'Packaging'), order.mainComponent.packagingUrl, true, (order.mainComponent.docSourceUrls || {}).packagingUrl)}
+      <input type="hidden" id="fPackagingUrlSource" value="${val((order.mainComponent.docSourceUrls || {}).packagingUrl)}" />
       <!-- The Product Dimensions photo upload was removed on purpose: it
            let people attach a picture of measurements instead of entering
            the actual values below, which is what the fields exist for. -->
@@ -4058,6 +4062,12 @@ async function openDetailPanel(id, scope) {
         washingTagUrl: document.getElementById('fWashingTagUrl').value,
         hangTagUrl: document.getElementById('fHangTagUrl').value,
         packagingUrl: document.getElementById('fPackagingUrl').value,
+        docSourceUrls: {
+          manufacturingDrawing: document.getElementById('fManufacturingDrawingSource').value || '',
+          washingTagUrl: document.getElementById('fWashingTagUrlSource').value || '',
+          hangTagUrl: document.getElementById('fHangTagUrlSource').value || '',
+          packagingUrl: document.getElementById('fPackagingUrlSource').value || ''
+        },
         // dimensionsUrl is no longer editable - kept as-is so existing
         // records don't lose a previously uploaded file.
         dimensionsUrl: order.mainComponent.dimensionsUrl || '',
@@ -5218,7 +5228,12 @@ function previewUrlFor(currentUrl) {
   return `/api/order-management/orders/${m[1]}/thumb?file=${m[2]}`;
 }
 
-function uploadFieldHtml(fieldId, label, currentUrl, isImage) {
+function uploadFieldHtml(fieldId, label, currentUrl, isImage, sourceUrl) {
+  /* When a Drive link exists it is what "View file" opens: the locally stored
+   * file is only a preview image now, so linking to it would hand someone a
+   * PNG of page one when they wanted the artwork. */
+  const openUrl = sourceUrl || currentUrl;
+  const openLabel = sourceUrl ? 'Open in Drive' : 'View file';
   let preview;
   /* An image-type field may be holding something that isn't an image at
    * all - a PDF, a zip of drawings, an .ai. Decide from the file itself,
@@ -5231,15 +5246,18 @@ function uploadFieldHtml(fieldId, label, currentUrl, isImage) {
      * back to the plain link if the render didn't work. */
     const pv = showAsImage ? null : previewUrlFor(currentUrl);
     preview = showAsImage
-      ? `<img id="${fieldId}Preview" class="om-upload-preview" src="${escapeHtml(currentUrl)}" alt="" title="Click to view larger" />`
+      ? `<span class="om-doc-preview">
+           <img id="${fieldId}Preview" class="om-upload-preview" src="${escapeHtml(currentUrl)}" alt="" title="Click to view larger" />
+           ${sourceUrl ? `<a href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener" style="font-size:12px;">${escapeHtml(openLabel)}</a>` : ''}
+         </span>`
       : pv
         ? `<span class="om-doc-preview">
              <img class="om-upload-preview" src="${escapeHtml(pv)}" alt=""
                title="First page - click to open the file"
                onerror="this.style.display='none';" />
-             <a id="${fieldId}Preview" href="${escapeHtml(currentUrl)}" target="_blank" rel="noopener" style="font-size:12px;">View file</a>
+             <a id="${fieldId}Preview" href="${escapeHtml(openUrl)}" target="_blank" rel="noopener" style="font-size:12px;">${escapeHtml(openLabel)}</a>
            </span>`
-        : `<a id="${fieldId}Preview" href="${escapeHtml(currentUrl)}" target="_blank" rel="noopener" style="font-size:12px;">View file</a>`;
+        : `<a id="${fieldId}Preview" href="${escapeHtml(openUrl)}" target="_blank" rel="noopener" style="font-size:12px;">${escapeHtml(openLabel)}</a>`;
   } else if (isImage) {
     // Reserved, empty slot rather than nothing - keeps the row's height
     // stable and shows where the thumbnail will land once a file's chosen.
@@ -5286,7 +5304,9 @@ function wireUploadField(fieldId, orderId, category, isImage) {
       const res = await fetch(`/api/order-management/orders/${encodeURIComponent(orderId)}/files`, { method: 'POST', body: formData });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || 'Upload failed');
-      document.getElementById(fieldId).value = body.file.url;
+      document.getElementById(fieldId).value = body.file.url || '';
+      const srcField = document.getElementById(`${fieldId}Source`);
+      if (srcField) srcField.value = body.file.sourceUrl || '';
       const container = document.getElementById(`${fieldId}Preview`).parentNode;
       const old = document.getElementById(`${fieldId}Preview`);
       let fresh;
