@@ -3368,7 +3368,51 @@ app.get('/api/order-management/file-categories', (req, res) => {
   res.json({ categories: orderManagementStore.FILE_CATEGORIES });
 });
 
-app.post('/api/order-management/orders/:id/files', uploadOrderFile.single('file'), (req, res) => {
+/**
+ * Design files are references, not archives.
+ *
+ * A manufacturing drawing or hang-tag artwork gets looked at; it is never
+ * edited here and never needs to be the authoritative copy, because Drive
+ * already is. Keeping the original meant years of multi-megabyte artwork on a
+ * per-GB persistent disk, inside a weekly backup that zips the whole data
+ * directory - the backup grows with it and eventually stops completing.
+ *
+ * So when a Drive link is supplied, we render a preview image, keep that, and
+ * throw the original away. When no link is supplied we keep the file as before,
+ * because discarding the only copy of something would be indefensible.
+ */
+async function storeAsPreviewOnly(orderId, uploaded, sourceUrl) {
+  const srcPath = uploaded.path;
+  const key = path.parse(uploaded.filename).name;
+  const dir = path.join(orderManagementStore.ORDER_FILES_DIR, orderId);
+
+  // An image is already its own preview, but a full-resolution photo is not
+  // small, so it is downscaled rather than kept as-is.
+  const previewPath = await filePreview.tryGeneratePreview(srcPath, dir, `${key}-preview`);
+  let storedName = previewPath ? path.basename(previewPath) : null;
+
+  if (!storedName && filePreview.isImage(srcPath)) {
+    storedName = uploaded.filename;      // keep the image itself as the preview
+  }
+
+  if (!storedName) {
+    // Nothing renderable (a .zip, a .xlsx). There is no preview to keep, so
+    // the link is all we store - the file itself lives in Drive.
+    try { fs.unlinkSync(srcPath); } catch (e) { /* already gone */ }
+    return { storedName: null, url: null, previewOnly: true };
+  }
+
+  if (storedName !== uploaded.filename) {
+    try { fs.unlinkSync(srcPath); } catch (e) { /* already gone */ }
+  }
+  return {
+    storedName,
+    url: `/order-management-files/${encodeURIComponent(orderId)}/${encodeURIComponent(storedName)}`,
+    previewOnly: true
+  };
+}
+
+app.post('/api/order-management/orders/:id/files', uploadOrderFile.single('file'), async (req, res) => {
   try {
     if (!orderManagementStore.getOrderById(req.params.id)) {
       return res.status(404).json({ error: 'Order not found' });
@@ -3376,14 +3420,32 @@ app.post('/api/order-management/orders/:id/files', uploadOrderFile.single('file'
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     const category = orderManagementStore.FILE_CATEGORIES.includes(req.body.category)
       ? req.body.category : 'Other';
+    const sourceUrl = String(req.body.sourceUrl || '').trim();
+
+    let stored = {
+      storedName: req.file.filename,
+      url: `/order-management-files/${encodeURIComponent(req.params.id)}/${encodeURIComponent(req.file.filename)}`,
+      previewOnly: false
+    };
+    if (sourceUrl) stored = await storeAsPreviewOnly(req.params.id, req.file, sourceUrl);
+
     const file = {
       id: uuidv4(),
       category,
       originalName: req.file.originalname,
-      storedName: req.file.filename,
-      size: req.file.size,
+      storedName: stored.storedName,
+      // The size of what we actually keep, not what was uploaded, so the
+      // disk figure in Settings reflects reality.
+      size: stored.storedName
+        ? (fs.existsSync(path.join(orderManagementStore.ORDER_FILES_DIR, req.params.id, stored.storedName))
+          ? fs.statSync(path.join(orderManagementStore.ORDER_FILES_DIR, req.params.id, stored.storedName)).size
+          : 0)
+        : 0,
+      originalSize: req.file.size,
+      previewOnly: stored.previewOnly,
+      sourceUrl: sourceUrl || null,
       relatedTo: (req.body.relatedTo || '').trim() || null,
-      url: `/order-management-files/${encodeURIComponent(req.params.id)}/${encodeURIComponent(req.file.filename)}`,
+      url: stored.url,
       uploadedAt: new Date().toISOString(),
       uploadedBy: req.body.actor || req.get('X-Actor') || 'Unknown'
     };

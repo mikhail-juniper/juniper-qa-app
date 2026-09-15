@@ -4562,5 +4562,29 @@
   "approvedReferenceLabel": {
     "en": "Approved sample",
     "zh": "已批准样品"
+  },
+  "titleLinkSourceFile": {
+    "en": "Link the original file",
+    "zh": "关联原始文件"
+  },
+  "helpLinkSourceFile": {
+    "en": "Paste the Google Drive link for this file. We keep a preview image for reference and leave the full file in Drive, which keeps the app small and fast.",
+    "zh": "请粘贴该文件的 Google Drive 链接。系统仅保留预览图供参考，完整文件保留在 Drive，以保持系统轻量。"
+  },
+  "noteLinkSourceFile": {
+    "en": "No link? The full file is stored here instead. That works, but it uses far more space - only do it when the file does not live anywhere else.",
+    "zh": "没有链接？则会完整保存文件。可以使用，但占用空间大得多——仅在文件无其他备份时使用。"
+  },
+  "btnUploadWithoutLink": {
+    "en": "Upload without a link",
+    "zh": "不关联链接上传"
+  },
+  "btnSaveLink": {
+    "en": "Save link",
+    "zh": "保存链接"
+  },
+  "pasteALinkFirst": {
+    "en": "Paste a link, or choose Upload without a link",
+    "zh": "请粘贴链接，或选择“不关联链接上传”"
   }
 }

@@ -5274,10 +5274,14 @@ function wireUploadField(fieldId, orderId, category, isImage) {
   fileInput.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    // Ask for the Drive link before uploading: with one, the server keeps a
+    // preview and drops the original.
+    const sourceUrl = await askForSourceLink(file.name);
     const formData = new FormData();
     formData.append('file', file);
     formData.append('category', category);
     formData.append('relatedTo', fieldId);
+    if (sourceUrl) formData.append('sourceUrl', sourceUrl);
     try {
       const res = await fetch(`/api/order-management/orders/${encodeURIComponent(orderId)}/files`, { method: 'POST', body: formData });
       const body = await res.json();
@@ -5702,4 +5706,53 @@ function applyAccessoryImageUrl(row, url) {
     img.src = url; img.alt = '';
     cell.insertBefore(img, first);
   }
+}
+
+/* ============================================================
+ * Drive link prompt for design-file uploads
+ * ============================================================
+ * Design files are references, not archives. Supplying a Drive link lets the
+ * server keep only a rendered preview and discard the original, which is what
+ * stops years of artwork accumulating on a per-GB persistent disk (and inside
+ * the weekly backup that zips it).
+ *
+ * Skipping is allowed on purpose: without a link the original is the only copy,
+ * and silently deleting it would be indefensible. The dialog says so rather
+ * than making the consequence invisible. */
+function askForSourceLink(fileName) {
+  return new Promise((resolve) => {
+    const back = document.createElement('div');
+    back.className = 'om-setup-backdrop';
+    back.innerHTML = `
+      <div class="om-setup-box" style="max-width:520px;" role="dialog" aria-modal="true">
+        <div class="om-setup-head">
+          <div class="om-setup-title">${escapeHtml(i18t('titleLinkSourceFile', 'Link the original file'))}</div>
+          <div class="om-setup-sub">${escapeHtml(fileName || '')}</div>
+        </div>
+        <div class="om-setup-body">
+          <div class="section-help">${escapeHtml(i18t('helpLinkSourceFile', 'Paste the Google Drive link for this file. We keep a preview image for reference and leave the full file in Drive, which keeps the app small and fast.'))}</div>
+          <input type="url" id="omSourceLinkInput" placeholder="https://drive.google.com/..." style="width:100%; margin-top:10px;" />
+          <div class="om-setup-note" style="margin-top:10px;">
+            ${escapeHtml(i18t('noteLinkSourceFile', 'No link? The full file is stored here instead. That works, but it uses far more space - only do it when the file does not live anywhere else.'))}
+          </div>
+        </div>
+        <div class="om-setup-foot">
+          <button type="button" class="btn btn-secondary" id="omSourceSkip" style="width:auto;padding:9px 18px;">${escapeHtml(i18t('btnUploadWithoutLink', 'Upload without a link'))}</button>
+          <button type="button" class="btn btn-primary" id="omSourceSave" style="width:auto;padding:9px 18px;">${escapeHtml(i18t('btnSaveLink', 'Save link'))}</button>
+        </div>
+      </div>
+    `;
+    const done = (value) => { document.removeEventListener('keydown', onKey); back.remove(); resolve(value); };
+    function onKey(e) { if (e.key === 'Escape') done(null); }
+    back.addEventListener('click', (e) => { if (e.target === back) done(null); });
+    back.querySelector('#omSourceSkip').addEventListener('click', () => done(null));
+    back.querySelector('#omSourceSave').addEventListener('click', () => {
+      const v = back.querySelector('#omSourceLinkInput').value.trim();
+      if (!v) { showToast(i18t('pasteALinkFirst', 'Paste a link, or choose Upload without a link'), true); return; }
+      done(v);
+    });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(back);
+    setTimeout(() => back.querySelector('#omSourceLinkInput').focus(), 30);
+  });
 }
