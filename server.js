@@ -988,6 +988,8 @@ app.get('/api/backup/download', (req, res) => {
   const dir = submissionLog.DATA_DIR;
   const filename = `juniper-qa-backup-${new Date().toISOString().slice(0, 10)}.zip`;
   res.attachment(filename);
+  // Same reason as the scheduled backup: checkpoint before the .db is copied.
+  orderManagementStore.checkpointDatabase();
   const archive = archiver('zip', { zlib: { level: 9 } });
   archive.on('error', (err) => {
     console.error('Backup zip failed:', err);
@@ -4026,6 +4028,11 @@ async function runScheduledBackupIfDue() {
     const filename = `weekly-backup-${new Date().toISOString().slice(0, 10)}.zip`;
     const destPath = path.join(SCHEDULED_BACKUP_DIR, filename);
     const output = fs.createWriteStream(destPath);
+    /* Fold the SQLite WAL into the .db file before it is copied. Zipping a
+     * WAL-mode database without this captures the .db without its pending
+     * -wal, producing a backup that restores short of recent writes or won't
+     * open at all - and that only surfaces when someone actually needs it. */
+    orderManagementStore.checkpointDatabase();
     const archive = archiver('zip', { zlib: { level: 9 } });
     await new Promise((resolve, reject) => {
       output.on('close', resolve);
