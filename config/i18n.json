@@ -4558,5 +4558,9 @@
   "approvalNoPoTable": {
     "en": "Values entered here establish the approved chart for this sample. Adding a Product Dimensions table in Order Management instead keeps the PO and the approval in step.",
     "zh": "在此录入的数值将作为本样品的已批准尺寸表。建议改为在订单管理中补充“产品尺寸”，以保持订单与审批一致。"
+  },
+  "approvedReferenceLabel": {
+    "en": "Approved sample",
+    "zh": "已批准样品"
   }
 }

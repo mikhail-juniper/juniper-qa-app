@@ -1365,3 +1365,17 @@ td.reference-selectable { outline-offset: -2px; }
   background: var(--jc-mint-light);
   border-radius: var(--radius-sm);
 }
+
+/* Approved-sample reference beside a Step 5 question. Small by default and
+   click-to-enlarge via the existing lightbox, so a run of questions with
+   references doesn't turn into a photo album. */
+.q-reference { margin: 8px 0 10px; }
+.q-reference-label {
+  font-size: 11.5px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--jc-muted); margin-bottom: 4px;
+}
+.q-reference-frame {
+  width: 96px; height: 96px; border: 1px solid var(--jc-border);
+  border-radius: var(--radius-sm); overflow: hidden; background: #fff;
+}
+.q-reference-frame img { width: 100%; height: 100%; object-fit: cover; cursor: zoom-in; display: block; }

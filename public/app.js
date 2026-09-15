@@ -2415,6 +2415,19 @@ function mediaRequirementFor(q, status) {
   return { required: false, label: '' };
 }
 
+/** The Golden Sample photo this question should be judged against.
+ *
+ *  Pulled from the PD approval rather than the artwork file on the PO: the
+ *  approval photo is the physical item someone signed off, which is what the
+ *  factory is actually expected to reproduce. Returns null when PD hasn't
+ *  submitted a sample approval, or hasn't filled that slot. */
+function referencePhotoFor(q) {
+  if (!q.reference) return null;
+  const sample = (state.approvalReferencePhotos && state.approvalReferencePhotos.sample) || {};
+  const urls = sample[q.reference];
+  return urls && urls.length ? urls[0] : null;
+}
+
 function renderQuestionCard(q) {
   const a = answerFor(q.id);
   const options = q.answer === 'passFail' ? ['pass', 'fail'] : ['pass', 'fail', 'na'];
@@ -2425,6 +2438,16 @@ function renderQuestionCard(q) {
     <div class="checklist-row q-row ${a.status === 'fail' ? 'q-row-fail' : ''}" data-question="${escapeHtml(q.id)}">
       <div class="checklist-question">${escapeHtml(q.title)}</div>
       ${q.guidance ? `<div class="q-guidance">${escapeHtml(q.guidance)}</div>` : ''}
+      ${(() => {
+        const ref = referencePhotoFor(q);
+        if (!ref) return '';
+        return `
+          <div class="q-reference">
+            <div class="q-reference-label">${escapeHtml(bi('approvedReferenceLabel', 'Approved sample').en)}</div>
+            <div class="q-reference-frame"><img src="${escapeHtml(ref)}" class="js-lightbox" alt="" /></div>
+          </div>
+        `;
+      })()}
       <div class="segmented">
         ${options.map((s) => {
           const sl = bi(s);
@@ -2997,6 +3020,15 @@ function normalizeSizeKey(v) {
   return String(v || '').replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
+/** Size names are stored with an age hint on youth sizes ("Youth M (8/9 yrs)")
+ *  because that's how fits.json seeds them, and fits.json is disk-seeded so the
+ *  stored keys can't be renamed without a migration. Strip the bracketed note
+ *  for display instead - the key itself is untouched, so matching, storage and
+ *  every already-submitted report keep working. */
+function displaySizeName(name) {
+  return String(name || '').replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim() || String(name || '');
+}
+
 function establishedStandardFor(sizeName, point, fitDef) {
   /* The PO's own Product Dimensions table wins: it is the sizing source of
    * truth for this order, and it's what the factory was given. The Golden
@@ -3054,7 +3086,7 @@ function renderReferenceChart() {
     : Object.keys(fitDef.sizes);
   const rows = sizeNames.map((sizeName) => {
     const cells = allPoints.map((p) => `<td>${escapeHtml(formatStandard(establishedStandardFor(sizeName, p, fitDef)))}</td>`).join('');
-    return `<tr><td class="size-name">${escapeHtml(sizeName)}</td>${cells}</tr>`;
+    return `<tr><td class="size-name">${escapeHtml(displaySizeName(sizeName))}</td>${cells}</tr>`;
   }).join('');
   return `
     <div class="card">
@@ -3106,12 +3138,12 @@ function renderSizeEntryTable() {
 
     return `
       <div class="size-card">
-        <div class="size-card-header">${escapeHtml(row.size)}</div>
+        <div class="size-card-header">${escapeHtml(displaySizeName(row.size))}</div>
         <div class="size-point-grid">${pointFields}</div>
-        <div class="size-card-photos">
-          <div class="section-photos-label">${biBlockHtml('sizingPhotosForSize', 'Photos for this size')}</div>
-          ${photoGrid('sizerow:' + ridx, true, true)}
-        </div>
+        <!-- Per-size photo slots removed: the sizing step is a table of
+             measurements, and a photo per size made it long enough that the
+             numbers got lost. Evidence lives on the Step 5 questions and the
+             Step 6 defect entries, where it's tied to an actual finding. -->
       </div>
     `;
   }).join('');

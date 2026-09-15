@@ -994,7 +994,7 @@ function renderCombinedFitSizingTable(sample, pp, bulk) {
         <td class="${cellClass(goldenVal, bulkVal)}" data-size-cell-target="${escapeHtml(cellTarget('bulk'))}" data-size-cell-label="${escapeHtml(cellLabel('bulk'))}">${escapeHtml(fmt(bulkVal))}</td>
       `;
     }).join('');
-    return `<tr data-size-target="${escapeHtml(size)}"><td class="size-name">${escapeHtml(size)}</td>${cells}</tr>`;
+    return `<tr data-size-target="${escapeHtml(size)}"><td class="size-name">${escapeHtml(displaySizeName(size))}</td>${cells}</tr>`;
   }).join('');
 
   return `
@@ -1022,7 +1022,7 @@ function renderOneSizingChart(s, titleKey, titleFallback) {
     }).join('');
     const rows = s.sizeRows.map((row) => {
       const cells = points.map((p) => `<td>${escapeHtml(row.measured && row.measured[p] !== undefined && row.measured[p] !== '' ? `${row.measured[p]} cm` : '-')}</td>`).join('');
-      return `<tr><td class="size-name">${escapeHtml(row.size)}</td>${cells}</tr>`;
+      return `<tr><td class="size-name">${escapeHtml(displaySizeName(row.size))}</td>${cells}</tr>`;
     }).join('');
     const fitLabel = fitDef ? `${fitDef.label_zh} ${fitDef.label_en}` : s.fit;
     body = `
@@ -1166,7 +1166,7 @@ function renderPhotoComparisonLarge(columns, category, sizesIncluded, sampledSiz
     const frontBackSlots = (approvalState.photoSet || []).filter((s) => s.key === 'front' || s.key === 'back');
     const perSizeSection = sizesIncluded.map((size) => `
       <div style="margin-top:14px; padding-top:14px; border-top:1px dashed var(--jc-border);">
-        <div class="section-photos-label" style="font-size:14px;">${escapeHtml(size)}</div>
+        <div class="section-photos-label" style="font-size:14px;">${escapeHtml(displaySizeName(size))}</div>
         ${frontBackSlots.map((slot) => `
           <div class="photo-compare-row">
             ${columns.map((col, idx) => {
@@ -1476,7 +1476,7 @@ function renderApprovalSizeEntryTable(fitDef) {
 
     return `
       <div class="size-card">
-        <div class="size-card-header">${escapeHtml(row.size)}</div>
+        <div class="size-card-header">${escapeHtml(displaySizeName(row.size))}</div>
         <div class="size-point-grid">${pointFields}${customFields}</div>
       </div>
     `;
@@ -1526,6 +1526,15 @@ function isSimplifiedCustomSizing(subcategory) {
  *  included sizes if that's been set, otherwise added manually. Hat and
  *  Socks get a single simple field instead of a full per-size chart, since a
  *  detailed multi-point chart doesn't really apply to those. */
+/** Size names are stored with an age hint on youth sizes ("Youth M (8/9 yrs)")
+ *  because that's how fits.json seeds them, and fits.json is disk-seeded so the
+ *  stored keys can't be renamed without a migration. Strip the bracketed note
+ *  for display instead - the key itself is untouched, so matching, storage and
+ *  every already-submitted report keep working. */
+function displaySizeName(name) {
+  return String(name || '').replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim() || String(name || '');
+}
+
 function renderApprovalCustomSizeChart() {
   if (isSimplifiedCustomSizing(approvalState.po.subcategory)) {
     return `
@@ -1736,7 +1745,7 @@ function renderPrePorBulkForm() {
     const sharedSlots = (approvalState.photoSet || []).filter((s) => s.key !== 'front' && s.key !== 'back');
     photoSlotsHtml = approvalState.po.sizesIncluded.map((size) => `
       <div style="margin-top:12px; padding-top:12px; border-top:1px dashed var(--jc-border);">
-        <div class="section-photos-label" style="font-size:14px;">${escapeHtml(size)}</div>
+        <div class="section-photos-label" style="font-size:14px;">${escapeHtml(displaySizeName(size))}</div>
         ${frontBack.map((slot) => renderPhotoSlot(slot.key, slot.label_en, slot.label_zh, size)).join('')}
       </div>
     `).join('');

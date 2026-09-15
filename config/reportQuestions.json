@@ -1,5 +1,5 @@
 {
-  "_readme": "The QA/QC report question bank, generated from QA_QC_Question_Bank_DRAFT.xlsx.\n\nQuestions are grouped by product type. A group names its top-level 'category' and the 'subcategories' it covers; an empty subcategories list means the whole category (Bags, Other), which have no subcategory picker. Matching is subcategory-first, then category.\n\nanswer: passFailNa (Step 5), passFail, numeric (plush weight), sizingChart (the existing sizing flow, untouched), defects (Step 6 - the inspector adds one entry per issue found).\nmedia:  on_fail (photo or video required when the answer is Fail), photo_always / video_always (required whatever the answer, because the evidence IS the check), on_entry (every defect entry needs one), none.\n\nSeverity is derived from the step, not chosen by the inspector: a Step 5 fail counts as MAJOR and a Step 6 entry counts as MINOR. Nothing is recorded as critical any more.\n\nRequired directly from the repo like categories.json, so edits here deploy normally. Question ids are stable and are what submitted reports reference - don't renumber them.\n\nBilingual: every section/title/guidance has a *_zh twin. The report renders whichever matches the header language toggle and falls back to English if a translation is blank.",
+  "_readme": "The QA/QC report question bank, generated from QA_QC_Question_Bank_DRAFT.xlsx.\n\nQuestions are grouped by product type. A group names its top-level 'category' and the 'subcategories' it covers; an empty subcategories list means the whole category (Bags, Other), which have no subcategory picker. Matching is subcategory-first, then category.\n\nanswer: passFailNa (Step 5), passFail, numeric (plush weight), sizingChart (the existing sizing flow, untouched), defects (Step 6 - the inspector adds one entry per issue found).\nmedia:  on_fail (photo or video required when the answer is Fail), photo_always / video_always (required whatever the answer, because the evidence IS the check), on_entry (every defect entry needs one), none.\n\nSeverity is derived from the step, not chosen by the inspector: a Step 5 fail counts as MAJOR and a Step 6 entry counts as MINOR. Nothing is recorded as critical any more.\n\nRequired directly from the repo like categories.json, so edits here deploy normally. Question ids are stable and are what submitted reports reference - don't renumber them.\n\nBilingual: every section/title/guidance has a *_zh twin. The report renders whichever matches the header language toggle and falls back to English if a translation is blank.\n\n'reference' names a Golden Sample approval photo slot (config/approvalPhotoSets.json). Where set, the approved photo from that slot is shown beside the question in the report so the inspector compares against what PD actually approved, rather than the artwork file on the PO.",
   "groups": {
     "apparel_garments": {
       "category": "apparel",
@@ -77,6 +77,7 @@
             "title_zh": "洗标与已批准样品一致",
             "guidance": "Check the wash/care label against the approved sample: wording, language, symbols, fibre content, size and position. The reference image attached to the PO is pulled in above for comparison. Confirm it is stitched down straight and fully enclosed.",
             "guidance_zh": "对照已批准样品检查洗标：文字、语言、符号、成分、尺寸与位置。上方已调取采购订单附带的参考图片以供比对。确认车缝顺直且完全封边。",
+            "reference": "washTag",
             "answer": "passFailNa",
             "media": "on_fail"
           },
@@ -88,6 +89,7 @@
             "title_zh": "吊牌与包装正确",
             "guidance": "Confirm the hang tag is the correct version and is attached in the right place with the correct fastening. Check the polybag, header card or box matches the approved packaging spec, including any barcode or SKU sticker.",
             "guidance_zh": "确认吊牌版本正确、悬挂位置正确且使用正确的连接件。检查胶袋、插卡或纸盒是否符合已批准的包装规格，包括条形码或 SKU 贴纸。",
+            "reference": "hangTag",
             "answer": "passFailNa",
             "media": "on_fail"
           },
@@ -99,6 +101,7 @@
             "title_zh": "包装无破损",
             "guidance": "Look over the packaging as it will arrive: crushed corners, tears, scuffing, water marks, or print rubbing off. Check cartons as well as individual packaging.",
             "guidance_zh": "按客户收到的状态检查包装：压角、破损、磨损、水渍或印刷掉色。外箱与单件包装均需检查。",
+            "reference": "packaging",
             "answer": "passFailNa",
             "media": "on_fail"
           }
@@ -234,6 +237,7 @@
             "title_zh": "洗标与已批准样品一致",
             "guidance": "Check the wash/care label against the approved sample: wording, language, symbols, fibre content, size and position. The reference image attached to the PO is pulled in above for comparison. Confirm it is stitched down straight and fully enclosed.",
             "guidance_zh": "对照已批准样品检查洗标：文字、语言、符号、成分、尺寸与位置。上方已调取采购订单附带的参考图片以供比对。确认车缝顺直且完全封边。",
+            "reference": "washTag",
             "answer": "passFailNa",
             "media": "on_fail"
           },
@@ -245,6 +249,7 @@
             "title_zh": "吊牌与包装正确",
             "guidance": "Confirm the hang tag is the correct version and is attached in the right place with the correct fastening. Check the polybag, header card or box matches the approved packaging spec, including any barcode or SKU sticker.",
             "guidance_zh": "确认吊牌版本正确、悬挂位置正确且使用正确的连接件。检查胶袋、插卡或纸盒是否符合已批准的包装规格，包括条形码或 SKU 贴纸。",
+            "reference": "hangTag",
             "answer": "passFailNa",
             "media": "on_fail"
           },
@@ -256,6 +261,7 @@
             "title_zh": "包装无破损",
             "guidance": "Look over the packaging as it will arrive: crushed corners, tears, scuffing, water marks, or print rubbing off. Check cartons as well as individual packaging.",
             "guidance_zh": "按客户收到的状态检查包装：压角、破损、磨损、水渍或印刷掉色。外箱与单件包装均需检查。",
+            "reference": "packaging",
             "answer": "passFailNa",
             "media": "on_fail"
           }
@@ -402,6 +408,7 @@
             "title_zh": "吊牌与包装正确",
             "guidance": "Confirm the hang tag is the correct version and is attached in the right place with the correct fastening. Check the polybag, header card or box matches the approved packaging spec, including any barcode or SKU sticker.",
             "guidance_zh": "确认吊牌版本正确、悬挂位置正确且使用正确的连接件。检查胶袋、插卡或纸盒是否符合已批准的包装规格，包括条形码或 SKU 贴纸。",
+            "reference": "hangTag",
             "answer": "passFailNa",
             "media": "on_fail"
           },
@@ -413,6 +420,7 @@
             "title_zh": "包装无破损",
             "guidance": "Look over the packaging as it will arrive: crushed corners, tears, scuffing, water marks, or print rubbing off. Check cartons as well as individual packaging.",
             "guidance_zh": "按客户收到的状态检查包装：压角、破损、磨损、水渍或印刷掉色。外箱与单件包装均需检查。",
+            "reference": "packaging",
             "answer": "passFailNa",
             "media": "on_fail"
           }
@@ -537,6 +545,7 @@
             "title_zh": "洗标与已批准样品一致",
             "guidance": "Check the wash/care label against the approved sample: wording, language, symbols, fibre content, size and position. The reference image attached to the PO is pulled in above for comparison. Confirm it is stitched down straight and fully enclosed.",
             "guidance_zh": "对照已批准样品检查洗标：文字、语言、符号、成分、尺寸与位置。上方已调取采购订单附带的参考图片以供比对。确认车缝顺直且完全封边。",
+            "reference": "washTag",
             "answer": "passFailNa",
             "media": "on_fail"
           },
@@ -548,6 +557,7 @@
             "title_zh": "吊牌与包装正确",
             "guidance": "Confirm the hang tag is the correct version and is attached in the right place with the correct fastening. Check the polybag, header card or box matches the approved packaging spec, including any barcode or SKU sticker.",
             "guidance_zh": "确认吊牌版本正确、悬挂位置正确且使用正确的连接件。检查胶袋、插卡或纸盒是否符合已批准的包装规格，包括条形码或 SKU 贴纸。",
+            "reference": "hangTag",
             "answer": "passFailNa",
             "media": "on_fail"
           },
@@ -559,6 +569,7 @@
             "title_zh": "包装无破损",
             "guidance": "Look over the packaging as it will arrive: crushed corners, tears, scuffing, water marks, or print rubbing off. Check cartons as well as individual packaging.",
             "guidance_zh": "按客户收到的状态检查包装：压角、破损、磨损、水渍或印刷掉色。外箱与单件包装均需检查。",
+            "reference": "packaging",
             "answer": "passFailNa",
             "media": "on_fail"
           }
@@ -695,6 +706,7 @@
             "title_zh": "洗标与已批准样品一致",
             "guidance": "Check the wash/care label against the approved sample: wording, language, symbols, fibre content, size and position. The reference image attached to the PO is pulled in above for comparison. Confirm it is stitched down straight and fully enclosed.",
             "guidance_zh": "对照已批准样品检查洗标：文字、语言、符号、成分、尺寸与位置。上方已调取采购订单附带的参考图片以供比对。确认车缝顺直且完全封边。",
+            "reference": "washTag",
             "answer": "passFailNa",
             "media": "on_fail"
           },
@@ -706,6 +718,7 @@
             "title_zh": "吊牌与包装正确",
             "guidance": "Confirm the hang tag is the correct version and is attached in the right place with the correct fastening. Check the polybag, header card or box matches the approved packaging spec, including any barcode or SKU sticker.",
             "guidance_zh": "确认吊牌版本正确、悬挂位置正确且使用正确的连接件。检查胶袋、插卡或纸盒是否符合已批准的包装规格，包括条形码或 SKU 贴纸。",
+            "reference": "hangTag",
             "answer": "passFailNa",
             "media": "on_fail"
           },
@@ -717,6 +730,7 @@
             "title_zh": "包装无破损",
             "guidance": "Look over the packaging as it will arrive: crushed corners, tears, scuffing, water marks, or print rubbing off. Check cartons as well as individual packaging.",
             "guidance_zh": "按客户收到的状态检查包装：压角、破损、磨损、水渍或印刷掉色。外箱与单件包装均需检查。",
+            "reference": "packaging",
             "answer": "passFailNa",
             "media": "on_fail"
           }
@@ -861,6 +875,7 @@
             "title_zh": "洗标与已批准样品一致",
             "guidance": "Check the wash/care label against the approved sample: wording, language, symbols, fibre content, size and position. The reference image attached to the PO is pulled in above for comparison. Confirm it is stitched down straight and fully enclosed.",
             "guidance_zh": "对照已批准样品检查洗标：文字、语言、符号、成分、尺寸与位置。上方已调取采购订单附带的参考图片以供比对。确认车缝顺直且完全封边。",
+            "reference": "washTag",
             "answer": "passFailNa",
             "media": "on_fail"
           },
@@ -872,6 +887,7 @@
             "title_zh": "吊牌与包装正确",
             "guidance": "Confirm the hang tag is the correct version and is attached in the right place with the correct fastening. Check the polybag, header card or box matches the approved packaging spec, including any barcode or SKU sticker.",
             "guidance_zh": "确认吊牌版本正确、悬挂位置正确且使用正确的连接件。检查胶袋、插卡或纸盒是否符合已批准的包装规格，包括条形码或 SKU 贴纸。",
+            "reference": "hangTag",
             "answer": "passFailNa",
             "media": "on_fail"
           },
@@ -883,6 +899,7 @@
             "title_zh": "包装无破损",
             "guidance": "Look over the packaging as it will arrive: crushed corners, tears, scuffing, water marks, or print rubbing off. Check cartons as well as individual packaging.",
             "guidance_zh": "按客户收到的状态检查包装：压角、破损、磨损、水渍或印刷掉色。外箱与单件包装均需检查。",
+            "reference": "packaging",
             "answer": "passFailNa",
             "media": "on_fail"
           },
@@ -1053,6 +1070,7 @@
             "title_zh": "包装正确",
             "guidance": "Confirm the colour box, backing card and protective film match the approved packaging spec where applicable, including any barcode or SKU sticker.",
             "guidance_zh": "确认彩盒、背卡与保护膜（如适用）符合已批准的包装规格，包括条形码或 SKU 贴纸。",
+            "reference": "packaging",
             "answer": "passFailNa",
             "media": "on_fail"
           },
@@ -1064,6 +1082,7 @@
             "title_zh": "包装无破损",
             "guidance": "Look over the packaging as it will arrive: crushed corners, tears, scuffing, water marks, or print rubbing off. Check cartons as well as individual packaging.",
             "guidance_zh": "按客户收到的状态检查包装：压角、破损、磨损、水渍或印刷掉色。外箱与单件包装均需检查。",
+            "reference": "packaging",
             "answer": "passFailNa",
             "media": "on_fail"
           }
@@ -1156,6 +1175,7 @@
             "title_zh": "包装正确",
             "guidance": "Confirm the hang tag is the correct version and is attached in the right place with the correct fastening. Check the polybag, header card or box matches the approved packaging spec, including any barcode or SKU sticker.",
             "guidance_zh": "确认吊牌版本正确、悬挂位置正确且使用正确的连接件。检查胶袋、插卡或纸盒是否符合已批准的包装规格，包括条形码或 SKU 贴纸。",
+            "reference": "packaging",
             "answer": "passFailNa",
             "media": "on_fail"
           },
@@ -1167,6 +1187,7 @@
             "title_zh": "包装无破损",
             "guidance": "Look over the packaging as it will arrive: crushed corners, tears, scuffing, water marks, or print rubbing off. Check cartons as well as individual packaging.",
             "guidance_zh": "按客户收到的状态检查包装：压角、破损、磨损、水渍或印刷掉色。外箱与单件包装均需检查。",
+            "reference": "packaging",
             "answer": "passFailNa",
             "media": "on_fail"
           }
@@ -1336,6 +1357,7 @@
             "title_zh": "吊牌与包装正确",
             "guidance": "Confirm the hang tag is the correct version and is attached in the right place with the correct fastening. Check the polybag, header card or box matches the approved packaging spec, including any barcode or SKU sticker.",
             "guidance_zh": "确认吊牌版本正确、悬挂位置正确且使用正确的连接件。检查胶袋、插卡或纸盒是否符合已批准的包装规格，包括条形码或 SKU 贴纸。",
+            "reference": "hangTag",
             "answer": "passFailNa",
             "media": "on_fail"
           },
@@ -1347,6 +1369,7 @@
             "title_zh": "包装无破损",
             "guidance": "Look over the packaging as it will arrive: crushed corners, tears, scuffing, water marks, or print rubbing off. Check cartons as well as individual packaging.",
             "guidance_zh": "按客户收到的状态检查包装：压角、破损、磨损、水渍或印刷掉色。外箱与单件包装均需检查。",
+            "reference": "packaging",
             "answer": "passFailNa",
             "media": "on_fail"
           }
