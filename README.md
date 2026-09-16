@@ -45,11 +45,13 @@ The lifecycle for one product, in order:
    works.
 3. **QA/QC Reporting** (`/reporting.html`) - the actual inspection
    reports: Pre-Production Sample Reporting and Bulk Sampling Reporting.
-   A 7-step wizard (order info -> production notes -> inspection
-   checklist -> sizing -> other issues -> review -> submit) that produces
-   a PDF and a pass/fail result, using the approved Golden Sample's own
-   measurements (not a generic template) as the standard to measure
-   against.
+   A 7-step wizard (PO lookup -> order info -> production notes ->
+   **sizing** -> **inspection details** -> additional issues -> review)
+   that produces a PDF and a pass/fail result. The questions asked are
+   specific to the product type and come from `reportQuestions.json`;
+   sizing is measured against the PO's own Product Dimensions table, not
+   a generic template. See "The September 2026 QA/QC redesign" below,
+   which is the section to read before changing anything in the report.
 4. **Reports** (`/reports.html`) - look up and download prior reports by
    SKU, or a single consolidated PDF combining a PO's entire QA/QC
    Approval history and every inspection report against it.
@@ -84,7 +86,11 @@ The lifecycle for one product, in order:
 ```
 server.js                    All Express routes - the entire backend API surface
 lib/
-  poStore.js                 Purchase Order CRUD (purchaseOrders.json)
+  orderDb.js                 SQLite storage for orders - schema, migration, WAL checkpoint
+  orderManagementStore.js    Order CRUD, component definitions sync, dispatch targets
+  componentDefinitionStore.js  Per-SKU sub-component specs (keyed sku::partName)
+  poDispatch.js              Builds per-supplier dispatch targets and messages
+  filePreview.js             Renders PDF/AI first page to an image (mupdf/WASM)
   approvalStore.js           QA/QC Approval CRUD (approvals.json)
   submissionLog.js           Inspection report log (submissions.json) + DATA_DIR definition
   passFail.js                Pass/fail + tolerance logic, mirrored client-side in public/app.js
@@ -98,12 +104,16 @@ config/
 public/
   index.html + home.js        New Purchase Order page
   approval.html + approval.js QA/QC Approval page
-  reporting.html + app.js     QA/QC Reporting wizard (this is the largest JS file - ~130KB)
+  reporting.html + app.js     QA/QC Reporting wizard (~190KB, the largest JS file)
+  order-management.html + order-management.js   Order Management ERP (~300KB, the largest file overall)
   reports.html + reports.js   Report lookup/download
   analytics.html + analytics.js
   settings.html + settings.js
   styles.css                  Shared styles for every page
 data/                         NOT in git - created at runtime, see DATA_DIR below
+  orderManagement.db          SQLite - orders (see Data model)
+  orderManagement.json        The pre-SQLite file, kept as the migration rollback
+  order-management-files/     Uploaded previews, per order id
 ```
 
 ## Config files (`config/*.json`)
@@ -111,61 +121,137 @@ data/                         NOT in git - created at runtime, see DATA_DIR belo
 These are reference data, not code - edited either directly, or through
 the Settings page (which writes back to the same files). Each one has a
 `_readme` field at the top explaining its own structure and how it's
-used, worth reading before touching one:
+used, worth reading before touching one.
+
+**The disk-seeded trap.** Several of these (`options`, `creatorTiers`,
+`aqlRecommendation`, `unitCosts`, `fits`, `tolerances`) are *seeded* onto
+the data disk on first run and read from there forever after. Editing the
+repo copy of one of those changes nothing on an existing deployment - a
+seeded file is never re-seeded. This has caused real confusion more than
+once: values looked correct in git and were absent in production. Either
+edit through Settings, or write a heal-on-boot merge like the one in
+`loadTolerances()`. Files loaded with `require()` (`categories`,
+`reportQuestions`, `conditionalChecks`, `i18n`, `aql`) deploy normally.
 
 | File | Purpose |
 |---|---|
 | `i18n.json` | Every bilingual (en/zh) label in the app - by far the largest file. A missing key here silently shows nothing, so check this first if text seems to disappear. |
-| `categories.json` | Product category/subcategory tree. Apparel subcategories link to a `fitGroup` in `fits.json`. |
+| `categories.json` | Product category/subcategory tree. Apparel subcategories link to a `fitGroup` in `fits.json`. Adding a top-level category also needs its key adding to `CATEGORY_ORDER` in `public/app.js`, or it is silently filtered out of both pickers. |
+| `reportQuestions.json` | **The QA report question bank** - 112 bilingual questions grouped by product type, driving Steps 4, 5 and 6. Question ids are referenced by submitted reports; do not renumber. |
+| `conditionalChecks.json` | Optional per-category checks offered at Setup Report Link (glow-in-the-dark, magnets, sound module, accessories). |
+| `tolerances.json` | Per-category `sizingCm` / `printCm` / `weightG`, editable in Settings. Apparel `sizingCm` is written through to `fits.toleranceCm`. Disk-seeded, and the loader merges shipped defaults underneath the disk copy to heal partial files. |
 | `fits.json` | Apparel sizing standards - each "fit" (e.g. Hoodie - Oversized) has a set of sizes and measurement points with generic standard values. Editable via Settings. |
 | `options.json` | The editable dropdown lists: factory codes, creators, QA leads, PD leads. New values typed into these dropdowns get auto-added here (see `addNewOptionIfMissing` in server.js). |
 | `aql.json` | The static AQL (Acceptable Quality Level) sampling table, standard reference data, not editable via Settings. |
 | `aqlRecommendation.json` | Tier x Risk x PO-Size -> recommended Inspection Level and Point Check % range. Editable via Settings. |
 | `creatorTiers.json` | Creator/brand -> QA Tier (1/2/3) mapping, feeds into the AQL recommendation. Editable via Settings. |
 | `unitCosts.json` | Category/subcategory -> $ per unit, used for cost estimates in the Reporting flow. Editable via Settings. |
+| `approvalPhotoSets.json` | Named photo slots on the PD approval page, per category. Step 5 questions can reference a slot (see the `reference` field in `reportQuestions.json`) to show the approved sample photo beside the question. |
 | `approvalPhotoSets.json` | Which named photo slots (Front, Back, Hang Tag, etc.) appear on the QA/QC Approval page, per category. |
 | `asanaFieldMap.json` | Asana integration config - see "Asana integration" below. |
 
-## Data model (`data/*.json`, created at runtime)
+## Data model
 
-Three files, each an append-only-ish array of records (updates rewrite
-the whole file - fine at this scale, would need to change for a real
-database):
+### Orders: SQLite (`data/orderManagement.db`)
 
-**`purchaseOrders.json`** - one entry per PO. Key fields: `id` (uuid,
-used in the approval page URL), `poNumber`, `sku`, `category`,
-`subcategory`, `productDevelopmentLead`, `sizesIncluded`, `fitKey` +
-`fitSizes` (the established apparel sizing standard for this PO's SKU,
-so a repeat PO of the same product can inherit it automatically),
-`asanaTaskLink` + `asanaTaskGid` (the raw pasted link and the numeric ID
-extracted from it).
+Orders moved from a single JSON file to SQLite in September 2026. The
+reason is scale: the import of ~4,700 historical POs is imminent, and the
+old store read the entire file and rewrote it on every operation.
+Measured with realistically-shaped records (accessories, size
+distribution, dimensions table, both QA stages, dispatch log, field
+history):
 
-**`approvals.json`** - one entry per PO (matched by `poNumber`), holding
-all three stages:
+| Orders | JSON file | One edit (read + rewrite) |
+|--------|-----------|---------------------------|
+| 500    | 4.8 MB    | 76 ms                     |
+| 2,000  | 19.3 MB   | 227 ms                    |
+| 4,700  | 40.4 MB   | **627 ms**                |
+
+Node is single-threaded, so each of those blocked every other request,
+and `loadAll()` is called in 22 places - one Order Management page view
+could stack several full parses.
+
+The schema is deliberately **not** a relational decomposition. Each order
+is one row whose `data` column holds exactly the JSON object the rest of
+the app already passes around:
+
 ```
-{
-  poNumber, sku,
-  sampleApproval: { submitted, submittedAt, data, pdComments, skipped, skippedAt },
-  preProductionApproval: { ...same shape... },
-  bulkApproval: { ...same shape... }
-}
+orders(id PK, po_number, sku, product_line, status,
+       supplier_name, created_at, updated_at, data TEXT)
 ```
-`data` is whatever China submitted for that stage (photos, factory code,
-QA lead, sizing measurements, etc. - shape varies slightly by
-category/stage). `pdComments` is a plain chronological array - see "The
-PD approval thread" below for how this is actually used.
 
-**`submissions.json`** - one entry per inspection report submitted
-through the Reporting wizard (Pre-Production or Bulk). This is the
-system of record for pass/fail history, analytics, and the "reference a
-prior report" feature. Each entry embeds its own `overallResult`,
-`issues` (with photo URLs), and a `sizingCarryForward` block so a later
-report on the same PO can pre-fill from it.
+The extra columns exist only so lookups and filters happen in SQL instead
+of loading everything and calling `.find()`. Because `data` is the same
+object as before, `hydrateOrder`, `normalizeAccessory`, `toQaShape`, the
+doc-slot matching and every caller work unmodified.
 
-Generated PDFs and uploaded photos live in subfolders of the same
-`DATA_DIR` (`submissions/`, `issue-photos/`, `approval-photos/`) and are
-served back as static files - see the `app.use('/submissions', ...)`
-lines near the top of `server.js`.
+Measured after the change, same 4,700 records:
+
+| Operation | Before | After |
+|---|---|---|
+| `getOrderById` | part of a 386 ms parse | 0.06 ms |
+| `getOrderByPoNumber` | same | 0.04 ms |
+| `getOrdersBySku` | same | 0.04 ms |
+| `updateOrder` | ~627 ms | 0.23 ms |
+| `listOrders` (filtered) | full scan | 0.05 ms |
+| `listOrders` (unfiltered) | ~386 ms | 326 ms |
+
+**`better-sqlite3` is a deliberate choice.** Its API is synchronous, so
+none of the 22 call sites - nor anything upstream in `server.js` - had to
+become async. It is a native module, so Render compiles it on deploy
+(~1-2 min). `node:sqlite` is the zero-compile alternative if build time
+ever becomes a constraint.
+
+**Migration is automatic and idempotent.** On boot, if the `orders` table
+is empty and `data/orderManagement.json` exists, it is imported. The JSON
+file is deliberately left on disk afterwards as the rollback copy.
+
+Two things to know if you touch this:
+
+- The migration call sits at the **bottom** of `orderManagementStore.js`
+  on purpose. `hydrateOrder` reads constants declared further down the
+  module; running it beside `orderDb.init()` at the top throws a
+  temporal-dead-zone error, and the surrounding catch meant the app
+  booted against an empty database - indistinguishable from "all the
+  orders are gone". The failure log is loud for the same reason.
+- WAL mode creates `-wal` and `-shm` sidecar files. **Both backup paths
+  call `checkpointDatabase()` before zipping**, because copying a WAL
+  database without checkpointing produces a backup that restores short of
+  recent writes or refuses to open - a failure invisible until someone
+  needs it.
+
+### Everything else: JSON files on the data disk
+
+Still flat files, and fine at their sizes: suppliers (~137), the fabric
+library (~1,049), users, clients, catalog products. The stores that grow
+**per PO** are the migration candidates once the orders store has proven
+itself in production:
+
+- `componentDefinitionStore` - roughly 4,700 x 4 parts, so ~19,000 rows
+- `approvalStore` - one per PO
+- `submissionLog` - one per submitted report
+
+They are the same pattern repeated; the second one is far quicker than
+the first was.
+
+### Uploaded files: preview + link, not the original
+
+Design files (manufacturing drawings, hang tags, packaging artwork) are
+**references, not archives**. Keeping originals meant years of
+multi-megabyte artwork on a per-GB persistent disk, inside a weekly
+backup that zips the whole data directory - the backup grows with it and
+eventually stops completing.
+
+On upload the user is asked for the Google Drive link. With one, the
+server renders a preview image, keeps that, and deletes the original. A
+2 MB drawing became a ~50-200 KB preview in testing. Without a link the
+full file is kept, because discarding the only copy of something would be
+indefensible - the dialog says so plainly.
+
+The Drive link is stored in `mainComponent.docSourceUrls`, keyed by slot
+field name. When present, the slot's link reads **Open in Drive**;
+without one it reads **View file** and points at the local copy, so files
+uploaded before this change behave exactly as they always did.
 
 ## Key design decisions worth understanding
 
@@ -341,328 +427,282 @@ Environment tab. Deploys are git-push-triggered.
 
 ### Moving to AWS
 
-The recommended path is **AWS Lightsail**, not raw EC2 - Lightsail is
-AWS's simplified VPS product (flat pricing, built-in static IP, simple
-firewall UI) and is the closest match to how Render feels to operate,
-without EC2's extra setup surface (security groups, elastic IPs, volume
-attachment as separate manual steps). Given this app's audience includes
-China-based factory staff, Lightsail's Hong Kong region (`ap-east-1`) is
-worth specifically considering for latency - though note AWS's Hong Kong
-region uses standard internet routing rather than a China-optimized
-backbone, so it's a meaningful improvement over hosting further away,
-not a guarantee of great performance from every part of mainland China.
+Still the goal. **AWS Lightsail** remains the recommended path over raw
+EC2 - flat pricing, built-in static IP, simple firewall, closest to how
+Render feels to operate. Given the China-based factory staff, the Hong
+Kong region (`ap-east-1`) is worth considering for latency, though AWS HK
+uses standard internet routing rather than a China-optimised backbone: a
+meaningful improvement over hosting further away, not a guarantee.
 
-What changes and what doesn't, moving off Render:
+What changes:
 
-- **DATA_DIR**: same concept, different disk. Provision a separate
-  Lightsail **Block Storage** volume (not just the instance's own root
-  volume) and mount it independently, so the data survives even if
-  something happens to the instance itself - this is the same principle
-  that mattered on Render, just a different product name.
-- **Environment variables**: move `DATA_DIR` and `ASANA_ACCESS_TOKEN`
-  into a `.env` file on the instance (this app already uses `dotenv`, no
-  code change needed) rather than a platform dashboard.
-- **HTTPS**: Render handles this automatically; on Lightsail this needs
-  Nginx as a reverse proxy in front of the Node process, with a free
-  Let's Encrypt certificate via `certbot`.
-- **Process management**: Render restarts the process automatically on
-  crash/deploy; on Lightsail, use `pm2` (or systemd) for the same
-  behavior.
-- **Deploys**: Render's git-push-to-deploy doesn't exist on a raw
-  instance. Either SSH in and run `git pull && npm install && pm2
-  restart` manually, or set up a small GitHub Actions workflow to do
-  that automatically on every push (SSH-based, using repo secrets for
-  the host/user/key - this touches nothing else in the AWS account
-  beyond that one instance, no AWS access keys involved).
-- **Nothing about the application code changes.** No AWS SDK, no S3, no
-  Lambda - this is a plain Node process reading/writing a local disk,
-  and that model carries over directly.
+- **DATA_DIR**: provision a separate Lightsail **Block Storage** volume
+  and mount it, rather than using the instance root volume, so data
+  survives the instance. Same principle that mattered on Render.
+- **Environment variables**: `DATA_DIR`, `ASANA_ACCESS_TOKEN`,
+  `SITE_PASSWORD`, `SESSION_SECRET` into a `.env` on the instance. The
+  app already uses `dotenv`, so no code change.
+- **HTTPS**: Render does this automatically. On Lightsail, Nginx as a
+  reverse proxy plus a Let's Encrypt certificate via `certbot`.
+- **Process management**: `pm2` or systemd for restart-on-crash.
+- **Deploys**: SSH in and `git pull && npm install && pm2 restart`, or a
+  small GitHub Actions workflow doing the same over SSH. Note `npm
+  install` now compiles `better-sqlite3`, so the instance needs
+  build-essential and python3 present.
 
----
+#### What SQLite changes about the migration
 
-## New: Upload/Restore from Backup
+The previous version of this document said "nothing about the
+application code changes". That is no longer quite true, and the
+difference matters for how the AWS deployment is shaped:
 
-Settings now has a "Restore from Backup" section right below the existing
-Download Backup button. Upload a previously downloaded backup zip, and
-it merges into the current data rather than replacing it wholesale:
+- **Single writer.** SQLite is a file, and the app is the only process
+  allowed to write it. That rules out running two or more app instances
+  behind a load balancer against a shared volume. One instance, scaled
+  vertically, is the supported topology. This is fine for the current
+  user count but it is now an explicit architectural constraint rather
+  than an accident.
+- **Do not put the database on EFS or any NFS share.** SQLite's locking
+  is not reliable over network filesystems, and the failure mode is
+  corruption rather than an error. Block storage (EBS / Lightsail block
+  storage), attached to one instance, is the correct choice.
+- **Backups need the checkpoint.** Any backup mechanism added at the
+  infrastructure level (volume snapshots, a cron job) must either use
+  SQLite's own backup API or checkpoint first. A naive file copy of a
+  live WAL database is not a valid backup. The in-app backup already
+  handles this; anything added outside the app must too.
+- **If multi-instance or multi-region ever becomes a requirement**, that
+  is the point at which SQLite stops being the answer and RDS
+  (Postgres) becomes worth the migration. The current schema - one row
+  per order with a JSON blob - maps onto Postgres `jsonb` almost
+  directly, so that path stays open and is not a rewrite.
 
-- Any PO in the backup that isn't already in the live data gets added
-- For a PO that already exists, a dropdown chooses what happens:
-  **Skip it** (default, the safer option - keeps whatever's currently
-  live) or **Replace it with the backup version** (overwrites the live
-  record with the backup's)
-- Referenced photos and PDFs come along automatically for anything added
-  or replaced - filenames already carry a random ID, so there's no risk
-  of accidentally overwriting an unrelated current file
-- A confirmation prompt appears before anything happens, with different
-  wording depending on which mode is selected, since "replace" is the
-  more consequential of the two choices
-- Server-side validation rejects anything that isn't a real zip, or a
-  zip that doesn't actually look like a Juniper QA backup - with a clear
-  message either way, not a generic error
+#### Historical data import (~4,700 POs)
 
-New endpoint: `POST /api/backup/upload` (multipart, fields: `backup` file
-+ `mode` of `ignore` or `override`), using a separate, much larger upload
-size limit than regular photo uploads, since backups accumulate PDFs and
-photos over time.
+Planned, not yet executed. Sources: a master PO spreadsheet (4 years),
+a variant breakdown sheet, per-supplier sheets covering subcomponents and
+pricing, Asana for PD approval statuses, and Google Drive for the
+approval docs and design files.
 
-Tested the full round trip: downloaded a real backup, simulated a PO
-going missing and another PO diverging from its backed-up version, then
-restored in "skip" mode (confirmed the missing PO came back and the
-diverged one was correctly left alone) and separately in "replace" mode
-(confirmed the diverged PO was correctly overwritten back to the backup's
-values). Also confirmed photos are restored correctly, confirmed clear
-error messages for a non-zip file and for a zip that isn't a real backup,
-and confirmed regular photo uploads and report submissions are
-unaffected by the new, separate upload configuration.
+Agreed approach:
 
----
-
-## Both features from the team's feedback are now complete and tested
-
-### Apparel Sizing Charts: additional columns
-
-A "+ Add Additional Column" button on the Golden Sample setup screen lets
-someone add a product-specific measurement point (e.g. "Inseam") beyond
-the fit's standard ones - name it, remove it if added by mistake, and
-fill in a value per size. That column then flows everywhere the standard
-ones do: the Reporting flow's reference chart and measurement entry, the
-Sizing Details comparison table, tolerance/pass-fail checking (both
-client preview and the authoritative server-side check), and the
-generated PDF report (both the reference table and the measurement
-table).
-
-Two real bugs were caught and fixed while finishing this: the PDF's
-measurement table was still comparing a custom column against the
-generic fits.json template (which never has that column, so it would
-have shown nothing and never flagged tolerance correctly), and the
-"Add Column" button itself crashed on click because it called a helper
-function that only exists in a different file.
-
-Verified end-to-end through the real UI, not just code review: added an
-Inseam column, filled it in, submitted the Golden Sample, confirmed it
-appears correctly in Reporting with the right established value,
-confirmed tolerance flagging correctly catches a bad value and clears a
-good one, and downloaded and visually inspected the actual generated PDF
-to confirm the column renders with correct red tolerance highlighting.
-
-### QA/QC Approval comments: reference a photo or a size row
-
-A "Reference (optional)" dropdown in the comment/reply form lists every
-photo uploaded for that stage, plus (Golden Sample only, since that's the
-one stage with its own inline size chart) every size row. Picking one
-attaches it to the comment. A submitted comment with a reference shows a
-small clickable chip; clicking it smoothly scrolls to and briefly
-highlights the actual photo or size-chart row it points at, wherever that
-lives on the page.
-
-A few judgment calls made building this, worth knowing about:
-- One reference per comment, not several
-- Jump-and-highlight, not an inline preview thumbnail
-- Only Golden Sample can reference a size row, since Pre-Production and
-  Bulk don't have their own inline size chart in the Approval page (their
-  sizing lives in the separate Reporting flow's report history instead)
-- If the referenced photo or size no longer exists by the time someone
-  clicks the chip (unlikely, but possible if data changed since), it
-  shows a clear message instead of doing nothing or breaking
-
-Tested the complete flow for both reference types: selected a photo
-reference, submitted the comment, confirmed the chip appears with the
-correct label, confirmed clicking it correctly targets and highlights
-that exact photo. Repeated the same for a size-row reference. Also
-confirmed the reference is correctly saved server-side, and confirmed a
-comment with no reference selected still submits and displays completely
-normally.
+- **Storage swap first** (done - see Data model above). Importing into
+  the old flat file would have made the app unusable.
+- **Import in dependency order**: suppliers -> fabrics -> products and
+  components -> POs -> variants -> subcomponents -> approvals -> files.
+- **Go through `createOrder`/`updateOrder`**, not hand-written rows, so
+  normalisation, the `Product - Part` qualification, component-definition
+  sync and doc-slot matching all apply.
+- **Idempotent, keyed on PO number**, with a dry-run mode producing a
+  reconciliation report: rows in, records out, and every rejected row
+  with a reason.
+- **Google Docs PD approvals**: do not attempt to reconstruct structured
+  approval records from years of free-form docs. Attach the doc link plus
+  its extracted images to the PO, and take the structured fields
+  (status, date, approver) from Asana, which is already structured.
+- **Design files**: link to Drive with a generated preview, per the
+  upload behaviour described in Data model. Do not copy Drive onto the
+  instance volume.
+- **Subcomponent names will be inconsistent across years.** Because
+  component definitions are keyed `sku::partName`, inconsistent naming
+  silently creates duplicate definitions. The first import pass should
+  emit a **name-mapping table for human review** rather than importing
+  straight through.
 
 ---
 
-## Merged in a fix made directly against an older file version
+## Upload/Restore from Backup
 
-Two files (approval.js, styles.css) came back edited from a separate
-conversation, based on a version of the app from before the custom
-sizing columns and comment-reference features existed in this session.
-Diffed them directly against the current working files rather than
-assuming - confirmed they were missing both of those features (would
-have been lost if used as-is), but also contained a genuine fix neither
-had: photos in the comparison views (Approved Sample vs Pre-Production vs
-Bulk, and the Reporting flow's photo gallery) now sit inside a bordered,
-fixed-aspect-ratio frame with `overflow: hidden`, rather than relying on
-the `<img>` tag's own `border-radius` and `aspect-ratio` to clip
-correctly on their own - a likely fix for the inconsistent photo
-edge/shadow artifact raised earlier, since a wrapping frame reliably
-clips regardless of a given photo's actual dimensions.
-
-Merged the frame fix into the current, complete version rather than
-picking one or the other - applied it to all three photo-comparison
-spots in approval.js and the Reporting flow's own photo gallery in
-app.js (which needed the same wrapper added, since the underlying CSS
-rule this fix relies on had moved off the bare `<img>` tag). Re-diffed
-against the originally uploaded files afterward to confirm every part of
-the fix made it in, and confirmed both the custom sizing columns and
-comment-reference features (the ones that would have been lost) are
-intact and still working after the merge.
+Settings offers a one-click backup download and a restore. The backup is
+a zip of the whole data directory. **It now checkpoints the SQLite WAL
+before zipping** - see Data model.
 
 ---
 
-## Reference feature redesigned: click-to-select instead of a dropdown
+# The September 2026 QA/QC redesign
 
-The plain dropdown for attaching a reference to a comment was hard to
-read (a list of raw text labels, no visual cue for what each one
-actually was), so it's been replaced with an interaction that mirrors
-Compare Photos, which was already a known, well-liked pattern in the
-app.
+The inspection report was reworked from a fixed checklist into a
+config-driven, per-product-type flow. This is the largest recent change
+and touches the report, Order Management, the PDF and the scoring.
 
-The reply form's "Reference (optional)" dropdown is gone. In its place,
-an "Attachments" section holds the existing Photos upload plus a new
-"Report Reference" button. Clicking it turns on a selection mode: every
-photo and every sizing-chart row on the page gets a dashed teal outline
-to show it's clickable, and clicking any of them attaches it to the
-reply draft and exits selection mode automatically - clicking the button
-again before picking anything cancels it. A photo reference shows an
-actual small thumbnail right in the form (closer to commenting directly
-on an image, which was the original ask); a sizing-row reference shows a
-text chip, since there's no single image to show for that. Either can be
-removed with a small "x" before submitting.
+## Step order changed
 
-Once submitted, a comment with a reference shows a "Report Attachment" -
-a thumbnail for a photo, a chip for a sizing row - and clicking it jumps
-to and briefly highlights the actual live photo or row wherever it sits
-on the page, same behavior as before.
+`STEPS` is now:
 
-One coexistence detail worth knowing: starting a reference pick
-automatically cancels an in-progress Compare Photos selection, since
-having two different "what does clicking a photo do" modes active at
-once would be confusing - only one can be active at a time.
+```
+poLookup -> orderInfo -> productionNotes -> sizing ->
+inspectionDetails -> issues -> review
+```
 
-Also fixed the wording on Compare Photos itself, per direct feedback:
-"Select 2 more photo(s)" is now "Select 2 photos".
+Sizing and Inspection Details **swapped**: sizing is Step 4, inspection
+is Step 5. The inspector measures first, then judges the piece against
+what they found.
 
-Tested the complete flow end-to-end through the real UI: entering
-selection mode, confirming photos and sizing rows both get the visual
-"selectable" cue, selecting each type and confirming the right preview
-appears in the draft, submitting and confirming the "Report Attachment"
-appears correctly on the saved comment, clicking it to confirm the jump
-and highlight lands on the right target, and confirming a comment
-submitted with no reference at all still works exactly as before. Also
-confirmed Compare Photos still works correctly on its own and doesn't
-conflict with the new mode.
+## Questions come from config, not code
+
+`config/reportQuestions.json` holds 112 questions grouped by product
+type. A group names its `category` and the `subcategories` it covers; an
+empty subcategory list means the whole category (Bags, Other). Matching
+is subcategory-first, then category.
+
+Every question carries `title`/`title_zh`, `guidance`/`guidance_zh`,
+`section`/`section_zh`, an `answer` format and a `media` rule. The
+renderer resolves to the header language and falls back to English if a
+translation is blank, so a question added without Chinese still renders.
+
+`answer` is one of `passFailNa` (Step 5), `passFail`, `numeric` (plush
+weight), `sizingChart`, or `defects` (Step 6).
+`media` is `on_fail`, `photo_always`, `video_always`, `on_entry` or
+`none`.
+
+**Question ids are stable and are what submitted reports reference. Do
+not renumber them.**
+
+## Severity is derived, not chosen
+
+The minor/major selector is gone. Severity now comes from *where* an
+issue was recorded:
+
+- A **Step 5** question answered Fail is **major**
+- Anything logged in **Step 6** is **minor**
+- An out-of-tolerance measurement is **major**
+- Nothing is recorded as critical any more, so the old automatic
+  critical-reject at ac=0 no longer fires
+
+`collectAllDefects()` exists in both `public/app.js` and `lib/passFail.js`
+and **they must agree**. The server's copy previously read only the old
+`categoryData` keys, so it saw zero defects on every new-format report and
+passed everything. Both now read `payload.inspection`.
+
+## Counting: entries, units, and defective units
+
+Three different things were being conflated, producing nonsense like "10
+minor issues" from a sample of 5 units. `countDefects()` separates them:
+
+- `entries` - how many distinct issues were logged
+- `units` - the sum of units-affected across them
+- `defectiveUnits` - **bounded by the number of units inspected**
+
+The third cannot be derived by adding: if issue A affected 5 units and
+issue B affected 5 of the same 5 checked, that is 5 bad units, not 10.
+Nothing records which unit each issue was found on, so the honest answer
+is a bound. All rates and the whole-PO extrapolation use `defectiveUnits`,
+because a rate over 100% is meaningless.
+
+The recap shows Found, **Total PO assumption** (the sample rate scaled
+across the order, capped at PO quantity) and Accepted.
+
+**A pre-production report used to always pass** - the branch built its
+recap object and pushed no fail reason at all. It now fails on any
+major/critical, and when every inspected unit had at least one issue. The
+same all-defective rule was added to bulk, where minors alone previously
+could never reject.
+
+## Setup Report Link and conditional checks
+
+`config/conditionalChecks.json` defines optional checks per top-level
+category (glow-in-the-dark, magnets, sound module, accessories, other
+functions). In Order Management, **Setup Report Link** opens a picker of
+the triggers valid for that PO's category, plus custom one-off questions
+with require-photo / require-video flags.
+
+Stored on the PO at `qaReports.<stage>.setup`. Saving moves a Pending
+stage to In Progress and the button becomes **Copy Report Link**. Bulk
+pre-fills from the Pre-Production setup. A report opened before setup ran
+gets `null` and proceeds with no additional questions - the safe default.
+
+The server drops any trigger not defined for the PO's category, so a
+stale dialog cannot attach sound-module questions to a pin.
+
+## Tolerances are editable
+
+`config/tolerances.json`, edited in Settings, holds three numbers per
+category: `sizingCm`, `printCm`, `weightG`.
+
+The one wrinkle: **apparel `sizingCm` is also `fits.toleranceCm`**, which
+`passFail.js`, `pdfBuilder.js`, `app.js` and `approval.js` all read.
+Rather than rewrite four consumers, it is written through to `fits.json`
+on save and reconciled at startup. `tolerances.json` always wins.
+
+Non-apparel dimensions are now scored against the category tolerance,
+which they never were before. Out of tolerance **flags the field and
+continues** - it does not block, because blocking just encourages
+deleting the real number to get past the step.
+
+Because this file is disk-seeded and went through two shape changes, the
+loader merges the shipped defaults underneath whatever is on disk and
+heals partial files on boot. An install still holding the first version
+had an empty table and no scoring at all.
+
+## Sizing is sourced from the PO
+
+The PO's Product Dimensions table is the sizing source of truth. The
+report and the PD approval page both pull from it and render it
+**read-only**; QA can no longer pick a different standard than the order
+was placed against. Where the PO has no table, the report shows a warning
+with an **Enter manually** fallback that is not written back to the PO -
+defining approved sizing is Product Development's call, not QA's.
+
+Age brackets on youth sizes ("Youth M (8/9 yrs)") are stripped at display
+time via `displaySizeName()`. The stored key is untouched, because
+`fits.json` is disk-seeded and renaming keys would orphan every submitted
+report.
+
+## Sub-component naming
+
+Parts are stored product-qualified: typing "Hang Tag" on the Test Plush
+PO saves as **"Test Plush - Hang Tag"**. This was to stop the Components
+page showing ten identical rows reading "Hang Tag".
+
+`partType` holds the bare type alongside the qualified `partName`. The
+doc-slot matchers test `partType`, because they are anchored regexes and
+testing them against a product-qualified name would silently never match.
+`partType` is **derived server-side** by stripping the product prefix,
+not taken from the client, because the edit form only posts `partName`
+and trusting it meant the type became the qualified name on the second
+save.
+
+## Dispatch rows follow the target
+
+`dispatchImageRow` previously built every supplier's PO image from the
+main component, so a hang-tag supplier received the plush photo, the
+plush quantity and the plush delivery date. It now uses the target's own
+photo, quantity and delivery date. A sub-component with no image attached
+shows **no** photo rather than falling back to the product shot: a wrong
+reference is worse than none.
 
 ---
 
-## Fixed: Creator/Brand on New Purchase Order had no "Other" option at all
+## Removed
 
-Found the actual cause: this field used a different, simpler dropdown
-helper than every other similar field in the app - one that never had an
-"Other" choice built in, not one where it was just hard to find. Switched
-it to the same "dropdown + Other reveals a text field" helper already
-used for Product Development Lead on the same form.
+**WeChat and WeCom sign-in** (September 2026). `lib/wechatAuth.js`,
+`lib/wecomAuth.js`, `lib/wecomCallback.js`, the `/auth/wechat`,
+`/auth/wecom` and `/wecom/callback` routes, and the
+`wechatOpenId`/`wechatUnionId`/`wecomUserId` identity fields. Never
+offered in the UI and never configurable - the callback domain's ICP
+filing could not be satisfied on an onrender.com subdomain. Google OAuth
+and the shared site password are the only sign-in routes.
 
-Also moved "Other" to the top of the list (right after the placeholder),
-for this field and Product Development Lead alongside it, since with 218+
-creators on file, having it buried at the bottom after everything else
-defeats the purpose of it being there at all.
+The WeChat **dispatch** workflow is unrelated and still in use: suppliers
+have a WeChat ID contact field, and the batch-send flow renders the PO as
+an image to paste into WeChat.
 
-Separately, found and fixed a real gap: even once "Other" existed, a
-newly typed creator name was never being saved for future use - only
-Product Development Lead had that auto-save wired up server-side, so a
-new creator would need to be retyped as "Other" every single time. Now
-saves it as a new option the first time it's used, exactly like every
-other similar field in the app already does.
-
-Tested end-to-end: confirmed "Other" now appears immediately after the
-placeholder rather than after 218 other options, confirmed typing a
-brand new creator name and submitting a PO actually adds it to the
-saved options list (verified directly in the data, not just that the UI
-accepted it), and confirmed selecting an existing creator from the list
-still works exactly as before with no regression.
+**Dead code removed**: `renderRestOfOrderInfo()` (no callers), the
+`toleranceGuidance*` i18n strings, and `toleranceGuidanceKey` from five
+categories.
 
 ---
 
-## Sizing chart references are now cell-specific, and highlights got a more noticeable animation
+## Known gaps
 
-### Sizing chart: highlights one exact cell, not the whole row
-
-Selecting a sizing-chart reference now works at the level of one specific
-cell - a size, a measurement point, and a stage (e.g. "Adult S · Sleeve ·
-Pre-Production Sample") - instead of the entire row for that size.
-Every individual cell in the Sizing Details table is its own click
-target during a reference pick, with its own precise label built in, and
-clicking a "Report Attachment" for one now highlights only that one
-cell - confirmed directly that the other 8 cells in the same row stay
-untouched. Old references saved before this change (row-level) still
-resolve correctly - this was added as a new option alongside the old one,
-not a replacement, so nothing already saved gets a broken link.
-
-### Photo references: confirmed the jump-and-highlight already worked, made it more visible
-
-Checked this directly rather than assuming - clicking a photo's "Report
-Attachment" was already scrolling to and highlighting the actual original
-photo on the page, not just the small thumbnail preview. Since the
-highlight itself (a thin outline) is naturally much less noticeable on a
-photo than the background-color change on a table cell, added a brief
-pulse animation on top of the outline for anything highlighted - visible
-regardless of what's underneath it (a photo, a table cell, anything),
-so it reads clearly as "this is the thing being pointed at" either way.
-
-Verified all of this against the real UI: selected a specific size/point/
-stage cell and confirmed only that exact cell highlights, confirmed the
-label attached to a saved comment names the precise cell picked, and
-confirmed clicking a photo attachment scrolls to and highlights the
-original photo (not the thumbnail) with the new pulse effect visible.
-
----
-
-## Fixed: photo reference highlight was invisible in a real browser
-
-Found the actual cause. Photos in the comparison views sit inside a
-bordered frame with `overflow: hidden` (added earlier for the
-photo-shadow fix). Applying the highlight to the `<img>` itself put an
-outline just outside the image's own edge - exactly where the frame's
-`overflow: hidden` clips it away, so the highlight was genuinely
-invisible even though the class was being added correctly.
-
-This is a case worth being upfront about: my testing at the time only
-confirmed the highlight class was being toggled on the right element,
-via jsdom - which doesn't render real CSS layout, so it had no way to
-catch that the effect was invisible once actually laid out and clipped
-in a real browser. The size-chart highlight worked fine because table
-cells aren't wrapped in an overflow-hidden frame, so that one never hit
-this problem - only photos did.
-
-Fixed by highlighting the frame wrapper instead of the image itself
-whenever one wraps the actual target, since an element's own outline is
-never clipped by its own overflow, only by an ancestor's. Verified with
-an actual screenshot this time, not just a jsdom class check - the
-outline is now clearly visible around the full photo, both immediately
-after clicking and once the pulse settles.
-
----
-
-## Found and fixed: size tiles weren't a color bug, they were a real pre-fill bug
-
-Checked the actual CSS before touching anything - the color mapping was
-already correct everywhere (white by default, green when selected, the
-standard convention), and this class is shared across many parts of the
-app (risk level, checklist status, etc.), so flipping it globally would
-have broken all of those instead of fixing anything.
-
-The real cause: whenever a repeat SKU already had an established apparel
-fit from a prior PO, a genuine bug was recording *every single size the
-generic fit definition supports* (e.g. all 14 universal sizes) as
-"established" for that SKU - rather than just the specific sizes that
-Golden Sample actually covered. So a Sample submitted for 3 sizes would
-make every future PO of that SKU default to all 14 sizes pre-selected,
-which is exactly the "everything starts green" experience described.
-Fixed it to record only the sizes actually submitted.
-
-Also added a small explanatory note that now appears above the tiles
-whenever sizes get pre-filled this way ("Pre-filled from a previous
-order for this SKU - click any size to adjust"), so it's clear why
-something already shows as selected - it disappears again once anything
-is manually clicked.
-
-Verified directly: a brand new SKU still starts with nothing selected;
-a repeat SKU now pre-fills only its actual previously-used sizes (tested
-with 3 of 14 sizes, confirmed exactly those 3 highlight and the other 11
-correctly stay white); confirmed the note appears with the pre-fill and
-disappears the moment a tile is manually toggled.
+- `listOrders` unfiltered still parses all rows (~326 ms at 4,700).
+  Pagination is the fix if the landing page gets slow, not more indexes.
+- `approvalStore`, `submissionLog` and `componentDefinitionStore` are
+  still JSON and grow per PO.
+- The question bank's expanded guidance text has not had a native-speaker
+  review of the Chinese, nor a full review of the English by the QA team.
+- The app has not been tested with real inspection photos over Chinese
+  mobile data - upload size and phone memory across dozens of photos per
+  report is untested.
+- The legacy defect paths in `collectAllDefects` are kept for in-flight
+  reports and can be removed once none remain.
