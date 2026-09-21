@@ -2815,6 +2815,10 @@ async function openDetailPanel(id, scope) {
     formData.append('file', file);
     formData.append('category', category);
     formData.append('relatedTo', row.dataset.accessoryId || '');
+    /* Only a preview is kept. These are reference images so the factory can see
+     * what they are making; they already hold the production files. Keeping the
+     * originals here was filling the persistent disk for no benefit. */
+    formData.append('previewOnly', 'true');
     try {
       const res = await fetch(`/api/order-management/orders/${encodeURIComponent(order.id)}/files`, { method: 'POST', body: formData });
       const body = await res.json();
@@ -2898,7 +2902,7 @@ async function openDetailPanel(id, scope) {
     return el ? el.value : '';
   }
   function addAccessoryRow(data) {
-    accessoryRowsHost.insertAdjacentHTML('beforeend', accessoryRowHtml(editAccessoryRowCount, data, currentSupplierAddress()));
+    accessoryRowsHost.insertAdjacentHTML('beforeend', accessoryRowHtml(editAccessoryRowCount, data, currentSupplierAddress(), order));
     const idx = editAccessoryRowCount;
     const row = panel.querySelector(`[data-accessory-row="${idx}"]`);
     panel.querySelector(`[data-remove-accessory="${idx}"]`).addEventListener('click', () => { row.remove(); recalcTotals(); });
@@ -5367,18 +5371,57 @@ function wireUploadField(fieldId, orderId, category, isImage) {
   });
 }
 
-function accessoryRowHtml(idx, data, mainAddress) {
+/**
+ * A thumbnail source for a sub-component's attached file.
+ *
+ * PDFs and AI files used to render as a bare "View file" link, so the
+ * breakdown table showed no preview at all for exactly the files that matter
+ * most - hang tag artwork and spec drawings are rarely JPEGs. The server
+ * already renders and caches a first-page image for any file recorded on the
+ * order (see the /thumb route), so point at that instead of guessing from the
+ * extension.
+ *
+ * Returns null when there is nothing renderable, in which case the caller
+ * falls back to a link.
+ */
+function accessoryThumbSrc(order, url) {
+  const u = String(url || '').trim();
+  if (!u) return null;
+
+  // A file living on this order: let the server rasterise it.
+  const marker = '/order-management-files/';
+  const at = u.indexOf(marker);
+  if (at !== -1 && order && order.id) {
+    const rest = u.slice(at + marker.length).split('/');
+    const storedName = decodeURIComponent(rest[rest.length - 1] || '');
+    if (storedName) {
+      return `/api/order-management/orders/${encodeURIComponent(order.id)}/thumb?file=${encodeURIComponent(storedName)}`;
+    }
+  }
+
+  // Anything else (a Drive link, an external URL) is only usable directly, and
+  // only if it is already an image.
+  return /\.(png|jpe?g|gif|webp|bmp)(\?|$)/i.test(u) ? u : null;
+}
+
+function accessoryRowHtml(idx, data, mainAddress, order) {
   data = data || {};
   const rowId = data.id || `tmp-${Date.now()}-${idx}`;
   return `
     <tr data-accessory-row="${idx}" data-accessory-id="${escapeHtml(rowId)}">
       <td><input type="text" id="accName${idx}" class="om-acc-name" value="${escapeHtml(data.partName || '')}" /></td>
       <td class="om-acc-image-cell">
-        ${data.imageUrl
-          ? (isPdfFile(data.imageUrl)
-            ? `<a class="om-acc-image-link" href="${escapeHtml(data.imageUrl)}" target="_blank" rel="noopener" style="display:block;font-size:11.5px;margin-bottom:4px;">${i18('btnViewFile', 'View file')}</a>`
-            : `<img class="om-table-thumb" src="${escapeHtml(data.imageUrl)}" alt="" />`)
-          : ''}
+        ${(() => {
+          if (!data.imageUrl) return '';
+          /* New uploads are already a preview image, so they render directly.
+             accessoryThumbSrc covers anything older that is still a PDF by
+             pointing at the server's rasteriser. */
+          const thumb = accessoryThumbSrc(order, data.imageUrl);
+          return `
+            ${thumb ? `<img class="om-table-thumb js-lightbox" src="${escapeHtml(thumb)}" alt="" />` : ''}
+            <a class="om-acc-image-link" href="${escapeHtml(data.imageUrl)}" target="_blank" rel="noopener" style="display:block;font-size:11.5px;margin-bottom:4px;">${i18('btnViewLarger', 'View larger')}</a>
+          `;
+        })()}
         <input type="hidden" class="om-acc-image-url" value="${escapeHtml(data.imageUrl || '')}" />
         <input type="file" class="om-acc-image-file" accept="image/*,application/pdf" style="display:none;" />
         <button type="button" class="om-table-upload-btn om-acc-image-upload-btn">${i18('btnUpload', 'Upload')}</button>
@@ -5729,7 +5772,7 @@ function openAccessoryRelinkPicker(order, row) {
   if (saveBtn) saveBtn.addEventListener('click', () => {
     const picked = back.querySelector('input[name="omRelinkPick"]:checked');
     if (!picked) { showToast(i18t('pickAFileFirst', 'Choose a file first'), true); return; }
-    applyAccessoryImageUrl(row, picked.value);
+    applyAccessoryImageUrl(row, picked.value, order);
     close();
     showToast(i18t('toastFileLinked', 'File linked. Save the PO to keep it.'));
   });
@@ -5741,25 +5784,30 @@ function openAccessoryRelinkPicker(order, row) {
 /** Point a sub-component row's photo cell at a URL, redrawing the preview.
  *  Shared by the relink picker and the upload handler so the two can't render
  *  the cell differently. */
-function applyAccessoryImageUrl(row, url) {
+function applyAccessoryImageUrl(row, url, order) {
   const cell = row.querySelector('.om-acc-image-cell');
   row.querySelector('.om-acc-image-url').value = url || '';
   cell.querySelectorAll('img.om-table-thumb, a.om-acc-image-link').forEach((el) => el.remove());
   if (!url) return;
   const first = cell.firstChild;
-  if (isPdfFile(url)) {
-    const link = document.createElement('a');
-    link.className = 'om-acc-image-link';
-    link.href = url; link.target = '_blank'; link.rel = 'noopener';
-    link.style.cssText = 'display:block;font-size:11.5px;margin-bottom:4px;';
-    link.textContent = i18t('btnViewFile', 'View file');
-    cell.insertBefore(link, first);
-  } else {
+
+  /* Same shape as the initial render: a thumbnail where one can be produced,
+     and always the link. Keeping the two in step matters - they diverged once
+     already, so an uploaded PDF looked different from the same PDF after a
+     page refresh. */
+  const thumb = accessoryThumbSrc(order, url);
+  if (thumb) {
     const img = document.createElement('img');
-    img.className = 'om-table-thumb';
-    img.src = url; img.alt = '';
+    img.className = 'om-table-thumb js-lightbox';
+    img.src = thumb; img.alt = '';
     cell.insertBefore(img, first);
   }
+  const link = document.createElement('a');
+  link.className = 'om-acc-image-link';
+  link.href = url; link.target = '_blank'; link.rel = 'noopener';
+  link.style.cssText = 'display:block;font-size:11.5px;margin-bottom:4px;';
+  link.textContent = i18t('btnViewFile', 'View file');
+  cell.insertBefore(link, first);
 }
 
 /* ============================================================

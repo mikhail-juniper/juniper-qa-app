@@ -3554,7 +3554,7 @@ app.get('/api/order-management/file-categories', (req, res) => {
  * throw the original away. When no link is supplied we keep the file as before,
  * because discarding the only copy of something would be indefensible.
  */
-async function storeAsPreviewOnly(orderId, uploaded, sourceUrl) {
+async function storeAsPreviewOnly(orderId, uploaded, sourceUrl, keepIfUnrenderable) {
   const srcPath = uploaded.path;
   const key = path.parse(uploaded.filename).name;
   const dir = path.join(orderManagementStore.ORDER_FILES_DIR, orderId);
@@ -3569,8 +3569,16 @@ async function storeAsPreviewOnly(orderId, uploaded, sourceUrl) {
   }
 
   if (!storedName) {
-    // Nothing renderable (a .zip, a .xlsx). There is no preview to keep, so
-    // the link is all we store - the file itself lives in Drive.
+    /* Nothing renderable (a .zip, a .xlsx). With a Drive link the file still
+     * exists somewhere, so the link is all we keep. Without one, deleting it
+     * would destroy the only copy - keep the original instead. */
+    if (!sourceUrl && keepIfUnrenderable) {
+      return {
+        storedName: uploaded.filename,
+        url: `/order-management-files/${encodeURIComponent(orderId)}/${encodeURIComponent(uploaded.filename)}`,
+        previewOnly: false
+      };
+    }
     try { fs.unlinkSync(srcPath); } catch (e) { /* already gone */ }
     return { storedName: null, url: null, previewOnly: true };
   }
@@ -3595,12 +3603,21 @@ app.post('/api/order-management/orders/:id/files', uploadOrderFile.single('file'
       ? req.body.category : 'Other';
     const sourceUrl = String(req.body.sourceUrl || '').trim();
 
+    /* Sub-component attachments are reference images, not deliverables: the
+     * factory already holds the production files. So they are always reduced to
+     * a preview, with no Drive link required - a 5 MB artwork file becomes a
+     * ~100 KB image. Product Documentation still keeps the original unless a
+     * Drive link is supplied. */
+    const previewOnlyRequested = String(req.body.previewOnly || '') === 'true';
+
     let stored = {
       storedName: req.file.filename,
       url: `/order-management-files/${encodeURIComponent(req.params.id)}/${encodeURIComponent(req.file.filename)}`,
       previewOnly: false
     };
-    if (sourceUrl) stored = await storeAsPreviewOnly(req.params.id, req.file, sourceUrl);
+    if (sourceUrl || previewOnlyRequested) {
+      stored = await storeAsPreviewOnly(req.params.id, req.file, sourceUrl, previewOnlyRequested);
+    }
 
     const file = {
       id: uuidv4(),
@@ -4187,7 +4204,11 @@ migrateFactoryCodesToSuppliers();
 // don't nest inside each other and balloon in size over time.
 const SCHEDULED_BACKUP_DIR = path.join(submissionLog.DATA_DIR, 'scheduled-backups');
 const BACKUP_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
-const MAX_SCHEDULED_BACKUPS = 8; // ~2 months of weekly snapshots
+/* Each weekly zip now contains both the SQLite databases and the legacy JSON
+ * files kept as migration rollbacks, so snapshots are roughly twice the size
+ * they used to be. Eight of those is a lot of a per-GB disk; four is still a
+ * month of history. */
+const MAX_SCHEDULED_BACKUPS = 4; // ~1 month of weekly snapshots
 
 function listScheduledBackups() {
   if (!fs.existsSync(SCHEDULED_BACKUP_DIR)) return [];

@@ -4822,5 +4822,9 @@
   "resolvedUnitsNote": {
     "en": "{n} unit(s) come out of the final counts as repaired or rejected.",
     "zh": "其中 {n} 件因已修复或拒收而不计入最终统计。"
+  },
+  "btnViewLarger": {
+    "en": "View larger",
+    "zh": "查看大图"
   }
 }
