@@ -2586,7 +2586,14 @@ app.get('/api/order-management/orders/:id/thumb', async (req, res) => {
     if (!fs.existsSync(src)) return res.status(404).end();
 
     const cacheDir = path.join(dir, '.thumbs');
-    const cached = path.join(cacheDir, `${file.storedName}.jpg`);
+    /* Width is a parameter now. The picker wants a small grid thumbnail; PD
+     * approval needs something you can actually judge artwork by, since the
+     * stored file may be a PDF that only ever displays through this route.
+     * Clamped, and part of the cache key so the two sizes don't overwrite
+     * each other. */
+    const rawW = parseInt(req.query.w, 10);
+    const width = Math.min(2000, Math.max(160, isNaN(rawW) ? 320 : rawW));
+    const cached = path.join(cacheDir, `${file.storedName}.${width}.jpg`);
     if (!fs.existsSync(cached)) {
       fs.mkdirSync(cacheDir, { recursive: true });
       /* A PDF or .ai has no pixels for sharp to resize, so render its first
@@ -2607,8 +2614,8 @@ app.get('/api/order-management/orders/:id/thumb', async (req, res) => {
           if (!rasterSrc) return res.status(415).end();
         }
       }
-      await sharp(rasterSrc).rotate().resize(320, 320, { fit: 'inside', withoutEnlargement: true })
-        .jpeg({ quality: 72 }).toFile(cached);
+      await sharp(rasterSrc).rotate().resize(width, width, { fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: width > 800 ? 86 : 72 }).toFile(cached);
     }
     res.setHeader('Cache-Control', 'private, max-age=86400');
     res.setHeader('Content-Type', 'image/jpeg');
