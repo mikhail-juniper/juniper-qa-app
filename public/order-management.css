@@ -1336,3 +1336,30 @@ html {
   background: none; border: 0; padding: 0; font: inherit; font-weight: 700;
   color: var(--jc-teal-dark); cursor: pointer; text-decoration: underline;
 }
+
+/* Measured on a 13" MacBook (1440px): the table fits without scrolling, but
+   the follow-up date and its note were sitting side by side in ~170px, which
+   truncated the date picker to "mm/" and the note to a few characters. Stack
+   them so each gets the full column width. */
+.om-checkin-fucol input {
+  display: block;
+  width: 100%;
+  margin-bottom: 4px;
+}
+
+/* Ten orders per supplier is normal, so keep rows compact enough to scan a
+   full list without scrolling past the ones already dealt with. */
+.om-checkin-table td { padding-top: 8px; padding-bottom: 8px; }
+.om-checkin-table .om-checkin-note { min-height: 44px; }
+.om-checkin-lastcol { line-height: 1.35; }
+.om-checkin-dates-cell { line-height: 1.5; }
+
+/* Row-level actions on the QA and PD queues. Scheduling from the queue is the
+   point of those views, so the buttons live on the row rather than behind a
+   click into the PO. */
+.om-row-actions { display: flex; flex-wrap: wrap; gap: 5px; }
+.om-row-actions .om-table-upload-btn { white-space: nowrap; text-decoration: none; }
+.om-checkin-photo img {
+  width: 40px; height: 40px; object-fit: cover;
+  border-radius: var(--radius-sm); border: 1px solid var(--jc-border); cursor: zoom-in;
+}

@@ -5070,5 +5070,37 @@
   "pdNeedsStartHelp": {
     "en": "Nothing has been submitted yet. A new PO needs its approved sample images; a finished inspection needs submitting for approval. These sit in no other queue.",
     "zh": "尚未提交任何内容。新订单需上传已批准样品图片；已完成的检验需提交审批。这些不会出现在其他列表中。"
+  },
+  "thStage": {
+    "en": "Stage",
+    "zh": "阶段"
+  },
+  "thActions": {
+    "en": "Actions",
+    "zh": "操作"
+  },
+  "poSingular": {
+    "en": "PO",
+    "zh": "个订单"
+  },
+  "poPlural": {
+    "en": "POs",
+    "zh": "个订单"
+  },
+  "stageBulk": {
+    "en": "Bulk",
+    "zh": "大货"
+  },
+  "stagePreProduction": {
+    "en": "Pre-Production",
+    "zh": "头样"
+  },
+  "btnOpenApproval": {
+    "en": "Open approval",
+    "zh": "打开审批"
+  },
+  "toastCopyFailed": {
+    "en": "Could not copy the link",
+    "zh": "复制链接失败"
   }
 }

@@ -5604,7 +5604,10 @@ function qaTriggersForCategory(category) {
   return (((conditionalChecksCache || {}).byCategory || {})[category] || []);
 }
 
-async function openQaSetupDialog(order, stage) {
+/* onSaved lets a caller outside the PO panel decide what happens next. Without
+ * it the dialog always reopened the detail panel, which from the QA Scheduling
+ * queue would throw Chloe out of the list she was working down. */
+async function openQaSetupDialog(order, stage, onSaved) {
   await loadConditionalChecks();
   const rep = (order.qaReports && order.qaReports[stage]) || {};
   const triggers = qaTriggersForCategory(order.category);
@@ -5736,12 +5739,17 @@ async function openQaSetupDialog(order, stage) {
       });
       close();
       showToast(i18('toastReportSetupSaved', 'Report link is ready to share'));
-      // Reopen the panel so the button flips to Copy Report Link and the
-      // status shows In Progress - same sequence the Skip button uses.
-      const id = order.id;
-      closePanel();
-      refreshCurrentView();
-      openDetailPanel(id, 'full');
+      if (typeof onSaved === 'function') {
+        // Called from a work view: stay where she is and just redraw.
+        onSaved();
+      } else {
+        // Reopen the panel so the button flips to Copy Report Link and the
+        // status shows In Progress - same sequence the Skip button uses.
+        const id = order.id;
+        closePanel();
+        refreshCurrentView();
+        openDetailPanel(id, 'full');
+      }
     } catch (e) {
       showToast(e.message || 'Could not save the report setup', true);
       btn.disabled = false;
@@ -6021,13 +6029,10 @@ function dueBadge(action) {
 
 /* ---- PO Check-In: the weekly supplier call-down ----
  *
- * A table, not a card-at-a-time wizard. A supplier can have 10+ orders and
- * Chloe works down a list on the phone: she needs to see where everything
- * stands at once, the way her spreadsheet does, rather than being shown one
- * order and asked to commit before seeing the next.
- *
- * The previous production update sits in its own column for the same reason -
- * "where were we" is the question the whole call starts from.
+ * A table, because a supplier can have 10+ orders and Chloe works down a list
+ * on the phone. The columns are the ones she reads off her spreadsheet today:
+ * what it is, how many, where it stands, what was said last time, and what
+ * she is writing now.
  */
 async function renderCheckInView(root) {
   root.innerHTML = `${workViewTabsHtml()}<div class="om-empty">${i18('emptyLoading', 'Loading...')}</div>`;
@@ -6047,22 +6052,19 @@ async function renderCheckInView(root) {
   if (!checkInSupplier || !bySupplier[checkInSupplier]) checkInSupplier = supplierNames[0] || null;
   const list = checkInSupplier ? bySupplier[checkInSupplier] : [];
 
-  const supplierOption = (name) => {
-    const l = bySupplier[name];
-    const needsYou = l.filter((r) => r.action.owner === 'you').length;
-    const overdue = l.filter((r) => (r.action.overdueBy || 0) > 0).length;
-    const bits = [`${l.length}`];
-    if (needsYou) bits.push(`${needsYou} ${i18t('needYou', 'need you')}`);
-    if (overdue) bits.push(`${overdue} ${i18t('overdueLabel', 'overdue')}`);
-    return `<option value="${escapeHtml(name)}" ${name === checkInSupplier ? 'selected' : ''}>${escapeHtml(name)} (${escapeHtml(bits.join(', '))})</option>`;
-  };
+  const plural = (n, one, many) => `${n} ${n === 1 ? i18t(one, 'PO') : i18t(many, 'POs')}`;
 
   root.innerHTML = `
     ${workViewTabsHtml()}
     <div class="om-checkin-bar">
       <label class="field-label" style="margin:0;">${escapeHtml(i18t('supplierLabel', 'Supplier'))}</label>
-      <select id="omCheckInSupplier">${supplierNames.map(supplierOption).join('')}</select>
-      <div class="om-checkin-counts">${list.length} ${escapeHtml(i18t('openOrders', 'open orders'))}</div>
+      <select id="omCheckInSupplier">
+        ${supplierNames.map((name) => `
+          <option value="${escapeHtml(name)}" ${name === checkInSupplier ? 'selected' : ''}>
+            ${escapeHtml(name)} - ${escapeHtml(plural(bySupplier[name].length, 'poSingular', 'poPlural'))}
+          </option>`).join('')}
+      </select>
+      <div class="om-checkin-counts"></div>
       <button type="button" class="btn btn-primary" id="omCheckInSaveAll" style="width:auto;padding:8px 18px;">
         ${escapeHtml(i18t('saveAllChanges', 'Save all changes'))}
       </button>
@@ -6073,11 +6075,11 @@ async function renderCheckInView(root) {
       <div class="size-table-wrap">
         <table class="size-table om-checkin-table">
           <thead><tr>
-            <th>${escapeHtml(i18t('thPoNumber', 'PO'))}</th>
+            <th>${escapeHtml(i18t('thPoNumber', 'PO Number'))}</th>
+            <th>${escapeHtml(i18t('thPhoto', 'Photo'))}</th>
             <th>${escapeHtml(i18t('thProduct', 'Product'))}</th>
             <th>${escapeHtml(i18t('thQty', 'Qty'))}</th>
-            <th>${escapeHtml(i18t('thKeyDates', 'Key dates'))}</th>
-            <th>${escapeHtml(i18t('thNextAction', 'Next'))}</th>
+            <th>${escapeHtml(i18t('thStatus', 'Status'))}</th>
             <th>${escapeHtml(i18t('thLastUpdate', 'Last update'))}</th>
             <th>${escapeHtml(i18t('thNewUpdate', 'Update'))}</th>
             <th>${escapeHtml(i18t('thFollowUp', 'Follow up'))}</th>
@@ -6086,25 +6088,21 @@ async function renderCheckInView(root) {
             ${list.map((r) => `
               <tr data-checkin-row="${escapeHtml(r.id)}">
                 <td><button type="button" class="om-linklike" data-open-po="${escapeHtml(r.id)}">${escapeHtml(r.poNumber)}</button></td>
+                <td class="om-checkin-photo">
+                  ${r.photo ? `<img src="${escapeHtml(r.photo)}" alt="" class="js-lightbox" />` : '<span class="om-sub">-</span>'}
+                </td>
                 <td>${escapeHtml(r.productName || '')}<div class="om-sub">${escapeHtml(r.sku || '')}</div></td>
                 <td>${r.quantity != null ? Number(r.quantity).toLocaleString() : '-'}</td>
-                <td class="om-checkin-dates-cell">
-                  ${[['ppSample', r.preProductionSampleDate], ['bulkSample', r.bulkSampleDate], ['delivery', r.deliveryDate]]
-                    .filter(([, d]) => d)
-                    .map(([k, d]) => `<div><em>${escapeHtml(i18t('date_' + k, k))}</em> ${escapeHtml(fmtDate(d))}</div>`).join('') || '<span class="om-sub">-</span>'}
-                </td>
-                <td>${ownerPill(r.action.owner)}<div class="om-sub">${escapeHtml(r.action.label || '')}</div>${dueBadge(r.action)}</td>
+                <td><span class="om-pill om-pill-${statusSlug(r.status)}">${tStatusInline(r.status)}</span></td>
                 <td class="om-checkin-lastcol">
                   ${r.lastNote
                     ? `<div class="om-sub">${escapeHtml(fmtDate(r.lastNote.at))} &middot; ${escapeHtml(r.lastNote.by || '')}</div>${escapeHtml(r.lastNote.text || '')}`
                     : `<span class="om-sub">${escapeHtml(i18t('noUpdatesYet', 'No updates yet'))}</span>`}
                 </td>
-                <td><textarea rows="2" class="om-checkin-note" data-note-for="${escapeHtml(r.id)}"
+                <td><textarea rows="1" class="om-checkin-note" data-note-for="${escapeHtml(r.id)}"
                   placeholder="${escapeHtml(i18t('checkInNotePlaceholder', 'What did the supplier say?'))}"></textarea></td>
                 <td class="om-checkin-fucol">
                   <input type="date" class="om-checkin-fu" data-fu-for="${escapeHtml(r.id)}" value="${escapeHtml(r.followUpDate || '')}" />
-                  <input type="text" class="om-checkin-funote" data-funote-for="${escapeHtml(r.id)}"
-                    value="${escapeHtml(r.followUpNote || '')}" placeholder="${escapeHtml(i18t('followUpNotePlaceholder', 'What are you waiting for?'))}" />
                 </td>
               </tr>
             `).join('')}
@@ -6114,6 +6112,11 @@ async function renderCheckInView(root) {
     ` : `<div class="om-empty">${escapeHtml(i18t('emptyNoOpenOrders', 'No open orders.'))}</div>`}
   `;
   bindWorkViewTabs();
+  // This page has its own zoom helper; attachLightboxHandlers belongs to the
+  // report app and is not loaded here.
+  document.querySelectorAll('.om-checkin-photo img').forEach((img) => {
+    img.addEventListener('click', (e) => { e.stopPropagation(); openImageLightbox(img.src); });
+  });
 
   document.getElementById('omCheckInSupplier').addEventListener('change', (e) => {
     checkInSupplier = e.target.value;
@@ -6130,17 +6133,16 @@ async function renderCheckInView(root) {
       for (const r of list) {
         const note = (document.querySelector(`[data-note-for="${r.id}"]`) || {}).value || '';
         const fu = (document.querySelector(`[data-fu-for="${r.id}"]`) || {}).value || '';
-        const fuNote = (document.querySelector(`[data-funote-for="${r.id}"]`) || {}).value || '';
         if (note.trim()) {
           await api(`/api/order-management/orders/${encodeURIComponent(r.id)}/progress-note`,
             { method: 'POST', body: JSON.stringify({ text: note.trim() }) });
           saved += 1;
         }
-        // Only write the follow-up when it actually changed, so a pass down
-        // the list doesn't stamp every PO with a changelog entry.
-        if (fu !== (r.followUpDate || '') || fuNote !== (r.followUpNote || '')) {
+        // Only write when it changed, so a pass down the list doesn't stamp a
+        // changelog entry on every PO.
+        if (fu !== (r.followUpDate || '')) {
           await api(`/api/order-management/orders/${encodeURIComponent(r.id)}`,
-            { method: 'PATCH', body: JSON.stringify({ patch: { followUpDate: fu || null, followUpNote: fuNote } }) });
+            { method: 'PATCH', body: JSON.stringify({ patch: { followUpDate: fu || null } }) });
           saved += 1;
         }
       }
@@ -6156,7 +6158,32 @@ async function renderCheckInView(root) {
   });
 }
 
-/* ---- QA Scheduling: driven by the sample dates ---- */
+/* ---- QA Scheduling: driven by the sample dates ----
+ *
+ * The same buttons as the QA/QC block inside a PO, inline on the row. Opening
+ * a PO just to press "Setup Report Link" was the whole friction: this view
+ * exists to schedule, so the scheduling controls have to be here.
+ */
+function qaRowActionsHtml(r, stage) {
+  const st = (r.qaStages || {})[stage] || {};
+  const mode = stage === 'preProduction' ? 'pre_production' : 'production';
+  const url = `${location.origin}/reporting.html?mode=${mode}&po=${r.poNumber}`;
+  return `
+    <div class="om-row-actions">
+      ${st.isSetUp ? `
+        <button type="button" class="om-table-upload-btn om-copy-link-btn" data-copy-url="${escapeHtml(url)}">${escapeHtml(i18t('btnCopyReportLink', 'Copy Report Link'))}</button>
+        <button type="button" class="om-table-upload-btn om-setup-link-btn" data-setup-stage="${stage}" data-setup-order="${escapeHtml(r.id)}">${escapeHtml(i18t('btnEditReportSetup', 'Edit questions'))} (${st.extras || 0})</button>
+      ` : `
+        <button type="button" class="om-table-upload-btn om-setup-link-btn" data-setup-stage="${stage}" data-setup-order="${escapeHtml(r.id)}">${escapeHtml(i18t('btnSetupReportLink', 'Setup Report Link'))}</button>
+      `}
+      ${stage === 'preProduction' ? `
+        <button type="button" class="om-table-upload-btn om-skip-stage-btn" data-po="${escapeHtml(r.poNumber)}">${escapeHtml(i18t('btnSkipStage', 'Skip'))}</button>` : ''}
+      ${st.pdfUrl ? `<a class="om-table-upload-btn" href="${escapeHtml(st.pdfUrl)}" target="_blank" rel="noopener">${escapeHtml(i18t('btnDownloadReportPdf', 'Report PDF'))}</a>` : ''}
+      <button type="button" class="om-table-upload-btn" data-open-po="${escapeHtml(r.id)}">${escapeHtml(i18t('openLabel', 'Open'))}</button>
+    </div>
+  `;
+}
+
 async function renderQaSchedulingView(root) {
   root.innerHTML = `${workViewTabsHtml()}<div class="om-empty">${i18('emptyLoading', 'Loading...')}</div>`;
   bindWorkViewTabs();
@@ -6182,19 +6209,22 @@ async function renderQaSchedulingView(root) {
           ${list.length ? `
             <div class="size-table-wrap"><table class="size-table">
               <thead><tr>
-                <th>${escapeHtml(i18t('thPoNumber', 'PO'))}</th><th>${escapeHtml(i18t('thProduct', 'Product'))}</th>
-                <th>${escapeHtml(i18t('thSupplier', 'Supplier'))}</th><th>${escapeHtml(i18t('thSampleDate', 'Sample date'))}</th>
-                <th>${escapeHtml(i18t('thAction', 'Next'))}</th><th></th>
+                <th>${escapeHtml(i18t('thPoNumber', 'PO Number'))}</th><th>${escapeHtml(i18t('thProduct', 'Product'))}</th>
+                <th>${escapeHtml(i18t('thSupplier', 'Supplier'))}</th><th>${escapeHtml(i18t('thStage', 'Stage'))}</th>
+                <th>${escapeHtml(i18t('thSampleDate', 'Sample date'))}</th><th>${escapeHtml(i18t('thActions', 'Actions'))}</th>
               </tr></thead>
-              <tbody>${list.map((r) => `
-                <tr>
-                  <td><strong>${escapeHtml(r.poNumber)}</strong></td>
-                  <td>${escapeHtml(r.productName || '')}</td>
-                  <td>${escapeHtml(r.supplierName || '')}</td>
-                  <td>${dueBadge(r.action)}</td>
-                  <td>${escapeHtml(r.action.label || '')}</td>
-                  <td><button type="button" class="om-table-upload-btn" data-open-po="${escapeHtml(r.id)}">${escapeHtml(i18t('openLabel', 'Open'))}</button></td>
-                </tr>`).join('')}</tbody>
+              <tbody>${list.map((r) => {
+                const stage = r.action.stage || 'preProduction';
+                return `
+                  <tr>
+                    <td><button type="button" class="om-linklike" data-open-po="${escapeHtml(r.id)}">${escapeHtml(r.poNumber)}</button></td>
+                    <td>${escapeHtml(r.productName || '')}<div class="om-sub">${escapeHtml(r.sku || '')}</div></td>
+                    <td>${escapeHtml(r.supplierName || '')}</td>
+                    <td>${escapeHtml(stage === 'bulk' ? i18t('stageBulk', 'Bulk') : i18t('stagePreProduction', 'Pre-Production'))}</td>
+                    <td>${dueBadge(r.action)}</td>
+                    <td>${qaRowActionsHtml(r, stage)}</td>
+                  </tr>`;
+              }).join('')}</tbody>
             </table></div>
           ` : `<div class="om-empty">${escapeHtml(i18t('emptyNothingHere', 'Nothing here.'))}</div>`}
         </div>
@@ -6202,8 +6232,7 @@ async function renderQaSchedulingView(root) {
     }).join('')}
   `;
   bindWorkViewTabs();
-  document.querySelectorAll('[data-open-po]').forEach((el) =>
-    el.addEventListener('click', () => openDetailPanel(el.dataset.openPo, 'full')));
+  bindWorkRowActions();
 }
 
 /* ---- PD Approval: who is it waiting on ---- */
@@ -6215,9 +6244,6 @@ async function renderPdApprovalView(root) {
   catch (e) { root.innerHTML = workViewTabsHtml() + `<div class="om-empty">${escapeHtml(e.message)}</div>`; bindWorkViewTabs(); return; }
 
   const pdRows = rows.filter((r) => ['pdNeedsStart', 'pdReview', 'pdReply'].includes(r.action.kind));
-  /* Three groups, in the order work moves: not started, in flight, back with
-   * her. Approved stages are absent by design - once a stage is signed off it
-   * is done and should stop taking up room. */
   const groups = [
     ['pdNeedsStart', i18t('pdNeedsStart', 'To start'),
       i18t('pdNeedsStartHelp', 'Nothing has been submitted yet. A new PO needs its approved sample images; a finished inspection needs submitting for approval. These sit in no other queue.')],
@@ -6238,16 +6264,25 @@ async function renderPdApprovalView(root) {
           ${list.length ? `
             <div class="size-table-wrap"><table class="size-table">
               <thead><tr>
-                <th>${escapeHtml(i18t('thPoNumber', 'PO'))}</th><th>${escapeHtml(i18t('thProduct', 'Product'))}</th>
-                <th>${escapeHtml(i18t('thSupplier', 'Supplier'))}</th><th>${escapeHtml(i18t('thAction', 'Next'))}</th><th></th>
+                <th>${escapeHtml(i18t('thPoNumber', 'PO Number'))}</th><th>${escapeHtml(i18t('thProduct', 'Product'))}</th>
+                <th>${escapeHtml(i18t('thSupplier', 'Supplier'))}</th><th>${escapeHtml(i18t('thAction', 'Next'))}</th>
+                <th>${escapeHtml(i18t('thActions', 'Actions'))}</th>
               </tr></thead>
               <tbody>${list.map((r) => `
                 <tr>
-                  <td><strong>${escapeHtml(r.poNumber)}</strong></td>
-                  <td>${escapeHtml(r.productName || '')}</td>
+                  <td><button type="button" class="om-linklike" data-open-po="${escapeHtml(r.id)}">${escapeHtml(r.poNumber)}</button></td>
+                  <td>${escapeHtml(r.productName || '')}<div class="om-sub">${escapeHtml(r.sku || '')}</div></td>
                   <td>${escapeHtml(r.supplierName || '')}</td>
                   <td>${escapeHtml(r.action.label || '')}</td>
-                  <td><button type="button" class="om-table-upload-btn" data-open-po="${escapeHtml(r.id)}">${escapeHtml(i18t('openLabel', 'Open'))}</button></td>
+                  <td>
+                    <div class="om-row-actions">
+                      ${/* Straight into the approval page for this PO - the whole
+                           point is not having to open the PO first. */ ''}
+                      <a class="om-table-upload-btn" href="/approval.html?po=${encodeURIComponent(r.id)}" target="_blank" rel="noopener">${escapeHtml(i18t('btnOpenApproval', 'Open approval'))}</a>
+                      <button type="button" class="om-table-upload-btn om-copy-link-btn" data-copy-url="${escapeHtml(location.origin + '/approval.html?po=' + encodeURIComponent(r.id))}">${escapeHtml(i18t('btnShareAccess', 'Share'))}</button>
+                      <button type="button" class="om-table-upload-btn" data-open-po="${escapeHtml(r.id)}">${escapeHtml(i18t('openLabel', 'Open'))}</button>
+                    </div>
+                  </td>
                 </tr>`).join('')}</tbody>
             </table></div>
           ` : `<div class="om-empty">${escapeHtml(i18t('emptyNothingHere', 'Nothing here.'))}</div>`}
@@ -6256,6 +6291,29 @@ async function renderPdApprovalView(root) {
     }).join('')}
   `;
   bindWorkViewTabs();
+  bindWorkRowActions();
+}
+
+/** Shared row-level handlers for the QA and PD views. */
+function bindWorkRowActions() {
   document.querySelectorAll('[data-open-po]').forEach((el) =>
     el.addEventListener('click', () => openDetailPanel(el.dataset.openPo, 'full')));
+
+  document.querySelectorAll('.om-copy-link-btn').forEach((el) =>
+    el.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(el.dataset.copyUrl);
+        showToast(i18t('toastLinkCopied', 'Link copied'));
+      } catch (e) { showToast(i18t('toastCopyFailed', 'Could not copy the link'), true); }
+    }));
+
+  document.querySelectorAll('.om-setup-link-btn[data-setup-order]').forEach((el) =>
+    el.addEventListener('click', async () => {
+      /* Same dialog as the PO panel. It needs the full order, which the work
+       * queue deliberately does not carry, so fetch it on demand. */
+      try {
+        const data = await api(`/api/order-management/orders/${encodeURIComponent(el.dataset.setupOrder)}`);
+        openQaSetupDialog(data.order, el.dataset.setupStage, () => { workQueueCache = null; render(); });
+      } catch (e) { showToast(e.message, true); }
+    }));
 }

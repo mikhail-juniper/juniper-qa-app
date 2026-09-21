@@ -1808,6 +1808,21 @@ app.get('/api/order-management/work-queue', (req, res) => {
         bulkSampleDate: (o.factoryUpdates || {}).bulkSampleDate || null,
         followUpDate: o.followUpDate || null,
         followUpNote: o.followUpNote || '',
+        /* Enough of the QA stage state for the scheduling view to offer the
+         * same buttons as the PO panel, rather than making her open the PO to
+         * press them. */
+        qaStages: ['preProduction', 'bulk'].reduce((acc, stage) => {
+          const r = (o.qaReports || {})[stage] || {};
+          acc[stage] = {
+            status: r.status || 'Pending',
+            isSetUp: !!(r.setup && r.setup.configuredAt),
+            extras: r.setup ? ((r.setup.checks || []).length + (r.setup.custom || []).length) : 0,
+            pdfUrl: r.pdfUrl || '',
+            result: r.result || '',
+            readyDate: (o.factoryUpdates || {})[stage === 'preProduction' ? 'preProductionSampleDate' : 'bulkSampleDate'] || null
+          };
+          return acc;
+        }, {}),
         // Progress notes live on factoryUpdates.bulkProgressLog; newest last.
         lastNote: ((o.factoryUpdates || {}).bulkProgressLog || []).slice(-1)[0] || null,
         action
