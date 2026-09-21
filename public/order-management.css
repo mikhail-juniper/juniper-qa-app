@@ -1317,3 +1317,22 @@ html {
   .om-checkin-nav { flex-direction: column; }
   .om-checkin-po { flex-direction: column; }
 }
+
+/* Check-in as a table: she works down a supplier's full list on one call, so
+   everything has to be visible at once rather than one order at a time. */
+.om-checkin-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+.om-checkin-bar select { width: auto; min-width: 280px; }
+.om-checkin-counts { font-size: 13px; color: var(--jc-muted); font-weight: 600; flex: 1; }
+.om-checkin-table td { vertical-align: top; }
+.om-checkin-table .om-sub { font-size: 11.5px; color: var(--jc-muted); }
+.om-checkin-dates-cell { white-space: nowrap; font-size: 12px; }
+.om-checkin-dates-cell em { font-style: normal; font-weight: 700; margin-right: 4px; }
+.om-checkin-lastcol { max-width: 260px; font-size: 12.5px; }
+.om-checkin-note { min-width: 200px; font-size: 13px; }
+.om-checkin-fucol { min-width: 170px; }
+.om-checkin-fucol input { margin-bottom: 4px; }
+.om-checkin-funote { font-size: 12.5px; }
+.om-linklike {
+  background: none; border: 0; padding: 0; font: inherit; font-weight: 700;
+  color: var(--jc-teal-dark); cursor: pointer; text-decoration: underline;
+}

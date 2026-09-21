@@ -5014,5 +5014,61 @@
   "openLabel": {
     "en": "Open",
     "zh": "打开"
+  },
+  "supplierLabel": {
+    "en": "Supplier",
+    "zh": "供应商"
+  },
+  "saveAllChanges": {
+    "en": "Save all changes",
+    "zh": "保存全部更改"
+  },
+  "checkInIntro2": {
+    "en": "Work down the list. Type into Update or Follow-up as you go, then save once at the end.",
+    "zh": "逐行跟进。边打电话边填写“更新”与“跟进”，最后统一保存。"
+  },
+  "thQty": {
+    "en": "Qty",
+    "zh": "数量"
+  },
+  "thKeyDates": {
+    "en": "Key dates",
+    "zh": "关键日期"
+  },
+  "thNextAction": {
+    "en": "Next",
+    "zh": "下一步"
+  },
+  "thLastUpdate": {
+    "en": "Last update",
+    "zh": "上次更新"
+  },
+  "thNewUpdate": {
+    "en": "Update",
+    "zh": "本次更新"
+  },
+  "thFollowUp": {
+    "en": "Follow up",
+    "zh": "跟进"
+  },
+  "noUpdatesYet": {
+    "en": "No updates yet",
+    "zh": "尚无更新"
+  },
+  "checkInSaved": {
+    "en": "{n} update(s) saved",
+    "zh": "已保存 {n} 项更新"
+  },
+  "checkInNothing": {
+    "en": "Nothing to save",
+    "zh": "没有需要保存的内容"
+  },
+  "pdNeedsStart": {
+    "en": "To start",
+    "zh": "待启动"
+  },
+  "pdNeedsStartHelp": {
+    "en": "Nothing has been submitted yet. A new PO needs its approved sample images; a finished inspection needs submitting for approval. These sit in no other queue.",
+    "zh": "尚未提交任何内容。新订单需上传已批准样品图片；已完成的检验需提交审批。这些不会出现在其他列表中。"
   }
 }
