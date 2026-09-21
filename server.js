@@ -1775,6 +1775,51 @@ app.post('/api/submit-revised', (req, res) => {
   }
 });
 
+/**
+ * The work queue behind Chloe's views.
+ *
+ * Returns every open PO with its derived next action, so the client can group
+ * by supplier (the call-down), by sample date (QA scheduling) or by who it is
+ * waiting on (PD approval) without three different endpoints computing three
+ * slightly different versions of the same thing.
+ */
+app.get('/api/order-management/work-queue', (req, res) => {
+  try {
+    const today = req.query.today || null;
+    const orders = orderManagementStore.listOrders({})
+      .filter((o) => o.status !== 'Completed' && o.status !== 'Cancelled');
+
+    const rows = orders.map((o) => {
+      let statuses = {};
+      try { statuses = approvalStore.pdApprovalStatuses(o.poNumber) || {}; }
+      catch (err) { /* an approval record that cannot be read must not hide the PO */ }
+      const action = orderManagementStore.nextActionFor(o, statuses, today);
+      return {
+        id: o.id,
+        poNumber: o.poNumber,
+        sku: (o.mainComponent || {}).sku || '',
+        productName: (o.mainComponent || {}).name || '',
+        photo: (o.mainComponent || {}).photoReference || '',
+        quantity: (o.mainComponent || {}).purchaseQuantity ?? null,
+        supplierName: (o.supplier && o.supplier.name) || '',
+        status: o.status,
+        deliveryDate: o.manufacturerDeliveryDate || null,
+        preProductionSampleDate: (o.factoryUpdates || {}).preProductionSampleDate || null,
+        bulkSampleDate: (o.factoryUpdates || {}).bulkSampleDate || null,
+        followUpDate: o.followUpDate || null,
+        followUpNote: o.followUpNote || '',
+        // Progress notes live on factoryUpdates.bulkProgressLog; newest last.
+        lastNote: ((o.factoryUpdates || {}).bulkProgressLog || []).slice(-1)[0] || null,
+        action
+      };
+    });
+    res.json({ ok: true, rows });
+  } catch (err) {
+    console.error('Work queue failed:', err);
+    res.status(500).json({ error: 'Could not build the work queue' });
+  }
+});
+
 // ---- Report history: reference prior reports for the same PO or the same SKU ----
 app.get('/api/submission-history/:poNumber', (req, res) => {
   try {
