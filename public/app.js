@@ -381,14 +381,31 @@ function computeActualAqlPlan() {
 /* Severity is derived from where an issue was recorded, not chosen by the
  * inspector: a Step 5 question answered Fail is MAJOR, and everything logged
  * in Step 6 is MINOR. Nothing is recorded as critical any more. */
-function collectAllDefects() {
+/**
+ * Every defect this report has recorded, BEFORE any disposition is applied.
+ *
+ * One builder, not two. This and collectAllDefects used to duplicate the Step
+ * 5 loop, and they drifted: one was updated when severity became per-question
+ * and the other still hardcoded 'major', so the client scored a critical
+ * question as major while the server scored it correctly and the two
+ * disagreed on the verdict. Now collectAllDefects is this list with the
+ * dispositions applied, and there is nowhere for them to diverge.
+ */
+/* Severity is carried by the question, not inferred from the step it was
+ * logged in. The QA team classified every question in the bank: Step 5 checks
+ * and conditional checks are critical, Step 6 sections are minor, major or
+ * critical depending on what they cover. Anything without an explicit severity
+ * falls back to the old step-based default so a question added without one
+ * still scores. */
+function severityForQuestion(q, fallback) {
+  const s = q && q.severity;
+  return (s === 'critical' || s === 'major' || s === 'minor') ? s : fallback;
+}
+
+function collectRawDefects() {
   const all = [];
 
-  /* Step 5: one defect per failed question, at the severity the question bank
-     assigns it, sized by units affected. This duplicated collectRawDefects and
-     still hardcoded 'major' after severity became per-question - so the client
-     scored a critical question as major while the server scored it correctly,
-     and the two disagreed on the verdict. */
+  // Step 5, plus any conditional or custom questions from the PO setup.
   questionsForStep(5).concat(additionalReviewQuestions()).forEach((q) => {
     const a = state.answers[q.id];
     if (!a || a.status !== 'fail') return;
@@ -401,9 +418,11 @@ function collectAllDefects() {
     });
   });
 
-  // Sizing: each measurement outside tolerance is a major issue in its own
-  // right, so it lands in the tally and on the PDF rather than only tipping
-  // the overall verdict.
+  /* Sizing: each measurement outside tolerance is a defect in its own right,
+   * so it lands in the tally and on the PDF rather than only tipping the
+   * verdict. Because these are now in the shared list, they also appear on the
+   * disposition step - an out-of-tolerance batch can be rejected or repaired
+   * like any other finding, which it could not be before. */
   if (state.category !== 'apparel') {
     ['height', 'width', 'depth'].forEach((k) => {
       if (!dimensionOutOfTolerance(k)) return;
@@ -426,21 +445,23 @@ function collectAllDefects() {
     });
   }
 
-  // Step 6: everything logged per section, always minor.
+  // Step 6: one entry per logged issue, at its section's severity.
   allSectionIssues().forEach((d) => all.push(d));
 
-  // Legacy: the fixed checklist keys still used by the Sizing step's
-  // custom-sizing flow, plus any older in-progress report.
-  CHECKLIST_KEYS.forEach((key) => {
-    const item = state.categoryData[key];
-    if (item && Array.isArray(item.defects)) item.defects.forEach((d) => all.push(d));
-  });
-  (state.additionalIssues || []).forEach((d) => all.push(d));
-  /* Apply the disposition decisions last: repaired and rejected units drop
-   * out of the count entirely, which is what lets a report move from fail to
-   * pass on the strength of what was done about the defects. Entries that
-   * reach zero are removed so they don't show as "0 units affected". */
-  return all.map(applyDisposition).filter((d) => (parseInt(d.unitsAffected, 10) || 0) > 0);
+  return all;
+}
+
+/**
+ * What actually counts, after the inspector's disposition decisions.
+ *
+ * Repaired-on-site and rejected units stop being defects - the first because
+ * they are good now, the second because they are not shipped. Entries that
+ * reach zero are dropped so they don't show as "0 units affected".
+ */
+function collectAllDefects() {
+  return collectRawDefects()
+    .map(applyDisposition)
+    .filter((d) => (parseInt(d.unitsAffected, 10) || 0) > 0);
 }
 function sumDefectsBySeverity(defects) {
   const sums = { minor: 0, major: 0, critical: 0 };
@@ -2651,6 +2672,11 @@ function additionalReviewQuestions() {
       title: currentLangIsEn() ? q.text_en : (q.text_zh || q.text_en),
       guidance: '',
       answer: 'passFail',
+      /* Carried from conditionalChecks.json, where the QA team classed every
+       * conditional check as critical - these cover functional features
+       * (sound, magnets, glow) where a failing unit is a safety or usability
+       * problem. Without this they silently fell back to major. */
+      severity: q.severity || 'critical',
       media: q.media
     }));
   });
@@ -2660,6 +2686,10 @@ function additionalReviewQuestions() {
     title: c.text,
     guidance: '',
     answer: 'passFail',
+    /* One-off questions added at PO setup. Major by decision - the same level
+     * the reviewed bank gave the "Additional issues" catch-alls, rather than
+     * failing an order outright on a question written on the day. */
+    severity: 'major',
     // A custom question can demand a photo, a video, or neither - in which
     // case a fail still needs evidence like every other question.
     media: c.requireVideo ? 'video_always' : (c.requirePhoto ? 'photo_always' : 'on_fail')
@@ -3133,32 +3163,6 @@ function navButtonsHtml() {
       <button class="btn btn-primary" id="btnNext">${biBlockHtml('next', 'Next')}</button>
     </div>
   `;
-}
-
-/* Defects as recorded, BEFORE any disposition is applied. The disposition step
- * needs the original numbers to ask about; collectAllDefects() below returns
- * what actually counts once those decisions are made. */
-/* Severity is carried by the question now, not inferred from the step it was
- * logged in. The QA team classified every question in the bank: Step 5 checks
- * and conditional checks are critical, Step 6 sections are minor, major or
- * critical depending on what they cover. Anything without an explicit severity
- * falls back to the old step-based default so a question added without one
- * still scores. */
-function severityForQuestion(q, fallback) {
-  const s = q && q.severity;
-  return (s === 'critical' || s === 'major' || s === 'minor') ? s : fallback;
-}
-
-function collectRawDefects() {
-  const all = [];
-  questionsForStep(5).concat(additionalReviewQuestions()).forEach((q) => {
-    const a = state.answers[q.id];
-    if (!a || a.status !== 'fail') return;
-    all.push({ id: q.id, description: q.title, severity: severityForQuestion(q, 'major'),
-      unitsAffected: parseInt(a.unitsAffected, 10) || 1, photos: a.media || [] });
-  });
-  allSectionIssues().forEach((d) => all.push(d));
-  return all;
 }
 
 /**
@@ -4135,11 +4139,6 @@ function renderReviewStep() {
     tolerance: 'resultReasonTolerance', minor: 'resultReasonMinor', major: 'resultReasonMajor',
     aqlCritical: 'resultReasonAqlCritical', aqlMajor: 'resultReasonAqlMajor', aqlMinor: 'resultReasonAqlMinor',
     // Was missing, so this reason rendered blank on the review banner.
-    /* 'allRejected' was retired when the rate thresholds replaced it - a
-     * fully-defective batch now reports as thresholdCritical. Kept in the map
-     * so a report submitted under the old rules still renders its reason
-     * rather than showing a blank line. */
-    allRejected: 'resultReasonAllRejected',
     thresholdCritical: 'resultReasonThresholdCritical',
     thresholdMajor: 'resultReasonThresholdMajor',
     thresholdMinor: 'resultReasonThresholdMinor'

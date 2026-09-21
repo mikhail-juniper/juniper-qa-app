@@ -827,10 +827,6 @@
     "en": "Other / Custom Sizing",
     "zh": "其他 / 自定义尺寸"
   },
-  "resultReasonAllRejected": {
-    "en": "Every unit checked was rejected",
-    "zh": "所检查的产品全部被判定为不合格"
-  },
   "actualCount": {
     "en": "Units Actually Checked",
     "zh": "实际检查件数"

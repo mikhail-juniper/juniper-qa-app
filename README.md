@@ -702,9 +702,10 @@ Severity is **baked into the payload at submit time**, so an already-filed
 report keeps the severities that were in force when it was inspected and is
 never retroactively rescored by a later edit to the bank.
 
-Four places read severity and **must agree**: `collectRawDefects` and
-`collectAllDefects` in `public/app.js` (these overlap and once drifted -
-one hardcoded `major` after the other was updated, so the client and server
+Three places read severity and **must agree**: `collectRawDefects` in
+`public/app.js` (`collectAllDefects` is now just that list with dispositions
+applied - the two used to duplicate the Step 5 loop and drifted, one
+hardcoding `major` after the other was updated, so the client and server
 disagreed on the verdict), `additionalReviewQuestions` for conditional and
 custom questions, and `collectAllDefects` in `lib/passFail.js`.
 
@@ -959,7 +960,3 @@ categories.
   "Historical data import" under Deployment.
 - Revised Unit Reports do not appear on the Reports page as individual
   entries, only as a count and inside the consolidated PDF.
-- The legacy defect paths in `collectAllDefects` are kept for in-flight
-  reports and can be removed once none remain. Likewise the
-  `allRejected` result reason, which is unreachable in new reports but
-  still renders for older ones.

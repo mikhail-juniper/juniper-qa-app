@@ -2823,7 +2823,13 @@ async function openDetailPanel(id, scope) {
       const res = await fetch(`/api/order-management/orders/${encodeURIComponent(order.id)}/files`, { method: 'POST', body: formData });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || 'Upload failed');
-      row.querySelector(urlInputSelector).value = body.file.url;
+      const urlInput = row.querySelector(urlInputSelector);
+      urlInput.value = body.file.url;
+      /* Assigning .value in code fires no event, so the panel's autosave never
+       * heard about it: the image appeared in the table but was only persisted
+       * if someone happened to press Save afterwards. Anything sent to the
+       * supplier before that had no photo. */
+      if (requestPanelSave) requestPanelSave();
       showToast(i18t('toastFileUploaded', 'File uploaded'));
       onDone(body.file.url);
     } catch (e) { showToast(e.message, true); }
@@ -4188,14 +4194,18 @@ async function openDetailPanel(id, scope) {
     autoSaveTimer = setTimeout(() => doSave({ silent: true }), 1200);
   }
 
+  // Expose it for the sub-component rows, which are added after wiring.
+  requestPanelSave = scheduleAutoSave;
+
   // Baseline: whatever the form holds on open counts as already saved, so
   // simply opening a PO never writes.
   const baseline = buildPatch();
   lastSaved = baseline ? JSON.stringify(baseline) : null;
 
   /* Autosave on edit. `change` covers selects and date pickers, `input`
-   * covers typing. Uploads, status changes and the sub-component tables
-   * have their own endpoints and save themselves already. */
+   * covers typing. Hidden inputs are included deliberately - the sub-component
+   * image field is written in code by the upload and relink handlers, which
+   * dispatch an input event so this picks it up. */
   panel.querySelectorAll('input, select, textarea').forEach((el) => {
     if (el.type === 'file' || el.disabled) return;
     el.addEventListener('change', scheduleAutoSave);
@@ -5834,9 +5844,17 @@ function openAccessoryRelinkPicker(order, row) {
 /** Point a sub-component row's photo cell at a URL, redrawing the preview.
  *  Shared by the relink picker and the upload handler so the two can't render
  *  the cell differently. */
+/* Set by the open detail panel so code outside it can ask for a save.
+ * Sub-component rows are inserted after the panel wires its listeners, so an
+ * input event dispatched on them reaches nothing - the handler simply is not
+ * attached to rows that did not exist at wiring time. */
+let requestPanelSave = null;
+
 function applyAccessoryImageUrl(row, url, order) {
   const cell = row.querySelector('.om-acc-image-cell');
-  row.querySelector('.om-acc-image-url').value = url || '';
+  const urlInput = row.querySelector('.om-acc-image-url');
+  urlInput.value = url || '';
+  if (requestPanelSave) requestPanelSave();
   cell.querySelectorAll('img.om-table-thumb, a.om-acc-image-link').forEach((el) => el.remove());
   if (!url) return;
   const first = cell.firstChild;
