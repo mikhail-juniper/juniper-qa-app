@@ -4794,5 +4794,33 @@
   "twoTotalsHelp": {
     "en": "As inspected is the result at the time of inspection. After repairs reflects Revised Unit Reports confirming defective units were fixed.",
     "zh": "“检验当时”为检验时的结果；“修复后”已计入返修确认报告中已修复的产品。"
+  },
+  "disposition_factory_pp": {
+    "en": "Factory will fix in bulk production",
+    "zh": "工厂将在大货生产中修正"
+  },
+  "dispositionHelp_factory_pp": {
+    "en": "The factory will correct this before the bulk run. It stays in the counts for this sample report.",
+    "zh": "工厂将在大货生产前修正。本次样品报告仍计入该项。"
+  },
+  "loggedEvidence": {
+    "en": "Logged evidence",
+    "zh": "已记录的证据"
+  },
+  "flaggedRecapTitle": {
+    "en": "What was flagged",
+    "zh": "已标记的问题"
+  },
+  "notYetDecided": {
+    "en": "not decided",
+    "zh": "尚未决定"
+  },
+  "decidedLabel": {
+    "en": "decided",
+    "zh": "已决定"
+  },
+  "resolvedUnitsNote": {
+    "en": "{n} unit(s) come out of the final counts as repaired or rejected.",
+    "zh": "其中 {n} 件因已修复或拒收而不计入最终统计。"
   }
 }
