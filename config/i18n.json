@@ -4826,5 +4826,13 @@
   "btnViewLarger": {
     "en": "View larger",
     "zh": "查看大图"
+  },
+  "fixedLabel": {
+    "en": "Fixed",
+    "zh": "已处理"
+  },
+  "finalLabel": {
+    "en": "Final",
+    "zh": "最终"
   }
 }

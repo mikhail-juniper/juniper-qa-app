@@ -904,7 +904,10 @@ function getAllValidationProblems() {
       if (!rows.length || rows.some((r) => !r.measurements || !r.measurements.trim())) problems.push(bi('customSizeMeasurementsRequired'));
     }
   }
-  if (state.category !== 'apparel') {
+  /* Only when the product actually has a sizing step. Plush no longer does,
+   * and the review screen was still demanding Height/Width/Depth for a step
+   * the inspector never saw - an error with nowhere to go and fix it. */
+  if (state.category !== 'apparel' && stepApplies('sizing')) {
     const dims = state.categoryData.dimensions;
     if (!dims.height || !dims.width || !dims.depth) problems.push(bi('dimensionsRequired'));
     // Out of tolerance is a finding, not an incomplete field, so it isn't
@@ -2328,14 +2331,50 @@ function fmtPct(pct) {
   return (pct >= 10 || pct === 0 ? Math.round(pct) : Math.round(pct * 10) / 10) + '%';
 }
 
+/**
+ * Found / Fixed / Final, per severity.
+ *
+ * The recap previously showed only the post-disposition number, so a report
+ * where 2 units were found and both repaired read as a flat zero - accurate,
+ * but it looked like nothing had been found at all. Splitting the column makes
+ * the work visible: found 2, fixed 2, final 0.
+ *
+ *   found - units flagged during inspection, before any decision
+ *   fixed - repaired on site or rejected, so they leave the count
+ *   final - what the verdict is actually scored against
+ */
+function recapBreakdown() {
+  const out = {
+    critical: { found: 0, fixed: 0, final: 0 },
+    major: { found: 0, fixed: 0, final: 0 },
+    minor: { found: 0, fixed: 0, final: 0 }
+  };
+  collectRawDefects().forEach((d) => {
+    const b = out[d.severity];
+    if (!b) return;
+    const flagged = parseInt(d.unitsAffected, 10) || 1;
+    b.found += flagged;
+    const disp = state.dispositions[d.id] || {};
+    if (disp.choice === 'rejected') b.fixed += flagged;
+    else if (disp.choice === 'repaired') b.fixed += Math.min(flagged, parseInt(disp.unitsRepaired, 10) || 0);
+  });
+  ['critical', 'major', 'minor'].forEach((k) => {
+    out[k].final = Math.max(0, out[k].found - out[k].fixed);
+  });
+  return out;
+}
+
 function foundAcceptedTableHtml(aql) {
   const checked = unitsCheckedForRecap();
   const poQty = parseInt(state.poQuantity, 10) || null;
 
   const counts = (aql && aql.counts) || countDefects(collectAllDefects(), checked);
 
+  const breakdown = recapBreakdown();
+
   const row = (labelKey, sev, accepted) => {
     const c = counts[sev] || { entries: 0, units: 0, defectiveUnits: 0 };
+    const b = breakdown[sev] || { found: 0, fixed: 0, final: 0 };
     /* Rates are based on defectiveUnits, not the raw sum. Two issues each
      * affecting all 5 checked units is 5 bad units out of 5, not 10 out of 5 -
      * and a 200% defect rate would extrapolate to nonsense. */
@@ -2344,6 +2383,8 @@ function foundAcceptedTableHtml(aql) {
       <tr>
         <td>${escapeHtml(bi(labelKey).en)}</td>
         <td>${c.entries}</td>
+        <td>${b.found}</td>
+        <td>${b.fixed}</td>
         <td>${c.defectiveUnits}${c.units > c.defectiveUnits
             ? ` <span class="recap-pct">${escapeHtml(bi('ofUnitsLogged', 'from {n} logged').en.replace('{n}', String(c.units)))}</span>`
             : ''}${ex ? ` <span class="recap-pct">${escapeHtml(fmtPct(ex.pct))}</span>` : ''}</td>
@@ -2359,7 +2400,9 @@ function foundAcceptedTableHtml(aql) {
         <tr>
           <th></th>
           <th>${escapeHtml(bi('issuesLoggedLabel', 'Issues').en)}</th>
-          <th>${escapeHtml(bi('unitsAffectedHeader', 'Units affected').en)}</th>
+          <th>${escapeHtml(bi('foundLabel').en)}</th>
+          <th>${escapeHtml(bi('fixedLabel', 'Fixed').en)}</th>
+          <th>${escapeHtml(bi('finalLabel', 'Final').en)}</th>
           <th>${escapeHtml(bi('totalPoAssumption', 'Total PO assumption').en)}</th>
           <th>${escapeHtml(bi('acceptedLabel').en)}</th>
         </tr>
@@ -2504,13 +2547,29 @@ function segOption(groupName, value, i18nKey, current) {
 
 /** The question group matching this product. Subcategory wins; a group with an
  *  empty subcategory list covers its whole category (Bags, Other). */
+/**
+ * The question group matching this product.
+ *
+ * Three steps, in order of precision:
+ *   1. a group naming this exact subcategory
+ *   2. a category-wide group (one with no subcategories, e.g. Bags, Other)
+ *   3. ANY group of this category
+ *
+ * Step 3 matters for older POs. Plush subcategories were restructured
+ * (standard/mini/electronic became plushToy/puppet), and a PO still carrying a
+ * retired value - or none at all - matched nothing and got an inspection with
+ * zero questions in Steps 4, 5 and 6. Falling back to the category's own set is
+ * always better than asking nothing.
+ */
 function questionGroupForProduct() {
-  const groups = ((CONFIG.reportQuestions || {}).groups) || {};
-  const bySub = Object.values(groups).find((g) =>
+  const groups = Object.values(((CONFIG.reportQuestions || {}).groups) || {});
+  const bySub = groups.find((g) =>
     g.category === state.category && (g.subcategories || []).includes(state.subcategory));
   if (bySub) return bySub;
-  return Object.values(groups).find((g) =>
-    g.category === state.category && !(g.subcategories || []).length) || null;
+  const categoryWide = groups.find((g) =>
+    g.category === state.category && !(g.subcategories || []).length);
+  if (categoryWide) return categoryWide;
+  return groups.find((g) => g.category === state.category) || null;
 }
 
 /** Questions with section/title/guidance already resolved to the header
@@ -2975,7 +3034,30 @@ function renderRevisedUnitReport() {
  * move from fail to pass here - which is exactly the intent for a batch whose
  * only problem was a handful of units that got pulled.
  */
-const DISPOSITION_CHOICES = ['repaired', 'factory', 'rejected'];
+/* Rejecting units is a bulk-production decision: at pre-production you are
+ * looking at a handful of samples, and there is no shipment to exclude them
+ * from. What the inspector actually needs there is "the factory will fix this
+ * before the bulk run", so the label changes and Rejected is not offered. */
+function dispositionChoices() {
+  return state.qaType === 'pre_production'
+    ? ['repaired', 'factory']
+    : ['repaired', 'factory', 'rejected'];
+}
+
+/** Same stored value, different wording per stage. */
+function dispositionLabel(choice) {
+  if (choice === 'factory' && state.qaType === 'pre_production') {
+    return bi('disposition_factory_pp', 'Factory will fix in bulk production').en;
+  }
+  return bi('disposition_' + choice).en;
+}
+
+function dispositionHelpText(choice) {
+  if (choice === 'factory' && state.qaType === 'pre_production') {
+    return bi('dispositionHelp_factory_pp', 'The factory will correct this before the bulk run. It stays in the counts for this sample report.').en;
+  }
+  return bi('dispositionHelp_' + choice).en;
+}
 
 function dispositionFor(id) {
   if (!state.dispositions[id]) {
@@ -2990,7 +3072,11 @@ function dispositionTargets() {
     id: d.id,
     description: d.description,
     severity: d.severity,
-    unitsAffected: parseInt(d.unitsAffected, 10) || 1
+    unitsAffected: parseInt(d.unitsAffected, 10) || 1,
+    // The evidence already captured for this defect. Shown on the tile so the
+    // decision is made against the photo rather than from memory of a defect
+    // logged several steps ago.
+    photos: (d.photos || []).map((f) => f && f.url).filter(Boolean)
   }));
 }
 
@@ -3065,15 +3151,23 @@ function renderDispositionStep() {
           <span class="k">${escapeHtml(bi('unitsFlaggedLabel', 'Units flagged').en)}</span>
           <span class="v">${t.unitsAffected}</span>
         </div>
+        ${t.photos.length ? `
+          <div class="q-reference">
+            <div class="q-reference-label">${escapeHtml(bi('loggedEvidence', 'Logged evidence').en)}</div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              ${t.photos.map((u) => `<div class="q-reference-frame"><img src="${escapeHtml(u)}" class="js-lightbox" alt="" /></div>`).join('')}
+            </div>
+          </div>
+        ` : ''}
         <div class="segmented" style="margin-top:10px;">
-          ${DISPOSITION_CHOICES.map((c) => `
+          ${dispositionChoices().map((c) => `
             <div class="segmented-option ${d.choice === c ? 'selected' : ''}"
               data-disposition-choice="${escapeHtml(t.id)}" data-val="${c}">
-              ${escapeHtml(bi('disposition_' + c).en)}
+              ${escapeHtml(dispositionLabel(c))}
             </div>
           `).join('')}
         </div>
-        ${d.choice ? `<div class="q-guidance">${escapeHtml(bi('dispositionHelp_' + d.choice).en)}</div>` : ''}
+        ${d.choice ? `<div class="q-guidance">${escapeHtml(dispositionHelpText(d.choice))}</div>` : ''}
         ${d.choice === 'repaired' ? `
           <div class="q-fail-block">
             <label class="field-label">${escapeHtml(bi('unitsRepairedLabel', 'How many were repaired on site?').en)}<span class="required">*</span></label>
@@ -3090,11 +3184,55 @@ function renderDispositionStep() {
     `;
   }).join('');
 
+  /* A running total of what was found and what has been decided. Without it
+   * the recap on the next step can legitimately read zero - because repaired
+   * and rejected units leave the count - with nothing to show that anything
+   * was found at all. */
+  const totalFlagged = targets.reduce((n, t) => n + t.unitsAffected, 0);
+  const decided = targets.filter((t) => (state.dispositions[t.id] || {}).choice).length;
+  const resolvedUnits = targets.reduce((n, t) => {
+    const d = state.dispositions[t.id] || {};
+    if (d.choice === 'rejected') return n + t.unitsAffected;
+    if (d.choice === 'repaired') return n + Math.min(t.unitsAffected, parseInt(d.unitsRepaired, 10) || 0);
+    return n;
+  }, 0);
+
   return `
     ${stepHeaderHtml(bi('dispositionTitle', 'Defective Units').en)}
     <div class="section-help" style="margin-bottom:12px;">
-      ${escapeHtml(bi('dispositionHelp', 'Decide what happens to each set of defective units. Repaired and rejected units come out of the final counts; units the factory will fix stay in and need a follow-up report.').en)}
+      ${escapeHtml(bi('dispositionHelp', 'Decide what happens to each set of defective units.').en)}
     </div>
+
+    <div class="card">
+      <div class="section-title">${escapeHtml(bi('flaggedRecapTitle', 'What was flagged').en)}</div>
+      <table class="aql-preview-table">
+        <thead><tr>
+          <th>${escapeHtml(bi('issueLabel', 'Issue').en)}</th>
+          <th>${escapeHtml(bi('unitsFlaggedLabel', 'Units flagged').en)}</th>
+          <th>${escapeHtml(bi('resolutionLabel', 'Resolution').en)}</th>
+        </tr></thead>
+        <tbody>
+          ${targets.map((t) => {
+            const d = state.dispositions[t.id] || {};
+            const res = d.choice
+              ? (d.choice === 'repaired'
+                ? `${escapeHtml(dispositionLabel('repaired'))} (${parseInt(d.unitsRepaired, 10) || 0}/${t.unitsAffected})`
+                : escapeHtml(dispositionLabel(d.choice)))
+              : `<span class="recap-pct">${escapeHtml(bi('notYetDecided', 'not decided').en)}</span>`;
+            return `<tr><td>${escapeHtml(t.description || '')}</td><td>${t.unitsAffected}</td><td>${res}</td></tr>`;
+          }).join('')}
+          <tr class="total-row">
+            <td>${escapeHtml(bi('totalRow', 'Total').en)}</td>
+            <td>${totalFlagged}</td>
+            <td>${decided} / ${targets.length} ${escapeHtml(bi('decidedLabel', 'decided').en)}</td>
+          </tr>
+        </tbody>
+      </table>
+      ${resolvedUnits ? `<div class="section-help" style="margin-top:8px;">
+        ${escapeHtml(bi('resolvedUnitsNote', '{n} unit(s) come out of the final counts as repaired or rejected.').en.replace('{n}', String(resolvedUnits)))}
+      </div>` : ''}
+    </div>
+
     ${tiles}
     ${navButtonsHtml()}
   `;
@@ -3882,11 +4020,26 @@ function renderAqlTallyCard() {
           <div class="aql-preview-row"><span>${escapeHtml(bi('quantityChecked').en)} <span class="zh">${escapeHtml(bi('quantityChecked').zh)}</span></span><strong>${aql.quantityChecked !== null ? aql.quantityChecked : '-'}</strong></div>
         </div>
         <table class="aql-preview-table" style="margin-top:10px;">
-          <thead><tr><th></th><th>${escapeHtml(bi('foundLabel').en)}</th></tr></thead>
+          <thead><tr>
+            <th></th>
+            <th>${escapeHtml(bi('foundLabel').en)}</th>
+            <th>${escapeHtml(bi('fixedLabel', 'Fixed').en)}</th>
+            <th>${escapeHtml(bi('finalLabel', 'Final').en)}</th>
+          </tr></thead>
           <tbody>
-            <tr><td>${escapeHtml(bi('aqlCritical').en)}</td><td>${aql.criticalCount}</td></tr>
-            <tr><td>${escapeHtml(bi('aqlMajor').en)}</td><td>${aql.majorCount}</td></tr>
-            <tr><td>${escapeHtml(bi('aqlMinor').en)}</td><td>${aql.minorCount}</td></tr>
+            ${(() => {
+              const br = recapBreakdown();
+              return ['critical', 'major', 'minor'].map((sev) => {
+                const r = br[sev];
+                const key = 'aql' + sev.charAt(0).toUpperCase() + sev.slice(1);
+                return `<tr>
+                  <td>${escapeHtml(bi(key).en)}</td>
+                  <td>${r.found}</td>
+                  <td>${r.fixed}</td>
+                  <td><strong>${r.final}</strong></td>
+                </tr>`;
+              }).join('');
+            })()}
           </tbody>
         </table>
       </div>
