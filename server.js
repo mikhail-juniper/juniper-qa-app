@@ -2835,11 +2835,28 @@ async function runHandoffImport(order, driveToken, drive) {
     await filePreview.tryGeneratePreview(dest, path.join(dirFor(), '.thumbs'), `${stored}.page1`);
     return registerFile(stored, got.name, category);
   };
-  const setSlot = (slot, url) => {
-    if (slot && url) {
-      orderManagementStore.updateOrder(order.id,
-        { mainComponent: { [slot]: url } }, IMPORT_TAG, 'Handoff import');
+  /**
+   * Fill a Product Documentation slot, recording where the file came from.
+   *
+   * `url` is the local copy we fetched; `sourceUrl` is the Drive link the
+   * Asana subtask pointed at. Storing both means the slot can offer "Open in
+   * Drive" instead of handing someone our copy - the Drive file is the one
+   * that gets updated, so linking to it is what people actually want.
+   *
+   * docSourceUrls is an object, and updateOrder merges mainComponent key by
+   * key rather than deeply, so writing {docSourceUrls: {hangTagUrl: ...}}
+   * would drop the slots recorded by earlier items in this same import. Read,
+   * merge, write.
+   */
+  const setSlot = (slot, url, sourceUrl) => {
+    if (!slot || !url) return;
+    const patch = { [slot]: url };
+    if (sourceUrl) {
+      const current = orderManagementStore.getOrderById(order.id);
+      const existing = (current && current.mainComponent && current.mainComponent.docSourceUrls) || {};
+      patch.docSourceUrls = { ...existing, [slot]: sourceUrl };
     }
+    orderManagementStore.updateOrder(order.id, { mainComponent: patch }, IMPORT_TAG, 'Handoff import');
   };
 
   /**
@@ -2906,7 +2923,7 @@ async function runHandoffImport(order, driveToken, drive) {
           const meta = await driveClient.getFile(access, it.drvFile[1]);
           const url = await saveDriveFile(access, meta, 'Design document');
           const slot = docSlotFor(it.label);
-          setSlot(slot, url);
+          setSlot(slot, url, it.url);
           recordOnDefinition(it.label, url);
           results.push({ label: it.label, status: 'imported', files: 1, as: slot ? `Product Documentation - ${it.label}` : 'PO file (slot already filled)' });
         } else {
@@ -2960,7 +2977,7 @@ async function runHandoffImport(order, driveToken, drive) {
             }
           }
           const slot = docSlotFor(it.label);
-          setSlot(slot, url);
+          setSlot(slot, url, it.url);
           recordOnDefinition(it.label, url);
           results.push({ label: it.label, status: 'imported', files: listed.length,
             as: slot ? `Product Documentation - ${it.label}${listed.length > 1 ? ' (zip)' : ''}` : 'PO file (slot already filled)' });

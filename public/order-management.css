@@ -1201,3 +1201,45 @@ details.om-handoff-card[open] > summary::after { content: '▾'; }
   font-weight: 700;
   color: var(--jc-teal-dark);
 }
+
+/* Reserve the scrollbar gutter so autosave doesn't shunt the layout sideways.
+   Saving re-renders the panel, and for a frame the content can be short enough
+   to drop the vertical scrollbar - the panel widens by the scrollbar's width,
+   then snaps back when the content returns. That read as the whole page
+   twitching left and right on every save.
+
+   scrollbar-gutter keeps the space allocated whether or not a scrollbar is
+   currently drawn. The overflow-y: scroll fallback does the same thing in
+   older engines at the cost of always drawing the track. */
+.om-panel {
+  scrollbar-gutter: stable;
+}
+@supports not (scrollbar-gutter: stable) {
+  .om-panel { overflow-y: scroll; }
+}
+
+/* Same reasoning for the page behind it: opening and closing the panel, and
+   any re-render that changes page height, shifts content horizontally when the
+   document scrollbar comes and goes. */
+html {
+  scrollbar-gutter: stable;
+}
+
+/* The save status cycles through "", "Saving...", "Saved" and "Unsaved
+   changes", each a different width. Sitting in the header's flex row ahead of
+   the buttons, every change nudged "Save changes" and the close button
+   sideways - which is what read as the page twitching left and right on each
+   autosave.
+
+   Reserving the width of the longest state keeps the buttons still. Right
+   alignment means the text grows leftwards into its own reserved space rather
+   than pushing anything. */
+.om-save-status {
+  display: inline-block;
+  min-width: 112px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--jc-muted);
+  margin-right: 10px;
+  white-space: nowrap;
+}

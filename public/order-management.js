@@ -2278,7 +2278,7 @@ async function openDetailPanel(id, scope) {
       </div>
       <div style="display:flex;gap:10px;align-items:center;">
         ${scope !== 'full' ? `<button class="btn btn-secondary" id="omViewFullPo" style="flex:none;width:auto;padding:7px 14px;font-size:13px;">${i18('btnViewFullPo', 'View full PO')}</button>` : ''}
-        <span id="omSaveStatus" style="font-size:12px;color:var(--jc-muted);margin-right:10px;"></span>
+        <span id="omSaveStatus" class="om-save-status"></span>
         <button class="btn btn-primary" id="omSaveOrder" style="flex:none;width:auto;padding:8px 18px;">${i18('btnSaveChanges', 'Save changes')}</button>
         <button class="om-panel-close" id="omClosePanel">&times;</button>
       </div>
@@ -4063,16 +4063,16 @@ async function openDetailPanel(id, scope) {
         purchaseQuantity: document.getElementById('fPurchaseQty').value || null,
         warehouse: warehouseValue,
         photoReference: document.getElementById('fPhotoReference').value,
-        manufacturingDrawing: document.getElementById('fManufacturingDrawing').value,
-        washingTagUrl: document.getElementById('fWashingTagUrl').value,
-        hangTagUrl: document.getElementById('fHangTagUrl').value,
-        packagingUrl: document.getElementById('fPackagingUrl').value,
-        docSourceUrls: {
-          manufacturingDrawing: document.getElementById('fManufacturingDrawingSource').value || '',
-          washingTagUrl: document.getElementById('fWashingTagUrlSource').value || '',
-          hangTagUrl: document.getElementById('fHangTagUrlSource').value || '',
-          packagingUrl: document.getElementById('fPackagingUrlSource').value || ''
-        },
+        /* File slots are written by things OTHER than this form - the Asana
+         * handoff import populates them server-side, and a panel left open
+         * still holds the empty values it rendered with. Autosaving those
+         * blanked freshly-imported files: the form is not the only writer, so
+         * it must not assert emptiness it never chose.
+         *
+         * An empty field is therefore only sent when it started empty AND
+         * something actually changed it, which is what happens when a user
+         * clears a slot. An untouched empty field is omitted entirely. */
+        ...docSlotPatch(),
         // dimensionsUrl is no longer editable - kept as-is so existing
         // records don't lose a previously uploaded file.
         dimensionsUrl: order.mainComponent.dimensionsUrl || '',
@@ -4117,6 +4117,9 @@ async function openDetailPanel(id, scope) {
   let lastSaved = null;
   let autoSaveTimer = null;
   let saveInFlight = false;
+
+  // Record what the file slots looked like when this panel rendered.
+  captureDocSlotBaseline();
 
   const setSaveStatus = (key, fallback) => {
     const el = document.getElementById('omSaveStatus');
@@ -5384,6 +5387,53 @@ function wireUploadField(fieldId, orderId, category, isImage) {
  * Returns null when there is nothing renderable, in which case the caller
  * falls back to a link.
  */
+/* Baseline values captured when the panel rendered, so an autosave can tell
+ * "the user cleared this" from "this was empty when the page loaded and
+ * something else has filled it since". */
+let docSlotBaseline = {};
+
+const DOC_SLOT_FIELDS = [
+  ['manufacturingDrawing', 'fManufacturingDrawing'],
+  ['washingTagUrl', 'fWashingTagUrl'],
+  ['hangTagUrl', 'fHangTagUrl'],
+  ['packagingUrl', 'fPackagingUrl']
+];
+
+function captureDocSlotBaseline() {
+  docSlotBaseline = {};
+  DOC_SLOT_FIELDS.forEach(([key, id]) => {
+    const el = document.getElementById(id);
+    docSlotBaseline[key] = el ? el.value : '';
+    const src = document.getElementById(id + 'Source');
+    docSlotBaseline[key + '__source'] = src ? src.value : '';
+  });
+}
+
+/** The doc-slot part of the patch, omitting fields this form hasn't changed. */
+function docSlotPatch() {
+  const patch = {};
+  const sources = {};
+  let anySource = false;
+
+  DOC_SLOT_FIELDS.forEach(([key, id]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const value = el.value;
+    const wasEmpty = !docSlotBaseline[key];
+    // Untouched and empty: say nothing, so a concurrent import survives.
+    if (!value && wasEmpty) return;
+    patch[key] = value;
+
+    const src = document.getElementById(id + 'Source');
+    const srcValue = src ? src.value : '';
+    if (srcValue || docSlotBaseline[key + '__source']) { anySource = true; }
+    sources[key] = srcValue;
+  });
+
+  if (anySource) patch.docSourceUrls = sources;
+  return patch;
+}
+
 function accessoryThumbSrc(order, url) {
   const u = String(url || '').trim();
   if (!u) return null;
