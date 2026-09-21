@@ -4830,5 +4830,189 @@
   "finalLabel": {
     "en": "Final",
     "zh": "最终"
+  },
+  "view_board": {
+    "en": "Default",
+    "zh": "默认视图"
+  },
+  "view_checkin": {
+    "en": "PO Check-In",
+    "zh": "订单跟进"
+  },
+  "view_qa": {
+    "en": "QA Scheduling",
+    "zh": "质检排期"
+  },
+  "view_pd": {
+    "en": "PD Approval",
+    "zh": "产品开发审批"
+  },
+  "owner_you": {
+    "en": "You",
+    "zh": "待你处理"
+  },
+  "owner_qa": {
+    "en": "QA",
+    "zh": "待质检"
+  },
+  "owner_pd": {
+    "en": "Product Dev",
+    "zh": "待产品开发"
+  },
+  "owner_supplier": {
+    "en": "Supplier",
+    "zh": "待供应商"
+  },
+  "owner_none": {
+    "en": "-",
+    "zh": "-"
+  },
+  "overdueByDays": {
+    "en": "{n}d overdue",
+    "zh": "逾期 {n} 天"
+  },
+  "checkInIntro": {
+    "en": "Pick a supplier to work through their open orders one at a time. Notes save as you go.",
+    "zh": "选择供应商，逐单跟进其未完成订单。备注即时保存。"
+  },
+  "openOrders": {
+    "en": "open orders",
+    "zh": "个未完成订单"
+  },
+  "needYou": {
+    "en": "need you",
+    "zh": "待你处理"
+  },
+  "overdueLabel": {
+    "en": "overdue",
+    "zh": "逾期"
+  },
+  "noSupplier": {
+    "en": "No supplier",
+    "zh": "未指定供应商"
+  },
+  "backToSuppliers": {
+    "en": "All suppliers",
+    "zh": "全部供应商"
+  },
+  "unitsWord": {
+    "en": "units",
+    "zh": "件"
+  },
+  "nothingOutstanding": {
+    "en": "Nothing outstanding",
+    "zh": "无待办事项"
+  },
+  "date_ppSample": {
+    "en": "PP sample",
+    "zh": "头样日期"
+  },
+  "date_bulkSample": {
+    "en": "Bulk sample",
+    "zh": "大货样日期"
+  },
+  "date_delivery": {
+    "en": "Delivery",
+    "zh": "交货日期"
+  },
+  "lastNoteLabel": {
+    "en": "Last note",
+    "zh": "上次备注"
+  },
+  "addNoteLabel": {
+    "en": "Progress note",
+    "zh": "进度备注"
+  },
+  "checkInNotePlaceholder": {
+    "en": "What did the supplier say?",
+    "zh": "供应商怎么说？"
+  },
+  "followUpLabel": {
+    "en": "Follow up on",
+    "zh": "跟进日期"
+  },
+  "followUpNotePlaceholder": {
+    "en": "What are you waiting for?",
+    "zh": "在等什么？"
+  },
+  "previous": {
+    "en": "Previous",
+    "zh": "上一个"
+  },
+  "openFullPo": {
+    "en": "Open full PO",
+    "zh": "打开完整订单"
+  },
+  "saveAndNext": {
+    "en": "Save and next",
+    "zh": "保存并下一个"
+  },
+  "saveAndFinish": {
+    "en": "Save and finish",
+    "zh": "保存并完成"
+  },
+  "checkInHint": {
+    "en": "Ctrl+Enter saves and moves to the next order.",
+    "zh": "Ctrl+Enter 保存并转至下一单。"
+  },
+  "checkInDone": {
+    "en": "Finished this supplier.",
+    "zh": "该供应商已跟进完毕。"
+  },
+  "emptyNoOpenOrders": {
+    "en": "No open orders.",
+    "zh": "没有未完成订单。"
+  },
+  "emptyNothingHere": {
+    "en": "Nothing here.",
+    "zh": "暂无内容。"
+  },
+  "qaBucketDue": {
+    "en": "Sample ready, no report link yet",
+    "zh": "样品已到期，尚未安排检验"
+  },
+  "qaBucketDueHelp": {
+    "en": "These are the ones that slip. The sample date has arrived and nothing has been scheduled.",
+    "zh": "这类最易遯漏：样品日期已到，但尚未安排检验。"
+  },
+  "qaBucketPending": {
+    "en": "Inspection booked, report not in",
+    "zh": "已安排检验，报告未提交"
+  },
+  "qaBucketPendingHelp": {
+    "en": "A link has been sent. Waiting on the QA team to submit.",
+    "zh": "已发送报告链接，等待质检团队提交。"
+  },
+  "qaBucketUpcoming": {
+    "en": "Coming up",
+    "zh": "即将到期"
+  },
+  "qaBucketUpcomingHelp": {
+    "en": "Sample dates ahead. Schedule before they arrive.",
+    "zh": "样品日期即将到来，请提前安排。"
+  },
+  "pdWaitingOnYou": {
+    "en": "Waiting on you",
+    "zh": "待你处理"
+  },
+  "pdWaitingOnYouHelp": {
+    "en": "Product Development has commented or asked for changes. Nothing moves until you reply.",
+    "zh": "产品开发已留言或要求修改，需你回复后才能推进。"
+  },
+  "pdWaitingOnPd": {
+    "en": "Waiting on Product Development",
+    "zh": "待产品开发审批"
+  },
+  "pdWaitingOnPdHelp": {
+    "en": "Submitted and sitting with PD. Chase anything that has been here too long.",
+    "zh": "已提交至产品开发，停留过久的需跟进。"
+  },
+  "thSampleDate": {
+    "en": "Sample date",
+    "zh": "样品日期"
+  },
+  "openLabel": {
+    "en": "Open",
+    "zh": "打开"
   }
 }

@@ -176,6 +176,11 @@ async function loadOrders() {
 
 function render() {
   const root = document.getElementById('omRoot');
+  /* The working views replace the page entirely rather than filtering the
+     board - the call-down in particular wants the full width. */
+  if (currentView === 'home' && omWorkView === 'checkin') return renderCheckInView(root);
+  if (currentView === 'home' && omWorkView === 'qa') return renderQaSchedulingView(root);
+  if (currentView === 'home' && omWorkView === 'pd') return renderPdApprovalView(root);
   if (currentView === 'home') return renderHome(root);
   if (currentView === 'suppliers') return renderSuppliersShell(root);
   if (currentView === 'products') return renderProductsShell(root);
@@ -285,7 +290,7 @@ function applyTileFilters(orders, st) {
 }
 
 async function renderHome(root) {
-  root.innerHTML = `<div class="om-empty">${i18('emptyLoading', 'Loading...')}</div>`;
+  root.innerHTML = workViewTabsHtml() + `<div class="om-empty">${i18('emptyLoading', 'Loading...')}</div>`;
   /* Fetch once before drawing: the tile headers show counts derived from
    * this same list, so they can never disagree with the rows below. */
   try {
@@ -325,7 +330,7 @@ async function renderHome(root) {
     `;
   };
 
-  root.innerHTML = `
+  root.innerHTML = workViewTabsHtml() + `
     ${groupTile('requests')}
     ${groupTile('production')}
     ${groupTile('completed')}
@@ -360,6 +365,7 @@ async function renderHome(root) {
     batchBtn.addEventListener('click', (e) => { e.stopPropagation(); openBatchSendPanel(); });
   }
 
+  bindWorkViewTabs();
   Object.keys(STATUS_GROUPS).forEach(loadTilePreview);
 }
 
@@ -5925,4 +5931,329 @@ function askForSourceLink(fileName) {
     document.body.appendChild(back);
     setTimeout(() => back.querySelector('#omSourceLinkInput').focus(), 30);
   });
+}
+
+/* ============================================================
+ * Chloe's working views
+ * ============================================================
+ * The default board is organised by what state a PO is in. Her work is
+ * organised by what needs her attention, which is a different axis - so these
+ * are separate full-page views rather than filters on the board.
+ *
+ * All three read the same /work-queue endpoint, which returns every open PO
+ * with a derived next action (owner, label, date). One source means the three
+ * views can never disagree about what a PO needs.
+ */
+const OM_WORK_VIEWS = [
+  ['board', 'Default'],
+  ['checkin', 'PO Check-In'],
+  ['qa', 'QA Scheduling'],
+  ['pd', 'PD Approval']
+];
+
+let omWorkView = 'board';
+let workQueueCache = null;
+let checkInSupplier = null;
+let checkInIndex = 0;
+
+function workViewTabsHtml() {
+  return `
+    <div class="om-view-tabs">
+      ${OM_WORK_VIEWS.map(([key, label]) => `
+        <button type="button" class="om-view-tab ${omWorkView === key ? 'is-on' : ''}" data-work-view="${key}">
+          ${escapeHtml(i18t('view_' + key, label))}
+        </button>
+      `).join('')}
+    </div>
+  `;
+}
+
+function bindWorkViewTabs() {
+  document.querySelectorAll('[data-work-view]').forEach((el) => {
+    el.addEventListener('click', () => {
+      omWorkView = el.dataset.workView;
+      checkInSupplier = null;
+      checkInIndex = 0;
+      render();
+    });
+  });
+}
+
+async function loadWorkQueue(force) {
+  if (workQueueCache && !force) return workQueueCache;
+  const data = await api('/api/order-management/work-queue');
+  workQueueCache = data.rows || [];
+  return workQueueCache;
+}
+
+/** Overdue first, then soonest due, then everything undated. */
+function byUrgency(a, b) {
+  const ao = a.action.overdueBy || 0;
+  const bo = b.action.overdueBy || 0;
+  if (ao !== bo) return bo - ao;
+  const ad = a.action.dueDate || '9999';
+  const bd = b.action.dueDate || '9999';
+  return ad < bd ? -1 : ad > bd ? 1 : 0;
+}
+
+const OWNER_LABELS = {
+  you: ['You', 'om-owner-you'],
+  qa: ['QA', 'om-owner-qa'],
+  pd: ['Product Dev', 'om-owner-pd'],
+  supplier: ['Supplier', 'om-owner-supplier'],
+  none: ['-', 'om-owner-none']
+};
+
+function ownerPill(owner) {
+  const [label, cls] = OWNER_LABELS[owner] || OWNER_LABELS.none;
+  return `<span class="om-owner-pill ${cls}">${escapeHtml(i18t('owner_' + owner, label))}</span>`;
+}
+
+function dueBadge(action) {
+  if (!action.dueDate) return '';
+  const over = action.overdueBy || 0;
+  const cls = over > 0 ? 'om-due-over' : over > -7 ? 'om-due-soon' : '';
+  const text = over > 0
+    ? i18t('overdueByDays', '{n}d overdue').replace('{n}', String(over))
+    : fmtDate(action.dueDate);
+  return `<span class="om-due-badge ${cls}">${escapeHtml(text)}</span>`;
+}
+
+/* ---- PO Check-In: the weekly supplier call-down ----
+ * One supplier at a time, one PO at a time, note box already focused. Her
+ * current process is a spreadsheet per supplier, where every row costs a click
+ * to find, a click to edit and a click to save. A queue removes all three. */
+async function renderCheckInView(root) {
+  root.innerHTML = `${workViewTabsHtml()}<div class="om-empty">${i18('emptyLoading', 'Loading...')}</div>`;
+  bindWorkViewTabs();
+  let rows;
+  try { rows = await loadWorkQueue(); }
+  catch (e) { root.innerHTML = workViewTabsHtml() + `<div class="om-empty">${escapeHtml(e.message)}</div>`; bindWorkViewTabs(); return; }
+
+  const bySupplier = {};
+  rows.forEach((r) => {
+    const key = r.supplierName || i18t('noSupplier', 'No supplier');
+    (bySupplier[key] = bySupplier[key] || []).push(r);
+  });
+  Object.values(bySupplier).forEach((list) => list.sort(byUrgency));
+
+  if (!checkInSupplier || !bySupplier[checkInSupplier]) {
+    root.innerHTML = `
+      ${workViewTabsHtml()}
+      <div class="om-section-intro">${escapeHtml(i18t('checkInIntro', 'Pick a supplier to work through their open orders one at a time. Notes save as you go.'))}</div>
+      <div class="om-supplier-grid">
+        ${Object.keys(bySupplier).sort().map((name) => {
+          const list = bySupplier[name];
+          const needsYou = list.filter((r) => r.action.owner === 'you').length;
+          const overdue = list.filter((r) => (r.action.overdueBy || 0) > 0).length;
+          return `
+            <button type="button" class="om-supplier-card" data-checkin-supplier="${escapeHtml(name)}">
+              <div class="om-supplier-name">${escapeHtml(name)}</div>
+              <div class="om-supplier-meta">
+                <span>${list.length} ${escapeHtml(i18t('openOrders', 'open orders'))}</span>
+                ${needsYou ? `<span class="om-owner-pill om-owner-you">${needsYou} ${escapeHtml(i18t('needYou', 'need you'))}</span>` : ''}
+                ${overdue ? `<span class="om-due-badge om-due-over">${overdue} ${escapeHtml(i18t('overdueLabel', 'overdue'))}</span>` : ''}
+              </div>
+            </button>
+          `;
+        }).join('') || `<div class="om-empty">${escapeHtml(i18t('emptyNoOpenOrders', 'No open orders.'))}</div>`}
+      </div>
+    `;
+    bindWorkViewTabs();
+    document.querySelectorAll('[data-checkin-supplier]').forEach((el) => {
+      el.addEventListener('click', () => { checkInSupplier = el.dataset.checkinSupplier; checkInIndex = 0; render(); });
+    });
+    return;
+  }
+
+  const list = bySupplier[checkInSupplier];
+  const idx = Math.min(checkInIndex, list.length - 1);
+  const r = list[idx];
+
+  root.innerHTML = `
+    ${workViewTabsHtml()}
+    <div class="om-checkin-head">
+      <button type="button" class="btn btn-secondary" id="omCheckInBack" style="width:auto;padding:7px 14px;">${escapeHtml(i18t('backToSuppliers', 'All suppliers'))}</button>
+      <div class="om-checkin-title">${escapeHtml(checkInSupplier)}</div>
+      <div class="om-checkin-progress">${idx + 1} / ${list.length}</div>
+    </div>
+
+    <div class="card om-checkin-card">
+      <div class="om-checkin-po">
+        <div>
+          <div class="om-checkin-poname">${escapeHtml(r.productName || '')}</div>
+          <div class="om-checkin-ponum">${escapeHtml(r.poNumber)} &middot; ${escapeHtml(r.sku || '')} &middot; ${r.quantity != null ? Number(r.quantity).toLocaleString() : '-'} ${escapeHtml(i18t('unitsWord', 'units'))}</div>
+        </div>
+        <div>${ownerPill(r.action.owner)} ${dueBadge(r.action)}</div>
+      </div>
+
+      <div class="om-checkin-action">${escapeHtml(r.action.label || i18t('nothingOutstanding', 'Nothing outstanding'))}</div>
+
+      <div class="om-checkin-dates">
+        ${[['ppSample', r.preProductionSampleDate], ['bulkSample', r.bulkSampleDate], ['delivery', r.deliveryDate]]
+          .filter(([, d]) => d)
+          .map(([k, d]) => `<span><em>${escapeHtml(i18t('date_' + k, k))}</em> ${escapeHtml(fmtDate(d))}</span>`).join('')}
+      </div>
+
+      ${r.lastNote ? `
+        <div class="om-checkin-lastnote">
+          <div class="om-checkin-lastnote-head">${escapeHtml(i18t('lastNoteLabel', 'Last note'))} &middot; ${escapeHtml(fmtDate(r.lastNote.at))} &middot; ${escapeHtml(r.lastNote.by || '')}</div>
+          ${escapeHtml(r.lastNote.text || '')}
+        </div>` : ''}
+
+      <label class="field-label" style="margin-top:12px;">${escapeHtml(i18t('addNoteLabel', 'Progress note'))}</label>
+      <textarea id="omCheckInNote" rows="3" placeholder="${escapeHtml(i18t('checkInNotePlaceholder', 'What did the supplier say?'))}"></textarea>
+
+      <div class="om-checkin-followup">
+        <label class="field-label">${escapeHtml(i18t('followUpLabel', 'Follow up on'))}</label>
+        <input type="date" id="omCheckInFollowUp" value="${escapeHtml(r.followUpDate || '')}" />
+        <input type="text" id="omCheckInFollowUpNote" placeholder="${escapeHtml(i18t('followUpNotePlaceholder', 'What are you waiting for?'))}" value="${escapeHtml(r.followUpNote || '')}" />
+      </div>
+
+      <div class="om-checkin-nav">
+        <button type="button" class="btn btn-secondary" id="omCheckInPrev" ${idx === 0 ? 'disabled' : ''}>${escapeHtml(i18t('previous', 'Previous'))}</button>
+        <button type="button" class="btn btn-secondary" id="omCheckInOpen">${escapeHtml(i18t('openFullPo', 'Open full PO'))}</button>
+        <button type="button" class="btn btn-primary" id="omCheckInNext">${escapeHtml(idx === list.length - 1 ? i18t('saveAndFinish', 'Save and finish') : i18t('saveAndNext', 'Save and next'))}</button>
+      </div>
+      <div class="om-checkin-hint">${escapeHtml(i18t('checkInHint', 'Ctrl+Enter saves and moves to the next order.'))}</div>
+    </div>
+  `;
+  bindWorkViewTabs();
+
+  const noteEl = document.getElementById('omCheckInNote');
+  if (noteEl) noteEl.focus();
+
+  const saveAndGo = async (delta) => {
+    const note = (document.getElementById('omCheckInNote') || {}).value || '';
+    const fu = (document.getElementById('omCheckInFollowUp') || {}).value || '';
+    const fuNote = (document.getElementById('omCheckInFollowUpNote') || {}).value || '';
+    try {
+      if (note.trim()) {
+        await api(`/api/order-management/orders/${encodeURIComponent(r.id)}/progress-note`, {
+          method: 'POST', body: JSON.stringify({ text: note.trim() })
+        });
+      }
+      if (fu !== (r.followUpDate || '') || fuNote !== (r.followUpNote || '')) {
+        await api(`/api/order-management/orders/${encodeURIComponent(r.id)}`, {
+          method: 'PATCH', body: JSON.stringify({ patch: { followUpDate: fu || null, followUpNote: fuNote } })
+        });
+      }
+    } catch (e) { showToast(e.message, true); return; }
+
+    workQueueCache = null;          // the action may have changed
+    checkInIndex = Math.max(0, Math.min(list.length - 1, idx + delta));
+    if (delta > 0 && idx === list.length - 1) {
+      showToast(i18t('checkInDone', 'Finished this supplier.'));
+      checkInSupplier = null;
+    }
+    render();
+  };
+
+  document.getElementById('omCheckInBack').addEventListener('click', () => { checkInSupplier = null; render(); });
+  document.getElementById('omCheckInPrev').addEventListener('click', () => saveAndGo(-1));
+  document.getElementById('omCheckInNext').addEventListener('click', () => saveAndGo(1));
+  document.getElementById('omCheckInOpen').addEventListener('click', () => openDetailPanel(r.id, 'full'));
+  if (noteEl) {
+    noteEl.addEventListener('keydown', (e) => {
+      // Keyboard-first: she should never need the mouse to work the queue.
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); saveAndGo(1); }
+    });
+  }
+}
+
+/* ---- QA Scheduling: driven by the sample dates ---- */
+async function renderQaSchedulingView(root) {
+  root.innerHTML = `${workViewTabsHtml()}<div class="om-empty">${i18('emptyLoading', 'Loading...')}</div>`;
+  bindWorkViewTabs();
+  let rows;
+  try { rows = await loadWorkQueue(); }
+  catch (e) { root.innerHTML = workViewTabsHtml() + `<div class="om-empty">${escapeHtml(e.message)}</div>`; bindWorkViewTabs(); return; }
+
+  const qaRows = rows.filter((r) => ['qaSetupDue', 'qaUpcoming', 'qaReportPending'].includes(r.action.kind));
+  const buckets = [
+    ['qaSetupDue', i18t('qaBucketDue', 'Sample ready, no report link yet'), i18t('qaBucketDueHelp', 'These are the ones that slip. The sample date has arrived and nothing has been scheduled.')],
+    ['qaReportPending', i18t('qaBucketPending', 'Inspection booked, report not in'), i18t('qaBucketPendingHelp', 'A link has been sent. Waiting on the QA team to submit.')],
+    ['qaUpcoming', i18t('qaBucketUpcoming', 'Coming up'), i18t('qaBucketUpcomingHelp', 'Sample dates ahead. Schedule before they arrive.')]
+  ];
+
+  root.innerHTML = `
+    ${workViewTabsHtml()}
+    ${buckets.map(([kind, title, help]) => {
+      const list = qaRows.filter((r) => r.action.kind === kind).sort(byUrgency);
+      return `
+        <div class="card">
+          <div class="section-title">${escapeHtml(title)} <span class="om-count">${list.length}</span></div>
+          <div class="section-help">${escapeHtml(help)}</div>
+          ${list.length ? `
+            <div class="size-table-wrap"><table class="size-table">
+              <thead><tr>
+                <th>${escapeHtml(i18t('thPoNumber', 'PO'))}</th><th>${escapeHtml(i18t('thProduct', 'Product'))}</th>
+                <th>${escapeHtml(i18t('thSupplier', 'Supplier'))}</th><th>${escapeHtml(i18t('thSampleDate', 'Sample date'))}</th>
+                <th>${escapeHtml(i18t('thAction', 'Next'))}</th><th></th>
+              </tr></thead>
+              <tbody>${list.map((r) => `
+                <tr>
+                  <td><strong>${escapeHtml(r.poNumber)}</strong></td>
+                  <td>${escapeHtml(r.productName || '')}</td>
+                  <td>${escapeHtml(r.supplierName || '')}</td>
+                  <td>${dueBadge(r.action)}</td>
+                  <td>${escapeHtml(r.action.label || '')}</td>
+                  <td><button type="button" class="om-table-upload-btn" data-open-po="${escapeHtml(r.id)}">${escapeHtml(i18t('openLabel', 'Open'))}</button></td>
+                </tr>`).join('')}</tbody>
+            </table></div>
+          ` : `<div class="om-empty">${escapeHtml(i18t('emptyNothingHere', 'Nothing here.'))}</div>`}
+        </div>
+      `;
+    }).join('')}
+  `;
+  bindWorkViewTabs();
+  document.querySelectorAll('[data-open-po]').forEach((el) =>
+    el.addEventListener('click', () => openDetailPanel(el.dataset.openPo, 'full')));
+}
+
+/* ---- PD Approval: who is it waiting on ---- */
+async function renderPdApprovalView(root) {
+  root.innerHTML = `${workViewTabsHtml()}<div class="om-empty">${i18('emptyLoading', 'Loading...')}</div>`;
+  bindWorkViewTabs();
+  let rows;
+  try { rows = await loadWorkQueue(); }
+  catch (e) { root.innerHTML = workViewTabsHtml() + `<div class="om-empty">${escapeHtml(e.message)}</div>`; bindWorkViewTabs(); return; }
+
+  const pdRows = rows.filter((r) => ['pdReview', 'pdReply'].includes(r.action.kind));
+  const groups = [
+    ['pdReply', i18t('pdWaitingOnYou', 'Waiting on you'), i18t('pdWaitingOnYouHelp', 'Product Development has commented or asked for changes. Nothing moves until you reply.')],
+    ['pdReview', i18t('pdWaitingOnPd', 'Waiting on Product Development'), i18t('pdWaitingOnPdHelp', 'Submitted and sitting with PD. Chase anything that has been here too long.')]
+  ];
+
+  root.innerHTML = `
+    ${workViewTabsHtml()}
+    ${groups.map(([kind, title, help]) => {
+      const list = pdRows.filter((r) => r.action.kind === kind);
+      return `
+        <div class="card">
+          <div class="section-title">${escapeHtml(title)} <span class="om-count">${list.length}</span></div>
+          <div class="section-help">${escapeHtml(help)}</div>
+          ${list.length ? `
+            <div class="size-table-wrap"><table class="size-table">
+              <thead><tr>
+                <th>${escapeHtml(i18t('thPoNumber', 'PO'))}</th><th>${escapeHtml(i18t('thProduct', 'Product'))}</th>
+                <th>${escapeHtml(i18t('thSupplier', 'Supplier'))}</th><th>${escapeHtml(i18t('thAction', 'Next'))}</th><th></th>
+              </tr></thead>
+              <tbody>${list.map((r) => `
+                <tr>
+                  <td><strong>${escapeHtml(r.poNumber)}</strong></td>
+                  <td>${escapeHtml(r.productName || '')}</td>
+                  <td>${escapeHtml(r.supplierName || '')}</td>
+                  <td>${escapeHtml(r.action.label || '')}</td>
+                  <td><button type="button" class="om-table-upload-btn" data-open-po="${escapeHtml(r.id)}">${escapeHtml(i18t('openLabel', 'Open'))}</button></td>
+                </tr>`).join('')}</tbody>
+            </table></div>
+          ` : `<div class="om-empty">${escapeHtml(i18t('emptyNothingHere', 'Nothing here.'))}</div>`}
+        </div>
+      `;
+    }).join('')}
+  `;
+  bindWorkViewTabs();
+  document.querySelectorAll('[data-open-po]').forEach((el) =>
+    el.addEventListener('click', () => openDetailPanel(el.dataset.openPo, 'full')));
 }
