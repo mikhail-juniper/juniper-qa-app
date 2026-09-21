@@ -52,6 +52,8 @@ const state = {
   productWeightG: '',
   poWeightG: null,
   poDimensionsTable: null,
+  /* Needed to build rasteriser URLs for non-image reference files. */
+  orderId: null,
   /* Identifies this report's photo folder on the server. Photos upload as
    * they are taken, so the report holds references rather than File objects -
    * which is what makes save-and-resume possible at all. */
@@ -382,14 +384,18 @@ function computeActualAqlPlan() {
 function collectAllDefects() {
   const all = [];
 
-  // Step 5: one major defect per failed question, sized by units affected.
+  /* Step 5: one defect per failed question, at the severity the question bank
+     assigns it, sized by units affected. This duplicated collectRawDefects and
+     still hardcoded 'major' after severity became per-question - so the client
+     scored a critical question as major while the server scored it correctly,
+     and the two disagreed on the verdict. */
   questionsForStep(5).concat(additionalReviewQuestions()).forEach((q) => {
     const a = state.answers[q.id];
     if (!a || a.status !== 'fail') return;
     all.push({
       id: q.id,
       description: q.title,
-      severity: 'major',
+      severity: severityForQuestion(q, 'major'),
       unitsAffected: parseInt(a.unitsAffected, 10) || 1,
       photos: a.media || []
     });
@@ -494,9 +500,12 @@ function rateFailures(counts, unitsChecked) {
   const th = failThresholds();
   const pct = (n) => (n / unitsChecked) * 100;
 
-  // Every inspected unit affected -> this is a batch problem, not a unit one.
-  out.isCritical = counts.totalDefectiveUnits >= unitsChecked;
-  out.rates.critical = out.isCritical ? 100 : 0;
+  /* Critical is no longer computed from "every unit affected" - the QA team
+   * assigns it per question instead, so a critical defect is critical at any
+   * quantity. The rate below is the real critical rate, which with a 0%
+   * threshold means a single critical unit fails the report. */
+  out.rates.critical = pct(counts.critical.defectiveUnits);
+  out.isCritical = counts.critical.defectiveUnits > 0;
   out.rates.major = pct(counts.major.defectiveUnits);
   out.rates.minor = pct(counts.minor.defectiveUnits);
 
@@ -1679,6 +1688,7 @@ async function submitPoLookup() {
       width: record.dimensionsWidth,
       depth: record.dimensionsLength
     };
+    state.orderId = record.id || null;
     state.poWeightG = record.weightGrams || null;
 
     /* Apparel sizing comes from the PO's Product Dimensions table, which is
@@ -1788,6 +1798,36 @@ async function submitPoLookup() {
 
 /* ---- Step 3: Production Notes (reference images, notes from every approval
  * stage, and every issue found on previous POs of this SKU) ---- */
+/**
+ * What to put in an <img> for a stored reference photo.
+ *
+ * Approval photos are stored as the ORIGINAL file so PD keeps full
+ * resolution, and manufacturing drawings, tag artwork and packaging specs are
+ * routinely PDF or AI - which no browser renders in an <img>. Those slots
+ * showed broken icons on Step 3's reference strip and beside the Step 5
+ * questions.
+ *
+ * Route anything that isn't an image through the server's rasteriser. Mirrors
+ * approvalPhotoSrc in public/approval.js.
+ */
+function referenceImageSrc(url) {
+  const u = String(url || '');
+  if (!u) return u;
+  if (/\.(png|jpe?g|gif|webp|bmp)(\?|$)/i.test(u)) return u;
+
+  const marker = '/order-management-files/';
+  const at = u.indexOf(marker);
+  if (at !== -1 && state.orderId) {
+    const parts = u.slice(at + marker.length).split('/');
+    const storedName = decodeURIComponent(parts[parts.length - 1] || '');
+    if (storedName) {
+      return `/api/order-management/orders/${encodeURIComponent(state.orderId)}/thumb`
+        + `?file=${encodeURIComponent(storedName)}&w=1200`;
+    }
+  }
+  return u;
+}
+
 function renderReferencePhotosSection() {
   const sample = state.approvalReferencePhotos.sample || {};
   const preProd = state.approvalReferencePhotos.preProduction || {};
@@ -1800,7 +1840,7 @@ function renderReferencePhotosSection() {
     if (!slots.length) return '';
     const tiles = slots.flatMap((slotKey) => photosMap[slotKey].map((url) => `
       <div class="photo-tile">
-        <div class="photo-gallery-large-frame"><img src="${escapeHtml(url)}" class="js-lightbox" /></div>
+        <div class="photo-gallery-large-frame"><img src="${escapeHtml(referenceImageSrc(url))}" class="js-lightbox" data-photo-target="${escapeHtml(url)}" /></div>
         <div class="photo-tile-caption">${escapeHtml(slotKey)}</div>
       </div>
     `)).join('');
@@ -2670,7 +2710,7 @@ function renderQuestionCard(q) {
         return `
           <div class="q-reference">
             <div class="q-reference-label">${escapeHtml(bi('approvedReferenceLabel', 'Approved sample').en)}</div>
-            <div class="q-reference-frame"><img src="${escapeHtml(ref)}" class="js-lightbox" alt="" /></div>
+            <div class="q-reference-frame"><img src="${escapeHtml(referenceImageSrc(ref))}" class="js-lightbox" data-photo-target="${escapeHtml(ref)}" alt="" /></div>
           </div>
         `;
       })()}
@@ -3098,12 +3138,23 @@ function navButtonsHtml() {
 /* Defects as recorded, BEFORE any disposition is applied. The disposition step
  * needs the original numbers to ask about; collectAllDefects() below returns
  * what actually counts once those decisions are made. */
+/* Severity is carried by the question now, not inferred from the step it was
+ * logged in. The QA team classified every question in the bank: Step 5 checks
+ * and conditional checks are critical, Step 6 sections are minor, major or
+ * critical depending on what they cover. Anything without an explicit severity
+ * falls back to the old step-based default so a question added without one
+ * still scores. */
+function severityForQuestion(q, fallback) {
+  const s = q && q.severity;
+  return (s === 'critical' || s === 'major' || s === 'minor') ? s : fallback;
+}
+
 function collectRawDefects() {
   const all = [];
   questionsForStep(5).concat(additionalReviewQuestions()).forEach((q) => {
     const a = state.answers[q.id];
     if (!a || a.status !== 'fail') return;
-    all.push({ id: q.id, description: q.title, severity: 'major',
+    all.push({ id: q.id, description: q.title, severity: severityForQuestion(q, 'major'),
       unitsAffected: parseInt(a.unitsAffected, 10) || 1, photos: a.media || [] });
   });
   allSectionIssues().forEach((d) => all.push(d));
@@ -3850,10 +3901,14 @@ function allSectionIssues() {
   const out = [];
   Object.keys(state.sectionIssues || {}).forEach((sectionId) => {
     (state.sectionIssues[sectionId] || []).forEach((issue) => {
+      /* Severity comes from the section's own question in the bank, so
+         "Missing components" scores critical while "Workmanship" scores minor.
+         It used to be minor for everything regardless. */
+      const q = questionsForStep(6).find((x) => x.id === sectionId);
       out.push({
         ...issue,
         sectionId,
-        severity: 'minor',   // always - see the note above
+        severity: severityForQuestion(q, 'minor'),
         photos: issue.media  // the tally and PDF both look for `photos`
       });
     });
@@ -4457,7 +4512,7 @@ const DRAFT_SAVE_KEYS = [
   'actualUnitsChecked', 'inspectionLevel', 'majorAql', 'minorAql', 'materials',
   'printingMethod', 'productionNotes', 'categoryData', 'answers', 'sectionIssues',
   'sectionCleared', 'additionalIssues', 'photos', 'dispositions', 'productWeightG', 'manualSizingOptIn',
-  'draftId', 'qaSetup', 'poDimensions', 'poDimensionsTable', 'poWeightG', 'step'
+  'draftId', 'qaSetup', 'poDimensions', 'poDimensionsTable', 'poWeightG', 'orderId', 'step'
 ];
 
 function draftSnapshot() {
@@ -4733,6 +4788,10 @@ function buildInspectionSectionsForPayload() {
       id: q.id,
       title: q.title,
       status: a.status || 'na',
+      // Baked in at submit time so the server scores this report by the
+      // severities that were in force when it was inspected, not by whatever
+      // the question bank says later.
+      severity: severityForQuestion(q, 'major'),
       unitsAffected: a.status === 'fail' ? (parseInt(a.unitsAffected, 10) || 0) : 0,
       photoCount: (a.media || []).length
     };
@@ -4752,7 +4811,7 @@ function buildIssueSectionsForPayload() {
       id: i.id,
       description: i.description,
       unitsAffected: parseInt(i.unitsAffected, 10) || 0,
-      severity: 'minor'
+      severity: severityForQuestion(q, 'minor')
     }))
   }));
 }

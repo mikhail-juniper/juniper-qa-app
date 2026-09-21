@@ -666,21 +666,47 @@ weight), `sizingChart`, or `defects` (Step 6).
 **Question ids are stable and are what submitted reports reference. Do
 not renumber them.**
 
-## Severity is derived, not chosen
+## Severity is assigned per question
 
-The minor/major selector is gone. Severity now comes from *where* an
-issue was recorded:
+**This replaced an earlier model and the change is significant.** Severity
+used to be derived from *where* an issue was logged - Step 5 failures were
+major, Step 6 entries minor, and critical was computed when every inspected
+unit was affected. The QA team reviewed the whole bank in September 2026 and
+assigned a severity to each question instead.
 
-- A **Step 5** question answered Fail is **major**
-- Anything logged in **Step 6** is **minor**
-- An out-of-tolerance measurement is **major**
-- Nothing is recorded as critical any more, so the old automatic
-  critical-reject at ac=0 no longer fires
+Each question in `config/reportQuestions.json` carries `severity`:
+`critical`, `major` or `minor`. The spread:
 
-`collectAllDefects()` exists in both `public/app.js` and `lib/passFail.js`
-and **they must agree**. The server's copy previously read only the old
-`categoryData` keys, so it saw zero defects on every new-format report and
-passed everything. Both now read `payload.inspection`.
+| Where | Severity |
+|---|---|
+| Step 5 inspection questions (57) | all **critical** |
+| Conditional checks (20) | all **critical** |
+| Step 6 sections | 13 minor, 21 major, 10 critical |
+| Custom questions added at PO setup | major |
+| Step 4 sizing questions (9) | none - scored via tolerances, not as question defects |
+
+Step 6 examples: Workmanship and Sewing lines are minor; Stuffing, Trims,
+Binding, Closures and Pair matching are major; Missing components is
+critical.
+
+**What this means in practice.** The critical threshold is 0%, so **one
+defective unit on any Step 5 question or conditional check fails the whole
+PO**, regardless of quantity. That is intended. The disposition step is the
+release valve: rejecting or repairing those units takes them out of the
+count, and "factory will fix" keeps the fail while recording the plan.
+
+**The computed rule is gone.** Nothing is escalated to critical because
+100% of units were affected; critical comes only from the question.
+
+Severity is **baked into the payload at submit time**, so an already-filed
+report keeps the severities that were in force when it was inspected and is
+never retroactively rescored by a later edit to the bank.
+
+Four places read severity and **must agree**: `collectRawDefects` and
+`collectAllDefects` in `public/app.js` (these overlap and once drifted -
+one hardcoded `major` after the other was updated, so the client and server
+disagreed on the verdict), `additionalReviewQuestions` for conditional and
+custom questions, and `collectAllDefects` in `lib/passFail.js`.
 
 ## Counting: entries, units, and defective units
 
@@ -757,10 +783,10 @@ a percentage of units **inspected**. Exceeding fails; equalling passes.
 fails - and because it is a rate, the same 5% fails whether 100 or 1,000
 units were checked.
 
-**Critical is computed, never chosen.** QA staff should not have to
-classify severity, so a defect escalates to critical when *every*
-inspected unit is affected - the point at which the batch, not the units,
-is the problem. There is no UI anywhere to mark something critical.
+**Critical comes from the question, not from a person and not from a
+calculation.** QA staff never classify severity; the question bank does it
+for them. See "Severity is assigned per question" above. With a 0%
+threshold, one critical unit fails the PO at any quantity.
 
 AQL is untouched: it still sizes the sample and sets the inspection
 level. Only the verdict changed.
