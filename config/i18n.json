@@ -5102,5 +5102,33 @@
   "toastCopyFailed": {
     "en": "Could not copy the link",
     "zh": "复制链接失败"
+  },
+  "checkInAutosaves": {
+    "en": "Changes save as you go",
+    "zh": "更改实时保存"
+  },
+  "checkInIntro3": {
+    "en": "Work down the list. An update saves when you move off the box; a follow-up date saves as soon as you pick it.",
+    "zh": "逐行跟进。离开输入框即保存更新；选择跟进日期后立即保存。"
+  },
+  "savedLabel": {
+    "en": "Saved",
+    "zh": "已保存"
+  },
+  "checkInNotePlaceholder2": {
+    "en": "Production update",
+    "zh": "生产更新"
+  },
+  "thDone": {
+    "en": "Done",
+    "zh": "已跟进"
+  },
+  "doneToday": {
+    "en": "Today",
+    "zh": "今日"
+  },
+  "checkInProgress": {
+    "en": "{done} of {total} done today",
+    "zh": "今日已跟进 {done}/{total}"
   }
 }

@@ -4132,6 +4132,8 @@ async function openDetailPanel(id, scope) {
 
   // Record what the file slots looked like when this panel rendered.
   captureDocSlotBaseline();
+  // Clicking anywhere in a date field opens the picker, not just the glyph.
+  makeDateFieldsClickable(panel);
 
   const setSaveStatus = (key, fallback) => {
     const el = document.getElementById('omSaveStatus');
@@ -6034,6 +6036,29 @@ function dueBadge(action) {
  * what it is, how many, where it stands, what was said last time, and what
  * she is writing now.
  */
+/** Has this PO been worked through today? Today, not ever - the whole point is
+ *  keeping her place in the call she is on right now. */
+function checkedInToday(r) {
+  if (!r.lastCheckedInAt) return false;
+  return String(r.lastCheckedInAt).slice(0, 10) === new Date().toISOString().slice(0, 10);
+}
+
+/* Native date inputs only open the picker from the little calendar glyph,
+ * which is a small target and not obvious. showPicker() opens it from a click
+ * anywhere in the field. Guarded because it is not in every browser and
+ * throws if called without a user gesture. */
+function makeDateFieldsClickable(scope) {
+  (scope || document).querySelectorAll('input[type="date"]').forEach((el) => {
+    if (el.dataset.pickerBound) return;
+    el.dataset.pickerBound = '1';
+    el.addEventListener('click', () => {
+      if (typeof el.showPicker === 'function') {
+        try { el.showPicker(); } catch (e) { /* not allowed here; the glyph still works */ }
+      }
+    });
+  });
+}
+
 async function renderCheckInView(root) {
   root.innerHTML = `${workViewTabsHtml()}<div class="om-empty">${i18('emptyLoading', 'Loading...')}</div>`;
   bindWorkViewTabs();
@@ -6064,15 +6089,12 @@ async function renderCheckInView(root) {
             ${escapeHtml(name)} - ${escapeHtml(plural(bySupplier[name].length, 'poSingular', 'poPlural'))}
           </option>`).join('')}
       </select>
-      <div class="om-checkin-counts"></div>
-      <button type="button" class="btn btn-primary" id="omCheckInSaveAll" style="width:auto;padding:8px 18px;">
-        ${escapeHtml(i18t('saveAllChanges', 'Save all changes'))}
-      </button>
+      <div class="om-checkin-counts" id="omCheckInProgress"></div>
     </div>
-    <div class="om-section-intro">${escapeHtml(i18t('checkInIntro2', 'Work down the list. Type into Update or Follow-up as you go, then save once at the end.'))}</div>
+    <div class="om-section-intro">${escapeHtml(i18t('checkInIntro3', 'Work down the list. An update saves when you move off the box; a follow-up date saves as soon as you pick it.'))}</div>
 
     ${list.length ? `
-      <div class="size-table-wrap">
+      <div class="om-checkin-wrap"><div class="size-table-wrap">
         <table class="size-table om-checkin-table">
           <thead><tr>
             <th>${escapeHtml(i18t('thPoNumber', 'PO Number'))}</th>
@@ -6083,10 +6105,11 @@ async function renderCheckInView(root) {
             <th>${escapeHtml(i18t('thLastUpdate', 'Last update'))}</th>
             <th>${escapeHtml(i18t('thNewUpdate', 'Update'))}</th>
             <th>${escapeHtml(i18t('thFollowUp', 'Follow up'))}</th>
+            <th>${escapeHtml(i18t('thDone', 'Done'))}</th>
           </tr></thead>
           <tbody>
             ${list.map((r) => `
-              <tr data-checkin-row="${escapeHtml(r.id)}">
+              <tr data-checkin-row="${escapeHtml(r.id)}" class="${checkedInToday(r) ? 'om-row-done' : ''}">
                 <td><button type="button" class="om-linklike" data-open-po="${escapeHtml(r.id)}">${escapeHtml(r.poNumber)}</button></td>
                 <td class="om-checkin-photo">
                   ${r.photo ? `<img src="${escapeHtml(r.photo)}" alt="" class="js-lightbox" />` : '<span class="om-sub">-</span>'}
@@ -6099,16 +6122,30 @@ async function renderCheckInView(root) {
                     ? `<div class="om-sub">${escapeHtml(fmtDate(r.lastNote.at))} &middot; ${escapeHtml(r.lastNote.by || '')}</div>${escapeHtml(r.lastNote.text || '')}`
                     : `<span class="om-sub">${escapeHtml(i18t('noUpdatesYet', 'No updates yet'))}</span>`}
                 </td>
-                <td><textarea rows="1" class="om-checkin-note" data-note-for="${escapeHtml(r.id)}"
-                  placeholder="${escapeHtml(i18t('checkInNotePlaceholder', 'What did the supplier say?'))}"></textarea></td>
+                <td>
+                  <textarea rows="1" class="om-checkin-note" data-note-for="${escapeHtml(r.id)}"
+                    placeholder="${escapeHtml(i18t('checkInNotePlaceholder2', 'Production update'))}"></textarea>
+                  <div class="om-row-saved" data-saved-for="${escapeHtml(r.id)}"></div>
+                </td>
                 <td class="om-checkin-fucol">
                   <input type="date" class="om-checkin-fu" data-fu-for="${escapeHtml(r.id)}" value="${escapeHtml(r.followUpDate || '')}" />
+                  <div class="om-row-saved" data-saved-fu="${escapeHtml(r.id)}"></div>
+                </td>
+                <td class="om-checkin-donecol">
+                  ${/* Ticking this is how she keeps her place in a list of 20.
+                       Saving an update ticks it automatically, because having
+                       just written a note IS having covered the order. */ ''}
+                  <label class="om-done-check">
+                    <input type="checkbox" class="om-checkin-done" data-done-for="${escapeHtml(r.id)}" ${checkedInToday(r) ? 'checked' : ''} />
+                    <span></span>
+                  </label>
+                  <div class="om-sub" data-done-when="${escapeHtml(r.id)}">${checkedInToday(r) ? escapeHtml(i18t('doneToday', 'Today')) : ''}</div>
                 </td>
               </tr>
             `).join('')}
           </tbody>
         </table>
-      </div>
+      </div></div>
     ` : `<div class="om-empty">${escapeHtml(i18t('emptyNoOpenOrders', 'No open orders.'))}</div>`}
   `;
   bindWorkViewTabs();
@@ -6125,36 +6162,98 @@ async function renderCheckInView(root) {
   document.querySelectorAll('[data-open-po]').forEach((el) =>
     el.addEventListener('click', () => openDetailPanel(el.dataset.openPo, 'full')));
 
-  document.getElementById('omCheckInSaveAll').addEventListener('click', async () => {
-    const btn = document.getElementById('omCheckInSaveAll');
-    btn.disabled = true;
-    let saved = 0;
+  /* ---- Autosave ----
+   *
+   * Progress notes are append-only, so the hazard here is posting the same
+   * note twice: a blur fires when she tabs away, clicks elsewhere, or the
+   * table re-renders. Each row therefore tracks what it has already sent and
+   * refuses to send the same text again, and the box is cleared on success so
+   * there is nothing left to resend.
+   */
+  const noteInFlight = new Set();
+
+  const refreshProgress = () => {
+    const done = document.querySelectorAll('.om-checkin-done:checked').length;
+    const el = document.getElementById('omCheckInProgress');
+    if (el) el.textContent = i18t('checkInProgress', '{done} of {total} done today')
+      .replace('{done}', String(done)).replace('{total}', String(list.length));
+  };
+
+  const markDone = async (id, done) => {
     try {
-      for (const r of list) {
-        const note = (document.querySelector(`[data-note-for="${r.id}"]`) || {}).value || '';
-        const fu = (document.querySelector(`[data-fu-for="${r.id}"]`) || {}).value || '';
-        if (note.trim()) {
-          await api(`/api/order-management/orders/${encodeURIComponent(r.id)}/progress-note`,
-            { method: 'POST', body: JSON.stringify({ text: note.trim() }) });
-          saved += 1;
-        }
-        // Only write when it changed, so a pass down the list doesn't stamp a
-        // changelog entry on every PO.
-        if (fu !== (r.followUpDate || '')) {
-          await api(`/api/order-management/orders/${encodeURIComponent(r.id)}`,
-            { method: 'PATCH', body: JSON.stringify({ patch: { followUpDate: fu || null } }) });
-          saved += 1;
-        }
-      }
-      showToast(saved
-        ? i18t('checkInSaved', '{n} update(s) saved').replace('{n}', String(saved))
-        : i18t('checkInNothing', 'Nothing to save'));
+      await api(`/api/order-management/orders/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ patch: { lastCheckedInAt: done ? new Date().toISOString() : null } })
+      });
+      const row = document.querySelector(`[data-checkin-row="${id}"]`);
+      if (row) row.classList.toggle('om-row-done', done);
+      const when = document.querySelector(`[data-done-when="${id}"]`);
+      if (when) when.textContent = done ? i18t('doneToday', 'Today') : '';
       workQueueCache = null;
-      render();
-    } catch (e) {
-      showToast(e.message, true);
-      btn.disabled = false;
-    }
+      refreshProgress();
+    } catch (e) { showToast(e.message, true); }
+  };
+
+  const flash = (selector, text) => {
+    const el = document.querySelector(selector);
+    if (!el) return;
+    el.textContent = text;
+    el.classList.add('is-on');
+    setTimeout(() => { el.classList.remove('is-on'); el.textContent = ''; }, 2500);
+  };
+
+  document.querySelectorAll('.om-checkin-note').forEach((el) => {
+    const id = el.dataset.noteFor;
+    el.addEventListener('blur', async () => {
+      const text = el.value.trim();
+      if (!text || noteInFlight.has(id)) return;
+      noteInFlight.add(id);
+      try {
+        await api(`/api/order-management/orders/${encodeURIComponent(id)}/progress-note`,
+          { method: 'POST', body: JSON.stringify({ text }) });
+        el.value = '';                    // nothing left to resend
+        flash(`[data-saved-for="${id}"]`, i18t('savedLabel', 'Saved'));
+        /* Writing an update IS covering the order, so tick it rather than
+         * asking her to do it twice. */
+        const doneBox = document.querySelector(`[data-done-for="${id}"]`);
+        if (doneBox && !doneBox.checked) { doneBox.checked = true; markDone(id, true); }
+        /* Refresh so the note appears under Last update, but only the cache -
+         * a full re-render here would steal focus from the next row she has
+         * already clicked into. */
+        workQueueCache = null;
+        const row = document.querySelector(`[data-checkin-row="${id}"] .om-checkin-lastcol`);
+        if (row) {
+          row.innerHTML = `<div class="om-sub">${escapeHtml(fmtDate(new Date().toISOString()))}</div>${escapeHtml(text)}`;
+        }
+      } catch (e) {
+        showToast(e.message, true);
+      } finally {
+        noteInFlight.delete(id);
+      }
+    });
+  });
+
+  document.querySelectorAll('.om-checkin-done').forEach((el) => {
+    el.addEventListener('change', () => markDone(el.dataset.doneFor, el.checked));
+  });
+  refreshProgress();
+  makeDateFieldsClickable(root);
+
+  document.querySelectorAll('.om-checkin-fu').forEach((el) => {
+    const id = el.dataset.fuFor;
+    const original = el.value;
+    el.addEventListener('change', async () => {
+      if (el.value === original) return;
+      try {
+        await api(`/api/order-management/orders/${encodeURIComponent(id)}`,
+          { method: 'PATCH', body: JSON.stringify({ patch: { followUpDate: el.value || null } }) });
+        flash(`[data-saved-fu="${id}"]`, i18t('savedLabel', 'Saved'));
+        workQueueCache = null;
+      } catch (e) {
+        showToast(e.message, true);
+        el.value = original;
+      }
+    });
   });
 }
 
@@ -6233,6 +6332,7 @@ async function renderQaSchedulingView(root) {
   `;
   bindWorkViewTabs();
   bindWorkRowActions();
+  makeDateFieldsClickable(root);
 }
 
 /* ---- PD Approval: who is it waiting on ---- */
@@ -6292,6 +6392,7 @@ async function renderPdApprovalView(root) {
   `;
   bindWorkViewTabs();
   bindWorkRowActions();
+  makeDateFieldsClickable(root);
 }
 
 /** Shared row-level handlers for the QA and PD views. */

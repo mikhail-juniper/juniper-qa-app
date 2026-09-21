@@ -1363,3 +1363,41 @@ html {
   width: 40px; height: 40px; object-fit: cover;
   border-radius: var(--radius-sm); border: 1px solid var(--jc-border); cursor: zoom-in;
 }
+
+/* Autosave confirmation per field. Deliberately quiet and self-clearing: she
+   is working down a list on the phone and does not need a toast per row, but
+   she does need to know the note landed. */
+.om-row-saved {
+  font-size: 11px; font-weight: 700; color: var(--jc-teal-dark);
+  min-height: 14px; opacity: 0; transition: opacity 0.15s;
+}
+.om-row-saved.is-on { opacity: 1; }
+
+/* ---- Check-in: keeping her place ----
+   A list of 20 gives no sense of progress, which is why POs currently live in
+   browser tabs. A row ticks itself when an update is saved, and covered rows
+   recede so the eye lands on what is left. */
+.om-checkin-donecol { text-align: center; white-space: nowrap; }
+.om-done-check { display: inline-flex; align-items: center; cursor: pointer; }
+.om-done-check input { width: 18px; height: 18px; cursor: pointer; accent-color: var(--jc-teal); }
+.om-row-done { background: var(--jc-mint-light) !important; }
+.om-row-done td { opacity: 0.62; }
+.om-row-done .om-checkin-note,
+.om-row-done .om-checkin-fu,
+.om-row-done .om-done-check { opacity: 1; }
+
+/* Match the rest of the app: the working views sit in the same card chrome,
+   at the same type scale, as every other page rather than floating loose. */
+.om-view-tabs { margin-bottom: 18px; }
+.om-checkin-bar {
+  background: #fff; border: 1px solid var(--jc-border); border-radius: var(--radius);
+  padding: 14px 16px; margin-bottom: 12px;
+}
+.om-checkin-bar .field-label { font-size: 12.5px; }
+.om-checkin-table { font-size: 13px; }
+.om-checkin-table thead th { font-size: 11.5px; letter-spacing: 0.03em; }
+.om-checkin-wrap {
+  background: #fff; border: 1px solid var(--jc-border);
+  border-radius: var(--radius); padding: 4px 10px 10px;
+}
+.om-row-actions .om-table-upload-btn { font-size: 12px; padding: 5px 10px; }

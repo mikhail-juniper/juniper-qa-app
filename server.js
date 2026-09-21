@@ -1808,6 +1808,8 @@ app.get('/api/order-management/work-queue', (req, res) => {
         bulkSampleDate: (o.factoryUpdates || {}).bulkSampleDate || null,
         followUpDate: o.followUpDate || null,
         followUpNote: o.followUpNote || '',
+        lastCheckedInAt: o.lastCheckedInAt || null,
+        lastCheckedInBy: o.lastCheckedInBy || '',
         /* Enough of the QA stage state for the scheduling view to offer the
          * same buttons as the PO panel, rather than making her open the PO to
          * press them. */
