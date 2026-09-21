@@ -2472,6 +2472,7 @@ async function openDetailPanel(id, scope) {
                 ${rep.submittedAt ? `<span>${fmtDate(rep.submittedAt)}</span>` : ''}
               </div>
             ` : `<div class="om-qa-report-meta">${i18('emptyNoReportSubmitted', 'No report submitted yet.')}</div>`}
+            ${revisedReportsHtml(order, stage)}
           </div>
         </div>
       `;
@@ -5226,6 +5227,39 @@ function previewUrlFor(currentUrl) {
   const m = String(currentUrl || '').match(/^\/order-management-files\/([^/]+)\/([^/?#]+)/);
   if (!m) return null;
   return `/api/order-management/orders/${m[1]}/thumb?file=${m[2]}`;
+}
+
+/**
+ * Follow-up Revised Unit Reports for one stage, listed under the original.
+ *
+ * Shown as their own entries rather than replacing the original: the first
+ * report is the record of what was found, and the revised one is the record of
+ * what was subsequently repaired. Collapsing them would lose the finding.
+ */
+function revisedReportsHtml(order, stage) {
+  const all = (order.revisedReports || []).filter((r) => {
+    const t = r.qaType === 'production' ? 'bulk' : 'preProduction';
+    return t === stage;
+  });
+  if (!all.length) return '';
+
+  return all.map((r, idx) => {
+    const fixed = (r.issues || []).reduce((n, i) => n + (parseInt(i.unitsFixed, 10) || 0), 0);
+    const flagged = (r.issues || []).reduce((n, i) => n + (parseInt(i.unitsAffected, 10) || 0), 0);
+    const when = r.submittedAt ? fmtDate(r.submittedAt) : '';
+    return `
+      <div class="om-qa-revised">
+        <div class="om-qa-revised-title">
+          ${i18('revisedReportLabel', 'Revised Unit Report')}${all.length > 1 ? ` #${idx + 1}` : ''}
+        </div>
+        <div class="om-qa-report-meta">
+          <span>${fixed} / ${flagged} ${escapeHtml(i18('unitsRepairedShort', 'units repaired'))}</span>
+          ${when ? `<span>${escapeHtml(when)}</span>` : ''}
+          ${r.qaLead ? `<span>${escapeHtml(r.qaLead)}</span>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 
 function uploadFieldHtml(fieldId, label, currentUrl, isImage, sourceUrl) {

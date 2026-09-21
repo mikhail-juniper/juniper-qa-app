@@ -487,6 +487,26 @@ There's also a one-click full backup: `GET /api/backup/download` zips
 the entire `DATA_DIR` on demand. Worth doing before any migration or
 risky change.
 
+## Node version
+
+Pinned to Node 22 LTS via `engines` in `package.json` and `.node-version`.
+
+This is not cosmetic. `better-sqlite3` is a native module: it installs a
+prebuilt binary when one exists for your Node version and platform, and
+falls back to compiling from source when one does not. On Node 24 +
+Windows there is no prebuild, so `npm install` tries to compile and fails
+unless Visual Studio with the "Desktop development with C++" workload is
+installed.
+
+If you hit `gyp ERR! find VS` on Windows, you are on the wrong Node.
+Switch to 22 (`nvm use 22`) and reinstall rather than installing a 6 GB
+toolchain.
+
+Linux, including Render, is unaffected in practice - the build image has
+a compiler, so worst case it compiles rather than failing. The pin exists
+so production does not silently drift onto an untested Node and turn a
+fast install into a slow one.
+
 ## Local development
 
 ```bash

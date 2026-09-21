@@ -1,6 +1,9 @@
 {
   "name": "juniper-qa-app",
   "version": "1.0.0",
+  "engines": {
+    "node": ">=20 <23"
+  },
   "description": "Juniper Creates QA/QC inspection report web app",
   "main": "server.js",
   "scripts": {

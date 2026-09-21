@@ -640,30 +640,7 @@
         "puppet"
       ],
       "steps": {
-        "4": [
-          {
-            "id": "plush.s4.01",
-            "section": "Sizing",
-            "section_zh": "尺寸",
-            "title": "Golden Sample sizing chart",
-            "title_zh": "金样尺寸表",
-            "guidance": "Measure every size in the Golden Sample sizing chart and enter the actual dimensions. Measure flat on a hard surface, smoothed but not stretched. Any measurement more than ±1 cm from the approved standard is flagged as a fail automatically.",
-            "guidance_zh": "测量金样尺寸表中的每一个尺码并填入实际数值。请将产品平放于硬质台面，抚平但不得拉伸。任何与已批准标准相差超过 ±1 厘米的数值都会自动判为不合格。",
-            "answer": "sizingChart",
-            "media": "none"
-          },
-          {
-            "id": "plush.s4.02",
-            "section": "Sizing",
-            "section_zh": "尺寸",
-            "title": "Product weight",
-            "title_zh": "产品重量",
-            "guidance": "Weigh a finished unit on a calibrated scale and record the weight in grams. The approved weight is taken from the golden sample. More than ±5 g out is a fail.",
-            "guidance_zh": "使用经校准的电子秤称量成品，以克为单位记录重量。已批准重量取自金样。相差超过 ±5 克即为不合格。",
-            "answer": "numeric",
-            "media": "on_fail"
-          }
-        ],
+        "4": [],
         "5": [
           {
             "id": "plush.s5.01",

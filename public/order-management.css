@@ -1185,3 +1185,19 @@ details.om-handoff-card[open] > summary::after { content: '▾'; }
 .om-field-align > input[type="hidden"] { display: none; }
 .om-field-align > input:not([type="hidden"]):last-of-type,
 .om-field-align > .om-money-wrap:last-of-type { margin-top: auto; }
+
+/* Revised Unit Reports listed under the original report they follow up on.
+   Indented and marked so they read as a follow-up rather than a second
+   inspection, which is exactly what they are not. */
+.om-qa-revised {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--jc-teal);
+  background: var(--jc-mint-light);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.om-qa-revised-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--jc-teal-dark);
+}

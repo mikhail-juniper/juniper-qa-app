@@ -1084,7 +1084,10 @@ app.get('/api/backup/download', (req, res) => {
   const filename = `juniper-qa-backup-${new Date().toISOString().slice(0, 10)}.zip`;
   res.attachment(filename);
   // Same reason as the scheduled backup: checkpoint before the .db is copied.
-  orderManagementStore.checkpointDatabase();
+  // Every SQLite store must be checkpointed, not just orders - a backup that
+    // copies a live WAL database restores short of recent writes or won't open.
+    [orderManagementStore, approvalStore, submissionLog, componentDefinitions]
+      .forEach((st) => { try { st.checkpointDatabase && st.checkpointDatabase(); } catch (e) { console.error('Checkpoint failed:', e.message || e); } });
   const archive = archiver('zip', { zlib: { level: 9 } });
   archive.on('error', (err) => {
     console.error('Backup zip failed:', err);
@@ -4217,7 +4220,10 @@ async function runScheduledBackupIfDue() {
      * WAL-mode database without this captures the .db without its pending
      * -wal, producing a backup that restores short of recent writes or won't
      * open at all - and that only surfaces when someone actually needs it. */
-    orderManagementStore.checkpointDatabase();
+    // Every SQLite store must be checkpointed, not just orders - a backup that
+    // copies a live WAL database restores short of recent writes or won't open.
+    [orderManagementStore, approvalStore, submissionLog, componentDefinitions]
+      .forEach((st) => { try { st.checkpointDatabase && st.checkpointDatabase(); } catch (e) { console.error('Checkpoint failed:', e.message || e); } });
     const archive = archiver('zip', { zlib: { level: 9 } });
     await new Promise((resolve, reject) => {
       output.on('close', resolve);

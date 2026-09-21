@@ -52,7 +52,20 @@ const state = {
   productWeightG: '',
   poWeightG: null,
   poDimensionsTable: null,
+  /* Identifies this report's photo folder on the server. Photos upload as
+   * they are taken, so the report holds references rather than File objects -
+   * which is what makes save-and-resume possible at all. */
+  draftId: null,
+  /* Set when this PO+stage already has a submitted report. The link then shows
+   * the completed state rather than silently starting a second report against
+   * a PO that has already been signed off. */
+  completedReport: null,
+  /* 'revised' when confirming previously-flagged units were repaired. */
+  reportMode: 'full',
+  revisedIssues: [],
   manualSizingOptIn: false,
+  /* What happens to each defect's units - see renderDispositionStep. */
+  dispositions: {},
   /* Step 6 entries keyed by the Step 6 question id they were logged under.
    * Everything here is minor by definition - see renderAdditionalIssuesStep. */
   sectionIssues: {},
@@ -85,7 +98,33 @@ const state = {
 let step = 0;
 // Sizing sits at Step 4 and Inspection Details at Step 5 (swapped Sept 2026):
 // the inspector measures first, then judges the piece against what they found.
-const STEPS = ['poLookup', 'orderInfo', 'productionNotes', 'sizing', 'inspectionDetails', 'issues', 'review'];
+const STEPS = ['poLookup', 'orderInfo', 'productionNotes', 'sizing', 'inspectionDetails', 'issues', 'disposition', 'review'];
+
+/**
+ * Steps that apply to THIS product.
+ *
+ * Plush has no sizing or weight check - the questions were removed from the
+ * bank, so the step would render an empty shell and ask the inspector to click
+ * through nothing. Skipping it outright is the honest behaviour.
+ */
+function stepApplies(name) {
+  if (name === 'sizing') return questionsForStep(4).length > 0 || state.category === 'apparel';
+  return true;
+}
+
+function visibleSteps() {
+  return STEPS.filter(stepApplies);
+}
+
+/* Derived rather than hardcoded. Every step used to carry its own "Step 4 / 7"
+ * string, so inserting a step meant editing nine of them and the numbering
+ * quietly drifted when one was missed. Counts the steps this product actually
+ * sees, so a plush report reads "Step 4 / 7" rather than skipping a number. */
+function stepLabel() {
+  const vis = visibleSteps();
+  const pos = vis.indexOf(STEPS[step]);
+  return `${biHtml('step', 'Step')} ${(pos < 0 ? step : pos) + 1} / ${vis.length}`;
+}
 // Display order for the category pickers. Any category key missing from this
 // list is filtered OUT of both pickers entirely (see the .filter calls in
 // renderNewPoScreen / the category step), so a new category in
@@ -391,7 +430,11 @@ function collectAllDefects() {
     if (item && Array.isArray(item.defects)) item.defects.forEach((d) => all.push(d));
   });
   (state.additionalIssues || []).forEach((d) => all.push(d));
-  return all;
+  /* Apply the disposition decisions last: repaired and rejected units drop
+   * out of the count entirely, which is what lets a report move from fail to
+   * pass on the strength of what was done about the defects. Entries that
+   * reach zero are removed so they don't show as "0 units affected". */
+  return all.map(applyDisposition).filter((d) => (parseInt(d.unitsAffected, 10) || 0) > 0);
 }
 function sumDefectsBySeverity(defects) {
   const sums = { minor: 0, major: 0, critical: 0 };
@@ -418,6 +461,51 @@ function sumDefectsBySeverity(defects) {
  * number of units actually inspected. That bound is what the rates and the
  * whole-PO assumption are based on, because a rate over 100% is meaningless.
  */
+/**
+ * Whether a report fails, by rate rather than by AQL accept/reject numbers.
+ *
+ * Thresholds live in config/aql.json (`failThresholds`) and are expressed as a
+ * percentage of the units actually INSPECTED: exceeding fails, equalling
+ * passes. 5 bad units out of 100 checked is 5% minor, over the 4% line, so it
+ * fails - and because the rate is what matters, the same 5% would fail whether
+ * 100 or 1,000 units had been checked.
+ *
+ * Rates use defectiveUnits, which is bounded by units checked. Two issues each
+ * affecting the same 5 units is 5 bad units, not 10, so a report cannot show a
+ * defect rate above 100%.
+ *
+ * CRITICAL is computed, never chosen. QA staff should not have to classify
+ * severity, so a defect is escalated to critical when every inspected unit is
+ * affected - which is also the point at which the batch, not the units, is the
+ * problem.
+ */
+function failThresholds() {
+  const t = (CONFIG.aql && CONFIG.aql.failThresholds) || {};
+  return {
+    criticalPct: t.criticalPct !== undefined ? t.criticalPct : 0,
+    majorPct: t.majorPct !== undefined ? t.majorPct : 1.5,
+    minorPct: t.minorPct !== undefined ? t.minorPct : 4
+  };
+}
+
+function rateFailures(counts, unitsChecked) {
+  const out = { rates: { critical: 0, major: 0, minor: 0 }, reasons: [], isCritical: false };
+  if (!unitsChecked || unitsChecked < 1) return out;
+  const th = failThresholds();
+  const pct = (n) => (n / unitsChecked) * 100;
+
+  // Every inspected unit affected -> this is a batch problem, not a unit one.
+  out.isCritical = counts.totalDefectiveUnits >= unitsChecked;
+  out.rates.critical = out.isCritical ? 100 : 0;
+  out.rates.major = pct(counts.major.defectiveUnits);
+  out.rates.minor = pct(counts.minor.defectiveUnits);
+
+  if (out.rates.critical > th.criticalPct) out.reasons.push('thresholdCritical');
+  if (out.rates.major > th.majorPct) out.reasons.push('thresholdMajor');
+  if (out.rates.minor > th.minorPct) out.reasons.push('thresholdMinor');
+  return out;
+}
+
 function countDefects(defects, unitsChecked) {
   const out = {
     critical: { entries: 0, units: 0 },
@@ -498,12 +586,24 @@ function goTo(newStep) {
   render();
   window.scrollTo(0, 0);
 }
+/* Saved on every step change as well as on demand. An inspector on a factory
+ * floor should lose at most the step they are on, not the whole report. */
 function next() {
   if (!validateStep(step)) return;
-  if (step < STEPS.length - 1) goTo(step + 1);
+  if (step < STEPS.length - 1) {
+    // Step over anything this product does not use.
+    let target = step + 1;
+    while (target < STEPS.length - 1 && !stepApplies(STEPS[target])) target += 1;
+    goTo(target);
+    // Quietly, so a dropped phone loses at most the step in progress.
+    if (state.poNumber) saveDraft(true);
+  }
 }
 function back() {
-  if (step > 0) goTo(step - 1);
+  if (step <= 0) return;
+  let target = step - 1;
+  while (target > 0 && !stepApplies(STEPS[target])) target -= 1;
+  goTo(target);
 }
 
 /* ---------------- VALIDATION ---------------- */
@@ -587,6 +687,8 @@ function validateChecklistStepGeneric(name) {
 }
 
 function validateStep(s) {
+  // A step this product skips cannot have anything to validate.
+  if (!stepApplies(STEPS[s])) return true;
   clearErrors();
   const name = STEPS[s];
   let ok = true;
@@ -608,6 +710,24 @@ function validateStep(s) {
       ok = false;
     }
     if (!ok) showToast('Please fill in all required fields / 请填写所有必填项', true);
+  } else if (name === 'disposition') {
+    const problems = dispositionProblems();
+    if (problems.length) {
+      ok = false;
+      problems.forEach((pb) => {
+        const card = document.querySelector(`[data-disposition="${pb.id}"]`);
+        if (card) card.classList.add('has-error');
+      });
+      const first = problems[0];
+      const msg = first.why === 'choice'
+        ? bi('dispositionRequired', 'Choose what happens to each set of defective units.')
+        : first.why === 'qty'
+          ? bi('unitsFixedRange', 'Enter a number between 1 and the units flagged.')
+          : bi('photoRequiredForDefect');
+      showToast(msg.en + ' / ' + msg.zh, true);
+      const card = document.querySelector(`[data-disposition="${first.id}"]`);
+      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
   } else if (name === 'issues') {
     /* An empty section is a valid "found nothing" - only entries that were
      * actually started get validated. */
@@ -832,13 +952,14 @@ function computeOverallResult() {
     /* Pre-production used to build this object and push no fail reason at
      * all, so a sample report passed no matter what was found. A first-article
      * check with defects is precisely the thing that should not pass. */
-    if (majorCount + criticalCount >= 1) reasons.push('major');
-    // Every unit inspected had something wrong with it. Same rule the bulk
-    // branch already applies, just applied here too.
-    if (checked && counts.totalDefectiveUnits >= checked) reasons.push('allRejected');
+    /* Rate thresholds replace the old ad-hoc rules here. AQL still sizes the
+     * sample and sets the inspection level; the verdict is now the rate. */
+    const rated = rateFailures(counts, checked);
+    rated.reasons.forEach((r) => reasons.push(r));
 
     aql = {
       criticalCount, majorCount, minorCount, counts,
+      rates: rated.rates, isCritical: rated.isCritical, thresholds: failThresholds(),
       isFallback: true, isPreProduction: true,
       quantityChecked: checked,
       poSize: parseInt(state.poQuantity, 10) || null
@@ -849,12 +970,13 @@ function computeOverallResult() {
       const counts = countDefects(allDefects, checked);
       const rejected = Math.min(checked, majorCount + criticalCount);
       const recap = { poSize: parseInt(state.poQuantity, 10) || null, quantityChecked: checked, quantityRejected: rejected, quantityApproved: checked - rejected };
-      if (rejected >= checked) reasons.push('allRejected');
-      // Minors alone never rejected a bulk report, so an order where every
-      // inspected unit had a minor issue still passed. Bounded defective
-      // units close that gap without changing the AQL treatment of minors.
-      if (counts.totalDefectiveUnits >= checked) reasons.push('allRejected');
-      aql = { criticalCount, majorCount, minorCount, counts, isFallback: false, isActual: true, recap };
+      const rated = rateFailures(counts, checked);
+      rated.reasons.forEach((r) => reasons.push(r));
+      aql = {
+        criticalCount, majorCount, minorCount, counts,
+        rates: rated.rates, isCritical: rated.isCritical, thresholds: failThresholds(),
+        isFallback: false, isActual: true, recap
+      };
     } else {
       if (minorCount >= 3) reasons.push('minor');
       if (majorCount + criticalCount >= 1) reasons.push('major');
@@ -862,8 +984,8 @@ function computeOverallResult() {
     }
   }
 
-  // 'allRejected' can be pushed twice by the bulk branch; de-duplicate so the
-  // reason list reads cleanly on the review screen.
+  /* De-duplicated because a report can trip more than one threshold at once -
+   * a 100%-affected batch is both critical and, say, 100% minor. */
   return { overall: reasons.length ? 'fail' : 'pass', reasons: [...new Set(reasons)], aql };
 }
 
@@ -877,6 +999,8 @@ function getPhotoArray(fieldId) {
   if (fieldId.startsWith('customsizerow:')) return state.categoryData.customSizeRows[parseInt(fieldId.split(':')[1], 10)].photos;
   if (fieldId === 'chartphotos') return state.categoryData.chartPhotos;
   if (fieldId === 'simplesize') return state.categoryData.simpleSizePhotos;
+  if (fieldId.startsWith('disp:')) return dispositionPhotoArray(fieldId.slice(5));
+  if (fieldId.startsWith('revised:')) return revisedPhotoArray(parseInt(fieldId.slice(8), 10));
   if (fieldId.startsWith('q:')) return answerFor(fieldId.slice(2)).media;
   if (fieldId.startsWith('issue:')) {
     const i = findSectionIssueById(fieldId.slice(6));
@@ -907,12 +1031,29 @@ function render() {
   }
   const name = STEPS[step];
   let html = '';
+  /* These two short-circuit the wizard entirely: the gate when this stage has
+   * already been reported on, and the revised flow when the inspector chose to
+   * confirm repairs rather than start another report. */
+  if (state.reportMode === 'revised') {
+    root.innerHTML = renderRevisedUnitReport();
+    attachRevisedHandlers();
+    attachPhotoHandlers();
+    attachLightboxHandlers();
+    return;
+  }
+  if (state.completedReport && state.reportMode === 'gate') {
+    root.innerHTML = renderCompletedReportGate();
+    attachGateHandlers();
+    return;
+  }
+
   if (name === 'poLookup') html = renderPoLookupStep();
   else if (name === 'orderInfo') html = renderOrderInfoStep();
   else if (name === 'productionNotes') html = renderProductionNotesStep();
   else if (name === 'inspectionDetails') html = renderInspectionDetailsStep();
   else if (name === 'sizing') html = renderSizingStep();
   else if (name === 'issues') html = renderAdditionalIssuesStep();
+  else if (name === 'disposition') html = renderDispositionStep();
   else if (name === 'review') html = renderReviewStep();
 
   root.innerHTML = html;
@@ -1483,7 +1624,7 @@ function renderNewPoSuccess(data) {
  * sizing standard now all come from the PO record + QA/QC Approval data. ---- */
 function renderPoLookupStep() {
   return `
-    <div class="step-eyebrow">${biHtml('step', 'Step')} 1 / 7</div>
+    <div class="step-eyebrow">${stepLabel()}</div>
     <div class="step-title">${biBlockHtml(stageTitleKeyForQaType(), 'Pre-Production Sample Reporting')}</div>
     <div class="card">
       <div class="field">
@@ -1616,6 +1757,24 @@ async function submitPoLookup() {
       }
     } catch (e) { console.error('Failed to load approval data for pre-fill', e); }
 
+    /* Resume last, so a saved draft wins over the PO/approval pre-fill above.
+     * Anything the inspector already typed or corrected should survive - the
+     * pre-fill is only a starting point. */
+    /* If this stage has already been reported on, the link shows the completed
+     * state instead of starting another report. Checked before the draft
+     * resume, because a submitted report supersedes any leftover draft. */
+    const stageKey = state.qaType === 'production' ? 'bulk' : 'preProduction';
+    const submitted = (record.qaSubmitted || {})[stageKey];
+    if (submitted) {
+      state.completedReport = submitted;
+      state.reportMode = 'gate';
+      render();
+      return;
+    }
+
+    const resumed = await tryResumeDraft();
+    if (resumed) { render(); return; }
+
     goTo(1);
   } catch (e) {
     console.error(e);
@@ -1724,13 +1883,19 @@ function renderProductionIssuesSection() {
   `;
 }
 
-/** Only Major/Critical issues from OTHER POs of the same SKU - this PO's own
- *  issues live in Production Issues above, not here. Rendered with a large
- *  header and a visible divider so it reads as clearly a different section. */
+/** Every issue from OTHER POs of the same SKU - this PO's own issues live in
+ *  Production Issues above, not here. Rendered with a large header and a
+ *  visible divider so it reads as clearly a different section.
+ *
+ *  This used to filter to major/critical only. Since severity became derived
+ *  (Step 5 fail = major, Step 6 = minor), that quietly meant no Step 6 issue
+ *  ever carried forward - so "loose threads on 5 units last time" never
+ *  reached the inspector looking at the repeat order, which is exactly the
+ *  thing worth knowing. */
 function renderPreviousPoReferencesSection() {
   const otherPoReports = priorReports.filter((r) => r.poNumber !== state.poNumber);
   const withMajorCritical = otherPoReports
-    .map((r) => ({ ...r, issues: (r.issues || []).filter((iss) => iss.severity === 'major' || iss.severity === 'critical') }))
+    .map((r) => ({ ...r, issues: r.issues || [] }))
     .filter((r) => r.issues.length);
   if (!withMajorCritical.length) return '';
 
@@ -1772,7 +1937,7 @@ function renderPreviousPoReferencesSection() {
 
 function renderProductionNotesStep() {
   return `
-    <div class="step-eyebrow">${biHtml('step', 'Step')} 3 / 7</div>
+    <div class="step-eyebrow">${stepLabel()}</div>
     <div class="step-title">${biBlockHtml('productionNotesStepTitle', 'Production Notes & References')}</div>
     <div id="referencePhotosArea">${renderReferencePhotosSection()}</div>
     ${renderProductionNotesSection()}
@@ -1780,6 +1945,7 @@ function renderProductionNotesStep() {
     ${renderPreviousPoReferencesSection()}
     <div class="nav-buttons">
       <button class="btn btn-secondary" id="btnBack">${biBlockHtml('back', 'Back')}</button>
+      <button class="btn btn-secondary" id="btnSaveDraft">${biBlockHtml('saveAndClose', 'Save')}</button>
       <button class="btn btn-primary" id="btnNext">${biBlockHtml('next', 'Next')}</button>
     </div>
   `;
@@ -1824,7 +1990,7 @@ function renderCategoryStep() {
       <a href="analytics.html" class="settings-link" title="Analytics">📊 ${biBlockHtml('analyticsLink', 'Analytics')}</a>
       <a href="settings.html" class="settings-link" title="Settings">⚙️ ${biBlockHtml('settingsTitle', 'Settings')}</a>
     </div>
-    <div class="step-eyebrow">${biHtml('step', 'Step')} 1 / 7</div>
+    <div class="step-eyebrow">${stepLabel()}</div>
     <div class="step-title">选择产品类别<span class="zh">Select Product Category</span></div>
     <div class="category-grid">${catCards}</div>
     <div class="nav-buttons">
@@ -1970,7 +2136,7 @@ function renderOrderInfoStep() {
   const subLabel = subDef ? { en: subDef.label_zh, zh: subDef.label_en } : null;
 
   return `
-    <div class="step-eyebrow">${biHtml('step', 'Step')} 2 / 7</div>
+    <div class="step-eyebrow">${stepLabel()}</div>
     <div class="step-title">订单信息<span class="zh">Order Information</span></div>
     <div class="card">
       ${state.autoFilledForPo || state.factoryCode || state.productRisk !== 'medium' ? `<div class="section-help" style="margin-bottom:10px; color:var(--jc-teal-dark);">${escapeHtml(bi('prefilledFromPoNotice').en)}<br/>${escapeHtml(bi('prefilledFromPoNotice').zh)}</div>` : ''}
@@ -2025,6 +2191,7 @@ function renderOrderInfoStep() {
 
     <div class="nav-buttons">
       <button class="btn btn-secondary" id="btnBack">${biBlockHtml('back', 'Back')}</button>
+      <button class="btn btn-secondary" id="btnSaveDraft">${biBlockHtml('saveAndClose', 'Save')}</button>
       <button class="btn btn-primary" id="btnNext">${biBlockHtml('next', 'Next')}</button>
     </div>
   `;
@@ -2512,11 +2679,12 @@ function renderInspectionDetailsStep() {
   }
 
   return `
-    <div class="step-eyebrow">${biHtml('step', 'Step')} 5 / 7</div>
+    <div class="step-eyebrow">${stepLabel()}</div>
     <div class="step-title">检验详情<span class="zh">Inspection Details</span></div>
     ${body}
     <div class="nav-buttons">
       <button class="btn btn-secondary" id="btnBack">${biBlockHtml('back', 'Back')}</button>
+      <button class="btn btn-secondary" id="btnSaveDraft">${biBlockHtml('saveAndClose', 'Save')}</button>
       <button class="btn btn-primary" id="btnNext">${biBlockHtml('next', 'Next')}</button>
     </div>
   `;
@@ -2704,6 +2872,271 @@ function renderManualSizingNotice() {
   `;
 }
 
+/* ---- Completed report gate ----
+ * A report link is now one report. Once submitted, reopening the link lands
+ * here rather than starting a fresh wizard - the previous behaviour let anyone
+ * quietly file a second report against the same stage. */
+function renderCompletedReportGate() {
+  const r = state.completedReport || {};
+  const resultLabel = r.result === 'pass' ? bi('resultPass').en : bi('resultFail').en;
+  const when = r.submittedAt ? new Date(r.submittedAt).toLocaleDateString() : '';
+  return `
+    <div class="step-title">${escapeHtml(bi('reportAlreadySubmitted', 'This report is complete').en)}</div>
+    <div class="card">
+      <div class="review-row"><span class="k">${escapeHtml(bi('poNumberLabel', 'Purchase Order Number').en)}</span><span class="v">${escapeHtml(state.poNumber || '')}</span></div>
+      <div class="review-row"><span class="k">${escapeHtml(bi('overallResultLabel', 'Overall Result').en)}</span><span class="v">${escapeHtml(resultLabel)}</span></div>
+      ${when ? `<div class="review-row"><span class="k">${escapeHtml(bi('submittedOn', 'Submitted').en)}</span><span class="v">${escapeHtml(when)}</span></div>` : ''}
+    </div>
+    <div class="card">
+      <div class="section-help">${escapeHtml(bi('completedGateHelp', 'Open the finished report, confirm that flagged units have since been repaired, or start a separate additional report.').en)}</div>
+      <div style="display:flex; flex-direction:column; gap:10px; margin-top:12px;">
+        ${r.pdfUrl ? `<a class="btn btn-primary" href="${escapeHtml(r.pdfUrl)}" target="_blank" rel="noopener" style="text-decoration:none; text-align:center;">${escapeHtml(bi('btnViewReport', 'View Report').en)}</a>` : ''}
+        <button type="button" class="btn btn-secondary" id="btnRevisedReport">${escapeHtml(bi('btnRevisedUnitReport', 'Add Revised Unit Report').en)}</button>
+        <button type="button" class="btn btn-secondary" id="btnAdditionalReport">${escapeHtml(bi('btnAdditionalReport', 'Add Additional Report').en)}</button>
+      </div>
+    </div>
+  `;
+}
+
+/* ---- Revised Unit Report ----
+ * A lightweight follow-up: one tile per issue the original report flagged, and
+ * the inspector records how many of those units have since been repaired, with
+ * a photo. Deliberately not a second full report - nothing else is re-checked. */
+function renderRevisedUnitReport() {
+  if (!state.revisedIssues.length) {
+    return `
+      <div class="step-title">${escapeHtml(bi('btnRevisedUnitReport', 'Add Revised Unit Report').en)}</div>
+      <div class="card"><div class="section-help">${escapeHtml(bi('noFlaggedUnits', 'The original report flagged no defective units, so there is nothing to confirm here.').en)}</div></div>
+      <div class="nav-buttons"><button class="btn btn-secondary" id="btnBackToGate">${escapeHtml(bi('back', 'Back').en)}</button></div>
+    `;
+  }
+  const tiles = state.revisedIssues.map((iss, idx) => {
+    const done = iss.confirmed;
+    return `
+      <div class="card ${done ? 'revised-done' : ''}" data-revised-idx="${idx}">
+        <div class="section-title">${escapeHtml(iss.description || bi('issueLabel', 'Issue').en)}</div>
+        <div class="review-row"><span class="k">${escapeHtml(bi('severityLabel', 'Severity').en)}</span><span class="v">${escapeHtml(bi('aql' + (iss.severity || 'minor').charAt(0).toUpperCase() + (iss.severity || 'minor').slice(1)).en)}</span></div>
+        <div class="review-row"><span class="k">${escapeHtml(bi('unitsFlaggedLabel', 'Units flagged').en)}</span><span class="v">${iss.unitsAffected}</span></div>
+        ${(iss.photos || []).length ? `<div class="q-reference"><div class="q-reference-label">${escapeHtml(bi('originalEvidence', 'From the original report').en)}</div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">${iss.photos.map((u) => `<div class="q-reference-frame"><img src="${escapeHtml(u)}" class="js-lightbox" alt="" /></div>`).join('')}</div></div>` : ''}
+        ${done ? `
+          <div class="no-issues-note">${escapeHtml(bi('unitsConfirmedFixed', 'Confirmed repaired').en)}: ${iss.unitsFixed} / ${iss.unitsAffected}</div>
+          <button type="button" class="section-clean-btn is-on" data-revised-undo="${idx}">${escapeHtml(bi('undo', 'Undo').en)}</button>
+        ` : `
+          <div class="field">
+            <label class="field-label">${escapeHtml(bi('unitsFixedLabel', 'How many of these units have been repaired?').en)}<span class="required">*</span></label>
+            <input type="number" min="1" max="${iss.unitsAffected}" class="input" data-revised-qty="${idx}" value="${escapeHtml(String(iss.unitsFixed || ''))}" />
+          </div>
+          <div class="q-media-block">
+            <div class="section-photos-label">${escapeHtml(bi('evidenceLabel', 'Evidence').en)}<span class="required">*</span>
+              <span class="q-media-hint">${escapeHtml(bi('mediaOnFailRequired', 'Photo or video of the defect required').en)}</span></div>
+            ${photoGrid('revised:' + idx, true)}
+          </div>
+          <button type="button" class="btn btn-secondary" data-revised-confirm="${idx}" style="width:auto;padding:9px 16px;margin-top:10px;">
+            ${escapeHtml(bi('btnConfirmFixed', 'Confirm repaired').en)}
+          </button>
+        `}
+      </div>
+    `;
+  }).join('');
+
+  const allDone = state.revisedIssues.every((i) => i.confirmed);
+  return `
+    <div class="step-title">${escapeHtml(bi('btnRevisedUnitReport', 'Add Revised Unit Report').en)}</div>
+    <div class="section-help" style="margin-bottom:12px;">${escapeHtml(bi('revisedReportHelp', 'Confirm how many of the units flagged in the original report have been repaired. Every tile must be confirmed before this can be submitted.').en)}</div>
+    ${tiles}
+    <div class="nav-buttons">
+      <button class="btn btn-secondary" id="btnBackToGate">${escapeHtml(bi('back', 'Back').en)}</button>
+      <button class="btn btn-primary" id="btnSubmitRevised" ${allDone ? '' : 'disabled'}>${escapeHtml(bi('btnSubmitRevised', 'Submit revised report').en)}</button>
+    </div>
+  `;
+}
+
+/* ============================================================
+ * Disposition step: what happens to the defective units
+ * ============================================================
+ * Sits between Additional Issues and Review, and only appears when something
+ * was actually flagged - a clean report goes straight to Review.
+ *
+ * For each issue the inspector chooses one of three outcomes. This is the
+ * point of the step: it lets simple problems be fixed on the spot at the
+ * factory instead of shipping units back, and it decides what the final
+ * numbers are.
+ *
+ *   repaired  - fixed on site. Those units are good now, so they stop counting
+ *               as defects. Requires a count (never more than were flagged)
+ *               and a photo.
+ *   factory   - the factory will fix them. They still count, and a Revised
+ *               Unit Report is needed afterwards to confirm the repair.
+ *   rejected  - not shipped. Excluded from the final quantity, so they stop
+ *               counting too.
+ *
+ * Because repaired and rejected units leave the count, a report can legitimately
+ * move from fail to pass here - which is exactly the intent for a batch whose
+ * only problem was a handful of units that got pulled.
+ */
+const DISPOSITION_CHOICES = ['repaired', 'factory', 'rejected'];
+
+function dispositionFor(id) {
+  if (!state.dispositions[id]) {
+    state.dispositions[id] = { choice: '', unitsRepaired: '', photos: [] };
+  }
+  return state.dispositions[id];
+}
+
+/** Every defect the inspector needs to decide about. */
+function dispositionTargets() {
+  return collectRawDefects().map((d) => ({
+    id: d.id,
+    description: d.description,
+    severity: d.severity,
+    unitsAffected: parseInt(d.unitsAffected, 10) || 1
+  }));
+}
+
+/** Shared step chrome, so a new step doesn't have to restate it. */
+function stepHeaderHtml(title) {
+  return `<div class="step-eyebrow">${stepLabel()}</div>\n<div class="step-title">${escapeHtml(title)}</div>`;
+}
+
+function navButtonsHtml() {
+  return `
+    <div class="nav-buttons">
+      <button class="btn btn-secondary" id="btnBack">${biBlockHtml('back', 'Back')}</button>
+      <button class="btn btn-secondary" id="btnSaveDraft">${biBlockHtml('saveAndClose', 'Save')}</button>
+      <button class="btn btn-primary" id="btnNext">${biBlockHtml('next', 'Next')}</button>
+    </div>
+  `;
+}
+
+/* Defects as recorded, BEFORE any disposition is applied. The disposition step
+ * needs the original numbers to ask about; collectAllDefects() below returns
+ * what actually counts once those decisions are made. */
+function collectRawDefects() {
+  const all = [];
+  questionsForStep(5).concat(additionalReviewQuestions()).forEach((q) => {
+    const a = state.answers[q.id];
+    if (!a || a.status !== 'fail') return;
+    all.push({ id: q.id, description: q.title, severity: 'major',
+      unitsAffected: parseInt(a.unitsAffected, 10) || 1, photos: a.media || [] });
+  });
+  allSectionIssues().forEach((d) => all.push(d));
+  return all;
+}
+
+/**
+ * Reduce a defect by whatever the inspector resolved.
+ *
+ * Repaired-on-site and rejected units stop being defects: the first because
+ * they are now good, the second because they are not shipped. Factory-fix
+ * units stay, and are what the Revised Unit Report later clears.
+ */
+function applyDisposition(defect) {
+  const d = state.dispositions[defect.id];
+  if (!d || !d.choice) return defect;
+  const flagged = parseInt(defect.unitsAffected, 10) || 1;
+  if (d.choice === 'rejected') return { ...defect, unitsAffected: 0, resolution: 'rejected' };
+  if (d.choice === 'repaired') {
+    const fixed = Math.min(flagged, parseInt(d.unitsRepaired, 10) || 0);
+    return { ...defect, unitsAffected: Math.max(0, flagged - fixed), unitsRepaired: fixed, resolution: 'repaired' };
+  }
+  return { ...defect, resolution: 'factory' };
+}
+
+function renderDispositionStep() {
+  const targets = dispositionTargets();
+
+  if (!targets.length) {
+    return `
+      ${stepHeaderHtml(bi('dispositionTitle', 'Defective Units').en)}
+      <div class="card">
+        <div class="section-help">${escapeHtml(bi('noDefectsToResolve', 'No defects were flagged, so there is nothing to resolve. Continue to review and submit.').en)}</div>
+      </div>
+      ${navButtonsHtml()}
+    `;
+  }
+
+  const tiles = targets.map((t) => {
+    const d = dispositionFor(t.id);
+    return `
+      <div class="card" data-disposition="${escapeHtml(t.id)}">
+        <div class="section-title">${escapeHtml(t.description || bi('issueLabel', 'Issue').en)}</div>
+        <div class="review-row">
+          <span class="k">${escapeHtml(bi('unitsFlaggedLabel', 'Units flagged').en)}</span>
+          <span class="v">${t.unitsAffected}</span>
+        </div>
+        <div class="segmented" style="margin-top:10px;">
+          ${DISPOSITION_CHOICES.map((c) => `
+            <div class="segmented-option ${d.choice === c ? 'selected' : ''}"
+              data-disposition-choice="${escapeHtml(t.id)}" data-val="${c}">
+              ${escapeHtml(bi('disposition_' + c).en)}
+            </div>
+          `).join('')}
+        </div>
+        ${d.choice ? `<div class="q-guidance">${escapeHtml(bi('dispositionHelp_' + d.choice).en)}</div>` : ''}
+        ${d.choice === 'repaired' ? `
+          <div class="q-fail-block">
+            <label class="field-label">${escapeHtml(bi('unitsRepairedLabel', 'How many were repaired on site?').en)}<span class="required">*</span></label>
+            <input type="number" min="1" max="${t.unitsAffected}" class="input"
+              data-disposition-qty="${escapeHtml(t.id)}" value="${escapeHtml(String(d.unitsRepaired || ''))}" />
+          </div>
+          <div class="q-media-block">
+            <div class="section-photos-label">${escapeHtml(bi('evidenceLabel', 'Evidence').en)}<span class="required">*</span>
+              <span class="q-media-hint">${escapeHtml(bi('repairEvidenceHint', 'Photo of the repaired units').en)}</span></div>
+            ${photoGrid('disp:' + t.id, true)}
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }).join('');
+
+  return `
+    ${stepHeaderHtml(bi('dispositionTitle', 'Defective Units').en)}
+    <div class="section-help" style="margin-bottom:12px;">
+      ${escapeHtml(bi('dispositionHelp', 'Decide what happens to each set of defective units. Repaired and rejected units come out of the final counts; units the factory will fix stay in and need a follow-up report.').en)}
+    </div>
+    ${tiles}
+    ${navButtonsHtml()}
+  `;
+}
+
+/** Every disposition answered, with a count and photo where repairs were claimed. */
+function dispositionProblems() {
+  const problems = [];
+  dispositionTargets().forEach((t) => {
+    const d = state.dispositions[t.id] || {};
+    if (!d.choice) { problems.push({ id: t.id, why: 'choice' }); return; }
+    if (d.choice !== 'repaired') return;
+    const n = parseInt(d.unitsRepaired, 10);
+    // Cannot repair more units than were flagged in the first place.
+    if (!(n > 0) || n > t.unitsAffected) problems.push({ id: t.id, why: 'qty' });
+    else if (!(d.photos || []).length) problems.push({ id: t.id, why: 'photo' });
+  });
+  return problems;
+}
+
+function attachDispositionHandlers() {
+  document.querySelectorAll('[data-disposition-choice]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const d = dispositionFor(el.dataset.dispositionChoice);
+      d.choice = el.dataset.val;
+      // A claim of on-site repair is meaningless once the choice changes.
+      if (d.choice !== 'repaired') { d.unitsRepaired = ''; d.photos = []; }
+      render();
+    });
+  });
+  document.querySelectorAll('[data-disposition-qty]').forEach((el) => {
+    el.addEventListener('input', () => {
+      dispositionFor(el.dataset.dispositionQty).unitsRepaired = el.value;
+    });
+  });
+}
+
+/** Photo arrays for on-site repair evidence. */
+function dispositionPhotoArray(id) {
+  return dispositionFor(id).photos;
+}
+
 function renderSizingStep() {
   let body = '';
   body += renderApprovalSizingReferenceTile();
@@ -2740,11 +3173,12 @@ function renderSizingStep() {
 /** Shared wrapper so the early return above renders the same chrome. */
 function sizingStepShell(body) {
   return `
-    <div class="step-eyebrow">${biHtml('step', 'Step')} 4 / 7</div>
+    <div class="step-eyebrow">${stepLabel()}</div>
     <div class="step-title">尺寸<span class="zh">Sizing</span></div>
     ${body}
     <div class="nav-buttons">
       <button class="btn btn-secondary" id="btnBack">${biBlockHtml('back', 'Back')}</button>
+      <button class="btn btn-secondary" id="btnSaveDraft">${biBlockHtml('saveAndClose', 'Save')}</button>
       <button class="btn btn-primary" id="btnNext">${biBlockHtml('next', 'Next')}</button>
     </div>
   `;
@@ -3201,7 +3635,7 @@ function renderSizingPhotosCard() {
 /* ---- Step 4: Final Approval Photos ---- */
 function renderPhotosStep() {
   return `
-    <div class="step-eyebrow">${biHtml('step', 'Step')} 5 / 7</div>
+    <div class="step-eyebrow">${stepLabel()}</div>
     <div class="step-title">${biBlockHtml('finalApprovalPhotos', 'Final Approval Photos')}</div>
     <div class="section-help" style="margin-bottom:14px;">${escapeHtml(bi('finalApprovalHelp').en)}<br/>${escapeHtml(bi('finalApprovalHelp').zh)}</div>
     <div class="card">
@@ -3216,6 +3650,7 @@ function renderPhotosStep() {
     </div>
     <div class="nav-buttons">
       <button class="btn btn-secondary" id="btnBack">${biBlockHtml('back', 'Back')}</button>
+      <button class="btn btn-secondary" id="btnSaveDraft">${biBlockHtml('saveAndClose', 'Save')}</button>
       <button class="btn btn-primary" id="btnNext">${biBlockHtml('next', 'Next')}</button>
     </div>
   `;
@@ -3228,9 +3663,11 @@ function photoGrid(fieldId, compact, mini) {
     const isVideo = (file.type || '').startsWith('video/') || /\.(mp4|mov|m4v|webm|avi|mkv|3gp)$/i.test(file.name || '');
     return `
     <div class="photo-thumb">
+      ${/* Served from the draft folder now, not a blob URL - the file is
+            already on the server by the time this renders. */ ''}
       ${isVideo
-        ? `<video src="${file._url}" class="photo-video" muted playsinline preload="metadata"></video><span class="photo-video-badge">&#9654; Video</span>`
-        : `<img src="${file._url}" />`}
+        ? `<video src="${escapeHtml(file.url || '')}" class="photo-video" muted playsinline preload="metadata"></video><span class="photo-video-badge">&#9654; Video</span>`
+        : `<img src="${escapeHtml(file.url || '')}" />`}
       <button class="photo-remove" data-photo-remove="${fieldId}" data-photo-idx="${idx}">✕</button>
     </div>
   `;
@@ -3345,7 +3782,7 @@ function renderAdditionalIssuesStep() {
   }).join('');
 
   return `
-    <div class="step-eyebrow">${biHtml('step', 'Step')} 6 / 7</div>
+    <div class="step-eyebrow">${stepLabel()}</div>
     <div class="step-title">${biBlockHtml('additionalIssuesSection', 'Additional Issues')}</div>
     <div class="section-help" style="margin-bottom:14px;">
       ${escapeHtml(bi('additionalIssuesHelpMinor', 'Minor issues found on individual units while checking. Add one entry per distinct issue, with the number of units affected. Leave a section empty if you found nothing.').en)}
@@ -3354,6 +3791,7 @@ function renderAdditionalIssuesStep() {
     <div id="issuesAqlLive">${renderAqlTallyCard()}</div>
     <div class="nav-buttons">
       <button class="btn btn-secondary" id="btnBack">${biBlockHtml('back', 'Back')}</button>
+      <button class="btn btn-secondary" id="btnSaveDraft">${biBlockHtml('saveAndClose', 'Save')}</button>
       <button class="btn btn-primary" id="btnNext">${biBlockHtml('next', 'Next')}</button>
     </div>
   `;
@@ -3489,7 +3927,14 @@ function renderReviewStep() {
     tolerance: 'resultReasonTolerance', minor: 'resultReasonMinor', major: 'resultReasonMajor',
     aqlCritical: 'resultReasonAqlCritical', aqlMajor: 'resultReasonAqlMajor', aqlMinor: 'resultReasonAqlMinor',
     // Was missing, so this reason rendered blank on the review banner.
-    allRejected: 'resultReasonAllRejected'
+    /* 'allRejected' was retired when the rate thresholds replaced it - a
+     * fully-defective batch now reports as thresholdCritical. Kept in the map
+     * so a report submitted under the old rules still renders its reason
+     * rather than showing a blank line. */
+    allRejected: 'resultReasonAllRejected',
+    thresholdCritical: 'resultReasonThresholdCritical',
+    thresholdMajor: 'resultReasonThresholdMajor',
+    thresholdMinor: 'resultReasonThresholdMinor'
   };
   const resultLabel = result.overall === 'pass' ? bi('resultPass') : bi('resultFail');
   const problems = getAllValidationProblems();
@@ -3504,7 +3949,7 @@ function renderReviewStep() {
   ` : '';
 
   return `
-    <div class="step-eyebrow">${biHtml('step', 'Step')} 7 / 7</div>
+    <div class="step-eyebrow">${stepLabel()}</div>
     <div class="step-title">${biBlockHtml('reviewTitle', 'Review & Submit')}</div>
 
     <div class="result-banner ${result.overall === 'fail' ? 'fail' : ''}">
@@ -3536,6 +3981,7 @@ function renderReviewStep() {
     </div>
     <div class="nav-buttons">
       <button class="btn btn-secondary" id="btnBack">${biBlockHtml('back', 'Back')}</button>
+      <button class="btn btn-secondary" id="btnSaveDraft">${biBlockHtml('saveAndClose', 'Save')}</button>
       <button class="btn btn-primary" id="btnSubmit" ${problems.length ? 'disabled' : ''}>${biBlockHtml('submit', 'Submit Report')}</button>
     </div>
   `;
@@ -3587,6 +4033,8 @@ function attachStepHandlers(name) {
   if (btnNext) btnNext.addEventListener('click', next);
   const btnSubmit = document.getElementById('btnSubmit');
   if (btnSubmit) btnSubmit.addEventListener('click', submitReport);
+  const btnSaveDraft = document.getElementById('btnSaveDraft');
+  if (btnSaveDraft) btnSaveDraft.addEventListener('click', () => saveDraft(false));
 
   document.querySelectorAll('[data-bind]').forEach((el) => {
     const evt = (el.tagName === 'SELECT') ? 'change' : 'input';
@@ -3594,6 +4042,7 @@ function attachStepHandlers(name) {
   });
 
   if (name === 'inspectionDetails') attachInspectionHandlers();
+  if (name === 'disposition') { attachDispositionHandlers(); attachPhotoHandlers(); }
 
   const manualSizingBtn = document.getElementById('btnEnterSizingManually');
   if (manualSizingBtn) {
@@ -3814,6 +4263,228 @@ function updateSizeCellInPlace(ridx, point) {
   if (flag) flag.style.display = outOfTol ? 'inline' : 'none';
 }
 
+/** Send one photo to this report's draft folder and return its reference.
+ *  Called as the photo is taken, not at submit. */
+async function uploadDraftPhoto(file) {
+  ensureDraftId();
+  const fd = new FormData();
+  fd.append('photo', file, file.name || 'photo.jpg');
+  const res = await fetch(`/api/qa/draft/${encodeURIComponent(state.draftId)}/photo`, { method: 'POST', body: fd });
+  if (!res.ok) throw new Error('upload failed: ' + res.status);
+  const body = await res.json();
+  return body.photo;
+}
+
+/**
+ * Derived from the PO and stage rather than random.
+ *
+ * A random id per page load would mean reopening the same report link started
+ * a fresh empty draft every time, which defeats the entire point - and would
+ * leave the previous draft's photos orphaned on disk. Ids are validated
+ * server-side against a character whitelist, hence the sanitising here.
+ */
+function draftIdFor(poNumber, qaType) {
+  const clean = String(poNumber || 'nopo').replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 40);
+  const stage = qaType === 'production' ? 'bulk' : 'prepro';
+  return `po-${clean}-${stage}`;
+}
+
+function ensureDraftId() {
+  if (!state.draftId) state.draftId = draftIdFor(state.poNumber, state.qaType);
+  return state.draftId;
+}
+
+
+/* ---- Save and resume ----
+ * Photos became server-side references in the previous change, which is what
+ * makes this possible: the entire report state is now plain JSON. */
+const DRAFT_SAVE_KEYS = [
+  'qaType', 'poNumber', 'sku', 'productTitle', 'category', 'subcategory', 'creator',
+  'date', 'poQuantity', 'productRisk', 'qaLead', 'preProductionUnitsChecked',
+  'actualUnitsChecked', 'inspectionLevel', 'majorAql', 'minorAql', 'materials',
+  'printingMethod', 'productionNotes', 'categoryData', 'answers', 'sectionIssues',
+  'sectionCleared', 'additionalIssues', 'photos', 'dispositions', 'productWeightG', 'manualSizingOptIn',
+  'draftId', 'qaSetup', 'poDimensions', 'poDimensionsTable', 'poWeightG', 'step'
+];
+
+function draftSnapshot() {
+  const out = {};
+  DRAFT_SAVE_KEYS.forEach((k) => { if (k !== 'step') out[k] = state[k]; });
+  out.step = step;
+  return out;
+}
+
+let lastSavedAt = null;
+
+async function saveDraft(quiet) {
+  ensureDraftId();
+  try {
+    const res = await fetch(`/api/qa/draft/${encodeURIComponent(state.draftId)}/state`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(draftSnapshot())
+    });
+    if (!res.ok) throw new Error('save failed');
+    lastSavedAt = new Date();
+    if (!quiet) showToast(bi('draftSaved', 'Progress saved. You can close this and come back to it.').en);
+    return true;
+  } catch (err) {
+    console.error('Draft save failed', err);
+    showToast(bi('draftSaveFailed', 'Could not save your progress - check your connection.').en, true);
+    return false;
+  }
+}
+
+/** Called once the PO is known, before the first render of step 2. */
+async function tryResumeDraft() {
+  const id = draftIdFor(state.poNumber, state.qaType);
+  try {
+    const res = await fetch(`/api/qa/draft/${encodeURIComponent(id)}/state`);
+    if (!res.ok) return false;
+    const body = await res.json();
+    if (!body.draft || !body.draft.data) return false;
+    const saved = body.draft.data;
+    // Only restore keys we know about, so a stale draft from an older build
+    // can't reintroduce fields that no longer exist.
+    DRAFT_SAVE_KEYS.forEach((k) => {
+      if (k === 'step') return;
+      if (saved[k] !== undefined) state[k] = saved[k];
+    });
+    state.draftId = id;
+    if (typeof saved.step === 'number') step = saved.step;
+    showToast(bi('draftResumed', 'Picked up where you left off.').en);
+    return true;
+  } catch (err) {
+    console.error('Could not load draft', err);
+    return false;
+  }
+}
+
+async function discardDraft() {
+  if (!state.draftId) return;
+  try {
+    await fetch(`/api/qa/draft/${encodeURIComponent(state.draftId)}`, { method: 'DELETE' });
+  } catch (err) { /* a leftover draft is swept after 30 days anyway */ }
+}
+
+/** Photo arrays for the revised report's per-issue evidence. */
+function revisedPhotoArray(idx) {
+  const iss = state.revisedIssues[idx];
+  if (!iss) return [];
+  if (!iss.newPhotos) iss.newPhotos = [];
+  return iss.newPhotos;
+}
+
+function attachGateHandlers() {
+  const a = document.getElementById('btnAdditionalReport');
+  if (a) a.addEventListener('click', () => {
+    // A genuinely separate report - the gate is dismissed and the wizard runs
+    // as normal, saving as its own submission.
+    state.reportMode = 'full';
+    state.completedReport = null;
+    goTo(1);
+  });
+  const r = document.getElementById('btnRevisedReport');
+  if (r) r.addEventListener('click', () => startRevisedReport());
+}
+
+async function startRevisedReport() {
+  try {
+    const res = await fetch(`/api/submission-history/${encodeURIComponent(state.poNumber)}`);
+    const data = res.ok ? await res.json() : { reports: [] };
+    const mine = (data.reports || []).find((x) => x.submissionId === (state.completedReport || {}).submissionId)
+      || (data.reports || [])[0];
+    state.revisedIssues = ((mine && mine.issues) || []).map((iss) => ({
+      description: iss.description || '',
+      severity: iss.severity || 'minor',
+      unitsAffected: parseInt(iss.unitsAffected, 10) || 1,
+      photos: iss.photos || [],
+      unitsFixed: '', newPhotos: [], confirmed: false
+    }));
+  } catch (err) {
+    console.error('Could not load the original report issues', err);
+    state.revisedIssues = [];
+  }
+  state.reportMode = 'revised';
+  render();
+}
+
+function attachRevisedHandlers() {
+  const back = document.getElementById('btnBackToGate');
+  if (back) back.addEventListener('click', () => { state.reportMode = 'gate'; render(); });
+
+  document.querySelectorAll('[data-revised-qty]').forEach((el) => {
+    el.addEventListener('input', () => {
+      const iss = state.revisedIssues[parseInt(el.dataset.revisedQty, 10)];
+      if (iss) iss.unitsFixed = el.value;
+    });
+  });
+
+  document.querySelectorAll('[data-revised-confirm]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const idx = parseInt(el.dataset.revisedConfirm, 10);
+      const iss = state.revisedIssues[idx];
+      const n = parseInt(iss.unitsFixed, 10);
+      // Cannot repair more units than were flagged in the first place.
+      if (!(n > 0) || n > iss.unitsAffected) {
+        showToast(bi('unitsFixedRange', 'Enter a number between 1 and the units flagged.').en
+          .replace('{max}', String(iss.unitsAffected)), true);
+        return;
+      }
+      if (!(iss.newPhotos || []).length) {
+        showToast(bi('photoRequiredForDefect').en, true);
+        return;
+      }
+      iss.confirmed = true;
+      render();
+    });
+  });
+
+  document.querySelectorAll('[data-revised-undo]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const iss = state.revisedIssues[parseInt(el.dataset.revisedUndo, 10)];
+      if (iss) iss.confirmed = false;
+      render();
+    });
+  });
+
+  const submit = document.getElementById('btnSubmitRevised');
+  if (submit) submit.addEventListener('click', submitRevisedReport);
+}
+
+async function submitRevisedReport() {
+  const btn = document.getElementById('btnSubmitRevised');
+  if (btn) { btn.disabled = true; btn.textContent = bi('savingEllipsis', 'Saving...').en; }
+  try {
+    const payload = {
+      poNumber: state.poNumber,
+      sku: state.sku,
+      qaType: state.qaType,
+      originalSubmissionId: (state.completedReport || {}).submissionId || null,
+      qaLead: state.qaLead || '',
+      submittedAt: new Date().toISOString(),
+      issues: state.revisedIssues.map((iss) => ({
+        description: iss.description,
+        severity: iss.severity,
+        unitsAffected: iss.unitsAffected,
+        unitsFixed: parseInt(iss.unitsFixed, 10) || 0,
+        photos: (iss.newPhotos || []).map((f) => ({ id: f.id, name: f.name, type: f.type }))
+      })),
+      draftId: state.draftId
+    };
+    const res = await fetch('/api/submit-revised', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error('submit failed');
+    showToast(bi('revisedSubmitted', 'Revised unit report submitted.').en);
+    state.reportMode = 'gate';
+    render();
+  } catch (err) {
+    console.error('Revised report submit failed', err);
+    showToast(bi('revisedSubmitFailed', 'Could not submit the revised report.').en, true);
+    if (btn) { btn.disabled = false; btn.textContent = bi('btnSubmitRevised', 'Submit revised report').en; }
+  }
+}
+
 function attachPhotoHandlers() {
   document.querySelectorAll('[data-photo-input]').forEach((el) => {
     el.addEventListener('change', async (e) => {
@@ -3824,14 +4495,19 @@ function attachPhotoHandlers() {
       el.value = '';
       showToast(bi('processingPhotos').en + ' / ' + bi('processingPhotos').zh);
       for (const f of files) {
+        let toSend = f;
         try {
-          const compressed = await compressImage(f);
-          compressed._url = URL.createObjectURL(compressed);
-          arr.push(compressed);
+          toSend = await compressImage(f);
         } catch (err) {
-          console.error('Photo compression failed, storing original', err);
-          try { f._url = URL.createObjectURL(f); arr.push(f); }
-          catch (e2) { showToast(bi('photoTooLarge').en + ' / ' + bi('photoTooLarge').zh, true); }
+          // Not an image (a video), or the canvas gave up. Send the original.
+          console.error('Photo compression failed, uploading original', err);
+        }
+        try {
+          const ref = await uploadDraftPhoto(toSend);
+          arr.push(ref);
+        } catch (err) {
+          console.error('Photo upload failed', err);
+          showToast(bi('photoUploadFailed', 'Could not upload that photo - check your connection and try again.').en, true);
         }
       }
       render();
@@ -3843,9 +4519,14 @@ function attachPhotoHandlers() {
       const idx = parseInt(el.getAttribute('data-photo-idx'), 10);
       const arr = getPhotoArray(fieldId);
       const removed = arr[idx];
-      if (removed && removed._url) URL.revokeObjectURL(removed._url);
       arr.splice(idx, 1);
       render();
+      // Fire and forget - the report is already correct without it, and a
+      // failed cleanup is a stray file rather than a broken report.
+      if (removed && removed.id && state.draftId) {
+        fetch(`/api/qa/draft/${encodeURIComponent(state.draftId)}/photo/${encodeURIComponent(removed.id)}`,
+          { method: 'DELETE' }).catch(() => {});
+      }
     });
   });
 }
@@ -3989,46 +4670,66 @@ async function submitReport() {
       inspection: {
         sections: buildInspectionSectionsForPayload(),
         issueSections: buildIssueSectionsForPayload(),
-        recap: buildRecapForPayload()
+        recap: buildRecapForPayload(),
+        /* What was decided about each defect, so the PDF can show the issue
+         * alongside its resolution rather than just the original finding. */
+        dispositions: dispositionTargets().map((t) => {
+          const d = state.dispositions[t.id] || {};
+          return {
+            id: t.id, description: t.description, severity: t.severity,
+            unitsFlagged: t.unitsAffected,
+            choice: d.choice || '',
+            unitsRepaired: d.choice === 'repaired' ? (parseInt(d.unitsRepaired, 10) || 0) : 0
+          };
+        })
       }
     };
 
-    const formData = new FormData();
-    formData.append('payload', JSON.stringify(payload));
-    state.photos.general.forEach((f) => formData.append('photo_general', f, f.name));
-    state.photos.tags.forEach((f) => formData.append('photo_tags', f, f.name));
-    Object.keys(state.categoryData.sectionPhotos).forEach((sectionKey) => {
-      state.categoryData.sectionPhotos[sectionKey].forEach((f) => {
-        formData.append(`photo_section_${sectionKey === 'washTag' ? 'washtag' : sectionKey}`, f, f.name);
+    /* Photos are already on the server, in this report's draft folder, so the
+     * submission sends references rather than re-uploading megabytes the
+     * server just received. photoRefs maps the same field names the PDF
+     * builder already expects onto the draft photo ids. */
+    const photoRefs = {};
+    const ref = (field, arr) => {
+      (arr || []).forEach((f) => {
+        if (!f || !f.id) return;
+        (photoRefs[field] = photoRefs[field] || []).push({ id: f.id, name: f.name, type: f.type });
       });
-    });
+    };
 
-    /* Step 5 evidence uploads under its question id whatever the answer was:
-     * a photo_always question (the plush comparison shot, a glow-in-the-dark
-     * photo) passes and still owes its picture, and the defect loop below only
-     * walks failures. */
-    const answerPhotoIds = new Set();
+    ref('photo_general', state.photos.general);
+    ref('photo_tags', state.photos.tags);
+    Object.keys(state.categoryData.sectionPhotos).forEach((sectionKey) => {
+      ref(`photo_section_${sectionKey === 'washTag' ? 'washtag' : sectionKey}`,
+        state.categoryData.sectionPhotos[sectionKey]);
+    });
     questionsForStep(5).concat(additionalReviewQuestions()).forEach((q) => {
       const a = state.answers[q.id];
-      if (!a || !(a.media || []).length) return;
-      answerPhotoIds.add(q.id);
-      a.media.forEach((f) => formData.append(`photo_q_${q.id}`, f, f.name));
+      if (a) ref(`photo_q_${q.id}`, a.media);
+    });
+    allSectionIssues().forEach((d) => ref(`photo_defect_${d.id}`, d.photos));
+    Object.keys(state.dispositions || {}).forEach((k) => ref(`photo_disposition_${k}`, state.dispositions[k].photos));
+    (state.categoryData.sizeRows || []).forEach((row, ridx) => ref(`photo_sizerow_${ridx}`, row.photos));
+    (state.categoryData.customSizeRows || []).forEach((row, ridx) => ref(`photo_customsizerow_${ridx}`, row.photos));
+    ref('photo_chart', state.categoryData.chartPhotos);
+    ref('photo_simplesize', state.categoryData.simpleSizePhotos);
+    // Legacy fixed-checklist defects, for reports started before the rework.
+    CHECKLIST_KEYS.forEach((key) => {
+      const item = state.categoryData[key];
+      (item && item.defects ? item.defects : []).forEach((d) => ref(`photo_defect_${d.id}`, d.photos));
     });
 
-    collectAllDefects().forEach((d) => {
-      if (answerPhotoIds.has(d.id)) return; // already sent as photo_q_*
-      (d.photos || []).forEach((f) => formData.append(`photo_defect_${d.id}`, f, f.name));
-    });
-    (state.categoryData.sizeRows || []).forEach((row, ridx) => {
-      (row.photos || []).forEach((f) => formData.append(`photo_sizerow_${ridx}`, f, f.name));
-    });
-    (state.categoryData.customSizeRows || []).forEach((row, ridx) => {
-      (row.photos || []).forEach((f) => formData.append(`photo_customsizerow_${ridx}`, f, f.name));
-    });
-    (state.categoryData.chartPhotos || []).forEach((f) => formData.append('photo_chart', f, f.name));
-    (state.categoryData.simpleSizePhotos || []).forEach((f) => formData.append('photo_simplesize', f, f.name));
+    payload.draftId = state.draftId;
+    payload.photoRefs = photoRefs;
+
+    const formData = new FormData();
+    formData.append('payload', JSON.stringify(payload));
 
     const res = await fetch('/api/submit', { method: 'POST', body: formData });
+    if (res.ok) {
+      // The submission has its own copies now, so the draft is dead weight.
+      discardDraft();
+    }
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || 'Submit failed');
