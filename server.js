@@ -2664,7 +2664,9 @@ app.get('/api/order-management/orders/:id/importable-images', (req, res) => {
     .map((f) => ({
       name: f.originalName || '',
       url: f.url,
-      // Small version for the picker grid; `url` is what gets attached.
+      /* Rasterised preview. This is now what gets ATTACHED as well as shown:
+         a PDF or AI file inserted by its original url rendered as a broken
+         image in the approval slot and stayed broken on the submitted record. */
       thumbUrl: `/api/order-management/orders/${encodeURIComponent(order.id)}/thumb`
         + `?file=${encodeURIComponent(f.storedName)}`,
       category: f.category || '',

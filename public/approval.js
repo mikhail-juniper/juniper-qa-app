@@ -1684,9 +1684,26 @@ function openImportedPicker(slotKey) {
     if (!approvalState.photos[slotKey]) approvalState.photos[slotKey] = [];
     [...chosen].forEach((i) => {
       const img = images[i];
-      const already = approvalState.photos[slotKey].some((f) => f && f._carriedUrl === img.url);
+      /* Carry the RENDERED preview, not the original file.
+       *
+       * The picker shows a rasterised thumbnail, so a PDF or AI artwork file
+       * looks fine while choosing - but inserting stored the original URL, and
+       * a PDF cannot render in an <img>. The slot showed a broken image, and
+       * because _carriedUrl is what gets persisted, it stayed broken on the
+       * submitted approval and in the report.
+       *
+       * These slots only ever need a picture of what is being made; the
+       * factory already holds the production files. */
+      const display = img.thumbUrl || img.url;
+      const already = approvalState.photos[slotKey].some((f) => f && f._carriedUrl === display);
       if (!already) {
-        approvalState.photos[slotKey].push({ _url: img.url, _carriedUrl: img.url, name: img.name || 'imported.jpg' });
+        approvalState.photos[slotKey].push({
+          _url: display,
+          _carriedUrl: display,
+          // Keep where it came from, so provenance isn't lost.
+          _sourceUrl: img.url,
+          name: img.name || 'imported.jpg'
+        });
       }
     });
     close();
