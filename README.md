@@ -87,6 +87,7 @@ The lifecycle for one product, in order:
 server.js                    All Express routes - the entire backend API surface
 lib/
   orderDb.js                 SQLite storage for orders - schema, migration, WAL checkpoint
+  jsonRowDb.js               Reusable SQLite row store used by the three stores below
   orderManagementStore.js    Order CRUD, component definitions sync, dispatch targets
   componentDefinitionStore.js  Per-SKU sub-component specs (keyed sku::partName)
   poDispatch.js              Builds per-supplier dispatch targets and messages
@@ -112,7 +113,12 @@ public/
   styles.css                  Shared styles for every page
 data/                         NOT in git - created at runtime, see DATA_DIR below
   orderManagement.db          SQLite - orders (see Data model)
-  orderManagement.json        The pre-SQLite file, kept as the migration rollback
+  approvals.db                SQLite - PD approvals
+  submissions.db              SQLite - inspection report log
+  componentDefinitions.db     SQLite - per-SKU sub-component specs
+  *.json                      The pre-SQLite files, kept as migration rollbacks
+  qa-drafts/                  In-progress reports: photos + saved state
+  revisedReports.json         Revised Unit Reports (follow-ups, not inspections)
   order-management-files/     Uploaded previews, per order id
 ```
 
@@ -220,19 +226,46 @@ Two things to know if you touch this:
   recent writes or refuses to open - a failure invisible until someone
   needs it.
 
-### Everything else: JSON files on the data disk
+### The other per-PO stores: also SQLite
 
-Still flat files, and fine at their sizes: suppliers (~137), the fabric
-library (~1,049), users, clients, catalog products. The stores that grow
-**per PO** are the migration candidates once the orders store has proven
-itself in production:
+Three more stores grew per purchase order and moved the same way, via
+`lib/jsonRowDb.js` - a small factory taking a table name, a primary-key
+function and a map of indexed columns, so the pattern is written once
+rather than four times. Measured on flat JSON at a 4,700-PO history:
 
-- `componentDefinitionStore` - roughly 4,700 x 4 parts, so ~19,000 rows
-- `approvalStore` - one per PO
-- `submissionLog` - one per submitted report
+| Store | Records | JSON size | One edit |
+|---|---|---|---|
+| `approvalStore` | 4,700 | 44.1 MB | **562 ms** |
+| `componentDefinitionStore` | 18,800 | 9.8 MB | 88 ms |
+| `submissionLog` | 9,400 | 8.3 MB | 59 ms |
 
-They are the same pattern repeated; the second one is far quicker than
-the first was.
+`approvalStore` was marginally worse than orders had been, because each PO
+carries three approval stages with comment threads. Every posted comment
+rewrote 44 MB and blocked every other request while it did. After the
+move, `addPdComment` went from ~562 ms to **0.15 ms** and
+`getByPoNumber` to 0.04 ms.
+
+Indexed columns per store: approvals by PO number and SKU, submissions by
+PO number, SKU and QA type, definitions by SKU. Record shapes are
+unchanged, so each store's normalising and hydrating functions work
+untouched.
+
+Each keeps its old JSON file as a rollback after migrating. Four files
+now sit unused-but-kept on the data disk: `orderManagement.json`,
+`approvals.json`, `submissions.json`, `componentDefinitions.json`.
+
+**The backup checkpoints all four.** It previously folded only the orders
+WAL, which would have captured three live WAL databases and restored
+short of recent writes.
+
+### Everything else: still JSON files on the data disk
+
+Still flat files, and fine at their sizes because they do not grow with
+the order book: suppliers (~137), the fabric library (~1,049), users,
+clients, catalog products, and the editable config files.
+
+If a future store does grow per PO, use `lib/jsonRowDb.js` rather than
+adding another JSON file.
 
 ### Uploaded files: preview + link, not the original
 
@@ -325,6 +358,12 @@ one before assuming it's a JS bug.
 
 ## The pass/fail and AQL logic
 
+> **Superseded in part.** The AQL machinery below still sizes the sample
+> and sets the inspection level, but the pass/fail *verdict* is now a rate
+> against fixed thresholds. See "Pass/fail is a rate, not an AQL accept
+> number" in the September 2026 redesign section.
+
+
 `lib/passFail.js` (server-side, authoritative) and its close mirror in
 `public/app.js` (client-side, live preview during the wizard) both
 implement:
@@ -382,6 +421,50 @@ Asana's REST API using a Bearer token. No Asana SDK dependency - just
 | `ASANA_ACCESS_TOKEN` | No | Asana Personal Access Token; leave unset to disable the Asana integration entirely |
 
 See `.env.example` for the copy-pasteable version with fuller comments.
+
+## A trap in server.js: temporal dead zones
+
+`server.js` has many `const` declarations *after* code that uses them.
+Startup work placed near the top that touches a config declared further
+down throws `Cannot access 'X' before initialization` - and because that
+work is usually wrapped in a `try/catch`, the error is swallowed and the
+app boots in a broken-but-quiet state.
+
+This has happened three times:
+
+- The SQLite migration ran before `hydrateOrder`'s constants existed, so
+  it silently imported nothing and **the app booted with an empty order
+  database** - indistinguishable from "all the orders are gone".
+- The tolerance loader, same shape.
+- The category consistency check, which simply never fired.
+
+If you add startup work: put it at the **bottom** of the module, or
+`require()` the config directly at the point of use (require is cached,
+so it is the same object), and make the catch log loudly. A startup task
+that silently does nothing is the worst outcome available here.
+
+## Category lists are enumerated in several places
+
+Adding a top-level category means touching all of these, and only some
+fail loudly:
+
+| Where | Fails how |
+|---|---|
+| `config/categories.json` | source of truth |
+| `CATEGORY_ORDER` in `public/app.js` | silently filtered out of both pickers |
+| `TOP_LEVEL_CATEGORIES` in `lib/analytics.js` | silently absent from category analytics |
+| `CATEGORY_LABELS` in `public/settings.js` | shows the raw key |
+| `tolerances.json`, `conditionalChecks.json`, `reportQuestions.json`, `unitCosts.json` | no tolerances / no conditional checks / no questions / falls back to a flat cost |
+
+Paper Goods was added to `categories.json` and missed in
+`lib/analytics.js`, so those POs were absent from category analytics for
+weeks with nothing complaining. **`server.js` now runs a consistency
+check at boot** and logs a warning naming the file and the missing
+category. It warns rather than throws: a mismatch is a reporting gap, not
+a reason to refuse to start.
+
+Note `unitCosts.json` deliberately has no `other` entry - that category
+is priced via `otherCategoryFlat`.
 
 ## The one thing that will bite you: DATA_DIR must be a real persistent disk
 
@@ -457,7 +540,7 @@ application code changes". That is no longer quite true, and the
 difference matters for how the AWS deployment is shaped:
 
 - **Single writer.** SQLite is a file, and the app is the only process
-  allowed to write it. That rules out running two or more app instances
+  allowed to write it. This now applies to four databases, not one. That rules out running two or more app instances
   behind a load balancer against a shared volume. One instance, scaled
   vertically, is the supported topology. This is fine for the current
   user count but it is now an explicit architectural constraint rather
@@ -466,9 +549,9 @@ difference matters for how the AWS deployment is shaped:
   is not reliable over network filesystems, and the failure mode is
   corruption rather than an error. Block storage (EBS / Lightsail block
   storage), attached to one instance, is the correct choice.
-- **Backups need the checkpoint.** Any backup mechanism added at the
-  infrastructure level (volume snapshots, a cron job) must either use
-  SQLite's own backup API or checkpoint first. A naive file copy of a
+- **Backups need the checkpoint, for all four databases.** Any backup
+  mechanism added at the infrastructure level (volume snapshots, a cron
+  job) must either use SQLite's own backup API or checkpoint first. A naive file copy of a
   live WAL database is not a valid backup. The in-app backup already
   handles this; anything added outside the app must too.
 - **If multi-instance or multi-region ever becomes a requirement**, that
@@ -531,12 +614,17 @@ and touches the report, Order Management, the PDF and the scoring.
 
 ```
 poLookup -> orderInfo -> productionNotes -> sizing ->
-inspectionDetails -> issues -> review
+inspectionDetails -> issues -> disposition -> review
 ```
 
 Sizing and Inspection Details **swapped**: sizing is Step 4, inspection
 is Step 5. The inspector measures first, then judges the piece against
-what they found.
+what they found. A **disposition** step was later added at 7 of 8 (see
+below).
+
+Step numbers in the UI derive from `STEPS` via `stepLabel()`. They used
+to be hardcoded strings in nine places, and inserting a step meant
+editing all nine - the numbering drifted the moment one was missed.
 
 ## Questions come from config, not code
 
@@ -634,6 +722,129 @@ loader merges the shipped defaults underneath whatever is on disk and
 heals partial files on boot. An install still holding the first version
 had an empty table and no scoring at all.
 
+## Pass/fail is a rate, not an AQL accept number
+
+Thresholds live in `config/aql.json` under `failThresholds`, expressed as
+a percentage of units **inspected**. Exceeding fails; equalling passes.
+
+| Severity | Threshold |
+|---|---|
+| Critical | > 0% |
+| Major | > 1.5% |
+| Minor | > 4% |
+
+5 bad units out of 100 checked is 5% minor, over the 4% line, so it
+fails - and because it is a rate, the same 5% fails whether 100 or 1,000
+units were checked.
+
+**Critical is computed, never chosen.** QA staff should not have to
+classify severity, so a defect escalates to critical when *every*
+inspected unit is affected - the point at which the batch, not the units,
+is the problem. There is no UI anywhere to mark something critical.
+
+AQL is untouched: it still sizes the sample and sets the inspection
+level. Only the verdict changed.
+
+`rateFailures()` in `public/app.js` and `applyThresholds()` in
+`lib/passFail.js` **must agree**. The server's verdict is what sets the
+PO status, files the PDF result and prints the banner, so a divergence
+means the inspector sees one result and the record shows another. That
+has happened twice; both times the server was the one that was wrong.
+
+## The disposition step
+
+Step 7 of 8, between Additional Issues and Review, shown only when
+something was flagged. One tile per defect, three outcomes:
+
+| Choice | Effect on the counts |
+|---|---|
+| Repaired on site | Those units stop counting. Requires a count (never more than flagged) and a photo. |
+| Factory will fix | Still count. A Revised Unit Report is needed to clear them. |
+| Rejected | Not shipped, so they stop counting. |
+
+Because repaired and rejected units leave the count, **a report can
+legitimately move from fail to pass here**. That is the intent: it lets
+simple problems be fixed on the spot instead of shipping units back.
+
+`applyDisposition()` in `public/app.js` and the equivalent block in
+`lib/passFail.js` must stay in step, for the same reason as the
+thresholds above.
+
+## One report per link, and the Revised Unit Report
+
+A report link is now one report. Once submitted, reopening it lands on a
+gate showing the result and three buttons:
+
+- **View Report** - the finished PDF
+- **Add Revised Unit Report** - a lightweight follow-up, one tile per
+  previously-flagged issue, recording how many units were repaired plus a
+  photo. Nothing else is re-inspected.
+- **Add Additional Report** - a genuinely separate full report
+
+Revised reports live in `data/revisedReports.json`, **not** the
+submission log. They are follow-ups, not inspections, and mixing them in
+would have analytics counting them as extra reports and skewing pass
+rates. They surface in Order Management under the original report, in the
+consolidated PDF, and as a count on the Reports page.
+
+## Save and resume, and how photos work now
+
+Photos used to be held as browser `File` objects and uploaded only at
+submit. That made save-and-resume impossible - `File` objects cannot be
+serialised, so any stored draft would silently drop every photo.
+
+Photos now upload **as they are taken**, into a per-report draft folder
+(`data/qa-drafts/<draftId>/`), and the report holds references. Submission
+sends those references and the server reads them off disk.
+
+Consequences worth knowing:
+
+- Draft ids are **derived from the PO and stage** (`po-<number>-<stage>`),
+  not random. A random id per page load would start a fresh empty draft
+  every time and orphan the previous photos.
+- Draft ids are validated server-side against a character whitelist.
+  Without it, `../../config` is a path traversal.
+- A **Save** button sits on every step, and progress saves quietly on
+  every step change, so a dropped phone loses at most the step in hand.
+- Resume runs *after* the PO/approval pre-fill, so anything the inspector
+  typed wins over the defaults.
+- Abandoned drafts are swept after 30 days.
+- The draft is deleted on successful submit; the submission has its own
+  copies by then.
+
+## Uploaded design files: preview + link
+
+Covered under Data model, but repeated here because it changes the
+workflow: uploading a design file asks for the Google Drive link first.
+With one, the server renders a preview, keeps that, and deletes the
+original. Without one it keeps the full file, because discarding the only
+copy of something would be indefensible.
+
+The Drive link is stored per slot in `mainComponent.docSourceUrls`. When
+present the slot reads **Open in Drive**; without one it reads **View
+file** and points locally, so files uploaded before this change are
+unaffected.
+
+## Analytics reports two views
+
+Every stats table shows two totals rows when they differ:
+
+- **Total (as inspected)** - the result at the time of inspection. "Did
+  the factory get it right first time."
+- **Total (after repairs)** - recomputed once Revised Unit Reports
+  confirmed units were fixed. "What ended up acceptable."
+
+One number could not answer both, and folding repairs into the original
+figures would have erased the factory's first-pass performance, which is
+the main thing these stats exist to measure. The "after repairs" verdict
+is recomputed against the same thresholds, not just adjusted.
+
+The defective rate now uses the **disposition summary** recorded on each
+submission rather than the AQL recap's `quantityRejected`, which is
+`min(checked, major + critical)` - an estimate of what the sampling plan
+implies, not how many units were really pulled. Reports predating the
+change fall back to the recap figure so historical numbers do not shift.
+
 ## Sizing is sourced from the PO
 
 The PO's Product Dimensions table is the sizing source of truth. The
@@ -697,12 +908,12 @@ categories.
 
 - `listOrders` unfiltered still parses all rows (~326 ms at 4,700).
   Pagination is the fix if the landing page gets slow, not more indexes.
-- `approvalStore`, `submissionLog` and `componentDefinitionStore` are
-  still JSON and grow per PO.
-- The question bank's expanded guidance text has not had a native-speaker
-  review of the Chinese, nor a full review of the English by the QA team.
-- The app has not been tested with real inspection photos over Chinese
-  mobile data - upload size and phone memory across dozens of photos per
-  report is untested.
+- **The historical import is the remaining milestone.** All four per-PO
+  stores are on SQLite now, which is what the import was waiting on. See
+  "Historical data import" under Deployment.
+- Revised Unit Reports do not appear on the Reports page as individual
+  entries, only as a count and inside the consolidated PDF.
 - The legacy defect paths in `collectAllDefects` are kept for in-flight
-  reports and can be removed once none remain.
+  reports and can be removed once none remain. Likewise the
+  `allRejected` result reason, which is unreachable in new reports but
+  still renders for older ones.

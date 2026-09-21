@@ -4586,5 +4586,213 @@
   "pasteALinkFirst": {
     "en": "Paste a link, or choose Upload without a link",
     "zh": "请粘贴链接，或选择“不关联链接上传”"
+  },
+  "saveAndClose": {
+    "en": "Save",
+    "zh": "保存"
+  },
+  "draftSaved": {
+    "en": "Progress saved. You can close this and come back to it.",
+    "zh": "已保存进度，可关闭后稍后继续。"
+  },
+  "draftSaveFailed": {
+    "en": "Could not save your progress - check your connection.",
+    "zh": "无法保存进度，请检查网络连接。"
+  },
+  "draftResumed": {
+    "en": "Picked up where you left off.",
+    "zh": "已恢复上次的进度。"
+  },
+  "photoUploadFailed": {
+    "en": "Could not upload that photo - check your connection and try again.",
+    "zh": "图片上传失败，请检查网络后重试。"
+  },
+  "reportAlreadySubmitted": {
+    "en": "This report is complete",
+    "zh": "本报告已完成"
+  },
+  "completedGateHelp": {
+    "en": "Open the finished report, confirm that flagged units have since been repaired, or start a separate additional report.",
+    "zh": "可查看已完成的报告、确认不合格品已修复，或新增一份独立报告。"
+  },
+  "btnViewReport": {
+    "en": "View Report",
+    "zh": "查看报告"
+  },
+  "btnRevisedUnitReport": {
+    "en": "Add Revised Unit Report",
+    "zh": "新增返修确认报告"
+  },
+  "btnAdditionalReport": {
+    "en": "Add Additional Report",
+    "zh": "新增额外报告"
+  },
+  "submittedOn": {
+    "en": "Submitted",
+    "zh": "提交日期"
+  },
+  "overallResultLabel": {
+    "en": "Overall Result",
+    "zh": "总体结果"
+  },
+  "poNumberLabel": {
+    "en": "Purchase Order Number",
+    "zh": "采购订单号"
+  },
+  "revisedReportHelp": {
+    "en": "Confirm how many of the units flagged in the original report have been repaired. Every tile must be confirmed before this can be submitted.",
+    "zh": "请确认原报告中标记的不合格品已修复的数量。所有项目确认后方可提交。"
+  },
+  "unitsFlaggedLabel": {
+    "en": "Units flagged",
+    "zh": "标记件数"
+  },
+  "unitsFixedLabel": {
+    "en": "How many of these units have been repaired?",
+    "zh": "其中已修复多少件？"
+  },
+  "unitsConfirmedFixed": {
+    "en": "Confirmed repaired",
+    "zh": "已确认修复"
+  },
+  "btnConfirmFixed": {
+    "en": "Confirm repaired",
+    "zh": "确认已修复"
+  },
+  "btnSubmitRevised": {
+    "en": "Submit revised report",
+    "zh": "提交返修报告"
+  },
+  "revisedSubmitted": {
+    "en": "Revised unit report submitted.",
+    "zh": "返修确认报告已提交。"
+  },
+  "revisedSubmitFailed": {
+    "en": "Could not submit the revised report.",
+    "zh": "返修报告提交失败。"
+  },
+  "unitsFixedRange": {
+    "en": "Enter a number between 1 and the units flagged.",
+    "zh": "请输入 1 至标记件数之间的数字。"
+  },
+  "noFlaggedUnits": {
+    "en": "The original report flagged no defective units, so there is nothing to confirm here.",
+    "zh": "原报告未标记不合格品，无需确认。"
+  },
+  "originalEvidence": {
+    "en": "From the original report",
+    "zh": "来自原报告"
+  },
+  "severityLabel": {
+    "en": "Severity",
+    "zh": "严重程度"
+  },
+  "issueLabel": {
+    "en": "Issue",
+    "zh": "问题"
+  },
+  "undo": {
+    "en": "Undo",
+    "zh": "撤销"
+  },
+  "resultReasonThresholdCritical": {
+    "en": "Critical: every inspected unit was affected.",
+    "zh": "严重：所有受检产品均存在问题。"
+  },
+  "resultReasonThresholdMajor": {
+    "en": "Major defect rate is above the allowed threshold.",
+    "zh": "主要缺陷率超出允许范围。"
+  },
+  "resultReasonThresholdMinor": {
+    "en": "Minor defect rate is above the allowed threshold.",
+    "zh": "轻微缺陷率超出允许范围。"
+  },
+  "dispositionTitle": {
+    "en": "Defective Units",
+    "zh": "不合格品处理"
+  },
+  "dispositionHelp": {
+    "en": "Decide what happens to each set of defective units. Repaired and rejected units come out of the final counts; units the factory will fix stay in and need a follow-up report.",
+    "zh": "请决定每组不合格品的处理方式。现场修复与拒收的产品不计入最终统计；由工厂修复的仍计入，并需提交返修确认报告。"
+  },
+  "disposition_repaired": {
+    "en": "Repaired on site",
+    "zh": "现场修复"
+  },
+  "disposition_factory": {
+    "en": "Factory will fix",
+    "zh": "工厂修复"
+  },
+  "disposition_rejected": {
+    "en": "Rejected",
+    "zh": "拒收"
+  },
+  "dispositionHelp_repaired": {
+    "en": "These units were fixed during the inspection, so they no longer count as defects.",
+    "zh": "这些产品已在检验期间修复，不再计入缺陷。"
+  },
+  "dispositionHelp_factory": {
+    "en": "These units stay in the counts. A Revised Unit Report will be needed to confirm the repair.",
+    "zh": "这些产品仍计入统计，需提交返修确认报告。"
+  },
+  "dispositionHelp_rejected": {
+    "en": "These units will not be shipped, so they are excluded from the final quantity.",
+    "zh": "这些产品不予出货，不计入最终数量。"
+  },
+  "unitsRepairedLabel": {
+    "en": "How many were repaired on site?",
+    "zh": "现场修复了多少件？"
+  },
+  "repairEvidenceHint": {
+    "en": "Photo of the repaired units",
+    "zh": "已修复产品的图片"
+  },
+  "dispositionRequired": {
+    "en": "Choose what happens to each set of defective units.",
+    "zh": "请为每组不合格品选择处理方式。"
+  },
+  "noDefectsToResolve": {
+    "en": "No defects were flagged, so there is nothing to resolve. Continue to review and submit.",
+    "zh": "未标记缺陷，无需处理。请继续至审核并提交。"
+  },
+  "resolutionLabel": {
+    "en": "Resolution",
+    "zh": "处理结果"
+  },
+  "pdfFactoryFixNote": {
+    "en": "Units the factory will repair remain counted. A Revised Unit Report is required to confirm the repair.",
+    "zh": "由工厂修复的产品仍计入统计，需提交返修确认报告。"
+  },
+  "revisedReportLabel": {
+    "en": "Revised Unit Report",
+    "zh": "返修确认报告"
+  },
+  "unitsRepairedShort": {
+    "en": "units repaired",
+    "zh": "件已修复"
+  },
+  "reportsOnFile": {
+    "en": "Reports on file",
+    "zh": "已存报告"
+  },
+  "inspectionReportsLabel": {
+    "en": "inspection report(s)",
+    "zh": "份检验报告"
+  },
+  "revisedReportsLabel": {
+    "en": "revised unit report(s)",
+    "zh": "份返修确认报告"
+  },
+  "asInspectedRow": {
+    "en": "Total (as inspected)",
+    "zh": "合计（检验当时）"
+  },
+  "afterRepairsRow": {
+    "en": "Total (after repairs)",
+    "zh": "合计（修复后）"
+  },
+  "twoTotalsHelp": {
+    "en": "As inspected is the result at the time of inspection. After repairs reflects Revised Unit Reports confirming defective units were fixed.",
+    "zh": "“检验当时”为检验时的结果；“修复后”已计入返修确认报告中已修复的产品。"
   }
 }

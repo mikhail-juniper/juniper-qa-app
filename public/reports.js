@@ -64,6 +64,16 @@ function renderPoList() {
       <div class="review-row"><span class="k">${escapeHtml(bi('date').en)}</span><span class="v">${escapeHtml(po.orderDate || '-')}</span></div>
       <div class="review-row"><span class="k">${escapeHtml(bi('poQuantity').en)}</span><span class="v">${escapeHtml(po.orderQuantity || '-')}</span></div>
       <div class="review-row"><span class="k">${escapeHtml(bi('creator').en)}</span><span class="v">${escapeHtml(po.creator || '-')}</span></div>
+      ${(() => {
+        /* What the full report will actually contain. A PO with no inspections
+         * yet produces a near-empty PDF, which looked like a broken download
+         * rather than "nothing has been inspected". */
+        const c = po.reportCounts || { inspections: 0, revisions: 0 };
+        const parts = [];
+        parts.push(`${c.inspections} ${escapeHtml(bi('inspectionReportsLabel', 'inspection report(s)').en)}`);
+        if (c.revisions) parts.push(`${c.revisions} ${escapeHtml(bi('revisedReportsLabel', 'revised unit report(s)').en)}`);
+        return `<div class="review-row"><span class="k">${escapeHtml(bi('reportsOnFile', 'Reports on file').en)}</span><span class="v">${parts.join(' &middot; ')}</span></div>`;
+      })()}
       <a href="/api/consolidated-report/${encodeURIComponent(po.poNumber)}" target="_blank" rel="noopener" class="btn btn-primary" style="display:block; text-decoration:none; text-align:center; margin-top:10px;">${biBlockHtml('downloadFullReport', 'Download Full Report')}</a>
     </div>
   `).join('');
