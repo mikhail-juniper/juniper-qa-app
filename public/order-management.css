@@ -1379,11 +1379,11 @@ html {
 .om-checkin-donecol { text-align: center; white-space: nowrap; }
 .om-done-check { display: inline-flex; align-items: center; cursor: pointer; }
 .om-done-check input { width: 18px; height: 18px; cursor: pointer; accent-color: var(--jc-teal); }
-.om-row-done { background: var(--jc-mint-light) !important; }
-.om-row-done td { opacity: 0.62; }
-.om-row-done .om-checkin-note,
-.om-row-done .om-checkin-fu,
-.om-row-done .om-done-check { opacity: 1; }
+/* A covered row recedes, but its notes and dates still have to be readable at
+   a glance - dimming the whole cell to 0.62 made the very information she is
+   scanning for the hardest thing on the page to read. Tint only, no opacity. */
+.om-row-done { background: rgba(215, 240, 230, 0.45) !important; }
+.om-row-done td { opacity: 1; }
 
 /* Match the rest of the app: the working views sit in the same card chrome,
    at the same type scale, as every other page rather than floating loose. */
@@ -1496,11 +1496,11 @@ html {
 .om-checkin-donecol { text-align: center; white-space: nowrap; }
 .om-done-check { display: inline-flex; align-items: center; cursor: pointer; }
 .om-done-check input { width: 18px; height: 18px; cursor: pointer; accent-color: var(--jc-teal); }
-.om-row-done { background: var(--jc-mint-light) !important; }
-.om-row-done td { opacity: 0.62; }
-.om-row-done .om-checkin-note,
-.om-row-done .om-checkin-fu,
-.om-row-done .om-done-check { opacity: 1; }
+/* A covered row recedes, but its notes and dates still have to be readable at
+   a glance - dimming the whole cell to 0.62 made the very information she is
+   scanning for the hardest thing on the page to read. Tint only, no opacity. */
+.om-row-done { background: rgba(215, 240, 230, 0.45) !important; }
+.om-row-done td { opacity: 1; }
 
 /* Match the rest of the app: the working views sit in the same card chrome,
    at the same type scale, as every other page rather than floating loose. */
@@ -1606,11 +1606,11 @@ html {
 .om-checkin-donecol { text-align: center; white-space: nowrap; }
 .om-done-check { display: inline-flex; align-items: center; cursor: pointer; }
 .om-done-check input { width: 18px; height: 18px; cursor: pointer; accent-color: var(--jc-teal); }
-.om-row-done { background: var(--jc-mint-light) !important; }
-.om-row-done td { opacity: 0.62; }
-.om-row-done .om-checkin-note,
-.om-row-done .om-checkin-fu,
-.om-row-done .om-done-check { opacity: 1; }
+/* A covered row recedes, but its notes and dates still have to be readable at
+   a glance - dimming the whole cell to 0.62 made the very information she is
+   scanning for the hardest thing on the page to read. Tint only, no opacity. */
+.om-row-done { background: rgba(215, 240, 230, 0.45) !important; }
+.om-row-done td { opacity: 1; }
 
 /* Match the rest of the app: the working views sit in the same card chrome,
    at the same type scale, as every other page rather than floating loose. */
@@ -1752,12 +1752,23 @@ html {
 .om-checkin-table th:nth-child(9),  .om-checkin-table td:nth-child(9)  { width: 10%; }
 .om-checkin-table th:nth-child(10), .om-checkin-table td:nth-child(10) { width: 5%; }
 
-/* PO Requests sit in their own card above production. The requests table has
-   six columns, not ten, so it gets its own widths rather than inheriting the
-   check-in ones. */
-.om-requests-table th:nth-child(1), .om-requests-table td:nth-child(1) { width: 14%; }
-.om-requests-table th:nth-child(2), .om-requests-table td:nth-child(2) { width: 8%; }
-.om-requests-table th:nth-child(3), .om-requests-table td:nth-child(3) { width: 36%; }
-.om-requests-table th:nth-child(4), .om-requests-table td:nth-child(4) { width: 8%; }
-.om-requests-table th:nth-child(5), .om-requests-table td:nth-child(5) { width: 18%; }
-.om-requests-table th:nth-child(6), .om-requests-table td:nth-child(6) { width: 16%; }
+
+/* A button sitting in a section heading, right-aligned against it. */
+.section-title { display: flex; align-items: center; gap: 10px; }
+/* .btn is width:100% by default, which in a flex heading stretched the button
+   across the whole row. */
+.om-section-action { margin-left: auto; width: auto; flex: none; }
+
+/* PD Approval: the three sections are separate tables, so without fixed
+   widths each sized itself to its own content and the columns stepped in and
+   out between sections - buttons in particular moved. Fixed layout plus
+   wrapping keeps every section aligned and the actions in one place. */
+.om-pd-table { table-layout: fixed; width: 100%; min-width: 0; }
+.om-pd-table th, .om-pd-table td { white-space: normal; }
+.om-pd-table td:nth-child(2),
+.om-pd-table td:nth-child(4) { overflow-wrap: anywhere; }
+.om-pd-table th:nth-child(1), .om-pd-table td:nth-child(1) { width: 16%; }
+.om-pd-table th:nth-child(2), .om-pd-table td:nth-child(2) { width: 24%; }
+.om-pd-table th:nth-child(3), .om-pd-table td:nth-child(3) { width: 18%; }
+.om-pd-table th:nth-child(4), .om-pd-table td:nth-child(4) { width: 24%; }
+.om-pd-table th:nth-child(5), .om-pd-table td:nth-child(5) { width: 18%; }

@@ -6120,94 +6120,11 @@ function makeDateFieldsClickable(scope) {
   });
 }
 
-async function renderCheckInView(root) {
-  root.innerHTML = `${workViewTabsHtml()}<div class="om-empty">${i18('emptyLoading', 'Loading...')}</div>`;
-  bindWorkViewTabs();
-  let rows;
-  try { rows = await loadWorkQueue(); }
-  catch (e) { root.innerHTML = workViewTabsHtml() + `<div class="om-empty">${escapeHtml(e.message)}</div>`; bindWorkViewTabs(); return; }
-
-  const bySupplier = {};
-  rows.forEach((r) => {
-    const key = r.supplierName || i18t('noSupplier', 'No supplier');
-    (bySupplier[key] = bySupplier[key] || []).push(r);
-  });
-  const supplierNames = Object.keys(bySupplier).sort();
-  Object.values(bySupplier).forEach((list) => list.sort(byUrgency));
-
-  if (!checkInSupplier || !bySupplier[checkInSupplier]) checkInSupplier = supplierNames[0] || null;
-  const all = checkInSupplier ? bySupplier[checkInSupplier] : [];
-
-  /* Split by where the PO is in its life, not by status name: anything never
-   * sent to the factory is a request she still has to place, and those are a
-   * different conversation from chasing production. Grouping them under the
-   * same heading meant new POs quietly sat in a list she reads as "things
-   * already running". */
-  const requests = all.filter((r) => !r.dispatched);
-  const list = all.filter((r) => !requests.includes(r));
-
-  const plural = (n, one, many) => `${n} ${n === 1 ? i18t(one, 'PO') : i18t(many, 'POs')}`;
-
-  root.innerHTML = `
-    ${workViewTabsHtml()}
-    <div class="om-checkin-bar">
-      <label class="field-label" style="margin:0;">${escapeHtml(i18t('supplierLabel', 'Supplier'))}</label>
-      <select id="omCheckInSupplier">
-        ${supplierNames.map((name) => `
-          <option value="${escapeHtml(name)}" ${name === checkInSupplier ? 'selected' : ''}>
-            ${escapeHtml(name)} - ${escapeHtml(plural(bySupplier[name].length, 'poSingular', 'poPlural'))}${(() => {
-              const n = bySupplier[name].filter((r) => !r.dispatched).length;
-              return n ? `, ${n} ${i18t('toSendWord', 'to send')}` : '';
-            })()}
-          </option>`).join('')}
-      </select>
-      <div class="om-checkin-counts" id="omCheckInProgress"></div>
-      ${requests.length ? `
-        <button type="button" class="btn btn-primary om-row-btn-lg" id="omCheckInBatchSend" style="width:auto;">
-          ${escapeHtml(i18t('btnOpenBatchSend', 'Batch send'))} (${requests.length})
-        </button>` : ''}
-    </div>
-    <div class="om-section-intro">${escapeHtml(i18t('checkInIntro3', 'Work down the list. An update saves when you move off the box; a follow-up date saves as soon as you pick it.'))}</div>
-
-    ${requests.length ? `
-      <div class="card">
-        <div class="section-title">
-          ${escapeHtml(i18t('groupRequests', 'PO Requests'))} <span class="om-count">${requests.length}</span>
-        </div>
-        <div class="section-help">${escapeHtml(i18t('checkInRequestsHelp', 'Not yet sent to this supplier. Send them before working through production.'))}</div>
-        <div class="om-table-wrap">
-          <table class="om-table om-checkin-table om-requests-table">
-            <thead><tr>
-              <th>${escapeHtml(i18t('thPoNumber', 'PO Number'))}</th>
-              <th>${escapeHtml(i18t('thPhoto', 'Photo'))}</th>
-              <th>${escapeHtml(i18t('thProduct', 'Product'))}</th>
-              <th>${escapeHtml(i18t('thQty', 'Qty'))}</th>
-              <th>${escapeHtml(i18t('thStatus', 'Status'))}</th>
-              <th>${escapeHtml(i18t('thOrderDate', 'Ordered'))}</th>
-            </tr></thead>
-            <tbody>
-              ${requests.map((r) => `
-                <tr class="om-row-clickable" data-row-po="${escapeHtml(r.id)}">
-                  <td><strong>${escapeHtml(r.poNumber)}</strong></td>
-                  <td class="om-checkin-photo">${r.photo ? `<img src="${escapeHtml(r.photo)}" alt="" class="om-acc-zoom" />` : '<span class="om-sub">-</span>'}</td>
-                  <td>${escapeHtml(r.productName || '')}<div class="om-sub">${escapeHtml(r.sku || '')}</div></td>
-                  <td>${r.quantity != null ? Number(r.quantity).toLocaleString() : '-'}</td>
-                  <td><span class="om-pill om-pill-${statusSlug(r.status)}">${tStatusInline(r.status)}</span></td>
-                  <td>${escapeHtml(r.orderDate ? fmtDate(r.orderDate) : '-')}</td>
-                </tr>`).join('')}
-            </tbody>
-          </table>
-        </div>
-      </div>` : ''}
-
-    ${list.length ? `
-      <div class="card">
-        <div class="section-title">
-          ${escapeHtml(i18t('groupInProduction', 'In Production'))} <span class="om-count">${list.length}</span>
-        </div>
-        <div class="om-table-wrap">
-        <table class="om-table om-checkin-table">
-          <thead><tr>
+/* One header and one row renderer for both check-in sections. They started as
+ * separate markup and immediately disagreed - PO Requests had six columns
+ * where In Production had ten - so both now come from here. */
+function checkInHeaderHtml() {
+  return `<tr>
             <th>${escapeHtml(i18t('thPoNumber', 'PO Number'))}</th>
             <th>${escapeHtml(i18t('thPhoto', 'Photo'))}</th>
             <th>${escapeHtml(i18t('thProduct', 'Product'))}</th>
@@ -6219,9 +6136,11 @@ async function renderCheckInView(root) {
             <th>${escapeHtml(i18t('thFollowUp', 'Follow up'))}</th>
             <th>${escapeHtml(i18t('thDone', 'Done'))}</th>
           </tr></thead>
-          <tbody>
-            ${list.map((r) => `
-              <tr data-checkin-row="${escapeHtml(r.id)}" data-row-po="${escapeHtml(r.id)}"
+  </tr>`;
+}
+
+function checkInRowHtml(r) {
+  return `              <tr data-checkin-row="${escapeHtml(r.id)}" data-row-po="${escapeHtml(r.id)}"
                   class="om-row-clickable ${checkedInToday(r) ? 'om-row-done' : ''}">
                 <td><strong>${escapeHtml(r.poNumber)}</strong></td>
                 <td class="om-checkin-photo">
@@ -6270,10 +6189,86 @@ async function renderCheckInView(root) {
                   <div class="om-sub" data-done-when="${escapeHtml(r.id)}">${checkedInToday(r) ? escapeHtml(i18t('doneToday', 'Today')) : ''}</div>
                 </td>
               </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      </div></div>
+            `;
+}
+
+async function renderCheckInView(root) {
+  root.innerHTML = `${workViewTabsHtml()}<div class="om-empty">${i18('emptyLoading', 'Loading...')}</div>`;
+  bindWorkViewTabs();
+  let rows;
+  try { rows = await loadWorkQueue(); }
+  catch (e) { root.innerHTML = workViewTabsHtml() + `<div class="om-empty">${escapeHtml(e.message)}</div>`; bindWorkViewTabs(); return; }
+
+  const bySupplier = {};
+  rows.forEach((r) => {
+    const key = r.supplierName || i18t('noSupplier', 'No supplier');
+    (bySupplier[key] = bySupplier[key] || []).push(r);
+  });
+  const supplierNames = Object.keys(bySupplier).sort();
+  Object.values(bySupplier).forEach((list) => list.sort(byUrgency));
+
+  if (!checkInSupplier || !bySupplier[checkInSupplier]) checkInSupplier = supplierNames[0] || null;
+  const all = checkInSupplier ? bySupplier[checkInSupplier] : [];
+
+  /* Split by where the PO is in its life, not by status name: anything never
+   * sent to the factory is a request she still has to place, and those are a
+   * different conversation from chasing production. Grouping them under the
+   * same heading meant new POs quietly sat in a list she reads as "things
+   * already running". */
+  const requests = all.filter((r) => !r.dispatched);
+  const list = all.filter((r) => !requests.includes(r));
+
+  const plural = (n, one, many) => `${n} ${n === 1 ? i18t(one, 'PO') : i18t(many, 'POs')}`;
+
+  root.innerHTML = `
+    ${workViewTabsHtml()}
+    <div class="om-checkin-bar">
+      <label class="field-label" style="margin:0;">${escapeHtml(i18t('supplierLabel', 'Supplier'))}</label>
+      <select id="omCheckInSupplier">
+        ${supplierNames.map((name) => `
+          <option value="${escapeHtml(name)}" ${name === checkInSupplier ? 'selected' : ''}>
+            ${escapeHtml(name)} - ${escapeHtml(plural(bySupplier[name].length, 'poSingular', 'poPlural'))}${(() => {
+              const n = bySupplier[name].filter((r) => !r.dispatched).length;
+              return n ? `, ${n} ${i18t('toSendWord', 'to send')}` : '';
+            })()}
+          </option>`).join('')}
+      </select>
+      <div class="om-checkin-counts" id="omCheckInProgress"></div>
+
+    </div>
+    <div class="om-section-intro">${escapeHtml(i18t('checkInIntro3', 'Work down the list. An update saves when you move off the box; a follow-up date saves as soon as you pick it.'))}</div>
+
+    ${requests.length ? `
+      <div class="card">
+        <div class="section-title">
+          ${escapeHtml(i18t('groupRequests', 'PO Requests'))} <span class="om-count">${requests.length}</span>
+          ${/* The send button belongs to the things being sent, not to the
+               page header where it sat away from its own section. */ ''}
+          <button type="button" class="btn btn-primary om-row-btn-lg om-section-action" id="omCheckInBatchSend">
+            ${escapeHtml(i18t('btnOpenBatchSend', 'Batch send'))} (${requests.length})
+          </button>
+        </div>
+        <div class="section-help">${escapeHtml(i18t('checkInRequestsHelp', 'Not yet sent to this supplier. Send them before working through production.'))}</div>
+        <div class="om-table-wrap">
+          <table class="om-table om-checkin-table">
+            <thead>${checkInHeaderHtml()}</thead>
+            <tbody>${requests.map(checkInRowHtml).join('')}</tbody>
+          </table>
+        </div>
+      </div>` : ''}
+
+    ${list.length ? `
+      <div class="card">
+        <div class="section-title">
+          ${escapeHtml(i18t('groupInProduction', 'In Production'))} <span class="om-count">${list.length}</span>
+        </div>
+        <div class="om-table-wrap">
+          <table class="om-table om-checkin-table">
+            <thead>${checkInHeaderHtml()}</thead>
+            <tbody>${list.map(checkInRowHtml).join('')}</tbody>
+          </table>
+        </div>
+      </div>
     ` : (requests.length ? '' : `<div class="om-empty">${escapeHtml(i18t('emptyNoOpenOrders', 'No open orders.'))}</div>`)}
   `;
   bindWorkViewTabs();
@@ -6433,83 +6428,11 @@ async function renderCheckInView(root) {
   });
 }
 
-/* ---- QA Scheduling: driven by the sample dates ----
- *
- * The same buttons as the QA/QC block inside a PO, inline on the row. Opening
- * a PO just to press "Setup Report Link" was the whole friction: this view
- * exists to schedule, so the scheduling controls have to be here.
- */
-function qaRowActionsHtml(r, stage) {
-  const st = (r.qaStages || {})[stage] || {};
-  const mode = stage === 'preProduction' ? 'pre_production' : 'production';
-  const url = `${location.origin}/reporting.html?mode=${mode}&po=${r.poNumber}`;
-  return `
-    <div class="om-row-actions">
-      ${st.isSetUp ? `
-        <button type="button" class="om-table-upload-btn om-copy-link-btn" data-copy-url="${escapeHtml(url)}">${escapeHtml(i18t('btnCopyReportLink', 'Copy Report Link'))}</button>
-        ${st.status === 'Pending' ? `<button type="button" class="om-table-upload-btn om-setup-link-btn" data-setup-stage="${stage}" data-setup-order="${escapeHtml(r.id)}">${escapeHtml(i18t('btnEditReportSetup', 'Edit questions'))} (${st.extras || 0})</button>` : ''}
-      ` : `
-        <button type="button" class="om-table-upload-btn om-setup-link-btn" data-setup-stage="${stage}" data-setup-order="${escapeHtml(r.id)}">${escapeHtml(i18t('btnSetupReportLink', 'Setup Report Link'))}</button>
-      `}
-      ${stage === 'preProduction' ? `
-        <button type="button" class="om-table-upload-btn om-skip-stage-btn" data-po="${escapeHtml(r.poNumber)}">${escapeHtml(i18t('btnSkipStage', 'Skip'))}</button>` : ''}
-      ${st.pdfUrl ? `<a class="om-table-upload-btn" href="${escapeHtml(st.pdfUrl)}" target="_blank" rel="noopener">${escapeHtml(i18t('btnDownloadReportPdf', 'Report PDF'))}</a>` : ''}
-      <button type="button" class="om-table-upload-btn" data-open-po="${escapeHtml(r.id)}">${escapeHtml(i18t('openLabel', 'Open'))}</button>
-    </div>
-  `;
-}
-
-async function renderQaSchedulingView(root) {
-  root.innerHTML = `${workViewTabsHtml()}<div class="om-empty">${i18('emptyLoading', 'Loading...')}</div>`;
-  bindWorkViewTabs();
-  let rows;
-  try { rows = await loadWorkQueue(); }
-  catch (e) { root.innerHTML = workViewTabsHtml() + `<div class="om-empty">${escapeHtml(e.message)}</div>`; bindWorkViewTabs(); return; }
-
-  const qaRows = rows.filter((r) => ['qaSetupDue', 'qaUpcoming', 'qaReportPending'].includes(r.action.kind));
-  const buckets = [
-    ['qaSetupDue', i18t('qaBucketDue', 'Sample ready, no report link yet'), i18t('qaBucketDueHelp', 'These are the ones that slip. The sample date has arrived and nothing has been scheduled.')],
-    ['qaReportPending', i18t('qaBucketPending', 'Inspection booked, report not in'), i18t('qaBucketPendingHelp', 'A link has been sent. Waiting on the QA team to submit.')],
-    ['qaUpcoming', i18t('qaBucketUpcoming', 'Coming up'), i18t('qaBucketUpcomingHelp', 'Sample dates ahead. Schedule before they arrive.')]
-  ];
-
-  root.innerHTML = `
-    ${workViewTabsHtml()}
-    ${buckets.map(([kind, title, help]) => {
-      const list = qaRows.filter((r) => r.action.kind === kind).sort(byUrgency);
-      return `
-        <div class="card">
-          <div class="section-title">${escapeHtml(title)} <span class="om-count">${list.length}</span></div>
-          <div class="section-help">${escapeHtml(help)}</div>
-          ${list.length ? `
-            <div class="om-table-wrap"><table class="om-table">
-              <thead><tr>
-                <th>${escapeHtml(i18t('thPoNumber', 'PO Number'))}</th><th>${escapeHtml(i18t('thProduct', 'Product'))}</th>
-                <th>${escapeHtml(i18t('thSupplier', 'Supplier'))}</th><th>${escapeHtml(i18t('thStage', 'Stage'))}</th>
-                <th>${escapeHtml(i18t('thSampleDate', 'Sample date'))}</th><th>${escapeHtml(i18t('thActions', 'Actions'))}</th>
-              </tr></thead>
-              <tbody>${list.map((r) => {
-                const stage = r.action.stage || 'preProduction';
-                return `
-                  <tr>
-                    <td><button type="button" class="om-linklike" data-open-po="${escapeHtml(r.id)}">${escapeHtml(r.poNumber)}</button></td>
-                    <td>${escapeHtml(r.productName || '')}<div class="om-sub">${escapeHtml(r.sku || '')}</div></td>
-                    <td>${escapeHtml(r.supplierName || '')}</td>
-                    <td>${escapeHtml(stage === 'bulk' ? i18t('stageBulk', 'Bulk') : i18t('stagePreProduction', 'Pre-Production'))}</td>
-                    <td>${dueBadge(r.action)}</td>
-                    <td>${qaRowActionsHtml(r, stage)}</td>
-                  </tr>`;
-              }).join('')}</tbody>
-            </table></div>
-          ` : `<div class="om-empty">${escapeHtml(i18t('emptyNothingHere', 'Nothing here.'))}</div>`}
-        </div>
-      `;
-    }).join('')}
-  `;
-  bindWorkViewTabs();
-  bindWorkRowActions();
-  makeDateFieldsClickable(root);
-}
+/* QA Scheduling had its own view and its own table here. Scheduling now
+ * happens from the Schedule QA button on each check-in row, so the view was
+ * removed - the dead renderer stayed behind long enough to silently absorb a
+ * style change meant for PD Approval, which is why it is gone rather than
+ * merely unrouted. */
 
 /* ---- PD Approval: who is it waiting on ---- */
 /* The three approval stages as compact pills. Showing where each stands means
@@ -6576,7 +6499,7 @@ async function renderPdApprovalView(root) {
           <div class="section-title">${escapeHtml(title)} <span class="om-count">${list.length}</span></div>
           <div class="section-help">${escapeHtml(help)}</div>
           ${list.length ? `
-            <div class="om-table-wrap"><table class="om-table">
+            <div class="om-table-wrap"><table class="om-table om-pd-table">
               <thead><tr>
                 <th>${escapeHtml(i18t('thPoNumber', 'PO Number'))}</th><th>${escapeHtml(i18t('thProduct', 'Product'))}</th>
                 ${/* Supplier dropped: it is not what these rows are worked by,
