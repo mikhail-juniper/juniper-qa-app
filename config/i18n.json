@@ -5130,5 +5130,37 @@
   "checkInProgress": {
     "en": "{done} of {total} done today",
     "zh": "今日已跟进 {done}/{total}"
+  },
+  "pdNeedsStart2": {
+    "en": "To Submit",
+    "zh": "待提交"
+  },
+  "pdWaitingOnYou2": {
+    "en": "Waiting on Juniper China",
+    "zh": "待 Juniper China 处理"
+  },
+  "repairEvidenceLabel": {
+    "en": "Repair evidence",
+    "zh": "修复证据"
+  },
+  "repairCommentLabel": {
+    "en": "Comment",
+    "zh": "备注"
+  },
+  "repairCommentPlaceholder": {
+    "en": "How was it repaired?",
+    "zh": "如何修复的？"
+  },
+  "confirmedLabel": {
+    "en": "Confirmed",
+    "zh": "已确认"
+  },
+  "noDueDate": {
+    "en": "No date",
+    "zh": "未设定"
+  },
+  "clearLabel": {
+    "en": "Clear",
+    "zh": "清除"
   }
 }

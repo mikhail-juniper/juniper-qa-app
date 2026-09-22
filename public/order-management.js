@@ -6036,6 +6036,15 @@ function dueBadge(action) {
  * what it is, how many, where it stands, what was said last time, and what
  * she is writing now.
  */
+/** "Oct 28" - month and day, no year. The year is noise on a follow-up that is
+ *  always days or weeks away, and it costs width in every row. */
+function shortDate(d) {
+  if (!d) return '';
+  const dt = new Date(d + (String(d).length === 10 ? 'T00:00:00' : ''));
+  if (isNaN(dt)) return String(d);
+  return dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
 /** Has this PO been worked through today? Today, not ever - the whole point is
  *  keeping her place in the call she is on right now. */
 function checkedInToday(r) {
@@ -6094,8 +6103,8 @@ async function renderCheckInView(root) {
     <div class="om-section-intro">${escapeHtml(i18t('checkInIntro3', 'Work down the list. An update saves when you move off the box; a follow-up date saves as soon as you pick it.'))}</div>
 
     ${list.length ? `
-      <div class="om-checkin-wrap"><div class="size-table-wrap">
-        <table class="size-table om-checkin-table">
+      <div class="card"><div class="om-table-wrap">
+        <table class="om-table om-checkin-table">
           <thead><tr>
             <th>${escapeHtml(i18t('thPoNumber', 'PO Number'))}</th>
             <th>${escapeHtml(i18t('thPhoto', 'Photo'))}</th>
@@ -6128,7 +6137,17 @@ async function renderCheckInView(root) {
                   <div class="om-row-saved" data-saved-for="${escapeHtml(r.id)}"></div>
                 </td>
                 <td class="om-checkin-fucol">
-                  <input type="date" class="om-checkin-fu" data-fu-for="${escapeHtml(r.id)}" value="${escapeHtml(r.followUpDate || '')}" />
+                  ${/* Compact: a calendar glyph when empty, "Oct 28" when set.
+                       A full mm/dd/yyyy control in every row is a lot of
+                       furniture for a field that is usually blank. The real
+                       input sits on top, invisible, so the native picker and
+                       keyboard entry both still work. */ ''}
+                  <label class="om-datechip ${r.followUpDate ? 'is-set' : ''}">
+                    <span class="om-datechip-icon">&#128197;</span>
+                    <span class="om-datechip-text" data-chip-for="${escapeHtml(r.id)}">${escapeHtml(r.followUpDate ? shortDate(r.followUpDate) : i18t('noDueDate', 'No date'))}</span>
+                    <input type="date" class="om-checkin-fu" data-fu-for="${escapeHtml(r.id)}" value="${escapeHtml(r.followUpDate || '')}" />
+                  </label>
+                  <button type="button" class="om-datechip-clear ${r.followUpDate ? '' : 'is-hidden'}" data-fu-clear="${escapeHtml(r.id)}" title="${escapeHtml(i18t('clearLabel', 'Clear'))}">&times;</button>
                   <div class="om-row-saved" data-saved-fu="${escapeHtml(r.id)}"></div>
                 </td>
                 <td class="om-checkin-donecol">
@@ -6233,6 +6252,31 @@ async function renderCheckInView(root) {
     });
   });
 
+  /* Keep the chip, the clear button and the hidden input in step. */
+  window.paintDateChip = (id, value) => {
+    const text = document.querySelector(`[data-chip-for="${id}"]`);
+    if (text) text.textContent = value ? shortDate(value) : i18t('noDueDate', 'No date');
+    const chip = text && text.closest('.om-datechip');
+    if (chip) chip.classList.toggle('is-set', !!value);
+    const clear = document.querySelector(`[data-fu-clear="${id}"]`);
+    if (clear) clear.classList.toggle('is-hidden', !value);
+  };
+
+  document.querySelectorAll('[data-fu-clear]').forEach((el) => {
+    el.addEventListener('click', async () => {
+      const id = el.dataset.fuClear;
+      const input = document.querySelector(`[data-fu-for="${id}"]`);
+      if (input) input.value = '';
+      try {
+        await api(`/api/order-management/orders/${encodeURIComponent(id)}`,
+          { method: 'PATCH', body: JSON.stringify({ patch: { followUpDate: null } }) });
+        paintDateChip(id, '');
+        flash(`[data-saved-fu="${id}"]`, i18t('savedLabel', 'Saved'));
+        workQueueCache = null;
+      } catch (e) { showToast(e.message, true); }
+    });
+  });
+
   document.querySelectorAll('.om-checkin-done').forEach((el) => {
     el.addEventListener('change', () => markDone(el.dataset.doneFor, el.checked));
   });
@@ -6248,6 +6292,7 @@ async function renderCheckInView(root) {
         await api(`/api/order-management/orders/${encodeURIComponent(id)}`,
           { method: 'PATCH', body: JSON.stringify({ patch: { followUpDate: el.value || null } }) });
         flash(`[data-saved-fu="${id}"]`, i18t('savedLabel', 'Saved'));
+        paintDateChip(id, el.value);
         workQueueCache = null;
       } catch (e) {
         showToast(e.message, true);
@@ -6306,7 +6351,7 @@ async function renderQaSchedulingView(root) {
           <div class="section-title">${escapeHtml(title)} <span class="om-count">${list.length}</span></div>
           <div class="section-help">${escapeHtml(help)}</div>
           ${list.length ? `
-            <div class="size-table-wrap"><table class="size-table">
+            <div class="om-table-wrap"><table class="om-table">
               <thead><tr>
                 <th>${escapeHtml(i18t('thPoNumber', 'PO Number'))}</th><th>${escapeHtml(i18t('thProduct', 'Product'))}</th>
                 <th>${escapeHtml(i18t('thSupplier', 'Supplier'))}</th><th>${escapeHtml(i18t('thStage', 'Stage'))}</th>
@@ -6345,9 +6390,9 @@ async function renderPdApprovalView(root) {
 
   const pdRows = rows.filter((r) => ['pdNeedsStart', 'pdReview', 'pdReply'].includes(r.action.kind));
   const groups = [
-    ['pdNeedsStart', i18t('pdNeedsStart', 'To start'),
+    ['pdNeedsStart', i18t('pdNeedsStart2', 'To Submit'),
       i18t('pdNeedsStartHelp', 'Nothing has been submitted yet. A new PO needs its approved sample images; a finished inspection needs submitting for approval. These sit in no other queue.')],
-    ['pdReply', i18t('pdWaitingOnYou', 'Waiting on you'),
+    ['pdReply', i18t('pdWaitingOnYou2', 'Waiting on Juniper China'),
       i18t('pdWaitingOnYouHelp', 'Product Development has asked for changes. Nothing moves until you reply.')],
     ['pdReview', i18t('pdWaitingOnPd', 'Waiting on Product Development'),
       i18t('pdWaitingOnPdHelp', 'Submitted and sitting with PD. Chase anything that has been here too long.')]
@@ -6362,7 +6407,7 @@ async function renderPdApprovalView(root) {
           <div class="section-title">${escapeHtml(title)} <span class="om-count">${list.length}</span></div>
           <div class="section-help">${escapeHtml(help)}</div>
           ${list.length ? `
-            <div class="size-table-wrap"><table class="size-table">
+            <div class="om-table-wrap"><table class="om-table">
               <thead><tr>
                 <th>${escapeHtml(i18t('thPoNumber', 'PO Number'))}</th><th>${escapeHtml(i18t('thProduct', 'Product'))}</th>
                 <th>${escapeHtml(i18t('thSupplier', 'Supplier'))}</th><th>${escapeHtml(i18t('thAction', 'Next'))}</th>

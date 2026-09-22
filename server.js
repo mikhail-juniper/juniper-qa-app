@@ -1768,6 +1768,38 @@ app.post('/api/submit-revised', (req, res) => {
       }).filter(Boolean)
     }));
     const record = submissionLog.appendRevisedReport({ ...payload, issues: stored });
+
+    /* If every flagged unit has now been repaired, the original report's
+     * finding is resolved: flip it to pass and mark the stage Completed.
+     *
+     * Without this the PO stayed on a failed report forever, and because PD
+     * approval only becomes actionable once the inspection is Completed, the
+     * order silently never reached the approval queue - the repair was
+     * recorded and then led nowhere. */
+    try {
+      const allRepaired = stored.length > 0 && stored.every((iss) =>
+        (parseInt(iss.unitsFixed, 10) || 0) >= (parseInt(iss.unitsAffected, 10) || 0));
+      if (allRepaired) {
+        const order = orderManagementStore.getOrderByPoNumber(payload.poNumber);
+        const stage = payload.qaType === 'production' ? 'bulk' : 'preProduction';
+        if (order && order.qaReports && order.qaReports[stage]) {
+          const updated = {
+            ...order.qaReports[stage],
+            result: 'pass',
+            status: 'Completed',
+            revisedAt: record.submittedAt || new Date().toISOString()
+          };
+          orderManagementStore.updateOrder(order.id,
+            { qaReports: { ...order.qaReports, [stage]: updated } },
+            payload.qaLead || 'Revised report', 'Revised unit report cleared the findings');
+        }
+      }
+    } catch (err) {
+      // The revision itself is already recorded; a status update failing must
+      // not lose it, but it does need to be visible.
+      console.error('Revised report saved, but the report status was not updated:', err);
+    }
+
     res.json({ ok: true, revisedId: record.id });
   } catch (err) {
     console.error('Revised report submission failed:', err);
