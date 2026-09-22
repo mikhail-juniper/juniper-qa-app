@@ -42,9 +42,12 @@ const CHECKS = [
   ['public/app.js', 'renderCompletedReportGate', 'One report per link'],
   ['public/app.js', 'renderRevisedUnitReport', 'Revised Unit Report'],
   ['public/app.js', 'stepApplies', 'Skips sizing where it does not apply'],
+<<<<<<< HEAD
   // The review screen must not demand dimensions for a step the product skips.
   ['public/app.js', "state.category !== 'apparel' && stepApplies('sizing')", 'Review skips dimensions for plush'],
   ['public/app.js', 'groups.find((g) => g.category === state.category)', 'Question fallback for retired subcategories'],
+=======
+>>>>>>> 0fd88c9b22eb0fbc9484ec0b8e34311ad9d0f1a2
   ['public/app.js', 'displaySizeName', 'Age brackets stripped'],
 
   // --- order management ---

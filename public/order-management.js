@@ -6136,6 +6136,7 @@ async function renderCheckInView(root) {
   Object.values(bySupplier).forEach((list) => list.sort(byUrgency));
 
   if (!checkInSupplier || !bySupplier[checkInSupplier]) checkInSupplier = supplierNames[0] || null;
+<<<<<<< HEAD
   const all = checkInSupplier ? bySupplier[checkInSupplier] : [];
 
   /* Split by where the PO is in its life, not by status name: anything never
@@ -6145,6 +6146,9 @@ async function renderCheckInView(root) {
    * already running". */
   const requests = all.filter((r) => !r.dispatched);
   const list = all.filter((r) => !requests.includes(r));
+=======
+  const list = checkInSupplier ? bySupplier[checkInSupplier] : [];
+>>>>>>> 0fd88c9b22eb0fbc9484ec0b8e34311ad9d0f1a2
 
   const plural = (n, one, many) => `${n} ${n === 1 ? i18t(one, 'PO') : i18t(many, 'POs')}`;
 
@@ -6155,6 +6159,7 @@ async function renderCheckInView(root) {
       <select id="omCheckInSupplier">
         ${supplierNames.map((name) => `
           <option value="${escapeHtml(name)}" ${name === checkInSupplier ? 'selected' : ''}>
+<<<<<<< HEAD
             ${escapeHtml(name)} - ${escapeHtml(plural(bySupplier[name].length, 'poSingular', 'poPlural'))}${(() => {
               const n = bySupplier[name].filter((r) => !r.dispatched).length;
               return n ? `, ${n} ${i18t('toSendWord', 'to send')}` : '';
@@ -6206,6 +6211,17 @@ async function renderCheckInView(root) {
           ${escapeHtml(i18t('groupInProduction', 'In Production'))} <span class="om-count">${list.length}</span>
         </div>
         <div class="om-table-wrap">
+=======
+            ${escapeHtml(name)} - ${escapeHtml(plural(bySupplier[name].length, 'poSingular', 'poPlural'))}
+          </option>`).join('')}
+      </select>
+      <div class="om-checkin-counts" id="omCheckInProgress"></div>
+    </div>
+    <div class="om-section-intro">${escapeHtml(i18t('checkInIntro3', 'Work down the list. An update saves when you move off the box; a follow-up date saves as soon as you pick it.'))}</div>
+
+    ${list.length ? `
+      <div class="card"><div class="om-table-wrap">
+>>>>>>> 0fd88c9b22eb0fbc9484ec0b8e34311ad9d0f1a2
         <table class="om-table om-checkin-table">
           <thead><tr>
             <th>${escapeHtml(i18t('thPoNumber', 'PO Number'))}</th>
@@ -6233,7 +6249,11 @@ async function renderCheckInView(root) {
                 <td class="om-checkin-qacol">
                   ${/* Scheduling happens during the call, so it belongs here
                        rather than on a page of its own. */ ''}
+<<<<<<< HEAD
                   <button type="button" class="om-table-upload-btn om-row-btn-lg" data-schedule-qa="${escapeHtml(r.id)}">${escapeHtml(i18t('btnScheduleQa', 'Schedule QA'))}</button>
+=======
+                  <button type="button" class="om-table-upload-btn" data-schedule-qa="${escapeHtml(r.id)}">${escapeHtml(i18t('btnScheduleQa', 'Schedule QA'))}</button>
+>>>>>>> 0fd88c9b22eb0fbc9484ec0b8e34311ad9d0f1a2
                 </td>
                 <td class="om-checkin-lastcol">
                   ${r.lastNote
@@ -6274,7 +6294,11 @@ async function renderCheckInView(root) {
           </tbody>
         </table>
       </div></div>
+<<<<<<< HEAD
     ` : (requests.length ? '' : `<div class="om-empty">${escapeHtml(i18t('emptyNoOpenOrders', 'No open orders.'))}</div>`)}
+=======
+    ` : `<div class="om-empty">${escapeHtml(i18t('emptyNoOpenOrders', 'No open orders.'))}</div>`}
+>>>>>>> 0fd88c9b22eb0fbc9484ec0b8e34311ad9d0f1a2
   `;
   bindWorkViewTabs();
   // This page has its own zoom helper; attachLightboxHandlers belongs to the
@@ -6283,12 +6307,15 @@ async function renderCheckInView(root) {
     img.addEventListener('click', (e) => { e.stopPropagation(); openImageLightbox(img.src); });
   });
 
+<<<<<<< HEAD
   const batchBtn = document.getElementById('omCheckInBatchSend');
   if (batchBtn) {
     // Scoped to the supplier she is calling, not the whole queue.
     batchBtn.addEventListener('click', () => openBatchSendPanel(checkInSupplier));
   }
 
+=======
+>>>>>>> 0fd88c9b22eb0fbc9484ec0b8e34311ad9d0f1a2
   document.getElementById('omCheckInSupplier').addEventListener('change', (e) => {
     checkInSupplier = e.target.value;
     render();
@@ -6579,8 +6606,12 @@ async function renderPdApprovalView(root) {
             <div class="om-table-wrap"><table class="om-table">
               <thead><tr>
                 <th>${escapeHtml(i18t('thPoNumber', 'PO Number'))}</th><th>${escapeHtml(i18t('thProduct', 'Product'))}</th>
+<<<<<<< HEAD
                 ${/* Supplier dropped: it is not what these rows are worked by,
                      and the space is better spent on the approval stages. */ ''}
+=======
+                <th>${escapeHtml(i18t('thSupplier', 'Supplier'))}</th>
+>>>>>>> 0fd88c9b22eb0fbc9484ec0b8e34311ad9d0f1a2
                 <th>${escapeHtml(i18t('thApprovals', 'Approvals'))}</th>
                 <th>${escapeHtml(i18t('thAction', 'Next'))}</th>
                 <th>${escapeHtml(i18t('thActions', 'Actions'))}</th>
@@ -6591,14 +6622,23 @@ async function renderPdApprovalView(root) {
                 <tr class="om-row-clickable" data-row-po="${escapeHtml(r.id)}">
                   <td><strong>${escapeHtml(r.poNumber)}</strong></td>
                   <td>${escapeHtml(r.productName || '')}<div class="om-sub">${escapeHtml(r.sku || '')}</div></td>
+<<<<<<< HEAD
+=======
+                  <td>${escapeHtml(r.supplierName || '')}</td>
+>>>>>>> 0fd88c9b22eb0fbc9484ec0b8e34311ad9d0f1a2
                   <td>${approvalStagesHtml(r.approvalStages)}</td>
                   <td>${escapeHtml(shortActionLabel(r.action))}${r.revisedSummary ? `<div class="om-sub">${escapeHtml(r.revisedSummary)}</div>` : ''}</td>
                   <td>
                     <div class="om-row-actions">
                       ${/* Straight into the approval page for this PO - the whole
                            point is not having to open the PO first. */ ''}
+<<<<<<< HEAD
                       <a class="om-table-upload-btn om-row-btn-lg" href="/approval.html?po=${encodeURIComponent(r.id)}" target="_blank" rel="noopener">${escapeHtml(i18t('btnOpenApproval', 'Open approval'))}</a>
                       <button type="button" class="om-table-upload-btn om-row-btn-lg om-copy-link-btn" data-copy-url="${escapeHtml(location.origin + '/approval.html?po=' + encodeURIComponent(r.id))}">${escapeHtml(i18t('btnShareAccess', 'Share'))}</button>
+=======
+                      <a class="om-table-upload-btn" href="/approval.html?po=${encodeURIComponent(r.id)}" target="_blank" rel="noopener">${escapeHtml(i18t('btnOpenApproval', 'Open approval'))}</a>
+                      <button type="button" class="om-table-upload-btn om-copy-link-btn" data-copy-url="${escapeHtml(location.origin + '/approval.html?po=' + encodeURIComponent(r.id))}">${escapeHtml(i18t('btnShareAccess', 'Share'))}</button>
+>>>>>>> 0fd88c9b22eb0fbc9484ec0b8e34311ad9d0f1a2
                     </div>
                   </td>
                 </tr>`).join('')}</tbody>

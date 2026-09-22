@@ -5246,6 +5246,7 @@
   "revisedReportTitle": {
     "en": "Revised Unit Report",
     "zh": "修复单位报告"
+<<<<<<< HEAD
   },
   "checkInRequestsHelp": {
     "en": "Not yet sent to this supplier. Send them before working through production.",
@@ -5258,5 +5259,7 @@
   "batchNothingForSupplier": {
     "en": "Nothing to send for this supplier",
     "zh": "该供应商没有待发送的订单"
+=======
+>>>>>>> 0fd88c9b22eb0fbc9484ec0b8e34311ad9d0f1a2
   }
 }

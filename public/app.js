@@ -3019,12 +3019,18 @@ function renderCompletedReportGate() {
     <div class="card">
       <div class="section-help">${escapeHtml(bi('completedGateHelp', 'Open the finished report, confirm that flagged units have since been repaired, or start a separate additional report.').en)}</div>
       <div style="display:flex; flex-direction:column; gap:10px; margin-top:12px;">
+<<<<<<< HEAD
         ${/* All three the same size, and the secondary pair given a real
               button treatment - in plain white they read as blocks of text
               rather than something to press. */ ''}
         ${r.pdfUrl ? `<a class="btn btn-primary gate-btn" href="${escapeHtml(r.pdfUrl)}" target="_blank" rel="noopener">${escapeHtml(bi('btnViewReport', 'View Report').en)}</a>` : ''}
         <button type="button" class="btn btn-alt gate-btn" id="btnRevisedReport">${escapeHtml(bi('btnRevisedUnitReport', 'Add Revised Unit Report').en)}</button>
         <button type="button" class="btn btn-alt gate-btn" id="btnAdditionalReport">${escapeHtml(bi('btnAdditionalReport', 'Add Additional Report').en)}</button>
+=======
+        ${r.pdfUrl ? `<a class="btn btn-primary" href="${escapeHtml(r.pdfUrl)}" target="_blank" rel="noopener" style="text-decoration:none; text-align:center;">${escapeHtml(bi('btnViewReport', 'View Report').en)}</a>` : ''}
+        <button type="button" class="btn btn-secondary" id="btnRevisedReport">${escapeHtml(bi('btnRevisedUnitReport', 'Add Revised Unit Report').en)}</button>
+        <button type="button" class="btn btn-secondary" id="btnAdditionalReport">${escapeHtml(bi('btnAdditionalReport', 'Add Additional Report').en)}</button>
+>>>>>>> 0fd88c9b22eb0fbc9484ec0b8e34311ad9d0f1a2
       </div>
     </div>
   `;
@@ -3053,6 +3059,7 @@ function renderRevisedUnitReport() {
           <div style="display:flex; gap:8px; flex-wrap:wrap;">${iss.photos.map((u) => `<div class="q-reference-frame"><img src="${escapeHtml(u)}" class="js-lightbox" alt="" /></div>`).join('')}</div></div>` : ''}
         ${done ? `
           <div class="no-issues-note">${escapeHtml(bi('unitsConfirmedFixed', 'Confirmed repaired').en)}: ${iss.unitsFixed} / ${iss.unitsAffected}</div>
+<<<<<<< HEAD
           ${/* Keep the repair evidence on screen once confirmed - hiding it
                 meant she could not check what she had just attached without
                 undoing the confirmation. */ ''}
@@ -3068,6 +3075,9 @@ function renderRevisedUnitReport() {
             <span class="revised-confirmed-badge">&#10003; ${escapeHtml(bi('confirmedLabel', 'Confirmed').en)}</span>
             <button type="button" class="btn btn-secondary" data-revised-undo="${idx}" style="width:auto;padding:7px 14px;">${escapeHtml(bi('undo', 'Undo').en)}</button>
           </div>
+=======
+          <button type="button" class="section-clean-btn is-on" data-revised-undo="${idx}">${escapeHtml(bi('undo', 'Undo').en)}</button>
+>>>>>>> 0fd88c9b22eb0fbc9484ec0b8e34311ad9d0f1a2
         ` : `
           <div class="field">
             <label class="field-label">${escapeHtml(bi('unitsFixedLabel', 'How many of these units have been repaired?').en)}<span class="required">*</span></label>
@@ -3078,12 +3088,16 @@ function renderRevisedUnitReport() {
               <span class="q-media-hint">${escapeHtml(bi('mediaOnFailRequired', 'Photo or video of the defect required').en)}</span></div>
             ${photoGrid('revised:' + idx, true)}
           </div>
+<<<<<<< HEAD
           <div class="field">
             <label class="field-label">${escapeHtml(bi('repairCommentLabel', 'Comment').en)} <span class="optional">(${escapeHtml(bi('optional', 'optional'))})</span></label>
             <textarea rows="2" data-revised-comment="${idx}"
               placeholder="${escapeHtml(bi('repairCommentPlaceholder', 'How was it repaired?').en)}">${escapeHtml(iss.comment || '')}</textarea>
           </div>
           <button type="button" class="btn btn-primary" data-revised-confirm="${idx}" style="width:auto;padding:9px 16px;margin-top:10px;">
+=======
+          <button type="button" class="btn btn-secondary" data-revised-confirm="${idx}" style="width:auto;padding:9px 16px;margin-top:10px;">
+>>>>>>> 0fd88c9b22eb0fbc9484ec0b8e34311ad9d0f1a2
             ${escapeHtml(bi('btnConfirmFixed', 'Confirm repaired').en)}
           </button>
         `}
@@ -4627,7 +4641,11 @@ async function startRevisedReport() {
       severity: iss.severity || 'minor',
       unitsAffected: parseInt(iss.unitsAffected, 10) || 1,
       photos: iss.photos || [],
+<<<<<<< HEAD
       unitsFixed: '', newPhotos: [], comment: '', confirmed: false
+=======
+      unitsFixed: '', newPhotos: [], confirmed: false
+>>>>>>> 0fd88c9b22eb0fbc9484ec0b8e34311ad9d0f1a2
     }));
   } catch (err) {
     console.error('Could not load the original report issues', err);
@@ -4641,6 +4659,7 @@ function attachRevisedHandlers() {
   const back = document.getElementById('btnBackToGate');
   if (back) back.addEventListener('click', () => { state.reportMode = 'gate'; render(); });
 
+<<<<<<< HEAD
   document.querySelectorAll('[data-revised-comment]').forEach((el) => {
     el.addEventListener('input', () => {
       const iss = state.revisedIssues[parseInt(el.dataset.revisedComment, 10)];
@@ -4648,6 +4667,8 @@ function attachRevisedHandlers() {
     });
   });
 
+=======
+>>>>>>> 0fd88c9b22eb0fbc9484ec0b8e34311ad9d0f1a2
   document.querySelectorAll('[data-revised-qty]').forEach((el) => {
     el.addEventListener('input', () => {
       const iss = state.revisedIssues[parseInt(el.dataset.revisedQty, 10)];
@@ -4703,7 +4724,10 @@ async function submitRevisedReport() {
         severity: iss.severity,
         unitsAffected: iss.unitsAffected,
         unitsFixed: parseInt(iss.unitsFixed, 10) || 0,
+<<<<<<< HEAD
         comment: iss.comment || '',
+=======
+>>>>>>> 0fd88c9b22eb0fbc9484ec0b8e34311ad9d0f1a2
         photos: (iss.newPhotos || []).map((f) => ({ id: f.id, name: f.name, type: f.type }))
       })),
       draftId: state.draftId
