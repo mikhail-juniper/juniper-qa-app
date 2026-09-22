@@ -176,6 +176,10 @@ async function loadOrders() {
 
 function render() {
   const root = document.getElementById('omRoot');
+  /* The working views replace the page entirely rather than filtering the
+     board - the call-down in particular wants the full width. */
+  if (currentView === 'home' && omWorkView === 'checkin') return renderCheckInView(root);
+  if (currentView === 'home' && omWorkView === 'pd') return renderPdApprovalView(root);
   if (currentView === 'home') return renderHome(root);
   if (currentView === 'suppliers') return renderSuppliersShell(root);
   if (currentView === 'products') return renderProductsShell(root);
@@ -285,7 +289,7 @@ function applyTileFilters(orders, st) {
 }
 
 async function renderHome(root) {
-  root.innerHTML = `<div class="om-empty">${i18('emptyLoading', 'Loading...')}</div>`;
+  root.innerHTML = workViewTabsHtml() + `<div class="om-empty">${i18('emptyLoading', 'Loading...')}</div>`;
   /* Fetch once before drawing: the tile headers show counts derived from
    * this same list, so they can never disagree with the rows below. */
   try {
@@ -325,7 +329,7 @@ async function renderHome(root) {
     `;
   };
 
-  root.innerHTML = `
+  root.innerHTML = workViewTabsHtml() + `
     ${groupTile('requests')}
     ${groupTile('production')}
     ${groupTile('completed')}
@@ -360,6 +364,7 @@ async function renderHome(root) {
     batchBtn.addEventListener('click', (e) => { e.stopPropagation(); openBatchSendPanel(); });
   }
 
+  bindWorkViewTabs();
   Object.keys(STATUS_GROUPS).forEach(loadTilePreview);
 }
 
@@ -2247,7 +2252,10 @@ function attachTypeahead(inputId, getOptions) {
   menu.dataset.typeaheadOwner = inputId;
 }
 
-async function openDetailPanel(id, scope) {
+/* opts.scrollTo names a section to jump to once the panel has rendered - the
+ * Schedule QA button lands her on the QA/QC block rather than the top of a
+ * long PO she then has to scroll through. */
+async function openDetailPanel(id, scope, opts) {
   scope = scope || 'full';
   let order;
   let supplierNamesShared = []; // populated once the async supplier fetch below resolves; typeahead callbacks read it lazily so timing doesn't matter
@@ -2278,7 +2286,7 @@ async function openDetailPanel(id, scope) {
       </div>
       <div style="display:flex;gap:10px;align-items:center;">
         ${scope !== 'full' ? `<button class="btn btn-secondary" id="omViewFullPo" style="flex:none;width:auto;padding:7px 14px;font-size:13px;">${i18('btnViewFullPo', 'View full PO')}</button>` : ''}
-        <span id="omSaveStatus" style="font-size:12px;color:var(--jc-muted);margin-right:10px;"></span>
+        <span id="omSaveStatus" class="om-save-status"></span>
         <button class="btn btn-primary" id="omSaveOrder" style="flex:none;width:auto;padding:8px 18px;">${i18('btnSaveChanges', 'Save changes')}</button>
         <button class="om-panel-close" id="omClosePanel">&times;</button>
       </div>
@@ -2416,7 +2424,7 @@ async function openDetailPanel(id, scope) {
     </div>
 
     <div class="om-panel-card">
-    <div class="om-section-title">${i18('secQaQcReporting', 'QA/QC Reporting')}</div>
+    <div class="om-section-title" id="omQaSection">${i18('secQaQcReporting', 'QA/QC Reporting')}</div>
     <div class="section-help" style="margin-bottom:14px;">${i18('helpQaReporting', 'Share a report link with a factory or QA contact.')}</div>
     <div class="om-qa-report-grid">
       ${[
@@ -2449,9 +2457,15 @@ async function openDetailPanel(id, scope) {
             return `
               ${isSetUp ? `
                 <button type="button" class="btn btn-secondary om-copy-link-btn" style="width:100%;margin-top:10px;padding:9px 16px;" data-copy-url="${escapeHtml(url)}">${i18('btnCopyReportLink', 'Copy Report Link')}</button>
-                <button type="button" class="btn btn-secondary om-setup-link-btn" style="width:100%;margin-top:8px;padding:7px 16px;font-size:12.5px;" data-setup-stage="${stage}">
-                  ${i18('btnEditReportSetup', 'Edit questions')} (${extras})
-                </button>
+                ${/* Questions are fixed once the report is under way. Changing
+                     the bank mid-inspection would mean the submitted report no
+                     longer matches what was asked, and the inspector may
+                     already be halfway through it. */ ''}
+                ${rep.status === 'Pending' ? `
+                  <button type="button" class="btn btn-secondary om-setup-link-btn" style="width:100%;margin-top:8px;padding:7px 16px;font-size:12.5px;" data-setup-stage="${stage}">
+                    ${i18('btnEditReportSetup', 'Edit questions')} (${extras})
+                  </button>` : `
+                  <div class="om-qa-report-meta" style="margin-top:8px;">${i18('questionsLocked', 'Questions locked')} (${extras})</div>`}
               ` : `
                 <button type="button" class="btn btn-secondary om-setup-link-btn" style="width:100%;margin-top:10px;padding:9px 16px;" data-setup-stage="${stage}">${i18('btnSetupReportLink', 'Setup Report Link')}</button>
               `}
@@ -2468,10 +2482,11 @@ async function openDetailPanel(id, scope) {
             ${rep.pdfUrl ? `
               <a href="${escapeHtml(rep.pdfUrl)}" target="_blank" rel="noopener" class="om-qa-report-link">${i18('btnDownloadReportPdf', 'Download report PDF')}</a>
               <div class="om-qa-report-meta">
-                ${rep.result ? `<span class="om-qa-result om-qa-result-${escapeHtml(String(rep.result).toLowerCase())}">${escapeHtml(rep.result)}</span>` : ''}
+                ${rep.result ? `<span class="om-qa-result om-qa-result-${escapeHtml(String(rep.result).toLowerCase())}">${i18('initialReportLabel', 'Initial report')}: ${escapeHtml(rep.result)}</span>` : ''}
                 ${rep.submittedAt ? `<span>${fmtDate(rep.submittedAt)}</span>` : ''}
               </div>
             ` : `<div class="om-qa-report-meta">${i18('emptyNoReportSubmitted', 'No report submitted yet.')}</div>`}
+            ${revisedReportsHtml(order, stage)}
           </div>
         </div>
       `;
@@ -2814,11 +2829,21 @@ async function openDetailPanel(id, scope) {
     formData.append('file', file);
     formData.append('category', category);
     formData.append('relatedTo', row.dataset.accessoryId || '');
+    /* Only a preview is kept. These are reference images so the factory can see
+     * what they are making; they already hold the production files. Keeping the
+     * originals here was filling the persistent disk for no benefit. */
+    formData.append('previewOnly', 'true');
     try {
       const res = await fetch(`/api/order-management/orders/${encodeURIComponent(order.id)}/files`, { method: 'POST', body: formData });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || 'Upload failed');
-      row.querySelector(urlInputSelector).value = body.file.url;
+      const urlInput = row.querySelector(urlInputSelector);
+      urlInput.value = body.file.url;
+      /* Assigning .value in code fires no event, so the panel's autosave never
+       * heard about it: the image appeared in the table but was only persisted
+       * if someone happened to press Save afterwards. Anything sent to the
+       * supplier before that had no photo. */
+      if (requestPanelSave) requestPanelSave();
       showToast(i18t('toastFileUploaded', 'File uploaded'));
       onDone(body.file.url);
     } catch (e) { showToast(e.message, true); }
@@ -2834,6 +2859,10 @@ async function openDetailPanel(id, scope) {
         openAccessoryDetailPanel(order.id, viewPoBtn.dataset.viewAccessory);
       });
     }
+    row.querySelectorAll('.om-acc-zoom').forEach((img) => {
+      img.addEventListener('click', (e) => { e.stopPropagation(); openImageLightbox(img.src); });
+    });
+
     const relinkBtn = row.querySelector('.om-acc-image-relink-btn');
     if (relinkBtn) relinkBtn.addEventListener('click', () => openAccessoryRelinkPicker(order, row));
 
@@ -2841,35 +2870,12 @@ async function openDetailPanel(id, scope) {
     row.querySelector('.om-acc-image-upload-btn').addEventListener('click', () => imageInput.click());
     imageInput.addEventListener('change', () => {
       if (!imageInput.files[0]) return;
+      /* One redraw path. This callback used to rebuild the cell itself, with
+       * its own PDF-link branch, and drifted out of step with the markup the
+       * row renders from - so an uploaded file looked different before and
+       * after a refresh, and kept the old Upload/Link pair. */
       uploadAccessoryFile(row, imageInput.files[0], 'Style picture', '.om-acc-image-url', (url) => {
-        const cell = row.querySelector('.om-acc-image-cell');
-        if (isPdfFile(url) || isPdfFile(imageInput.files[0].name)) {
-          // PDFs get a link in place of the thumbnail, since this cell also
-          // accepts drawings/spec sheets that aren't images.
-          const oldImg = cell.querySelector('img');
-          if (oldImg) oldImg.remove();
-          let link = cell.querySelector('a.om-acc-image-link');
-          if (!link) {
-            link = document.createElement('a');
-            link.className = 'om-acc-image-link';
-            link.target = '_blank';
-            link.rel = 'noopener';
-            link.style.cssText = 'display:block;font-size:11.5px;margin-bottom:4px;';
-            link.textContent = i18t('btnViewFile', 'View file');
-            cell.insertBefore(link, cell.firstChild);
-          }
-          link.href = url;
-          return;
-        }
-        const oldLink = cell.querySelector('a.om-acc-image-link');
-        if (oldLink) oldLink.remove();
-        let img = cell.querySelector('img');
-        if (!img) {
-          img = document.createElement('img');
-          img.className = 'om-table-thumb';
-          cell.insertBefore(img, cell.firstChild);
-        }
-        img.src = url;
+        applyAccessoryImageUrl(row, url, order);
       });
     });
     const docInput = row.querySelector('.om-acc-doc-file');
@@ -2897,7 +2903,7 @@ async function openDetailPanel(id, scope) {
     return el ? el.value : '';
   }
   function addAccessoryRow(data) {
-    accessoryRowsHost.insertAdjacentHTML('beforeend', accessoryRowHtml(editAccessoryRowCount, data, currentSupplierAddress()));
+    accessoryRowsHost.insertAdjacentHTML('beforeend', accessoryRowHtml(editAccessoryRowCount, data, currentSupplierAddress(), order));
     const idx = editAccessoryRowCount;
     const row = panel.querySelector(`[data-accessory-row="${idx}"]`);
     panel.querySelector(`[data-remove-accessory="${idx}"]`).addEventListener('click', () => { row.remove(); recalcTotals(); });
@@ -4058,16 +4064,16 @@ async function openDetailPanel(id, scope) {
         purchaseQuantity: document.getElementById('fPurchaseQty').value || null,
         warehouse: warehouseValue,
         photoReference: document.getElementById('fPhotoReference').value,
-        manufacturingDrawing: document.getElementById('fManufacturingDrawing').value,
-        washingTagUrl: document.getElementById('fWashingTagUrl').value,
-        hangTagUrl: document.getElementById('fHangTagUrl').value,
-        packagingUrl: document.getElementById('fPackagingUrl').value,
-        docSourceUrls: {
-          manufacturingDrawing: document.getElementById('fManufacturingDrawingSource').value || '',
-          washingTagUrl: document.getElementById('fWashingTagUrlSource').value || '',
-          hangTagUrl: document.getElementById('fHangTagUrlSource').value || '',
-          packagingUrl: document.getElementById('fPackagingUrlSource').value || ''
-        },
+        /* File slots are written by things OTHER than this form - the Asana
+         * handoff import populates them server-side, and a panel left open
+         * still holds the empty values it rendered with. Autosaving those
+         * blanked freshly-imported files: the form is not the only writer, so
+         * it must not assert emptiness it never chose.
+         *
+         * An empty field is therefore only sent when it started empty AND
+         * something actually changed it, which is what happens when a user
+         * clears a slot. An untouched empty field is omitted entirely. */
+        ...docSlotPatch(),
         // dimensionsUrl is no longer editable - kept as-is so existing
         // records don't lose a previously uploaded file.
         dimensionsUrl: order.mainComponent.dimensionsUrl || '',
@@ -4112,6 +4118,36 @@ async function openDetailPanel(id, scope) {
   let lastSaved = null;
   let autoSaveTimer = null;
   let saveInFlight = false;
+
+  // Record what the file slots looked like when this panel rendered.
+  captureDocSlotBaseline();
+  // Clicking anywhere in a date field opens the picker, not just the glyph.
+  makeDateFieldsClickable(panel);
+
+  if (opts && opts.scrollTo === 'qa') {
+    /* Land on the QA card.
+     *
+     * Deliberately instant rather than smooth, and re-asserted twice. A smooth
+     * scroll over ~1500px takes about a second, during which anything that
+     * moves focus - a field autofocusing, an image finishing, another render
+     * pass - hijacks it and leaves the panel parked somewhere arbitrary. An
+     * instant jump cannot be interrupted, and the repeats cover content above
+     * the card still settling.
+     *
+     * The card, not the heading inside it: targeting the heading put the
+     * card's own top edge and padding above the fold. */
+    const goToQa = () => {
+      const heading = panel.querySelector('#omQaSection');
+      const target = (heading && heading.closest('.om-panel-card')) || heading;
+      if (!target) return;
+      const panelRect = panel.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      panel.scrollTop += (targetRect.top - panelRect.top) - 16;
+    };
+    requestAnimationFrame(goToQa);
+    setTimeout(goToQa, 200);
+    setTimeout(goToQa, 700);
+  }
 
   const setSaveStatus = (key, fallback) => {
     const el = document.getElementById('omSaveStatus');
@@ -4180,14 +4216,18 @@ async function openDetailPanel(id, scope) {
     autoSaveTimer = setTimeout(() => doSave({ silent: true }), 1200);
   }
 
+  // Expose it for the sub-component rows, which are added after wiring.
+  requestPanelSave = scheduleAutoSave;
+
   // Baseline: whatever the form holds on open counts as already saved, so
   // simply opening a PO never writes.
   const baseline = buildPatch();
   lastSaved = baseline ? JSON.stringify(baseline) : null;
 
   /* Autosave on edit. `change` covers selects and date pickers, `input`
-   * covers typing. Uploads, status changes and the sub-component tables
-   * have their own endpoints and save themselves already. */
+   * covers typing. Hidden inputs are included deliberately - the sub-component
+   * image field is written in code by the upload and relink handlers, which
+   * dispatch an input event so this picks it up. */
   panel.querySelectorAll('input, select, textarea').forEach((el) => {
     if (el.type === 'file' || el.disabled) return;
     el.addEventListener('change', scheduleAutoSave);
@@ -4528,11 +4568,21 @@ function handoffResultsHtml(rows) {
     </ul>`;
 }
 
-async function openBatchSendPanel() {
+/* focusSupplier opens the panel already scoped to one supplier, which is how
+ * the check-in view uses it: she is on a call with that factory and wants the
+ * unsent POs for them, not the whole queue. */
+async function openBatchSendPanel(focusSupplier) {
   let data;
   try {
     data = await api('/api/order-management/dispatch-queue');
   } catch (e) { return showToast(e.message, true); }
+
+  if (focusSupplier) {
+    // Narrow to one factory, and say so if they have nothing waiting.
+    const only = (data.suppliers || []).filter((g) => g.supplierName === focusSupplier);
+    if (!only.length) return showToast(i18t('batchNothingForSupplier', 'Nothing to send for this supplier'));
+    data = { ...data, suppliers: only, totalItems: only.reduce((n, g) => n + g.items.length, 0) };
+  }
 
   const panel = document.createElement('div');
   panel.className = 'om-panel-backdrop';
@@ -5228,6 +5278,45 @@ function previewUrlFor(currentUrl) {
   return `/api/order-management/orders/${m[1]}/thumb?file=${m[2]}`;
 }
 
+/**
+ * Follow-up Revised Unit Reports for one stage, listed under the original.
+ *
+ * Shown as their own entries rather than replacing the original: the first
+ * report is the record of what was found, and the revised one is the record of
+ * what was subsequently repaired. Collapsing them would lose the finding.
+ */
+function revisedReportsHtml(order, stage) {
+  const all = (order.revisedReports || []).filter((r) => {
+    const t = r.qaType === 'production' ? 'bulk' : 'preProduction';
+    return t === stage;
+  });
+  if (!all.length) return '';
+
+  return all.map((r, idx) => {
+    const fixed = (r.issues || []).reduce((n, i) => n + (parseInt(i.unitsFixed, 10) || 0), 0);
+    const flagged = (r.issues || []).reduce((n, i) => n + (parseInt(i.unitsAffected, 10) || 0), 0);
+    const when = r.submittedAt ? fmtDate(r.submittedAt) : '';
+    return `
+      <div class="om-qa-revised">
+        <div class="om-qa-revised-title">
+          ${i18('revisedReportLabel', 'Revised Unit Report')}${all.length > 1 ? ` #${idx + 1}` : ''}${(() => {
+            /* The outcome, not just that a revision happened. A revision that
+               repaired everything is what turns the PO's result around, and
+               reading "Revised Unit Report" alone gave no clue either way. */
+            const cleared = flagged > 0 && fixed >= flagged;
+            return `: <span class="om-qa-revised-result ${cleared ? 'is-pass' : 'is-open'}">${cleared ? i18('resultPass', 'Pass') : i18('resultOpen', 'Outstanding')}</span>`;
+          })()}
+        </div>
+        <div class="om-qa-report-meta">
+          <span>${fixed} / ${flagged} ${escapeHtml(i18('unitsRepairedShort', 'units repaired'))}</span>
+          ${when ? `<span>${escapeHtml(when)}</span>` : ''}
+          ${r.qaLead ? `<span>${escapeHtml(r.qaLead)}</span>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
 function uploadFieldHtml(fieldId, label, currentUrl, isImage, sourceUrl) {
   /* When a Drive link exists it is what "View file" opens: the locally stored
    * file is only a preview image now, so linking to it would hand someone a
@@ -5333,26 +5422,117 @@ function wireUploadField(fieldId, orderId, category, isImage) {
   });
 }
 
-function accessoryRowHtml(idx, data, mainAddress) {
+/**
+ * A thumbnail source for a sub-component's attached file.
+ *
+ * PDFs and AI files used to render as a bare "View file" link, so the
+ * breakdown table showed no preview at all for exactly the files that matter
+ * most - hang tag artwork and spec drawings are rarely JPEGs. The server
+ * already renders and caches a first-page image for any file recorded on the
+ * order (see the /thumb route), so point at that instead of guessing from the
+ * extension.
+ *
+ * Returns null when there is nothing renderable, in which case the caller
+ * falls back to a link.
+ */
+/* Baseline values captured when the panel rendered, so an autosave can tell
+ * "the user cleared this" from "this was empty when the page loaded and
+ * something else has filled it since". */
+let docSlotBaseline = {};
+
+const DOC_SLOT_FIELDS = [
+  ['manufacturingDrawing', 'fManufacturingDrawing'],
+  ['washingTagUrl', 'fWashingTagUrl'],
+  ['hangTagUrl', 'fHangTagUrl'],
+  ['packagingUrl', 'fPackagingUrl']
+];
+
+function captureDocSlotBaseline() {
+  docSlotBaseline = {};
+  DOC_SLOT_FIELDS.forEach(([key, id]) => {
+    const el = document.getElementById(id);
+    docSlotBaseline[key] = el ? el.value : '';
+    const src = document.getElementById(id + 'Source');
+    docSlotBaseline[key + '__source'] = src ? src.value : '';
+  });
+}
+
+/** The doc-slot part of the patch, omitting fields this form hasn't changed. */
+function docSlotPatch() {
+  const patch = {};
+  const sources = {};
+  let anySource = false;
+
+  DOC_SLOT_FIELDS.forEach(([key, id]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const value = el.value;
+    const wasEmpty = !docSlotBaseline[key];
+    // Untouched and empty: say nothing, so a concurrent import survives.
+    if (!value && wasEmpty) return;
+    patch[key] = value;
+
+    const src = document.getElementById(id + 'Source');
+    const srcValue = src ? src.value : '';
+    if (srcValue || docSlotBaseline[key + '__source']) { anySource = true; }
+    sources[key] = srcValue;
+  });
+
+  if (anySource) patch.docSourceUrls = sources;
+  return patch;
+}
+
+function accessoryThumbSrc(order, url) {
+  const u = String(url || '').trim();
+  if (!u) return null;
+
+  // A file living on this order: let the server rasterise it.
+  const marker = '/order-management-files/';
+  const at = u.indexOf(marker);
+  if (at !== -1 && order && order.id) {
+    const rest = u.slice(at + marker.length).split('/');
+    const storedName = decodeURIComponent(rest[rest.length - 1] || '');
+    if (storedName) {
+      return `/api/order-management/orders/${encodeURIComponent(order.id)}/thumb?file=${encodeURIComponent(storedName)}`;
+    }
+  }
+
+  // Anything else (a Drive link, an external URL) is only usable directly, and
+  // only if it is already an image.
+  return /\.(png|jpe?g|gif|webp|bmp)(\?|$)/i.test(u) ? u : null;
+}
+
+function accessoryRowHtml(idx, data, mainAddress, order) {
   data = data || {};
   const rowId = data.id || `tmp-${Date.now()}-${idx}`;
   return `
     <tr data-accessory-row="${idx}" data-accessory-id="${escapeHtml(rowId)}">
       <td><input type="text" id="accName${idx}" class="om-acc-name" value="${escapeHtml(data.partName || '')}" /></td>
       <td class="om-acc-image-cell">
-        ${data.imageUrl
-          ? (isPdfFile(data.imageUrl)
-            ? `<a class="om-acc-image-link" href="${escapeHtml(data.imageUrl)}" target="_blank" rel="noopener" style="display:block;font-size:11.5px;margin-bottom:4px;">${i18('btnViewFile', 'View file')}</a>`
-            : `<img class="om-table-thumb" src="${escapeHtml(data.imageUrl)}" alt="" />`)
-          : ''}
+        ${(() => {
+          if (!data.imageUrl) return '';
+          /* New uploads are already a preview image, so they render directly.
+             accessoryThumbSrc covers anything older that is still a PDF by
+             pointing at the server's rasteriser.
+
+             Clicking the thumbnail enlarges it, the same as the reference
+             photo elsewhere, so the separate "View larger" link is gone. */
+          const thumb = accessoryThumbSrc(order, data.imageUrl);
+          return thumb ? `<img class="om-table-thumb om-acc-zoom" src="${escapeHtml(thumb)}" alt="" title="${escapeHtml(i18('clickToEnlarge', 'Click to enlarge'))}" />` : '';
+        })()}
         <input type="hidden" class="om-acc-image-url" value="${escapeHtml(data.imageUrl || '')}" />
         <input type="file" class="om-acc-image-file" accept="image/*,application/pdf" style="display:none;" />
-        <button type="button" class="om-table-upload-btn om-acc-image-upload-btn">${i18('btnUpload', 'Upload')}</button>
-        <!-- Most sub-component photos already exist as Product Documentation on
-             the PO: the hang tag artwork, the washing tag, the packaging
-             layout. Re-uploading them was duplicating the same file per row and
-             letting the copies drift apart when one was replaced. -->
-        <button type="button" class="om-table-upload-btn om-acc-image-relink-btn">${i18('btnLinkExisting', 'Link')}</button>
+        ${data.imageUrl ? `
+          ${/* One button once there is an image. Upload and Link side by side
+               was two choices for what is really one action. */ ''}
+          <button type="button" class="om-table-upload-btn om-acc-image-upload-btn">${i18('btnReplace', 'Replace')}</button>
+        ` : `
+          <button type="button" class="om-table-upload-btn om-acc-image-upload-btn">${i18('btnUpload', 'Upload')}</button>
+          <!-- Most sub-component photos already exist as Product Documentation
+               on the PO: the hang tag artwork, the washing tag, the packaging
+               layout. Re-uploading them duplicated the same file per row. -->
+          <button type="button" class="om-table-upload-btn om-acc-image-relink-btn">${i18('btnLinkExisting', 'Link')}</button>
+        `}
       </td>
       <td class="om-acc-viewpo-cell">
         ${data.id
@@ -5461,7 +5641,10 @@ function qaTriggersForCategory(category) {
   return (((conditionalChecksCache || {}).byCategory || {})[category] || []);
 }
 
-async function openQaSetupDialog(order, stage) {
+/* onSaved lets a caller outside the PO panel decide what happens next. Without
+ * it the dialog always reopened the detail panel, which from the QA Scheduling
+ * queue would throw Chloe out of the list she was working down. */
+async function openQaSetupDialog(order, stage, onSaved) {
   await loadConditionalChecks();
   const rep = (order.qaReports && order.qaReports[stage]) || {};
   const triggers = qaTriggersForCategory(order.category);
@@ -5593,12 +5776,17 @@ async function openQaSetupDialog(order, stage) {
       });
       close();
       showToast(i18('toastReportSetupSaved', 'Report link is ready to share'));
-      // Reopen the panel so the button flips to Copy Report Link and the
-      // status shows In Progress - same sequence the Skip button uses.
-      const id = order.id;
-      closePanel();
-      refreshCurrentView();
-      openDetailPanel(id, 'full');
+      if (typeof onSaved === 'function') {
+        // Called from a work view: stay where she is and just redraw.
+        onSaved();
+      } else {
+        // Reopen the panel so the button flips to Copy Report Link and the
+        // status shows In Progress - same sequence the Skip button uses.
+        const id = order.id;
+        closePanel();
+        refreshCurrentView();
+        openDetailPanel(id, 'full');
+      }
     } catch (e) {
       showToast(e.message || 'Could not save the report setup', true);
       btn.disabled = false;
@@ -5695,7 +5883,7 @@ function openAccessoryRelinkPicker(order, row) {
   if (saveBtn) saveBtn.addEventListener('click', () => {
     const picked = back.querySelector('input[name="omRelinkPick"]:checked');
     if (!picked) { showToast(i18t('pickAFileFirst', 'Choose a file first'), true); return; }
-    applyAccessoryImageUrl(row, picked.value);
+    applyAccessoryImageUrl(row, picked.value, order);
     close();
     showToast(i18t('toastFileLinked', 'File linked. Save the PO to keep it.'));
   });
@@ -5707,25 +5895,40 @@ function openAccessoryRelinkPicker(order, row) {
 /** Point a sub-component row's photo cell at a URL, redrawing the preview.
  *  Shared by the relink picker and the upload handler so the two can't render
  *  the cell differently. */
-function applyAccessoryImageUrl(row, url) {
+/* Set by the open detail panel so code outside it can ask for a save.
+ * Sub-component rows are inserted after the panel wires its listeners, so an
+ * input event dispatched on them reaches nothing - the handler simply is not
+ * attached to rows that did not exist at wiring time. */
+let requestPanelSave = null;
+
+function applyAccessoryImageUrl(row, url, order) {
   const cell = row.querySelector('.om-acc-image-cell');
-  row.querySelector('.om-acc-image-url').value = url || '';
+  const urlInput = row.querySelector('.om-acc-image-url');
+  urlInput.value = url || '';
+  if (requestPanelSave) requestPanelSave();
+
   cell.querySelectorAll('img.om-table-thumb, a.om-acc-image-link').forEach((el) => el.remove());
   if (!url) return;
-  const first = cell.firstChild;
-  if (isPdfFile(url)) {
-    const link = document.createElement('a');
-    link.className = 'om-acc-image-link';
-    link.href = url; link.target = '_blank'; link.rel = 'noopener';
-    link.style.cssText = 'display:block;font-size:11.5px;margin-bottom:4px;';
-    link.textContent = i18t('btnViewFile', 'View file');
-    cell.insertBefore(link, first);
-  } else {
+
+  /* Same shape as the initial render: a click-to-enlarge thumbnail, and the
+     two setup buttons collapsed to a single Replace. Keeping the two in step
+     matters - they diverged once already, so an uploaded file looked different
+     before and after a page refresh. */
+  const thumb = accessoryThumbSrc(order, url);
+  if (thumb) {
     const img = document.createElement('img');
-    img.className = 'om-table-thumb';
-    img.src = url; img.alt = '';
-    cell.insertBefore(img, first);
+    img.className = 'om-table-thumb om-acc-zoom';
+    img.src = thumb;
+    img.alt = '';
+    img.title = i18t('clickToEnlarge', 'Click to enlarge');
+    img.addEventListener('click', (e) => { e.stopPropagation(); openImageLightbox(img.src); });
+    cell.insertBefore(img, cell.firstChild);
   }
+
+  const relink = cell.querySelector('.om-acc-image-relink-btn');
+  if (relink) relink.remove();
+  const uploadBtn = cell.querySelector('.om-acc-image-upload-btn');
+  if (uploadBtn) uploadBtn.textContent = i18t('btnReplace', 'Replace');
 }
 
 /* ============================================================
@@ -5775,4 +5978,677 @@ function askForSourceLink(fileName) {
     document.body.appendChild(back);
     setTimeout(() => back.querySelector('#omSourceLinkInput').focus(), 30);
   });
+}
+
+/* ============================================================
+ * Chloe's working views
+ * ============================================================
+ * The default board is organised by what state a PO is in. Her work is
+ * organised by what needs her attention, which is a different axis - so these
+ * are separate full-page views rather than filters on the board.
+ *
+ * All three read the same /work-queue endpoint, which returns every open PO
+ * with a derived next action (owner, label, date). One source means the three
+ * views can never disagree about what a PO needs.
+ */
+const OM_WORK_VIEWS = [
+  ['board', 'Default'],
+  ['checkin', 'PO Check-In'],
+  /* QA Scheduling was its own view, but in practice scheduling happens while
+   * working down the check-in list, not as a separate sitting. The Schedule QA
+   * button on each check-in row replaces it. */
+  ['pd', 'PD Approval']
+];
+
+let omWorkView = 'board';
+let workQueueCache = null;
+let checkInSupplier = null;
+let checkInIndex = 0;
+
+function workViewTabsHtml() {
+  return `
+    <div class="om-view-tabs">
+      ${OM_WORK_VIEWS.map(([key, label]) => `
+        <button type="button" class="om-view-tab ${omWorkView === key ? 'is-on' : ''}" data-work-view="${key}">
+          ${escapeHtml(i18t('view_' + key, label))}
+        </button>
+      `).join('')}
+    </div>
+  `;
+}
+
+function bindWorkViewTabs() {
+  document.querySelectorAll('[data-work-view]').forEach((el) => {
+    el.addEventListener('click', () => {
+      omWorkView = el.dataset.workView;
+      checkInSupplier = null;
+      checkInIndex = 0;
+      render();
+    });
+  });
+}
+
+async function loadWorkQueue(force) {
+  if (workQueueCache && !force) return workQueueCache;
+  const data = await api('/api/order-management/work-queue');
+  workQueueCache = data.rows || [];
+  return workQueueCache;
+}
+
+/** Overdue first, then soonest due, then everything undated. */
+function byUrgency(a, b) {
+  const ao = a.action.overdueBy || 0;
+  const bo = b.action.overdueBy || 0;
+  if (ao !== bo) return bo - ao;
+  const ad = a.action.dueDate || '9999';
+  const bd = b.action.dueDate || '9999';
+  return ad < bd ? -1 : ad > bd ? 1 : 0;
+}
+
+const OWNER_LABELS = {
+  you: ['You', 'om-owner-you'],
+  qa: ['QA', 'om-owner-qa'],
+  pd: ['Product Dev', 'om-owner-pd'],
+  supplier: ['Supplier', 'om-owner-supplier'],
+  none: ['-', 'om-owner-none']
+};
+
+function ownerPill(owner) {
+  const [label, cls] = OWNER_LABELS[owner] || OWNER_LABELS.none;
+  return `<span class="om-owner-pill ${cls}">${escapeHtml(i18t('owner_' + owner, label))}</span>`;
+}
+
+function dueBadge(action) {
+  if (!action.dueDate) return '';
+  const over = action.overdueBy || 0;
+  const cls = over > 0 ? 'om-due-over' : over > -7 ? 'om-due-soon' : '';
+  const text = over > 0
+    ? i18t('overdueByDays', '{n}d overdue').replace('{n}', String(over))
+    : fmtDate(action.dueDate);
+  return `<span class="om-due-badge ${cls}">${escapeHtml(text)}</span>`;
+}
+
+/* ---- PO Check-In: the weekly supplier call-down ----
+ *
+ * A table, because a supplier can have 10+ orders and Chloe works down a list
+ * on the phone. The columns are the ones she reads off her spreadsheet today:
+ * what it is, how many, where it stands, what was said last time, and what
+ * she is writing now.
+ */
+/** "Oct 28" - month and day, no year. The year is noise on a follow-up that is
+ *  always days or weeks away, and it costs width in every row. */
+function shortDate(d) {
+  if (!d) return '';
+  const dt = new Date(d + (String(d).length === 10 ? 'T00:00:00' : ''));
+  if (isNaN(dt)) return String(d);
+  return dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+/** Local calendar date as YYYY-MM-DD.
+ *
+ *  toISOString() gives the UTC date, which is the wrong day for most of the
+ *  working day outside UTC: ticking a PO at 9pm in Toronto stamped it with
+ *  tomorrow's UTC date, so it still read as "done today" the following
+ *  morning and never reset. */
+function localDateKey(d) {
+  const dt = d ? new Date(d) : new Date();
+  if (isNaN(dt)) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
+}
+
+/** Has this PO been worked through today, in the user's own day? Today, not
+ *  ever - the whole point is keeping her place in the call she is on now. */
+function checkedInToday(r) {
+  if (!r.lastCheckedInAt) return false;
+  return localDateKey(r.lastCheckedInAt) === localDateKey();
+}
+
+/* Native date inputs only open the picker from the little calendar glyph,
+ * which is a small target and not obvious. showPicker() opens it from a click
+ * anywhere in the field. Guarded because it is not in every browser and
+ * throws if called without a user gesture. */
+function makeDateFieldsClickable(scope) {
+  (scope || document).querySelectorAll('input[type="date"]').forEach((el) => {
+    if (el.dataset.pickerBound) return;
+    el.dataset.pickerBound = '1';
+    el.addEventListener('click', () => {
+      if (typeof el.showPicker === 'function') {
+        try { el.showPicker(); } catch (e) { /* not allowed here; the glyph still works */ }
+      }
+    });
+  });
+}
+
+async function renderCheckInView(root) {
+  root.innerHTML = `${workViewTabsHtml()}<div class="om-empty">${i18('emptyLoading', 'Loading...')}</div>`;
+  bindWorkViewTabs();
+  let rows;
+  try { rows = await loadWorkQueue(); }
+  catch (e) { root.innerHTML = workViewTabsHtml() + `<div class="om-empty">${escapeHtml(e.message)}</div>`; bindWorkViewTabs(); return; }
+
+  const bySupplier = {};
+  rows.forEach((r) => {
+    const key = r.supplierName || i18t('noSupplier', 'No supplier');
+    (bySupplier[key] = bySupplier[key] || []).push(r);
+  });
+  const supplierNames = Object.keys(bySupplier).sort();
+  Object.values(bySupplier).forEach((list) => list.sort(byUrgency));
+
+  if (!checkInSupplier || !bySupplier[checkInSupplier]) checkInSupplier = supplierNames[0] || null;
+  const all = checkInSupplier ? bySupplier[checkInSupplier] : [];
+
+  /* Split by where the PO is in its life, not by status name: anything never
+   * sent to the factory is a request she still has to place, and those are a
+   * different conversation from chasing production. Grouping them under the
+   * same heading meant new POs quietly sat in a list she reads as "things
+   * already running". */
+  const requests = all.filter((r) => !r.dispatched);
+  const list = all.filter((r) => !requests.includes(r));
+
+  const plural = (n, one, many) => `${n} ${n === 1 ? i18t(one, 'PO') : i18t(many, 'POs')}`;
+
+  root.innerHTML = `
+    ${workViewTabsHtml()}
+    <div class="om-checkin-bar">
+      <label class="field-label" style="margin:0;">${escapeHtml(i18t('supplierLabel', 'Supplier'))}</label>
+      <select id="omCheckInSupplier">
+        ${supplierNames.map((name) => `
+          <option value="${escapeHtml(name)}" ${name === checkInSupplier ? 'selected' : ''}>
+            ${escapeHtml(name)} - ${escapeHtml(plural(bySupplier[name].length, 'poSingular', 'poPlural'))}${(() => {
+              const n = bySupplier[name].filter((r) => !r.dispatched).length;
+              return n ? `, ${n} ${i18t('toSendWord', 'to send')}` : '';
+            })()}
+          </option>`).join('')}
+      </select>
+      <div class="om-checkin-counts" id="omCheckInProgress"></div>
+      ${requests.length ? `
+        <button type="button" class="btn btn-primary om-row-btn-lg" id="omCheckInBatchSend" style="width:auto;">
+          ${escapeHtml(i18t('btnOpenBatchSend', 'Batch send'))} (${requests.length})
+        </button>` : ''}
+    </div>
+    <div class="om-section-intro">${escapeHtml(i18t('checkInIntro3', 'Work down the list. An update saves when you move off the box; a follow-up date saves as soon as you pick it.'))}</div>
+
+    ${requests.length ? `
+      <div class="card">
+        <div class="section-title">
+          ${escapeHtml(i18t('groupRequests', 'PO Requests'))} <span class="om-count">${requests.length}</span>
+        </div>
+        <div class="section-help">${escapeHtml(i18t('checkInRequestsHelp', 'Not yet sent to this supplier. Send them before working through production.'))}</div>
+        <div class="om-table-wrap">
+          <table class="om-table om-checkin-table om-requests-table">
+            <thead><tr>
+              <th>${escapeHtml(i18t('thPoNumber', 'PO Number'))}</th>
+              <th>${escapeHtml(i18t('thPhoto', 'Photo'))}</th>
+              <th>${escapeHtml(i18t('thProduct', 'Product'))}</th>
+              <th>${escapeHtml(i18t('thQty', 'Qty'))}</th>
+              <th>${escapeHtml(i18t('thStatus', 'Status'))}</th>
+              <th>${escapeHtml(i18t('thOrderDate', 'Ordered'))}</th>
+            </tr></thead>
+            <tbody>
+              ${requests.map((r) => `
+                <tr class="om-row-clickable" data-row-po="${escapeHtml(r.id)}">
+                  <td><strong>${escapeHtml(r.poNumber)}</strong></td>
+                  <td class="om-checkin-photo">${r.photo ? `<img src="${escapeHtml(r.photo)}" alt="" class="om-acc-zoom" />` : '<span class="om-sub">-</span>'}</td>
+                  <td>${escapeHtml(r.productName || '')}<div class="om-sub">${escapeHtml(r.sku || '')}</div></td>
+                  <td>${r.quantity != null ? Number(r.quantity).toLocaleString() : '-'}</td>
+                  <td><span class="om-pill om-pill-${statusSlug(r.status)}">${tStatusInline(r.status)}</span></td>
+                  <td>${escapeHtml(r.orderDate ? fmtDate(r.orderDate) : '-')}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>` : ''}
+
+    ${list.length ? `
+      <div class="card">
+        <div class="section-title">
+          ${escapeHtml(i18t('groupInProduction', 'In Production'))} <span class="om-count">${list.length}</span>
+        </div>
+        <div class="om-table-wrap">
+        <table class="om-table om-checkin-table">
+          <thead><tr>
+            <th>${escapeHtml(i18t('thPoNumber', 'PO Number'))}</th>
+            <th>${escapeHtml(i18t('thPhoto', 'Photo'))}</th>
+            <th>${escapeHtml(i18t('thProduct', 'Product'))}</th>
+            <th>${escapeHtml(i18t('thQty', 'Qty'))}</th>
+            <th>${escapeHtml(i18t('thStatus', 'Status'))}</th>
+            <th>${escapeHtml(i18t('thQaQc', 'QA/QC'))}</th>
+            <th>${escapeHtml(i18t('thLastUpdate', 'Last update'))}</th>
+            <th>${escapeHtml(i18t('thNewUpdate', 'Update'))}</th>
+            <th>${escapeHtml(i18t('thFollowUp', 'Follow up'))}</th>
+            <th>${escapeHtml(i18t('thDone', 'Done'))}</th>
+          </tr></thead>
+          <tbody>
+            ${list.map((r) => `
+              <tr data-checkin-row="${escapeHtml(r.id)}" data-row-po="${escapeHtml(r.id)}"
+                  class="om-row-clickable ${checkedInToday(r) ? 'om-row-done' : ''}">
+                <td><strong>${escapeHtml(r.poNumber)}</strong></td>
+                <td class="om-checkin-photo">
+                  ${r.photo ? `<img src="${escapeHtml(r.photo)}" alt="" class="js-lightbox" />` : '<span class="om-sub">-</span>'}
+                </td>
+                <td>${escapeHtml(r.productName || '')}<div class="om-sub">${escapeHtml(r.sku || '')}</div></td>
+                <td>${r.quantity != null ? Number(r.quantity).toLocaleString() : '-'}</td>
+                <td><span class="om-pill om-pill-${statusSlug(r.status)}">${tStatusInline(r.status)}</span></td>
+                <td class="om-checkin-qacol">
+                  ${/* Scheduling happens during the call, so it belongs here
+                       rather than on a page of its own. */ ''}
+                  <button type="button" class="om-table-upload-btn om-row-btn-lg" data-schedule-qa="${escapeHtml(r.id)}">${escapeHtml(i18t('btnScheduleQa', 'Schedule QA'))}</button>
+                </td>
+                <td class="om-checkin-lastcol">
+                  ${r.lastNote
+                    ? `<div class="om-sub">${escapeHtml(fmtDate(r.lastNote.at))} &middot; ${escapeHtml(r.lastNote.by || '')}</div>${escapeHtml(r.lastNote.text || '')}`
+                    : `<span class="om-sub">${escapeHtml(i18t('noUpdatesYet', 'No updates yet'))}</span>`}
+                </td>
+                <td>
+                  <textarea rows="1" class="om-checkin-note" data-note-for="${escapeHtml(r.id)}"
+                    placeholder="${escapeHtml(i18t('checkInNotePlaceholder2', 'Production update'))}"></textarea>
+                  <div class="om-row-saved" data-saved-for="${escapeHtml(r.id)}"></div>
+                </td>
+                <td class="om-checkin-fucol">
+                  ${/* Compact: a calendar glyph when empty, "Oct 28" when set.
+                       A full mm/dd/yyyy control in every row is a lot of
+                       furniture for a field that is usually blank. The real
+                       input sits on top, invisible, so the native picker and
+                       keyboard entry both still work. */ ''}
+                  <label class="om-datechip ${r.followUpDate ? 'is-set' : ''}">
+                    <span class="om-datechip-icon">&#128197;</span>
+                    <span class="om-datechip-text" data-chip-for="${escapeHtml(r.id)}">${escapeHtml(r.followUpDate ? shortDate(r.followUpDate) : i18t('noDueDate', 'No date'))}</span>
+                    <input type="date" class="om-checkin-fu" data-fu-for="${escapeHtml(r.id)}" value="${escapeHtml(r.followUpDate || '')}" />
+                  </label>
+                  <button type="button" class="om-datechip-clear ${r.followUpDate ? '' : 'is-hidden'}" data-fu-clear="${escapeHtml(r.id)}" title="${escapeHtml(i18t('clearLabel', 'Clear'))}">&times;</button>
+                  <div class="om-row-saved" data-saved-fu="${escapeHtml(r.id)}"></div>
+                </td>
+                <td class="om-checkin-donecol">
+                  ${/* Ticking this is how she keeps her place in a list of 20.
+                       Saving an update ticks it automatically, because having
+                       just written a note IS having covered the order. */ ''}
+                  <label class="om-done-check">
+                    <input type="checkbox" class="om-checkin-done" data-done-for="${escapeHtml(r.id)}" ${checkedInToday(r) ? 'checked' : ''} />
+                    <span></span>
+                  </label>
+                  <div class="om-sub" data-done-when="${escapeHtml(r.id)}">${checkedInToday(r) ? escapeHtml(i18t('doneToday', 'Today')) : ''}</div>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div></div>
+    ` : (requests.length ? '' : `<div class="om-empty">${escapeHtml(i18t('emptyNoOpenOrders', 'No open orders.'))}</div>`)}
+  `;
+  bindWorkViewTabs();
+  // This page has its own zoom helper; attachLightboxHandlers belongs to the
+  // report app and is not loaded here.
+  document.querySelectorAll('.om-checkin-photo img').forEach((img) => {
+    img.addEventListener('click', (e) => { e.stopPropagation(); openImageLightbox(img.src); });
+  });
+
+  const batchBtn = document.getElementById('omCheckInBatchSend');
+  if (batchBtn) {
+    // Scoped to the supplier she is calling, not the whole queue.
+    batchBtn.addEventListener('click', () => openBatchSendPanel(checkInSupplier));
+  }
+
+  document.getElementById('omCheckInSupplier').addEventListener('change', (e) => {
+    checkInSupplier = e.target.value;
+    render();
+  });
+  document.querySelectorAll('[data-open-po]').forEach((el) =>
+    el.addEventListener('click', () => openDetailPanel(el.dataset.openPo, 'full')));
+
+  /* ---- Autosave ----
+   *
+   * Progress notes are append-only, so the hazard here is posting the same
+   * note twice: a blur fires when she tabs away, clicks elsewhere, or the
+   * table re-renders. Each row therefore tracks what it has already sent and
+   * refuses to send the same text again, and the box is cleared on success so
+   * there is nothing left to resend.
+   */
+  const noteInFlight = new Set();
+
+  const refreshProgress = () => {
+    const done = document.querySelectorAll('.om-checkin-done:checked').length;
+    const el = document.getElementById('omCheckInProgress');
+    if (el) el.textContent = i18t('checkInProgress', '{done} of {total} done today')
+      .replace('{done}', String(done)).replace('{total}', String(list.length));
+  };
+
+  const markDone = async (id, done) => {
+    try {
+      await api(`/api/order-management/orders/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ patch: { lastCheckedInAt: done ? new Date().toISOString() : null } })
+      });
+      const row = document.querySelector(`[data-checkin-row="${id}"]`);
+      if (row) row.classList.toggle('om-row-done', done);
+      const when = document.querySelector(`[data-done-when="${id}"]`);
+      if (when) when.textContent = done ? i18t('doneToday', 'Today') : '';
+      workQueueCache = null;
+      refreshProgress();
+    } catch (e) { showToast(e.message, true); }
+  };
+
+  const flash = (selector, text) => {
+    const el = document.querySelector(selector);
+    if (!el) return;
+    el.textContent = text;
+    el.classList.add('is-on');
+    setTimeout(() => { el.classList.remove('is-on'); el.textContent = ''; }, 2500);
+  };
+
+  document.querySelectorAll('.om-checkin-note').forEach((el) => {
+    const id = el.dataset.noteFor;
+    /* Enter saves, because on a call the note is almost always one line and
+     * reaching for the mouse to commit it is the slow part. Ctrl+Enter adds a
+     * line for the occasional longer note - the reverse of the usual pairing,
+     * but it matches which one she does fifty times a morning. */
+    el.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      if (e.ctrlKey || e.metaKey) return;      // let the newline through
+      e.preventDefault();
+      el.blur();                                // blur is what saves
+    });
+    el.addEventListener('blur', async () => {
+      const text = el.value.trim();
+      if (!text || noteInFlight.has(id)) return;
+      noteInFlight.add(id);
+      try {
+        await api(`/api/order-management/orders/${encodeURIComponent(id)}/progress-note`,
+          { method: 'POST', body: JSON.stringify({ text }) });
+        el.value = '';                    // nothing left to resend
+        flash(`[data-saved-for="${id}"]`, i18t('savedLabel', 'Saved'));
+        /* Writing an update IS covering the order, so tick it rather than
+         * asking her to do it twice. */
+        const doneBox = document.querySelector(`[data-done-for="${id}"]`);
+        if (doneBox && !doneBox.checked) { doneBox.checked = true; markDone(id, true); }
+        /* Refresh so the note appears under Last update, but only the cache -
+         * a full re-render here would steal focus from the next row she has
+         * already clicked into. */
+        workQueueCache = null;
+        const row = document.querySelector(`[data-checkin-row="${id}"] .om-checkin-lastcol`);
+        if (row) {
+          row.innerHTML = `<div class="om-sub">${escapeHtml(fmtDate(new Date().toISOString()))}</div>${escapeHtml(text)}`;
+        }
+      } catch (e) {
+        showToast(e.message, true);
+      } finally {
+        noteInFlight.delete(id);
+      }
+    });
+  });
+
+  /* Keep the chip, the clear button and the hidden input in step. */
+  window.paintDateChip = (id, value) => {
+    const text = document.querySelector(`[data-chip-for="${id}"]`);
+    if (text) text.textContent = value ? shortDate(value) : i18t('noDueDate', 'No date');
+    const chip = text && text.closest('.om-datechip');
+    if (chip) chip.classList.toggle('is-set', !!value);
+    const clear = document.querySelector(`[data-fu-clear="${id}"]`);
+    if (clear) clear.classList.toggle('is-hidden', !value);
+  };
+
+  document.querySelectorAll('[data-fu-clear]').forEach((el) => {
+    el.addEventListener('click', async () => {
+      const id = el.dataset.fuClear;
+      const input = document.querySelector(`[data-fu-for="${id}"]`);
+      if (input) input.value = '';
+      try {
+        await api(`/api/order-management/orders/${encodeURIComponent(id)}`,
+          { method: 'PATCH', body: JSON.stringify({ patch: { followUpDate: null } }) });
+        paintDateChip(id, '');
+        flash(`[data-saved-fu="${id}"]`, i18t('savedLabel', 'Saved'));
+        workQueueCache = null;
+      } catch (e) { showToast(e.message, true); }
+    });
+  });
+
+  document.querySelectorAll('.om-checkin-done').forEach((el) => {
+    el.addEventListener('change', () => markDone(el.dataset.doneFor, el.checked));
+  });
+
+  document.querySelectorAll('[data-schedule-qa]').forEach((el) => {
+    el.addEventListener('click', () => openDetailPanel(el.dataset.scheduleQa, 'full', { scrollTo: 'qa' }));
+  });
+
+  bindRowClickToOpen();
+  refreshProgress();
+  makeDateFieldsClickable(root);
+
+  document.querySelectorAll('.om-checkin-fu').forEach((el) => {
+    const id = el.dataset.fuFor;
+    const original = el.value;
+    el.addEventListener('change', async () => {
+      if (el.value === original) return;
+      try {
+        await api(`/api/order-management/orders/${encodeURIComponent(id)}`,
+          { method: 'PATCH', body: JSON.stringify({ patch: { followUpDate: el.value || null } }) });
+        flash(`[data-saved-fu="${id}"]`, i18t('savedLabel', 'Saved'));
+        paintDateChip(id, el.value);
+        workQueueCache = null;
+      } catch (e) {
+        showToast(e.message, true);
+        el.value = original;
+      }
+    });
+  });
+}
+
+/* ---- QA Scheduling: driven by the sample dates ----
+ *
+ * The same buttons as the QA/QC block inside a PO, inline on the row. Opening
+ * a PO just to press "Setup Report Link" was the whole friction: this view
+ * exists to schedule, so the scheduling controls have to be here.
+ */
+function qaRowActionsHtml(r, stage) {
+  const st = (r.qaStages || {})[stage] || {};
+  const mode = stage === 'preProduction' ? 'pre_production' : 'production';
+  const url = `${location.origin}/reporting.html?mode=${mode}&po=${r.poNumber}`;
+  return `
+    <div class="om-row-actions">
+      ${st.isSetUp ? `
+        <button type="button" class="om-table-upload-btn om-copy-link-btn" data-copy-url="${escapeHtml(url)}">${escapeHtml(i18t('btnCopyReportLink', 'Copy Report Link'))}</button>
+        ${st.status === 'Pending' ? `<button type="button" class="om-table-upload-btn om-setup-link-btn" data-setup-stage="${stage}" data-setup-order="${escapeHtml(r.id)}">${escapeHtml(i18t('btnEditReportSetup', 'Edit questions'))} (${st.extras || 0})</button>` : ''}
+      ` : `
+        <button type="button" class="om-table-upload-btn om-setup-link-btn" data-setup-stage="${stage}" data-setup-order="${escapeHtml(r.id)}">${escapeHtml(i18t('btnSetupReportLink', 'Setup Report Link'))}</button>
+      `}
+      ${stage === 'preProduction' ? `
+        <button type="button" class="om-table-upload-btn om-skip-stage-btn" data-po="${escapeHtml(r.poNumber)}">${escapeHtml(i18t('btnSkipStage', 'Skip'))}</button>` : ''}
+      ${st.pdfUrl ? `<a class="om-table-upload-btn" href="${escapeHtml(st.pdfUrl)}" target="_blank" rel="noopener">${escapeHtml(i18t('btnDownloadReportPdf', 'Report PDF'))}</a>` : ''}
+      <button type="button" class="om-table-upload-btn" data-open-po="${escapeHtml(r.id)}">${escapeHtml(i18t('openLabel', 'Open'))}</button>
+    </div>
+  `;
+}
+
+async function renderQaSchedulingView(root) {
+  root.innerHTML = `${workViewTabsHtml()}<div class="om-empty">${i18('emptyLoading', 'Loading...')}</div>`;
+  bindWorkViewTabs();
+  let rows;
+  try { rows = await loadWorkQueue(); }
+  catch (e) { root.innerHTML = workViewTabsHtml() + `<div class="om-empty">${escapeHtml(e.message)}</div>`; bindWorkViewTabs(); return; }
+
+  const qaRows = rows.filter((r) => ['qaSetupDue', 'qaUpcoming', 'qaReportPending'].includes(r.action.kind));
+  const buckets = [
+    ['qaSetupDue', i18t('qaBucketDue', 'Sample ready, no report link yet'), i18t('qaBucketDueHelp', 'These are the ones that slip. The sample date has arrived and nothing has been scheduled.')],
+    ['qaReportPending', i18t('qaBucketPending', 'Inspection booked, report not in'), i18t('qaBucketPendingHelp', 'A link has been sent. Waiting on the QA team to submit.')],
+    ['qaUpcoming', i18t('qaBucketUpcoming', 'Coming up'), i18t('qaBucketUpcomingHelp', 'Sample dates ahead. Schedule before they arrive.')]
+  ];
+
+  root.innerHTML = `
+    ${workViewTabsHtml()}
+    ${buckets.map(([kind, title, help]) => {
+      const list = qaRows.filter((r) => r.action.kind === kind).sort(byUrgency);
+      return `
+        <div class="card">
+          <div class="section-title">${escapeHtml(title)} <span class="om-count">${list.length}</span></div>
+          <div class="section-help">${escapeHtml(help)}</div>
+          ${list.length ? `
+            <div class="om-table-wrap"><table class="om-table">
+              <thead><tr>
+                <th>${escapeHtml(i18t('thPoNumber', 'PO Number'))}</th><th>${escapeHtml(i18t('thProduct', 'Product'))}</th>
+                <th>${escapeHtml(i18t('thSupplier', 'Supplier'))}</th><th>${escapeHtml(i18t('thStage', 'Stage'))}</th>
+                <th>${escapeHtml(i18t('thSampleDate', 'Sample date'))}</th><th>${escapeHtml(i18t('thActions', 'Actions'))}</th>
+              </tr></thead>
+              <tbody>${list.map((r) => {
+                const stage = r.action.stage || 'preProduction';
+                return `
+                  <tr>
+                    <td><button type="button" class="om-linklike" data-open-po="${escapeHtml(r.id)}">${escapeHtml(r.poNumber)}</button></td>
+                    <td>${escapeHtml(r.productName || '')}<div class="om-sub">${escapeHtml(r.sku || '')}</div></td>
+                    <td>${escapeHtml(r.supplierName || '')}</td>
+                    <td>${escapeHtml(stage === 'bulk' ? i18t('stageBulk', 'Bulk') : i18t('stagePreProduction', 'Pre-Production'))}</td>
+                    <td>${dueBadge(r.action)}</td>
+                    <td>${qaRowActionsHtml(r, stage)}</td>
+                  </tr>`;
+              }).join('')}</tbody>
+            </table></div>
+          ` : `<div class="om-empty">${escapeHtml(i18t('emptyNothingHere', 'Nothing here.'))}</div>`}
+        </div>
+      `;
+    }).join('')}
+  `;
+  bindWorkViewTabs();
+  bindWorkRowActions();
+  makeDateFieldsClickable(root);
+}
+
+/* ---- PD Approval: who is it waiting on ---- */
+/* The three approval stages as compact pills. Showing where each stands means
+ * the Action column no longer has to spell it out - "Bulk approval was
+ * rejected" is redundant next to a Bulk pill reading Rejected. */
+const APPROVAL_STAGE_LABELS = [
+  ['sample', 'stageGolden', 'Golden'],
+  ['preProduction', 'stagePp', 'PP'],
+  ['bulk', 'stageBulkShort', 'Bulk']
+];
+
+const APPROVAL_STATE = {
+  notStarted: ['approvalNotStarted', 'Not started', 'is-none'],
+  waitingOnProductDev: ['approvalWaiting', 'With PD', 'is-waiting'],
+  approved: ['approvalApproved', 'Approved', 'is-ok'],
+  approvedWithIssues: ['approvalApprovedIssues', 'Approved*', 'is-ok'],
+  notApproved: ['approvalRejected', 'Rejected', 'is-bad'],
+  notApplicable: ['approvalSkipped', 'Skipped', 'is-none']
+};
+
+function approvalStagesHtml(stages) {
+  const st = stages || {};
+  return `<div class="om-stage-pills">${APPROVAL_STAGE_LABELS.map(([key, lk, lf]) => {
+    const [textKey, fallback, cls] = APPROVAL_STATE[st[key]] || APPROVAL_STATE.notStarted;
+    return `<span class="om-stage-pill ${cls}">
+      <em>${escapeHtml(i18t(lk, lf))}</em> ${escapeHtml(i18t(textKey, fallback))}
+    </span>`;
+  }).join('')}</div>`;
+}
+
+/* With the stage pills present, the action only needs to say what to DO. */
+function shortActionLabel(action) {
+  const map = {
+    pdNeedsStart: i18t('actionSubmitForApproval', 'Submit for approval'),
+    pdReview: i18t('actionAwaitingPd', 'Awaiting decision'),
+    pdReply: i18t('actionRespond', 'Respond to PD')
+  };
+  return map[action.kind] || action.label || '';
+}
+
+async function renderPdApprovalView(root) {
+  root.innerHTML = `${workViewTabsHtml()}<div class="om-empty">${i18('emptyLoading', 'Loading...')}</div>`;
+  bindWorkViewTabs();
+  let rows;
+  try { rows = await loadWorkQueue(); }
+  catch (e) { root.innerHTML = workViewTabsHtml() + `<div class="om-empty">${escapeHtml(e.message)}</div>`; bindWorkViewTabs(); return; }
+
+  const pdRows = rows.filter((r) => ['pdNeedsStart', 'pdReview', 'pdReply'].includes(r.action.kind));
+  const groups = [
+    ['pdNeedsStart', i18t('pdNeedsStart2', 'To Submit'),
+      i18t('pdNeedsStartHelp', 'Nothing has been submitted yet. A new PO needs its approved sample images; a finished inspection needs submitting for approval. These sit in no other queue.')],
+    ['pdReply', i18t('pdWaitingOnYou2', 'Waiting on Juniper China'),
+      i18t('pdWaitingOnYouHelp', 'Product Development has asked for changes. Nothing moves until you reply.')],
+    ['pdReview', i18t('pdWaitingOnPd', 'Waiting on Product Development'),
+      i18t('pdWaitingOnPdHelp', 'Submitted and sitting with PD. Chase anything that has been here too long.')]
+  ];
+
+  root.innerHTML = `
+    ${workViewTabsHtml()}
+    ${groups.map(([kind, title, help]) => {
+      const list = pdRows.filter((r) => r.action.kind === kind);
+      return `
+        <div class="card">
+          <div class="section-title">${escapeHtml(title)} <span class="om-count">${list.length}</span></div>
+          <div class="section-help">${escapeHtml(help)}</div>
+          ${list.length ? `
+            <div class="om-table-wrap"><table class="om-table">
+              <thead><tr>
+                <th>${escapeHtml(i18t('thPoNumber', 'PO Number'))}</th><th>${escapeHtml(i18t('thProduct', 'Product'))}</th>
+                ${/* Supplier dropped: it is not what these rows are worked by,
+                     and the space is better spent on the approval stages. */ ''}
+                <th>${escapeHtml(i18t('thApprovals', 'Approvals'))}</th>
+                <th>${escapeHtml(i18t('thAction', 'Next'))}</th>
+                <th>${escapeHtml(i18t('thActions', 'Actions'))}</th>
+              </tr></thead>
+              <tbody>${list.map((r) => `
+                ${/* The whole row opens the PO, so there is no separate Open
+                      button competing with the real actions. */ ''}
+                <tr class="om-row-clickable" data-row-po="${escapeHtml(r.id)}">
+                  <td><strong>${escapeHtml(r.poNumber)}</strong></td>
+                  <td>${escapeHtml(r.productName || '')}<div class="om-sub">${escapeHtml(r.sku || '')}</div></td>
+                  <td>${approvalStagesHtml(r.approvalStages)}</td>
+                  <td>${escapeHtml(shortActionLabel(r.action))}${r.revisedSummary ? `<div class="om-sub">${escapeHtml(r.revisedSummary)}</div>` : ''}</td>
+                  <td>
+                    <div class="om-row-actions">
+                      ${/* Straight into the approval page for this PO - the whole
+                           point is not having to open the PO first. */ ''}
+                      <a class="om-table-upload-btn om-row-btn-lg" href="/approval.html?po=${encodeURIComponent(r.id)}" target="_blank" rel="noopener">${escapeHtml(i18t('btnOpenApproval', 'Open approval'))}</a>
+                      <button type="button" class="om-table-upload-btn om-row-btn-lg om-copy-link-btn" data-copy-url="${escapeHtml(location.origin + '/approval.html?po=' + encodeURIComponent(r.id))}">${escapeHtml(i18t('btnShareAccess', 'Share'))}</button>
+                    </div>
+                  </td>
+                </tr>`).join('')}</tbody>
+            </table></div>
+          ` : `<div class="om-empty">${escapeHtml(i18t('emptyNothingHere', 'Nothing here.'))}</div>`}
+        </div>
+      `;
+    }).join('')}
+  `;
+  bindWorkViewTabs();
+  bindWorkRowActions();
+  makeDateFieldsClickable(root);
+}
+
+/** Shared row-level handlers for the QA and PD views. */
+/* Clicking a row opens the PO. Clicks that land on a control are ignored -
+ * otherwise ticking Done, picking a date or typing an update would all yank
+ * the panel open over the top of what she is doing. */
+function bindRowClickToOpen() {
+  document.querySelectorAll('.om-row-clickable').forEach((row) => {
+    if (row.dataset.rowBound) return;
+    row.dataset.rowBound = '1';
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('button, a, input, textarea, select, label')) return;
+      if (window.getSelection && String(window.getSelection())) return;  // text being selected
+      openDetailPanel(row.dataset.rowPo, 'full');
+    });
+  });
+}
+
+function bindWorkRowActions() {
+  document.querySelectorAll('[data-open-po]').forEach((el) =>
+    el.addEventListener('click', () => openDetailPanel(el.dataset.openPo, 'full')));
+  bindRowClickToOpen();
+
+  document.querySelectorAll('.om-copy-link-btn').forEach((el) =>
+    el.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(el.dataset.copyUrl);
+        showToast(i18t('toastLinkCopied', 'Link copied'));
+      } catch (e) { showToast(i18t('toastCopyFailed', 'Could not copy the link'), true); }
+    }));
+
+  document.querySelectorAll('.om-setup-link-btn[data-setup-order]').forEach((el) =>
+    el.addEventListener('click', async () => {
+      /* Same dialog as the PO panel. It needs the full order, which the work
+       * queue deliberately does not carry, so fetch it on demand. */
+      try {
+        const data = await api(`/api/order-management/orders/${encodeURIComponent(el.dataset.setupOrder)}`);
+        openQaSetupDialog(data.order, el.dataset.setupStage, () => { workQueueCache = null; render(); });
+      } catch (e) { showToast(e.message, true); }
+    }));
 }

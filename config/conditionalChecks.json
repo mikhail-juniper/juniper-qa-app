@@ -1,5 +1,5 @@
 {
-  "_readme": "Conditional checks offered at PO setup, per top-level product category.\n\nChloe ticks the ones that apply when she sets up the report link in Order Management. The chosen triggers are stored on the PO under qaReports.<stage>.setup, and every question belonging to a ticked trigger is added to an 'Additional Review' section at the bottom of Step 5 of the QA report.\n\nmedia: 'on_fail' = photo or video required only when the answer is Fail. 'photo_always' / 'video_always' = required whatever the answer, because the evidence IS the check.\n\nEvery question is answered Pass / Fail with no N/A - a trigger is only ticked when the feature is actually present - and a Fail always requires the quantity affected.\n\nThis file is required directly from the repo (like categories.json), so edits here deploy normally.",
+  "_readme": "Conditional checks offered at PO setup, per top-level product category.\n\nChloe ticks the ones that apply when she sets up the report link in Order Management. The chosen triggers are stored on the PO under qaReports.<stage>.setup, and every question belonging to a ticked trigger is added to an 'Additional Review' section at the bottom of Step 5 of the QA report.\n\nmedia: 'on_fail' = photo or video required only when the answer is Fail. 'photo_always' / 'video_always' = required whatever the answer, because the evidence IS the check.\n\nEvery question is answered Pass / Fail with no N/A - a trigger is only ticked when the feature is actually present - and a Fail always requires the quantity affected.\n\nThis file is required directly from the repo (like categories.json), so edits here deploy normally. Each question carries severity: critical - the QA team classed every conditional check as critical, since these cover functional features (sound, magnets, glow) where any failing unit is a safety or usability problem.",
   "answerFormat": "passFail",
   "byCategory": {
     "apparel": [
@@ -12,7 +12,8 @@
             "key": "gitd_works",
             "text_en": "Confirm the glow-in-the-dark effect works as expected",
             "text_zh": "确认夜光效果正常",
-            "media": "photo_always"
+            "media": "photo_always",
+            "severity": "critical"
           }
         ]
       },
@@ -25,7 +26,8 @@
             "key": "cc_works",
             "text_en": "Confirm the colour-changing effect works as expected",
             "text_zh": "确认变色效果正常",
-            "media": "video_always"
+            "media": "video_always",
+            "severity": "critical"
           }
         ]
       }
@@ -40,7 +42,8 @@
             "key": "sound_works",
             "text_en": "Confirm the sound module powers on and plays as expected",
             "text_zh": "确认发声器可正常开启并播放",
-            "media": "video_always"
+            "media": "video_always",
+            "severity": "critical"
           }
         ]
       },
@@ -53,19 +56,22 @@
             "key": "mag_present",
             "text_en": "Confirm the magnet is present and in the correct position",
             "text_zh": "确认磁铁存在且位置正确",
-            "media": "on_fail"
+            "media": "on_fail",
+            "severity": "critical"
           },
           {
             "key": "mag_secure",
             "text_en": "Confirm the magnet stays securely in place",
             "text_zh": "确认磁铁牢固不脱落",
-            "media": "on_fail"
+            "media": "on_fail",
+            "severity": "critical"
           },
           {
             "key": "mag_strength",
             "text_en": "Confirm the magnetic connection is strong and holds properly",
             "text_zh": "确认磁吸连接牢固有效",
-            "media": "on_fail"
+            "media": "on_fail",
+            "severity": "critical"
           }
         ]
       },
@@ -78,13 +84,15 @@
             "key": "acc_included",
             "text_en": "Confirm the correct accessories are included",
             "text_zh": "确认配件齐全且正确",
-            "media": "on_fail"
+            "media": "on_fail",
+            "severity": "critical"
           },
           {
             "key": "acc_attached",
             "text_en": "Confirm accessories are securely attached and correctly positioned",
             "text_zh": "确认配件牢固且位置正确",
-            "media": "on_fail"
+            "media": "on_fail",
+            "severity": "critical"
           }
         ]
       },
@@ -97,7 +105,8 @@
             "key": "gitd_works",
             "text_en": "Confirm the glow-in-the-dark effect works as expected",
             "text_zh": "确认夜光效果正常",
-            "media": "photo_always"
+            "media": "photo_always",
+            "severity": "critical"
           }
         ]
       },
@@ -110,7 +119,8 @@
             "key": "otherfn_works",
             "text_en": "Confirm the function works as expected",
             "text_zh": "确认功能正常",
-            "media": "video_always"
+            "media": "video_always",
+            "severity": "critical"
           }
         ]
       }
@@ -125,7 +135,8 @@
             "key": "gitd_works",
             "text_en": "Confirm the glow-in-the-dark effect works as expected",
             "text_zh": "确认夜光效果正常",
-            "media": "photo_always"
+            "media": "photo_always",
+            "severity": "critical"
           }
         ]
       },
@@ -138,19 +149,22 @@
             "key": "mag_present",
             "text_en": "Confirm the magnet is present and in the correct position",
             "text_zh": "确认磁铁存在且位置正确",
-            "media": "on_fail"
+            "media": "on_fail",
+            "severity": "critical"
           },
           {
             "key": "mag_secure",
             "text_en": "Confirm the magnet stays securely in place",
             "text_zh": "确认磁铁牢固不脱落",
-            "media": "on_fail"
+            "media": "on_fail",
+            "severity": "critical"
           },
           {
             "key": "mag_strength",
             "text_en": "Confirm the magnetic connection is strong and holds properly",
             "text_zh": "确认磁吸连接牢固有效",
-            "media": "on_fail"
+            "media": "on_fail",
+            "severity": "critical"
           }
         ]
       },
@@ -163,13 +177,15 @@
             "key": "acc_included",
             "text_en": "Confirm the correct accessories are included",
             "text_zh": "确认配件齐全且正确",
-            "media": "on_fail"
+            "media": "on_fail",
+            "severity": "critical"
           },
           {
             "key": "acc_attached",
             "text_en": "Confirm accessories are securely attached and correctly positioned",
             "text_zh": "确认配件牢固且位置正确",
-            "media": "on_fail"
+            "media": "on_fail",
+            "severity": "critical"
           }
         ]
       }
@@ -184,7 +200,8 @@
             "key": "gitd_works",
             "text_en": "Confirm the glow-in-the-dark effect works as expected",
             "text_zh": "确认夜光效果正常",
-            "media": "photo_always"
+            "media": "photo_always",
+            "severity": "critical"
           }
         ]
       }
@@ -199,7 +216,8 @@
             "key": "gitd_works",
             "text_en": "Confirm the glow-in-the-dark effect works as expected",
             "text_zh": "确认夜光效果正常",
-            "media": "photo_always"
+            "media": "photo_always",
+            "severity": "critical"
           }
         ]
       }
@@ -214,7 +232,8 @@
             "key": "gitd_works",
             "text_en": "Confirm the glow-in-the-dark effect works as expected",
             "text_zh": "确认夜光效果正常",
-            "media": "photo_always"
+            "media": "photo_always",
+            "severity": "critical"
           }
         ]
       },
@@ -227,7 +246,8 @@
             "key": "otherfn_works",
             "text_en": "Confirm the function works as expected",
             "text_zh": "确认功能正常",
-            "media": "video_always"
+            "media": "video_always",
+            "severity": "critical"
           }
         ]
       }

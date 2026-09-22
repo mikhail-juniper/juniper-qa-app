@@ -50,6 +50,7 @@ const approvalState = {
   approval: null,
   priorSampleApproval: null,
   reportingHistory: null,
+  revisedReports: null,
   // working fields
   factoryCode: '', qaLead: '', productRisk: 'medium',
   fit: '', sizeRows: [], customSizeRows: [], customPoints: [], _fitForRows: null, chinaApprovalStatus: '', sampledSize: '',
@@ -411,6 +412,7 @@ async function loadApprovalForPo(poNumber) {
     }
   }
   approvalState.reportingHistory = data.reportingHistory;
+  approvalState.revisedReports = data.revisedReports || [];
   approvalState.stage = determineCurrentStage(data.approval);
 
   // Pre-fill the Sample-stage setup from what the Order Management
@@ -578,7 +580,7 @@ function renderStageNotesCard(stage, stageData) {
           <span class="prior-issue-desc" style="font-weight:700;">${escapeHtml(submitter)} ${escapeHtml(bi('submittedVerb').en)}<span class="zh">${escapeHtml(submitter)} ${escapeHtml(bi('submittedVerb').zh)}</span></span>
         </div>
         ${notes && notes.trim() ? `<div class="prior-issue-desc" style="margin-top:4px;">${escapeHtml(notes)}</div>` : ''}
-        ${(stageData.data.photos && stageData.data.photos.notesPhotos || []).map((u) => `<img src="${escapeHtml(u)}" class="prior-issue-photo js-lightbox" data-photo-target="${escapeHtml(u)}" />`).join('')}
+        ${(stageData.data.photos && stageData.data.photos.notesPhotos || []).map((u) => `<img src="${escapeHtml(approvalPhotoSrc(u))}" class="prior-issue-photo js-lightbox" data-photo-target="${escapeHtml(u)}" />`).join('')}
       </div>
     `;
   }
@@ -591,7 +593,7 @@ function renderStageNotesCard(stage, stageData) {
         <span class="prior-issue-desc" style="font-weight:700;">${escapeHtml(bi(approvalStatusLabelKey(status)).en)}<span class="zh">${escapeHtml(bi(approvalStatusLabelKey(status)).zh)}</span></span>
       </div>
       ${notes && notes.trim() ? `<div class="prior-issue-desc" style="margin-top:4px;">${escapeHtml(notes)}</div>` : ''}
-      ${(stageData.data.photos && stageData.data.photos.notesPhotos || []).map((u) => `<img src="${escapeHtml(u)}" class="prior-issue-photo js-lightbox" data-photo-target="${escapeHtml(u)}" />`).join('')}
+      ${(stageData.data.photos && stageData.data.photos.notesPhotos || []).map((u) => `<img src="${escapeHtml(approvalPhotoSrc(u))}" class="prior-issue-photo js-lightbox" data-photo-target="${escapeHtml(u)}" />`).join('')}
     </div>
   `;
 }
@@ -636,9 +638,58 @@ function renderLinkedReportCard(r, stage) {
       </div>
       ${spotCheckPct !== null ? `<div class="section-help">${escapeHtml(bi('spotCheckPercentLabel').en)} ${escapeHtml(bi('spotCheckPercentLabel').zh)}: <strong>${spotCheckPct}%</strong> (${r.actualUnitsChecked} / ${r.poQuantity})</div>` : ''}
       ${issuesHtml}
+      ${revisedReportsHtml(r)}
       <a href="/submissions/${encodeURIComponent(r.pdfFilename)}" target="_blank" rel="noopener" class="btn btn-secondary" style="display:block; text-decoration:none; text-align:center; margin-top:8px; max-width:220px;">${biBlockHtml('downloadFullReport', 'Download Full Report')}</a>
     </div>
   `;
+}
+
+/**
+ * Follow-up repairs against this inspection.
+ *
+ * A failing inspection that was later put right still displayed as a bare
+ * FAIL here, which is what Product Development was approving against. The
+ * repair is part of the story and belongs on the same card.
+ */
+function revisedReportsHtml(report) {
+  const qaType = report.qaType;
+  const revs = (approvalState.revisedReports || []).filter((r) => !r.qaType || r.qaType === qaType);
+  if (!revs.length) return '';
+
+  return revs.map((rev, idx) => {
+    const fixed = (rev.issues || []).reduce((n, i) => n + (parseInt(i.unitsFixed, 10) || 0), 0);
+    const flagged = (rev.issues || []).reduce((n, i) => n + (parseInt(i.unitsAffected, 10) || 0), 0);
+    const cleared = flagged > 0 && fixed >= flagged;
+    return `
+      <div class="defect-card ${cleared ? 'report-pass' : 'report-fail'}" style="margin-top:10px;">
+        <div class="section-photos-label">
+          ${escapeHtml(bi('revisedReportTitle', 'Revised Unit Report').en)} ${escapeHtml(bi('revisedReportTitle', 'Revised Unit Report').zh || '')}
+          ${revs.length > 1 ? ` #${idx + 1}` : ''}
+        </div>
+        <div class="section-help">
+          ${escapeHtml((rev.submittedAt || '').slice(0, 10))}
+          ${rev.qaLead ? ` &middot; ${escapeHtml(rev.qaLead)}` : ''} &middot;
+          <strong style="color:${cleared ? 'var(--jc-teal-dark)' : 'var(--jc-fail)'}">
+            ${fixed} / ${flagged} ${escapeHtml(bi('unitsRepairedLabel', 'units repaired').en)}
+          </strong>
+        </div>
+        ${(rev.issues || []).map((iss) => `
+          <div class="prior-issue">
+            <div class="prior-issue-desc">${escapeHtml(iss.description || '')}</div>
+            <div class="section-help">
+              ${escapeHtml(bi('unitsRepairedLabel', 'units repaired').en)}: ${iss.unitsFixed || 0} / ${iss.unitsAffected || 0}
+            </div>
+            ${iss.comment ? `<div class="section-help">${escapeHtml(iss.comment)}</div>` : ''}
+            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
+              ${(iss.photos || []).map((f) => f && f.url
+                ? `<img src="${escapeHtml(approvalPhotoSrc(f.url))}" class="prior-issue-photo js-lightbox" data-photo-target="${escapeHtml(f.url)}" />`
+                : '').join('')}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }).join('');
 }
 
 function renderLinkedReportForStage(stage) {
@@ -670,7 +721,7 @@ function renderCommentCard(c, stage) {
       ${c.text ? `<div class="prior-issue-desc" style="margin-top:4px;">${escapeHtml(c.text)}</div>` : `<div class="prior-issue-desc" style="margin-top:4px; font-style:italic; color:var(--jc-muted);">${escapeHtml(bi('noCommentTextProvided').en)}<span class="zh">${escapeHtml(bi('noCommentTextProvided').zh)}</span></div>`}
       ${c.reference ? renderCommentReferenceAttachment(c.reference) : ''}
       <div class="section-help">${escapeHtml(c.author)} · ${new Date(c.timestamp).toLocaleString()}</div>
-      ${(c.photos || []).map((url) => `<img src="${escapeHtml(url)}" class="prior-issue-photo js-lightbox" data-photo-target="${escapeHtml(url)}" />`).join('')}
+      ${(c.photos || []).map((url) => `<img src="${escapeHtml(approvalPhotoSrc(url))}" class="prior-issue-photo js-lightbox" data-photo-target="${escapeHtml(url)}" />`).join('')}
     </div>
   `;
 }
@@ -1153,7 +1204,7 @@ function renderGenericSlotComparison(columns, slotKeys) {
         ${columns.map((col) => `
           <div class="photo-compare-col">
             <div class="photo-compare-col-label">${escapeHtml(col.label.en)} ${escapeHtml(col.label.zh)} · ${escapeHtml(label.en)} ${escapeHtml(label.zh)}</div>
-            ${(col.photos[slotKey] || []).map((u) => `<div class="photo-compare-col-frame"><img src="${escapeHtml(u)}" class="js-lightbox" data-photo-target="${escapeHtml(u)}" /></div>`).join('') || `<div class="section-help">${escapeHtml(bi('noPhotosYet').en)}<span class="zh">${escapeHtml(bi('noPhotosYet').zh)}</span></div>`}
+            ${(col.photos[slotKey] || []).map((u) => `<div class="photo-compare-col-frame"><img src="${escapeHtml(approvalPhotoSrc(u))}" class="js-lightbox" data-photo-target="${escapeHtml(u)}" /></div>`).join('') || `<div class="section-help">${escapeHtml(bi('noPhotosYet').en)}<span class="zh">${escapeHtml(bi('noPhotosYet').zh)}</span></div>`}
           </div>
         `).join('')}
       </div>
@@ -1187,7 +1238,7 @@ function renderPhotoComparisonLarge(columns, category, sizesIncluded, sampledSiz
                 return `
                   <div class="photo-compare-col">
                     <div class="photo-compare-col-label">${escapeHtml(col.label.en)} · ${escapeHtml(catLabel(slot))}</div>
-                    ${urls.length ? urls.map((u) => `<div class="photo-compare-col-frame"><img src="${escapeHtml(u)}" class="js-lightbox" data-photo-target="${escapeHtml(u)}" /></div>`).join('') : `<div class="section-help">${escapeHtml(bi('noPhotosYet').en)}<span class="zh">${escapeHtml(bi('noPhotosYet').zh)}</span></div>`}
+                    ${urls.length ? urls.map((u) => `<div class="photo-compare-col-frame"><img src="${escapeHtml(approvalPhotoSrc(u))}" class="js-lightbox" data-photo-target="${escapeHtml(u)}" /></div>`).join('') : `<div class="section-help">${escapeHtml(bi('noPhotosYet').en)}<span class="zh">${escapeHtml(bi('noPhotosYet').zh)}</span></div>`}
                   </div>
                 `;
               }
@@ -1195,7 +1246,7 @@ function renderPhotoComparisonLarge(columns, category, sizesIncluded, sampledSiz
               return `
                 <div class="photo-compare-col">
                   <div class="photo-compare-col-label">${escapeHtml(col.label.en)} · ${escapeHtml(catLabel(slot))}</div>
-                  ${urls.length ? urls.map((u) => `<div class="photo-compare-col-frame"><img src="${escapeHtml(u)}" class="js-lightbox" data-photo-target="${escapeHtml(u)}" /></div>`).join('') : `<div class="section-help">${escapeHtml(bi('noPhotosYet').en)}<span class="zh">${escapeHtml(bi('noPhotosYet').zh)}</span></div>`}
+                  ${urls.length ? urls.map((u) => `<div class="photo-compare-col-frame"><img src="${escapeHtml(approvalPhotoSrc(u))}" class="js-lightbox" data-photo-target="${escapeHtml(u)}" /></div>`).join('') : `<div class="section-help">${escapeHtml(bi('noPhotosYet').en)}<span class="zh">${escapeHtml(bi('noPhotosYet').zh)}</span></div>`}
                 </div>
               `;
             }).join('')}
@@ -1535,6 +1586,37 @@ function displaySizeName(name) {
   return String(name || '').replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim() || String(name || '');
 }
 
+/**
+ * What to put in an <img> for a stored approval photo.
+ *
+ * The stored URL is always the ORIGINAL file, because PD approval is the
+ * reference for the whole order and needs full resolution. But a
+ * manufacturing drawing or tag artwork is often a PDF or AI file, which no
+ * browser will render in an <img> - those slots showed a broken icon.
+ *
+ * So: display through the server's rasteriser when the file is not an image,
+ * and straight from the original when it is. Storage is unaffected either way.
+ */
+function approvalPhotoSrc(url) {
+  const u = String(url || '');
+  if (!u) return u;
+  if (/\.(png|jpe?g|gif|webp|bmp)(\?|$)/i.test(u)) return u;
+
+  const marker = '/order-management-files/';
+  const at = u.indexOf(marker);
+  const orderId = approvalState.po && approvalState.po.id;
+  if (at !== -1 && orderId) {
+    const parts = u.slice(at + marker.length).split('/');
+    const storedName = decodeURIComponent(parts[parts.length - 1] || '');
+    if (storedName) {
+      // Wide enough to judge artwork by, unlike the 320px picker thumbnail.
+      return `/api/order-management/orders/${encodeURIComponent(orderId)}/thumb`
+        + `?file=${encodeURIComponent(storedName)}&w=1600`;
+    }
+  }
+  return u;
+}
+
 function renderApprovalCustomSizeChart() {
   if (isSimplifiedCustomSizing(approvalState.po.subcategory)) {
     return `
@@ -1684,9 +1766,26 @@ function openImportedPicker(slotKey) {
     if (!approvalState.photos[slotKey]) approvalState.photos[slotKey] = [];
     [...chosen].forEach((i) => {
       const img = images[i];
+      /* Carry the ORIGINAL file, not a thumbnail.
+       *
+       * PD approval is the reference for the whole order, so it needs the
+       * full-resolution image - a 320px rasterised preview is fine for a
+       * supplier-facing reference and useless for approving a sample.
+       *
+       * Carrying the thumbnail URL also broke insertion outright: the server
+       * whitelists carried URLs to /approval-photos/... and
+       * /order-management-files/<id>/<file>, and a /api/.../thumb?file=... URL
+       * matches neither, so every inserted image was silently dropped.
+       *
+       * Files that cannot render in an <img> (PDF, AI) are handled at display
+       * time instead - see approvalPhotoSrc. */
       const already = approvalState.photos[slotKey].some((f) => f && f._carriedUrl === img.url);
       if (!already) {
-        approvalState.photos[slotKey].push({ _url: img.url, _carriedUrl: img.url, name: img.name || 'imported.jpg' });
+        approvalState.photos[slotKey].push({
+          _url: img.thumbUrl || img.url,   // what the slot shows
+          _carriedUrl: img.url,            // what is stored, at full resolution
+          name: img.name || 'imported.jpg'
+        });
       }
     });
     close();

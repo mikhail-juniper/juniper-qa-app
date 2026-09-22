@@ -1379,3 +1379,28 @@ td.reference-selectable { outline-offset: -2px; }
   border-radius: var(--radius-sm); overflow: hidden; background: #fff;
 }
 .q-reference-frame img { width: 100%; height: 100%; object-fit: cover; cursor: zoom-in; display: block; }
+
+/* Completed-report gate: three equal buttons. The secondary pair used plain
+   white, which read as text blocks rather than controls - a tinted fill with a
+   real border makes them look pressable without competing with the primary. */
+.gate-btn {
+  width: 100%;
+  padding: 12px 18px;
+  text-align: center;
+  text-decoration: none;
+  font-size: 14px;
+}
+.btn-alt {
+  background: var(--jc-mint-light);
+  border: 1px solid var(--jc-teal);
+  color: var(--jc-teal-dark);
+  font-weight: 700;
+}
+.btn-alt:hover { background: #d7f0e6; }
+
+/* Repair evidence stays visible once a tile is confirmed. */
+.revised-confirmed-row { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+.revised-confirmed-badge {
+  background: var(--jc-teal); color: #fff; font-weight: 700; font-size: 12.5px;
+  padding: 6px 14px; border-radius: var(--radius-sm);
+}

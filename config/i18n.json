@@ -827,10 +827,6 @@
     "en": "Other / Custom Sizing",
     "zh": "其他 / 自定义尺寸"
   },
-  "resultReasonAllRejected": {
-    "en": "Every unit checked was rejected",
-    "zh": "所检查的产品全部被判定为不合格"
-  },
   "actualCount": {
     "en": "Units Actually Checked",
     "zh": "实际检查件数"
@@ -4794,5 +4790,473 @@
   "twoTotalsHelp": {
     "en": "As inspected is the result at the time of inspection. After repairs reflects Revised Unit Reports confirming defective units were fixed.",
     "zh": "“检验当时”为检验时的结果；“修复后”已计入返修确认报告中已修复的产品。"
+  },
+  "disposition_factory_pp": {
+    "en": "Factory will fix in bulk production",
+    "zh": "工厂将在大货生产中修正"
+  },
+  "dispositionHelp_factory_pp": {
+    "en": "The factory will correct this before the bulk run. It stays in the counts for this sample report.",
+    "zh": "工厂将在大货生产前修正。本次样品报告仍计入该项。"
+  },
+  "loggedEvidence": {
+    "en": "Logged evidence",
+    "zh": "已记录的证据"
+  },
+  "flaggedRecapTitle": {
+    "en": "What was flagged",
+    "zh": "已标记的问题"
+  },
+  "notYetDecided": {
+    "en": "not decided",
+    "zh": "尚未决定"
+  },
+  "decidedLabel": {
+    "en": "decided",
+    "zh": "已决定"
+  },
+  "resolvedUnitsNote": {
+    "en": "{n} unit(s) come out of the final counts as repaired or rejected.",
+    "zh": "其中 {n} 件因已修复或拒收而不计入最终统计。"
+  },
+  "btnViewLarger": {
+    "en": "View larger",
+    "zh": "查看大图"
+  },
+  "fixedLabel": {
+    "en": "Fixed",
+    "zh": "已处理"
+  },
+  "finalLabel": {
+    "en": "Final",
+    "zh": "最终"
+  },
+  "view_board": {
+    "en": "Default",
+    "zh": "默认视图"
+  },
+  "view_checkin": {
+    "en": "PO Check-In",
+    "zh": "订单跟进"
+  },
+  "view_qa": {
+    "en": "QA Scheduling",
+    "zh": "质检排期"
+  },
+  "view_pd": {
+    "en": "PD Approval",
+    "zh": "产品开发审批"
+  },
+  "owner_you": {
+    "en": "You",
+    "zh": "待你处理"
+  },
+  "owner_qa": {
+    "en": "QA",
+    "zh": "待质检"
+  },
+  "owner_pd": {
+    "en": "Product Dev",
+    "zh": "待产品开发"
+  },
+  "owner_supplier": {
+    "en": "Supplier",
+    "zh": "待供应商"
+  },
+  "owner_none": {
+    "en": "-",
+    "zh": "-"
+  },
+  "overdueByDays": {
+    "en": "{n}d overdue",
+    "zh": "逾期 {n} 天"
+  },
+  "checkInIntro": {
+    "en": "Pick a supplier to work through their open orders one at a time. Notes save as you go.",
+    "zh": "选择供应商，逐单跟进其未完成订单。备注即时保存。"
+  },
+  "openOrders": {
+    "en": "open orders",
+    "zh": "个未完成订单"
+  },
+  "needYou": {
+    "en": "need you",
+    "zh": "待你处理"
+  },
+  "overdueLabel": {
+    "en": "overdue",
+    "zh": "逾期"
+  },
+  "noSupplier": {
+    "en": "No supplier",
+    "zh": "未指定供应商"
+  },
+  "backToSuppliers": {
+    "en": "All suppliers",
+    "zh": "全部供应商"
+  },
+  "unitsWord": {
+    "en": "units",
+    "zh": "件"
+  },
+  "nothingOutstanding": {
+    "en": "Nothing outstanding",
+    "zh": "无待办事项"
+  },
+  "date_ppSample": {
+    "en": "PP sample",
+    "zh": "头样日期"
+  },
+  "date_bulkSample": {
+    "en": "Bulk sample",
+    "zh": "大货样日期"
+  },
+  "date_delivery": {
+    "en": "Delivery",
+    "zh": "交货日期"
+  },
+  "lastNoteLabel": {
+    "en": "Last note",
+    "zh": "上次备注"
+  },
+  "addNoteLabel": {
+    "en": "Progress note",
+    "zh": "进度备注"
+  },
+  "checkInNotePlaceholder": {
+    "en": "What did the supplier say?",
+    "zh": "供应商怎么说？"
+  },
+  "followUpLabel": {
+    "en": "Follow up on",
+    "zh": "跟进日期"
+  },
+  "followUpNotePlaceholder": {
+    "en": "What are you waiting for?",
+    "zh": "在等什么？"
+  },
+  "previous": {
+    "en": "Previous",
+    "zh": "上一个"
+  },
+  "openFullPo": {
+    "en": "Open full PO",
+    "zh": "打开完整订单"
+  },
+  "saveAndNext": {
+    "en": "Save and next",
+    "zh": "保存并下一个"
+  },
+  "saveAndFinish": {
+    "en": "Save and finish",
+    "zh": "保存并完成"
+  },
+  "checkInHint": {
+    "en": "Ctrl+Enter saves and moves to the next order.",
+    "zh": "Ctrl+Enter 保存并转至下一单。"
+  },
+  "checkInDone": {
+    "en": "Finished this supplier.",
+    "zh": "该供应商已跟进完毕。"
+  },
+  "emptyNoOpenOrders": {
+    "en": "No open orders.",
+    "zh": "没有未完成订单。"
+  },
+  "emptyNothingHere": {
+    "en": "Nothing here.",
+    "zh": "暂无内容。"
+  },
+  "qaBucketDue": {
+    "en": "Sample ready, no report link yet",
+    "zh": "样品已到期，尚未安排检验"
+  },
+  "qaBucketDueHelp": {
+    "en": "These are the ones that slip. The sample date has arrived and nothing has been scheduled.",
+    "zh": "这类最易遯漏：样品日期已到，但尚未安排检验。"
+  },
+  "qaBucketPending": {
+    "en": "Inspection booked, report not in",
+    "zh": "已安排检验，报告未提交"
+  },
+  "qaBucketPendingHelp": {
+    "en": "A link has been sent. Waiting on the QA team to submit.",
+    "zh": "已发送报告链接，等待质检团队提交。"
+  },
+  "qaBucketUpcoming": {
+    "en": "Coming up",
+    "zh": "即将到期"
+  },
+  "qaBucketUpcomingHelp": {
+    "en": "Sample dates ahead. Schedule before they arrive.",
+    "zh": "样品日期即将到来，请提前安排。"
+  },
+  "pdWaitingOnYou": {
+    "en": "Waiting on you",
+    "zh": "待你处理"
+  },
+  "pdWaitingOnYouHelp": {
+    "en": "Product Development has commented or asked for changes. Nothing moves until you reply.",
+    "zh": "产品开发已留言或要求修改，需你回复后才能推进。"
+  },
+  "pdWaitingOnPd": {
+    "en": "Waiting on Product Development",
+    "zh": "待产品开发审批"
+  },
+  "pdWaitingOnPdHelp": {
+    "en": "Submitted and sitting with PD. Chase anything that has been here too long.",
+    "zh": "已提交至产品开发，停留过久的需跟进。"
+  },
+  "thSampleDate": {
+    "en": "Sample date",
+    "zh": "样品日期"
+  },
+  "openLabel": {
+    "en": "Open",
+    "zh": "打开"
+  },
+  "supplierLabel": {
+    "en": "Supplier",
+    "zh": "供应商"
+  },
+  "saveAllChanges": {
+    "en": "Save all changes",
+    "zh": "保存全部更改"
+  },
+  "checkInIntro2": {
+    "en": "Work down the list. Type into Update or Follow-up as you go, then save once at the end.",
+    "zh": "逐行跟进。边打电话边填写“更新”与“跟进”，最后统一保存。"
+  },
+  "thQty": {
+    "en": "Qty",
+    "zh": "数量"
+  },
+  "thKeyDates": {
+    "en": "Key dates",
+    "zh": "关键日期"
+  },
+  "thNextAction": {
+    "en": "Next",
+    "zh": "下一步"
+  },
+  "thLastUpdate": {
+    "en": "Last update",
+    "zh": "上次更新"
+  },
+  "thNewUpdate": {
+    "en": "Update",
+    "zh": "本次更新"
+  },
+  "thFollowUp": {
+    "en": "Follow up",
+    "zh": "跟进"
+  },
+  "noUpdatesYet": {
+    "en": "No updates yet",
+    "zh": "尚无更新"
+  },
+  "checkInSaved": {
+    "en": "{n} update(s) saved",
+    "zh": "已保存 {n} 项更新"
+  },
+  "checkInNothing": {
+    "en": "Nothing to save",
+    "zh": "没有需要保存的内容"
+  },
+  "pdNeedsStart": {
+    "en": "To start",
+    "zh": "待启动"
+  },
+  "pdNeedsStartHelp": {
+    "en": "Nothing has been submitted yet. A new PO needs its approved sample images; a finished inspection needs submitting for approval. These sit in no other queue.",
+    "zh": "尚未提交任何内容。新订单需上传已批准样品图片；已完成的检验需提交审批。这些不会出现在其他列表中。"
+  },
+  "thStage": {
+    "en": "Stage",
+    "zh": "阶段"
+  },
+  "thActions": {
+    "en": "Actions",
+    "zh": "操作"
+  },
+  "poSingular": {
+    "en": "PO",
+    "zh": "个订单"
+  },
+  "poPlural": {
+    "en": "POs",
+    "zh": "个订单"
+  },
+  "stageBulk": {
+    "en": "Bulk",
+    "zh": "大货"
+  },
+  "stagePreProduction": {
+    "en": "Pre-Production",
+    "zh": "头样"
+  },
+  "btnOpenApproval": {
+    "en": "Open approval",
+    "zh": "打开审批"
+  },
+  "toastCopyFailed": {
+    "en": "Could not copy the link",
+    "zh": "复制链接失败"
+  },
+  "checkInAutosaves": {
+    "en": "Changes save as you go",
+    "zh": "更改实时保存"
+  },
+  "checkInIntro3": {
+    "en": "Work down the list. An update saves when you move off the box; a follow-up date saves as soon as you pick it.",
+    "zh": "逐行跟进。离开输入框即保存更新；选择跟进日期后立即保存。"
+  },
+  "savedLabel": {
+    "en": "Saved",
+    "zh": "已保存"
+  },
+  "checkInNotePlaceholder2": {
+    "en": "Production update",
+    "zh": "生产更新"
+  },
+  "thDone": {
+    "en": "Done",
+    "zh": "已跟进"
+  },
+  "doneToday": {
+    "en": "Today",
+    "zh": "今日"
+  },
+  "checkInProgress": {
+    "en": "{done} of {total} done today",
+    "zh": "今日已跟进 {done}/{total}"
+  },
+  "pdNeedsStart2": {
+    "en": "To Submit",
+    "zh": "待提交"
+  },
+  "pdWaitingOnYou2": {
+    "en": "Waiting on Juniper China",
+    "zh": "待 Juniper China 处理"
+  },
+  "repairEvidenceLabel": {
+    "en": "Repair evidence",
+    "zh": "修复证据"
+  },
+  "repairCommentLabel": {
+    "en": "Comment",
+    "zh": "备注"
+  },
+  "repairCommentPlaceholder": {
+    "en": "How was it repaired?",
+    "zh": "如何修复的？"
+  },
+  "confirmedLabel": {
+    "en": "Confirmed",
+    "zh": "已确认"
+  },
+  "noDueDate": {
+    "en": "No date",
+    "zh": "未设定"
+  },
+  "clearLabel": {
+    "en": "Clear",
+    "zh": "清除"
+  },
+  "btnScheduleQa": {
+    "en": "Schedule QA",
+    "zh": "安排质检"
+  },
+  "thQa": {
+    "en": "QA",
+    "zh": "质检"
+  },
+  "initialReportLabel": {
+    "en": "Initial report",
+    "zh": "初次报告"
+  },
+  "questionsLocked": {
+    "en": "Questions locked",
+    "zh": "问题已锁定"
+  },
+  "resultOpen": {
+    "en": "Outstanding",
+    "zh": "尚未完成"
+  },
+  "btnReplace": {
+    "en": "Replace",
+    "zh": "替换"
+  },
+  "clickToEnlarge": {
+    "en": "Click to enlarge",
+    "zh": "点击放大"
+  },
+  "thApprovals": {
+    "en": "Approvals",
+    "zh": "审批状态"
+  },
+  "stageGolden": {
+    "en": "Golden",
+    "zh": "金样"
+  },
+  "stagePp": {
+    "en": "PP",
+    "zh": "头样"
+  },
+  "stageBulkShort": {
+    "en": "Bulk",
+    "zh": "大货"
+  },
+  "approvalNotStarted": {
+    "en": "Not started",
+    "zh": "未开始"
+  },
+  "approvalWaiting": {
+    "en": "With PD",
+    "zh": "待审批"
+  },
+  "approvalApproved": {
+    "en": "Approved",
+    "zh": "已批准"
+  },
+  "approvalApprovedIssues": {
+    "en": "Approved*",
+    "zh": "有条件批准"
+  },
+  "approvalRejected": {
+    "en": "Rejected",
+    "zh": "未通过"
+  },
+  "approvalSkipped": {
+    "en": "Skipped",
+    "zh": "已跳过"
+  },
+  "actionSubmitForApproval": {
+    "en": "Submit for approval",
+    "zh": "提交审批"
+  },
+  "actionAwaitingPd": {
+    "en": "Awaiting decision",
+    "zh": "等待决策"
+  },
+  "actionRespond": {
+    "en": "Respond to PD",
+    "zh": "回复产品开发"
+  },
+  "revisedReportTitle": {
+    "en": "Revised Unit Report",
+    "zh": "修复单位报告"
+  },
+  "checkInRequestsHelp": {
+    "en": "Not yet sent to this supplier. Send them before working through production.",
+    "zh": "尚未发送给该供应商。请先发送，再跟进生产。"
+  },
+  "toSendWord": {
+    "en": "to send",
+    "zh": "待发送"
+  },
+  "batchNothingForSupplier": {
+    "en": "Nothing to send for this supplier",
+    "zh": "该供应商没有待发送的订单"
   }
 }

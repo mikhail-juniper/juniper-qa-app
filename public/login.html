@@ -125,7 +125,7 @@
 
     // Two modes: the original shared site password, and per-user accounts.
     // Shared stays the default so nothing changes for existing users; the
-    // account mode is what Google/WeChat sign-in will slot into later.
+    // account mode is what any future SSO provider would slot into.
     // Account-type picker. Until real per-user sign-in exists, the shared
     // password lets you choose which role's view of the site to load. It's a
     // preview mechanism rather than a restriction - but the choice is stored
@@ -150,12 +150,7 @@
       try {
         const opts = await (await fetch('/api/login-options')).json();
         // Only offer Google when the server actually has credentials.
-        /* WeChat and WeCom sign-in are deliberately not offered.
-         * Both require the callback domain's ICP filing entity to match
-         * the company, which an onrender.com subdomain cannot satisfy -
-         * so neither flow can be configured at all. lib/wecomAuth.js and
-         * lib/wechatAuth.js stay in place and dormant; restore the two
-         * buttons below once the app runs on an ICP-filed domain. */
+
         if (opts.google && opts.google.enabled) {
           document.getElementById('googleWrap').style.display = '';
           // With several domains allowed, naming one would be misleading.

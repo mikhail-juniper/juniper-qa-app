@@ -1185,3 +1185,579 @@ details.om-handoff-card[open] > summary::after { content: '▾'; }
 .om-field-align > input[type="hidden"] { display: none; }
 .om-field-align > input:not([type="hidden"]):last-of-type,
 .om-field-align > .om-money-wrap:last-of-type { margin-top: auto; }
+
+/* Revised Unit Reports listed under the original report they follow up on.
+   Indented and marked so they read as a follow-up rather than a second
+   inspection, which is exactly what they are not. */
+.om-qa-revised {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--jc-teal);
+  background: var(--jc-mint-light);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.om-qa-revised-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--jc-teal-dark);
+}
+
+/* Reserve the scrollbar gutter so autosave doesn't shunt the layout sideways.
+   Saving re-renders the panel, and for a frame the content can be short enough
+   to drop the vertical scrollbar - the panel widens by the scrollbar's width,
+   then snaps back when the content returns. That read as the whole page
+   twitching left and right on every save.
+
+   scrollbar-gutter keeps the space allocated whether or not a scrollbar is
+   currently drawn. The overflow-y: scroll fallback does the same thing in
+   older engines at the cost of always drawing the track. */
+.om-panel {
+  scrollbar-gutter: stable;
+}
+@supports not (scrollbar-gutter: stable) {
+  .om-panel { overflow-y: scroll; }
+}
+
+/* Same reasoning for the page behind it: opening and closing the panel, and
+   any re-render that changes page height, shifts content horizontally when the
+   document scrollbar comes and goes. */
+html {
+  scrollbar-gutter: stable;
+}
+
+/* The save status cycles through "", "Saving...", "Saved" and "Unsaved
+   changes", each a different width. Sitting in the header's flex row ahead of
+   the buttons, every change nudged "Save changes" and the close button
+   sideways - which is what read as the page twitching left and right on each
+   autosave.
+
+   Reserving the width of the longest state keeps the buttons still. Right
+   alignment means the text grows leftwards into its own reserved space rather
+   than pushing anything. */
+.om-save-status {
+  display: inline-block;
+  min-width: 112px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--jc-muted);
+  margin-right: 10px;
+  white-space: nowrap;
+}
+
+/* ---- Chloe's working views ----
+   Full-page alternatives to the status board, not filters on it: the call-down
+   in particular needs the whole width and no competing detail. */
+.om-view-tabs {
+  display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap;
+  border-bottom: 1px solid var(--jc-border); padding-bottom: 10px;
+}
+.om-view-tab {
+  padding: 8px 16px; border: 1px solid var(--jc-border); background: #fff;
+  border-radius: var(--radius-sm); font-size: 13.5px; font-weight: 600;
+  color: var(--jc-muted); cursor: pointer;
+}
+.om-view-tab.is-on { background: var(--jc-teal); border-color: var(--jc-teal); color: #fff; }
+
+.om-section-intro { font-size: 13px; color: var(--jc-muted); margin-bottom: 14px; }
+.om-count { font-size: 12.5px; color: var(--jc-muted); font-weight: 600; }
+
+/* Owner of the next action. Colour carries meaning here, so the label is
+   always present too rather than colour alone. */
+.om-owner-pill {
+  display: inline-block; padding: 2px 9px; border-radius: 999px;
+  font-size: 11.5px; font-weight: 700; margin-right: 6px;
+}
+.om-owner-you { background: var(--jc-teal); color: #fff; }
+.om-owner-qa { background: #EAF3FB; color: #2C6FA8; }
+.om-owner-pd { background: #F3EAFB; color: #6B4A9E; }
+.om-owner-supplier { background: #FBF3E6; color: #B9770E; }
+.om-owner-none { background: var(--jc-bg); color: var(--jc-muted); }
+
+.om-due-badge { display: inline-block; font-size: 11.5px; font-weight: 600; color: var(--jc-muted); }
+.om-due-soon { color: #B9770E; }
+.om-due-over { color: var(--jc-fail); font-weight: 700; }
+
+/* Supplier picker for the call-down */
+.om-supplier-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.om-supplier-card {
+  text-align: left; padding: 16px; border: 1px solid var(--jc-border);
+  border-radius: var(--radius); background: #fff; cursor: pointer;
+}
+.om-supplier-card:hover { border-color: var(--jc-teal); }
+.om-supplier-name { font-weight: 700; font-size: 14.5px; margin-bottom: 6px; }
+.om-supplier-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12.5px; color: var(--jc-muted); }
+
+/* The call-down itself */
+.om-checkin-head { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+.om-checkin-title { font-weight: 700; font-size: 16px; flex: 1; }
+.om-checkin-progress { font-size: 13px; color: var(--jc-muted); font-weight: 600; }
+.om-checkin-card { max-width: 860px; }
+.om-checkin-po { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.om-checkin-poname { font-size: 18px; font-weight: 700; }
+.om-checkin-ponum { font-size: 12.5px; color: var(--jc-muted); margin-top: 2px; }
+.om-checkin-action {
+  margin: 12px 0; padding: 10px 12px; background: var(--jc-mint-light);
+  border-radius: var(--radius-sm); font-weight: 600; font-size: 13.5px;
+}
+.om-checkin-dates { display: flex; gap: 18px; flex-wrap: wrap; font-size: 12.5px; color: var(--jc-muted); }
+.om-checkin-dates em { font-style: normal; font-weight: 700; margin-right: 4px; }
+.om-checkin-lastnote {
+  margin-top: 12px; padding: 10px 12px; background: var(--jc-bg);
+  border-radius: var(--radius-sm); font-size: 13px;
+}
+.om-checkin-lastnote-head { font-size: 11.5px; color: var(--jc-muted); font-weight: 700; margin-bottom: 4px; }
+.om-checkin-followup { display: flex; gap: 10px; align-items: flex-end; margin-top: 12px; flex-wrap: wrap; }
+.om-checkin-followup input[type="date"] { width: auto; }
+.om-checkin-followup input[type="text"] { flex: 1; min-width: 200px; }
+.om-checkin-nav { display: flex; gap: 10px; margin-top: 16px; }
+.om-checkin-nav .btn:last-child { flex: 1; }
+.om-checkin-hint { font-size: 11.5px; color: var(--jc-muted); margin-top: 8px; text-align: center; }
+
+@media (max-width: 640px) {
+  .om-checkin-nav { flex-direction: column; }
+  .om-checkin-po { flex-direction: column; }
+}
+
+/* Check-in as a table: she works down a supplier's full list on one call, so
+   everything has to be visible at once rather than one order at a time. */
+.om-checkin-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+.om-checkin-bar select { width: auto; min-width: 280px; }
+.om-checkin-counts { font-size: 13px; color: var(--jc-muted); font-weight: 600; flex: 1; }
+.om-checkin-table td { vertical-align: top; }
+.om-checkin-table .om-sub { font-size: 11.5px; color: var(--jc-muted); }
+.om-checkin-dates-cell { white-space: nowrap; font-size: 12px; }
+.om-checkin-dates-cell em { font-style: normal; font-weight: 700; margin-right: 4px; }
+.om-checkin-lastcol { max-width: 260px; font-size: 12.5px; }
+.om-checkin-note { min-width: 200px; font-size: 13px; }
+.om-checkin-fucol { min-width: 170px; }
+.om-checkin-fucol input { margin-bottom: 4px; }
+.om-checkin-funote { font-size: 12.5px; }
+.om-linklike {
+  background: none; border: 0; padding: 0; font: inherit; font-weight: 700;
+  color: var(--jc-teal-dark); cursor: pointer; text-decoration: underline;
+}
+
+/* Measured on a 13" MacBook (1440px): the table fits without scrolling, but
+   the follow-up date and its note were sitting side by side in ~170px, which
+   truncated the date picker to "mm/" and the note to a few characters. Stack
+   them so each gets the full column width. */
+.om-checkin-fucol input {
+  display: block;
+  width: 100%;
+  margin-bottom: 4px;
+}
+
+/* Ten orders per supplier is normal, so keep rows compact enough to scan a
+   full list without scrolling past the ones already dealt with. */
+.om-checkin-table .om-checkin-note { min-height: 44px; }
+.om-checkin-lastcol { line-height: 1.35; }
+.om-checkin-dates-cell { line-height: 1.5; }
+
+/* Row-level actions on the QA and PD queues. Scheduling from the queue is the
+   point of those views, so the buttons live on the row rather than behind a
+   click into the PO. */
+.om-row-actions { display: flex; flex-wrap: wrap; gap: 5px; }
+.om-row-actions .om-table-upload-btn { white-space: nowrap; text-decoration: none; }
+.om-checkin-photo img {
+  width: 40px; height: 40px; object-fit: cover;
+  border-radius: var(--radius-sm); border: 1px solid var(--jc-border); cursor: zoom-in;
+}
+
+/* Autosave confirmation per field. Deliberately quiet and self-clearing: she
+   is working down a list on the phone and does not need a toast per row, but
+   she does need to know the note landed. */
+.om-row-saved {
+  font-size: 11px; font-weight: 700; color: var(--jc-teal-dark);
+  min-height: 14px; opacity: 0; transition: opacity 0.15s;
+}
+.om-row-saved.is-on { opacity: 1; }
+
+/* ---- Check-in: keeping her place ----
+   A list of 20 gives no sense of progress, which is why POs currently live in
+   browser tabs. A row ticks itself when an update is saved, and covered rows
+   recede so the eye lands on what is left. */
+.om-checkin-donecol { text-align: center; white-space: nowrap; }
+.om-done-check { display: inline-flex; align-items: center; cursor: pointer; }
+.om-done-check input { width: 18px; height: 18px; cursor: pointer; accent-color: var(--jc-teal); }
+.om-row-done { background: var(--jc-mint-light) !important; }
+.om-row-done td { opacity: 0.62; }
+.om-row-done .om-checkin-note,
+.om-row-done .om-checkin-fu,
+.om-row-done .om-done-check { opacity: 1; }
+
+/* Match the rest of the app: the working views sit in the same card chrome,
+   at the same type scale, as every other page rather than floating loose. */
+.om-view-tabs { margin-bottom: 18px; }
+.om-checkin-bar {
+  background: #fff; border: 1px solid var(--jc-border); border-radius: var(--radius);
+  padding: 14px 16px; margin-bottom: 12px;
+}
+
+/* Compact follow-up date: a glyph when empty, "Oct 28" when set. The native
+   input is stretched invisibly over the chip so the picker, keyboard entry and
+   accessibility all keep working - a div plus a custom calendar would lose all
+   three. */
+.om-datechip {
+  position: relative; display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 10px; border-radius: 999px; background: var(--jc-bg);
+  border: 1px dashed var(--jc-border); cursor: pointer; font-size: 12.5px;
+  color: var(--jc-muted); white-space: nowrap;
+}
+.om-datechip.is-set {
+  background: var(--jc-mint-light); border-style: solid;
+  border-color: var(--jc-teal); color: var(--jc-teal-dark); font-weight: 700;
+}
+.om-datechip:hover { border-color: var(--jc-teal); }
+.om-datechip-icon { font-size: 13px; line-height: 1; }
+.om-datechip input[type="date"] {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  opacity: 0; cursor: pointer; padding: 0; margin: 0; border: 0;
+}
+.om-datechip-clear {
+  background: none; border: 0; cursor: pointer; font-size: 15px;
+  color: var(--jc-muted); padding: 0 4px; line-height: 1;
+}
+.om-datechip-clear.is-hidden { display: none; }
+.om-checkin-fucol { white-space: nowrap; }
+
+/* ---- Formatting pass ----
+ * Measured against the established pages: the three working views had drifted
+ * to three different table type scales (11.5/12.5/13px headers) and three
+ * different left indents, because each had picked up bespoke padding and a
+ * bespoke wrapper. Everything below now inherits the shared .card and
+ * .size-table rules; only genuinely view-specific things are set here.
+ */
+.om-checkin-table td { vertical-align: top; }
+.om-sub { font-size: 11.5px; color: var(--jc-muted); }
+
+/* Row actions match the small buttons used in tables elsewhere. */
+.om-row-actions { display: flex; flex-wrap: wrap; gap: 5px; }
+.om-row-actions .om-table-upload-btn { white-space: nowrap; text-decoration: none; }
+
+/* The supplier bar is a card like everything else on the page. */
+.om-checkin-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: #fff; border: 1px solid var(--jc-border);
+  border-radius: var(--radius); padding: 18px 16px; margin-bottom: 14px;
+}
+
+/* Column widths for the check-in table.
+   Adopting the page's shared cell padding (10px 12px) made the table 217px
+   too wide for a 13" MacBook. Rather than shrink the type back out of step
+   with every other table, constrain the columns: the wide free-text ones wrap,
+   the fixed ones stay narrow. Measured to fit 1065px of usable width. */
+.om-checkin-table { table-layout: fixed; width: 100%; min-width: 0; }
+/* The shared .om-table sets white-space: nowrap, which suits its scrolling
+   tables but fights table-layout: fixed here - text simply overflowed into the
+   next column instead of wrapping. This table wraps. */
+.om-checkin-table th, .om-checkin-table td { white-space: normal; }
+/* Break mid-word only where the content is free text. Applied to every cell it
+   split "1,500" into "1,50 / 0" and the DONE header into "DON / E". */
+.om-checkin-table td:nth-child(3),
+.om-checkin-table td:nth-child(7) { overflow-wrap: anywhere; }
+.om-checkin-table th { overflow-wrap: normal; hyphens: none; }
+.om-checkin-table td:nth-child(4) { white-space: nowrap; }
+/* Column order: PO, Photo, Product, Qty, Status, QA/QC, Last update, Update,
+   Follow up, Done. Totals 100%. The QA/QC column has to hold the full
+   "Schedule QA" button at body-text size - at 9% the button overflowed and sat
+   on top of the Last update cell. */
+
+/* A button that outgrows its column should wrap or clip, never sit on top of
+   the neighbouring cell. */
+.om-checkin-table td { overflow: hidden; }
+.om-checkin-qacol .om-row-btn-lg { max-width: 100%; }
+.om-checkin-table .om-checkin-note { min-height: 44px; }
+.om-checkin-lastcol { line-height: 1.35; }
+.om-checkin-dates-cell { line-height: 1.5; }
+
+/* Row-level actions on the QA and PD queues. Scheduling from the queue is the
+   point of those views, so the buttons live on the row rather than behind a
+   click into the PO. */
+.om-row-actions { display: flex; flex-wrap: wrap; gap: 5px; }
+.om-row-actions .om-table-upload-btn { white-space: nowrap; text-decoration: none; }
+.om-checkin-photo img {
+  width: 40px; height: 40px; object-fit: cover;
+  border-radius: var(--radius-sm); border: 1px solid var(--jc-border); cursor: zoom-in;
+}
+
+/* Autosave confirmation per field. Deliberately quiet and self-clearing: she
+   is working down a list on the phone and does not need a toast per row, but
+   she does need to know the note landed. */
+.om-row-saved {
+  font-size: 11px; font-weight: 700; color: var(--jc-teal-dark);
+  min-height: 14px; opacity: 0; transition: opacity 0.15s;
+}
+.om-row-saved.is-on { opacity: 1; }
+
+/* ---- Check-in: keeping her place ----
+   A list of 20 gives no sense of progress, which is why POs currently live in
+   browser tabs. A row ticks itself when an update is saved, and covered rows
+   recede so the eye lands on what is left. */
+.om-checkin-donecol { text-align: center; white-space: nowrap; }
+.om-done-check { display: inline-flex; align-items: center; cursor: pointer; }
+.om-done-check input { width: 18px; height: 18px; cursor: pointer; accent-color: var(--jc-teal); }
+.om-row-done { background: var(--jc-mint-light) !important; }
+.om-row-done td { opacity: 0.62; }
+.om-row-done .om-checkin-note,
+.om-row-done .om-checkin-fu,
+.om-row-done .om-done-check { opacity: 1; }
+
+/* Match the rest of the app: the working views sit in the same card chrome,
+   at the same type scale, as every other page rather than floating loose. */
+.om-view-tabs { margin-bottom: 18px; }
+.om-checkin-bar {
+  background: #fff; border: 1px solid var(--jc-border); border-radius: var(--radius);
+  padding: 14px 16px; margin-bottom: 12px;
+}
+
+/* Compact follow-up date: a glyph when empty, "Oct 28" when set. The native
+   input is stretched invisibly over the chip so the picker, keyboard entry and
+   accessibility all keep working - a div plus a custom calendar would lose all
+   three. */
+.om-datechip {
+  position: relative; display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 10px; border-radius: 999px; background: var(--jc-bg);
+  border: 1px dashed var(--jc-border); cursor: pointer; font-size: 12.5px;
+  color: var(--jc-muted); white-space: nowrap;
+}
+.om-datechip.is-set {
+  background: var(--jc-mint-light); border-style: solid;
+  border-color: var(--jc-teal); color: var(--jc-teal-dark); font-weight: 700;
+}
+.om-datechip:hover { border-color: var(--jc-teal); }
+.om-datechip-icon { font-size: 13px; line-height: 1; }
+.om-datechip input[type="date"] {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  opacity: 0; cursor: pointer; padding: 0; margin: 0; border: 0;
+}
+.om-datechip-clear {
+  background: none; border: 0; cursor: pointer; font-size: 15px;
+  color: var(--jc-muted); padding: 0 4px; line-height: 1;
+}
+.om-datechip-clear.is-hidden { display: none; }
+.om-checkin-fucol { white-space: nowrap; }
+
+/* ---- Formatting pass ----
+ * Measured against the established pages: the three working views had drifted
+ * to three different table type scales (11.5/12.5/13px headers) and three
+ * different left indents, because each had picked up bespoke padding and a
+ * bespoke wrapper. Everything below now inherits the shared .card and
+ * .size-table rules; only genuinely view-specific things are set here.
+ */
+.om-checkin-table td { vertical-align: top; }
+.om-sub { font-size: 11.5px; color: var(--jc-muted); }
+
+/* Row actions match the small buttons used in tables elsewhere. */
+.om-row-actions { display: flex; flex-wrap: wrap; gap: 5px; }
+.om-row-actions .om-table-upload-btn { white-space: nowrap; text-decoration: none; }
+
+/* The supplier bar is a card like everything else on the page. */
+.om-checkin-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: #fff; border: 1px solid var(--jc-border);
+  border-radius: var(--radius); padding: 18px 16px; margin-bottom: 14px;
+}
+
+/* Column widths for the check-in table.
+   Adopting the page's shared cell padding (10px 12px) made the table 217px
+   too wide for a 13" MacBook. Rather than shrink the type back out of step
+   with every other table, constrain the columns: the wide free-text ones wrap,
+   the fixed ones stay narrow. Measured to fit 1065px of usable width. */
+.om-checkin-table { table-layout: fixed; width: 100%; min-width: 0; }
+/* The shared .om-table sets white-space: nowrap, which suits its scrolling
+   tables but fights table-layout: fixed here - text simply overflowed into the
+   next column instead of wrapping. This table wraps. */
+.om-checkin-table th, .om-checkin-table td { white-space: normal; }
+/* Break mid-word only where the content is free text. Applied to every cell it
+   split "1,500" into "1,50 / 0" and the DONE header into "DON / E". */
+.om-checkin-table td:nth-child(3),
+.om-checkin-table td:nth-child(7) { overflow-wrap: anywhere; }
+.om-checkin-table th { overflow-wrap: normal; hyphens: none; }
+.om-checkin-table td:nth-child(4) { white-space: nowrap; }
+/* Column order: PO, Photo, Product, Qty, Status, QA/QC, Last update, Update,
+   Follow up, Done. Measured to fit 1065px of usable width on a 13" MacBook. */
+.om-checkin-table .om-checkin-note { min-height: 44px; }
+.om-checkin-lastcol { line-height: 1.35; }
+.om-checkin-dates-cell { line-height: 1.5; }
+
+/* Row-level actions on the QA and PD queues. Scheduling from the queue is the
+   point of those views, so the buttons live on the row rather than behind a
+   click into the PO. */
+.om-row-actions { display: flex; flex-wrap: wrap; gap: 5px; }
+.om-row-actions .om-table-upload-btn { white-space: nowrap; text-decoration: none; }
+.om-checkin-photo img {
+  width: 40px; height: 40px; object-fit: cover;
+  border-radius: var(--radius-sm); border: 1px solid var(--jc-border); cursor: zoom-in;
+}
+
+/* Autosave confirmation per field. Deliberately quiet and self-clearing: she
+   is working down a list on the phone and does not need a toast per row, but
+   she does need to know the note landed. */
+.om-row-saved {
+  font-size: 11px; font-weight: 700; color: var(--jc-teal-dark);
+  min-height: 14px; opacity: 0; transition: opacity 0.15s;
+}
+.om-row-saved.is-on { opacity: 1; }
+
+/* ---- Check-in: keeping her place ----
+   A list of 20 gives no sense of progress, which is why POs currently live in
+   browser tabs. A row ticks itself when an update is saved, and covered rows
+   recede so the eye lands on what is left. */
+.om-checkin-donecol { text-align: center; white-space: nowrap; }
+.om-done-check { display: inline-flex; align-items: center; cursor: pointer; }
+.om-done-check input { width: 18px; height: 18px; cursor: pointer; accent-color: var(--jc-teal); }
+.om-row-done { background: var(--jc-mint-light) !important; }
+.om-row-done td { opacity: 0.62; }
+.om-row-done .om-checkin-note,
+.om-row-done .om-checkin-fu,
+.om-row-done .om-done-check { opacity: 1; }
+
+/* Match the rest of the app: the working views sit in the same card chrome,
+   at the same type scale, as every other page rather than floating loose. */
+.om-view-tabs { margin-bottom: 18px; }
+.om-checkin-bar {
+  background: #fff; border: 1px solid var(--jc-border); border-radius: var(--radius);
+  padding: 14px 16px; margin-bottom: 12px;
+}
+
+/* Compact follow-up date: a glyph when empty, "Oct 28" when set. The native
+   input is stretched invisibly over the chip so the picker, keyboard entry and
+   accessibility all keep working - a div plus a custom calendar would lose all
+   three. */
+.om-datechip {
+  position: relative; display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 10px; border-radius: 999px; background: var(--jc-bg);
+  border: 1px dashed var(--jc-border); cursor: pointer; font-size: 12.5px;
+  color: var(--jc-muted); white-space: nowrap;
+}
+.om-datechip.is-set {
+  background: var(--jc-mint-light); border-style: solid;
+  border-color: var(--jc-teal); color: var(--jc-teal-dark); font-weight: 700;
+}
+.om-datechip:hover { border-color: var(--jc-teal); }
+.om-datechip-icon { font-size: 13px; line-height: 1; }
+.om-datechip input[type="date"] {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  opacity: 0; cursor: pointer; padding: 0; margin: 0; border: 0;
+}
+.om-datechip-clear {
+  background: none; border: 0; cursor: pointer; font-size: 15px;
+  color: var(--jc-muted); padding: 0 4px; line-height: 1;
+}
+.om-datechip-clear.is-hidden { display: none; }
+.om-checkin-fucol { white-space: nowrap; }
+
+/* ---- Formatting pass ----
+ * Measured against the established pages: the three working views had drifted
+ * to three different table type scales (11.5/12.5/13px headers) and three
+ * different left indents, because each had picked up bespoke padding and a
+ * bespoke wrapper. Everything below now inherits the shared .card and
+ * .size-table rules; only genuinely view-specific things are set here.
+ */
+.om-checkin-table td { vertical-align: top; }
+.om-sub { font-size: 11.5px; color: var(--jc-muted); }
+
+/* Row actions match the small buttons used in tables elsewhere. */
+.om-row-actions { display: flex; flex-wrap: wrap; gap: 5px; }
+.om-row-actions .om-table-upload-btn { white-space: nowrap; text-decoration: none; }
+
+/* The supplier bar is a card like everything else on the page. */
+.om-checkin-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: #fff; border: 1px solid var(--jc-border);
+  border-radius: var(--radius); padding: 18px 16px; margin-bottom: 14px;
+}
+
+/* Column widths for the check-in table.
+   Adopting the page's shared cell padding (10px 12px) made the table 217px
+   too wide for a 13" MacBook. Rather than shrink the type back out of step
+   with every other table, constrain the columns: the wide free-text ones wrap,
+   the fixed ones stay narrow. Measured to fit 1065px of usable width. */
+.om-checkin-table { table-layout: fixed; width: 100%; min-width: 0; }
+/* The shared .om-table sets white-space: nowrap, which suits its scrolling
+   tables but fights table-layout: fixed here - text simply overflowed into the
+   next column instead of wrapping. This table wraps. */
+.om-checkin-table th, .om-checkin-table td { white-space: normal; }
+/* Break mid-word only where the content is free text. Applied to every cell it
+   split "1,500" into "1,50 / 0" and the DONE header into "DON / E". */
+.om-checkin-table td:nth-child(3),
+.om-checkin-table td:nth-child(7) { overflow-wrap: anywhere; }
+.om-checkin-table th { overflow-wrap: normal; hyphens: none; }
+.om-checkin-table td:nth-child(4) { white-space: nowrap; }
+.om-checkin-table .om-checkin-note { width: 100%; min-width: 0; }
+
+/* Row click opens the PO, so it should look pressable. Controls inside the row
+   stop the click, which is handled in bindRowClickToOpen. */
+.om-row-clickable { cursor: pointer; }
+.om-row-clickable:hover { background: var(--jc-mint-light); }
+.om-row-clickable input, .om-row-clickable textarea,
+.om-row-clickable button, .om-row-clickable a,
+.om-row-clickable label { cursor: auto; }
+.om-row-clickable button, .om-row-clickable a, .om-row-clickable label { cursor: pointer; }
+
+/* 30% larger so the product is recognisable at a glance while she works down
+   the list. */
+.om-checkin-photo img { width: 52px; height: 52px; }
+.om-checkin-qacol { white-space: nowrap; }
+
+/* Breathing room when Schedule QA scrolls this card into view, so it does not
+   sit flush against the panel header. */
+.om-panel-card { scroll-margin-top: 16px; }
+
+/* Outcome of a revised unit report, beside its title. */
+.om-qa-revised-result.is-pass { color: var(--jc-teal-dark); font-weight: 700; }
+.om-qa-revised-result.is-open { color: var(--jc-warn); font-weight: 700; }
+
+/* Sub-component thumbnail enlarges on click, like the reference photo. */
+.om-acc-zoom { cursor: zoom-in; }
+
+/* The three approval stages, shown rather than described. Colour carries
+   meaning so the stage name is always present alongside it. */
+.om-stage-pills { display: flex; flex-direction: column; gap: 3px; }
+.om-stage-pill {
+  font-size: 11.5px; white-space: nowrap;
+  padding: 2px 8px; border-radius: 999px; display: inline-block;
+}
+.om-stage-pill em { font-style: normal; font-weight: 700; margin-right: 4px; }
+.om-stage-pill.is-none { background: var(--jc-bg); color: var(--jc-muted); }
+.om-stage-pill.is-waiting { background: #F3EAFB; color: #6B4A9E; }
+.om-stage-pill.is-ok { background: var(--jc-mint-light); color: var(--jc-teal-dark); }
+.om-stage-pill.is-bad { background: #FBEAEA; color: var(--jc-fail); }
+
+/* Row actions people actually press: sized to the body text beside them rather
+   than the 11.5px used for incidental table buttons, which read as captions. */
+.om-row-btn-lg {
+  font-size: 13.5px;
+  padding: 8px 14px;
+  font-weight: 600;
+}
+
+/* ---- Check-in column widths (single source) ----
+ * Totals 100%. QA/QC is sized from the measured "Schedule QA" button (98px of
+ * content plus 24px of cell padding), not guessed - at 9% the button was
+ * clipped mid-word.
+ *
+ * NOTE: these rules have been duplicated by later appends twice in this file.
+ * If a width refuses to change, search for a second nth-child block below this
+ * one rather than editing this one again.
+ */
+.om-checkin-table th:nth-child(1),  .om-checkin-table td:nth-child(1)  { width: 9%; }
+.om-checkin-table th:nth-child(2),  .om-checkin-table td:nth-child(2)  { width: 6%; }
+.om-checkin-table th:nth-child(3),  .om-checkin-table td:nth-child(3)  { width: 12%; }
+.om-checkin-table th:nth-child(4),  .om-checkin-table td:nth-child(4)  { width: 5%; }
+.om-checkin-table th:nth-child(5),  .om-checkin-table td:nth-child(5)  { width: 10%; }
+.om-checkin-table th:nth-child(6),  .om-checkin-table td:nth-child(6)  { width: 13%; }
+.om-checkin-table th:nth-child(7),  .om-checkin-table td:nth-child(7)  { width: 15%; }
+.om-checkin-table th:nth-child(8),  .om-checkin-table td:nth-child(8)  { width: 15%; }
+.om-checkin-table th:nth-child(9),  .om-checkin-table td:nth-child(9)  { width: 10%; }
+.om-checkin-table th:nth-child(10), .om-checkin-table td:nth-child(10) { width: 5%; }
+
+/* PO Requests sit in their own card above production. The requests table has
+   six columns, not ten, so it gets its own widths rather than inheriting the
+   check-in ones. */
+.om-requests-table th:nth-child(1), .om-requests-table td:nth-child(1) { width: 14%; }
+.om-requests-table th:nth-child(2), .om-requests-table td:nth-child(2) { width: 8%; }
+.om-requests-table th:nth-child(3), .om-requests-table td:nth-child(3) { width: 36%; }
+.om-requests-table th:nth-child(4), .om-requests-table td:nth-child(4) { width: 8%; }
+.om-requests-table th:nth-child(5), .om-requests-table td:nth-child(5) { width: 18%; }
+.om-requests-table th:nth-child(6), .om-requests-table td:nth-child(6) { width: 16%; }

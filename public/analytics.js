@@ -204,7 +204,7 @@ function downloadCsv(filename, csvContent) {
   URL.revokeObjectURL(url);
 }
 
-function statsTableHtml(monthRows, totalRow, exportKey, exportLabel) {
+function statsTableHtml(monthRows, totalRow, exportKey, exportLabel, totals) {
   if (!monthRows.length) {
     return `<div class="section-help" style="padding:14px 0;">${escapeHtml(bi('noDataForPeriod').en)}<br/>${escapeHtml(bi('noDataForPeriod').zh)}</div>`;
   }
@@ -224,11 +224,21 @@ function statsTableHtml(monthRows, totalRow, exportKey, exportLabel) {
     if (key === 'manufacturedQuantity' || key === 'unitsChecked' || key === 'unitsRejected' || key === 'posPlaced') return Number(val).toLocaleString();
     return val;
   };
-  const rowHtml = (row, isTotal) => `
+  const rowHtml = (row, isTotal, totalLabel) => `
     <tr class="${isTotal ? 'total-row' : ''}">
-      ${cols.map(([labelKey, dataKey]) => `<td>${dataKey === 'month' ? (isTotal ? escapeHtml(bi('totalRow').en) : escapeHtml(row.month)) : fmt(dataKey, row[dataKey])}</td>`).join('')}
+      ${cols.map(([labelKey, dataKey]) => `<td>${dataKey === 'month'
+        ? (isTotal ? escapeHtml(totalLabel || bi('totalRow').en) : escapeHtml(row.month))
+        : fmt(dataKey, row[dataKey])}</td>`).join('')}
     </tr>
   `;
+  /* Two totals rows when revisions exist: the report as submitted, and what
+   * it became once repairs were confirmed. Splitting them keeps "did the
+   * factory get it right first time" readable - folding repairs into one
+   * number would erase exactly that. Only shown when the two differ, so a
+   * period with no revisions is not cluttered with a duplicate row. */
+  const finalRow = totals && totals.final;
+  const differs = finalRow && JSON.stringify(finalRow) !== JSON.stringify(totalRow);
+
   return `
     ${exportKey ? `
       <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
@@ -240,10 +250,12 @@ function statsTableHtml(monthRows, totalRow, exportKey, exportLabel) {
         <thead><tr>${cols.map(([labelKey]) => `<th>${escapeHtml(bi(labelKey).en)}<span class="zh">${escapeHtml(bi(labelKey).zh)}</span></th>`).join('')}</tr></thead>
         <tbody>
           ${monthRows.map((r) => rowHtml(r, false)).join('')}
-          ${rowHtml(totalRow, true)}
+          ${rowHtml(totalRow, true, differs ? bi('asInspectedRow', 'Total (as inspected)').en : null)}
+          ${differs ? rowHtml(finalRow, true, bi('afterRepairsRow', 'Total (after repairs)').en) : ''}
         </tbody>
       </table>
     </div>
+    ${differs ? `<div class="section-help" style="margin-top:6px;">${escapeHtml(bi('twoTotalsHelp', 'As inspected is the result at the time of inspection. After repairs reflects Revised Unit Reports confirming defective units were fixed.').en)}</div>` : ''}
   `;
 }
 
@@ -254,7 +266,7 @@ function renderCategorySection() {
     return `
     <div class="card">
       <div class="section-title">${escapeHtml(bi(CATEGORY_LABEL_KEYS[cat.category]).en)}<span class="zh">${escapeHtml(bi(CATEGORY_LABEL_KEYS[cat.category]).zh)}</span></div>
-      ${statsTableHtml(cat.months, cat.total, `category_${cat.category}`, label)}
+      ${statsTableHtml(cat.months, cat.total, `category_${cat.category}`, label, cat.totals)}
     </div>
   `;
   }).join('');
@@ -268,7 +280,7 @@ function renderVendorSection() {
   return `
     <div class="card">
       <div class="section-title">${escapeHtml(label)}</div>
-      ${statsTableHtml(vendorData.months, vendorData.total, `vendor_${label}`, label)}
+      ${statsTableHtml(vendorData.months, vendorData.total, `vendor_${label}`, label, vendorData.totals)}
     </div>
   `;
 }

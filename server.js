@@ -1084,7 +1084,10 @@ app.get('/api/backup/download', (req, res) => {
   const filename = `juniper-qa-backup-${new Date().toISOString().slice(0, 10)}.zip`;
   res.attachment(filename);
   // Same reason as the scheduled backup: checkpoint before the .db is copied.
-  orderManagementStore.checkpointDatabase();
+  // Every SQLite store must be checkpointed, not just orders - a backup that
+    // copies a live WAL database restores short of recent writes or won't open.
+    [orderManagementStore, approvalStore, submissionLog, componentDefinitions]
+      .forEach((st) => { try { st.checkpointDatabase && st.checkpointDatabase(); } catch (e) { console.error('Checkpoint failed:', e.message || e); } });
   const archive = archiver('zip', { zlib: { level: 9 } });
   archive.on('error', (err) => {
     console.error('Backup zip failed:', err);
@@ -1765,10 +1768,129 @@ app.post('/api/submit-revised', (req, res) => {
       }).filter(Boolean)
     }));
     const record = submissionLog.appendRevisedReport({ ...payload, issues: stored });
+
+    /* If every flagged unit has now been repaired, the original report's
+     * finding is resolved: flip it to pass and mark the stage Completed.
+     *
+     * Without this the PO stayed on a failed report forever, and because PD
+     * approval only becomes actionable once the inspection is Completed, the
+     * order silently never reached the approval queue - the repair was
+     * recorded and then led nowhere. */
+    try {
+      const allRepaired = stored.length > 0 && stored.every((iss) =>
+        (parseInt(iss.unitsFixed, 10) || 0) >= (parseInt(iss.unitsAffected, 10) || 0));
+      if (allRepaired) {
+        const order = orderManagementStore.getOrderByPoNumber(payload.poNumber);
+        const stage = payload.qaType === 'production' ? 'bulk' : 'preProduction';
+        if (order && order.qaReports && order.qaReports[stage]) {
+          const updated = {
+            ...order.qaReports[stage],
+            result: 'pass',
+            status: 'Completed',
+            revisedAt: record.submittedAt || new Date().toISOString()
+          };
+          orderManagementStore.updateOrder(order.id,
+            { qaReports: { ...order.qaReports, [stage]: updated } },
+            payload.qaLead || 'Revised report', 'Revised unit report cleared the findings');
+        }
+      }
+    } catch (err) {
+      // The revision itself is already recorded; a status update failing must
+      // not lose it, but it does need to be visible.
+      console.error('Revised report saved, but the report status was not updated:', err);
+    }
+
     res.json({ ok: true, revisedId: record.id });
   } catch (err) {
     console.error('Revised report submission failed:', err);
     res.status(500).json({ error: 'Failed to record the revised report' });
+  }
+});
+
+/**
+ * The work queue behind Chloe's views.
+ *
+ * Returns every open PO with its derived next action, so the client can group
+ * by supplier (the call-down), by sample date (QA scheduling) or by who it is
+ * waiting on (PD approval) without three different endpoints computing three
+ * slightly different versions of the same thing.
+ */
+app.get('/api/order-management/work-queue', (req, res) => {
+  try {
+    const today = req.query.today || null;
+    const orders = orderManagementStore.listOrders({})
+      .filter((o) => o.status !== 'Completed' && o.status !== 'Cancelled');
+
+    const rows = orders.map((o) => {
+      let statuses = {};
+      try { statuses = approvalStore.pdApprovalStatuses(o.poNumber) || {}; }
+      catch (err) { /* an approval record that cannot be read must not hide the PO */ }
+      const action = orderManagementStore.nextActionFor(o, statuses, today);
+      /* The three approval stages, so the PD view can show where each one
+       * stands instead of spelling it out in a sentence. */
+      const approvalStages = {
+        sample: statuses.sample || 'notStarted',
+        preProduction: statuses.preProduction || 'notStarted',
+        bulk: statuses.bulk || 'notStarted'
+      };
+      return {
+        id: o.id,
+        poNumber: o.poNumber,
+        sku: (o.mainComponent || {}).sku || '',
+        productName: (o.mainComponent || {}).name || '',
+        photo: (o.mainComponent || {}).photoReference || '',
+        quantity: (o.mainComponent || {}).purchaseQuantity ?? null,
+        supplierName: (o.supplier && o.supplier.name) || '',
+        status: o.status,
+        deliveryDate: o.manufacturerDeliveryDate || null,
+        preProductionSampleDate: (o.factoryUpdates || {}).preProductionSampleDate || null,
+        bulkSampleDate: (o.factoryUpdates || {}).bulkSampleDate || null,
+        followUpDate: o.followUpDate || null,
+        followUpNote: o.followUpNote || '',
+        lastCheckedInAt: o.lastCheckedInAt || null,
+        /* Has anything actually been sent to the factory? The check-in view
+         * splits on this rather than on the derived next action, because a PO
+         * that has never been dispatched often has some other action ranked
+         * higher (a missing Golden Sample, say) and would otherwise be filed
+         * under work already in production. */
+        dispatched: ((o.dispatchLog || []).length > 0),
+        approvalStages,
+        /* So the PD queue can show that a failed inspection was since cleared
+           by a revised report, rather than only the original finding. */
+        revisedSummary: (() => {
+          try {
+            const revs = submissionLog.findRevisedReports(o.poNumber) || [];
+            if (!revs.length) return '';
+            const fixed = revs.reduce((n, r) => n + (r.issues || []).reduce((m, i) => m + (parseInt(i.unitsFixed, 10) || 0), 0), 0);
+            const flagged = revs.reduce((n, r) => n + (r.issues || []).reduce((m, i) => m + (parseInt(i.unitsAffected, 10) || 0), 0), 0);
+            return `Revised unit report: ${fixed} / ${flagged} units repaired`;
+          } catch (e) { return ''; }
+        })(),
+        lastCheckedInBy: o.lastCheckedInBy || '',
+        /* Enough of the QA stage state for the scheduling view to offer the
+         * same buttons as the PO panel, rather than making her open the PO to
+         * press them. */
+        qaStages: ['preProduction', 'bulk'].reduce((acc, stage) => {
+          const r = (o.qaReports || {})[stage] || {};
+          acc[stage] = {
+            status: r.status || 'Pending',
+            isSetUp: !!(r.setup && r.setup.configuredAt),
+            extras: r.setup ? ((r.setup.checks || []).length + (r.setup.custom || []).length) : 0,
+            pdfUrl: r.pdfUrl || '',
+            result: r.result || '',
+            readyDate: (o.factoryUpdates || {})[stage === 'preProduction' ? 'preProductionSampleDate' : 'bulkSampleDate'] || null
+          };
+          return acc;
+        }, {}),
+        // Progress notes live on factoryUpdates.bulkProgressLog; newest last.
+        lastNote: ((o.factoryUpdates || {}).bulkProgressLog || []).slice(-1)[0] || null,
+        action
+      };
+    });
+    res.json({ ok: true, rows });
+  } catch (err) {
+    console.error('Work queue failed:', err);
+    res.status(500).json({ error: 'Could not build the work queue' });
   }
 });
 
@@ -2583,7 +2705,14 @@ app.get('/api/order-management/orders/:id/thumb', async (req, res) => {
     if (!fs.existsSync(src)) return res.status(404).end();
 
     const cacheDir = path.join(dir, '.thumbs');
-    const cached = path.join(cacheDir, `${file.storedName}.jpg`);
+    /* Width is a parameter now. The picker wants a small grid thumbnail; PD
+     * approval needs something you can actually judge artwork by, since the
+     * stored file may be a PDF that only ever displays through this route.
+     * Clamped, and part of the cache key so the two sizes don't overwrite
+     * each other. */
+    const rawW = parseInt(req.query.w, 10);
+    const width = Math.min(2000, Math.max(160, isNaN(rawW) ? 320 : rawW));
+    const cached = path.join(cacheDir, `${file.storedName}.${width}.jpg`);
     if (!fs.existsSync(cached)) {
       fs.mkdirSync(cacheDir, { recursive: true });
       /* A PDF or .ai has no pixels for sharp to resize, so render its first
@@ -2604,8 +2733,8 @@ app.get('/api/order-management/orders/:id/thumb', async (req, res) => {
           if (!rasterSrc) return res.status(415).end();
         }
       }
-      await sharp(rasterSrc).rotate().resize(320, 320, { fit: 'inside', withoutEnlargement: true })
-        .jpeg({ quality: 72 }).toFile(cached);
+      await sharp(rasterSrc).rotate().resize(width, width, { fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: width > 800 ? 86 : 72 }).toFile(cached);
     }
     res.setHeader('Cache-Control', 'private, max-age=86400');
     res.setHeader('Content-Type', 'image/jpeg');
@@ -2661,7 +2790,9 @@ app.get('/api/order-management/orders/:id/importable-images', (req, res) => {
     .map((f) => ({
       name: f.originalName || '',
       url: f.url,
-      // Small version for the picker grid; `url` is what gets attached.
+      /* Rasterised preview. This is now what gets ATTACHED as well as shown:
+         a PDF or AI file inserted by its original url rendered as a broken
+         image in the approval slot and stayed broken on the submitted record. */
       thumbUrl: `/api/order-management/orders/${encodeURIComponent(order.id)}/thumb`
         + `?file=${encodeURIComponent(f.storedName)}`,
       category: f.category || '',
@@ -2823,11 +2954,28 @@ async function runHandoffImport(order, driveToken, drive) {
     await filePreview.tryGeneratePreview(dest, path.join(dirFor(), '.thumbs'), `${stored}.page1`);
     return registerFile(stored, got.name, category);
   };
-  const setSlot = (slot, url) => {
-    if (slot && url) {
-      orderManagementStore.updateOrder(order.id,
-        { mainComponent: { [slot]: url } }, IMPORT_TAG, 'Handoff import');
+  /**
+   * Fill a Product Documentation slot, recording where the file came from.
+   *
+   * `url` is the local copy we fetched; `sourceUrl` is the Drive link the
+   * Asana subtask pointed at. Storing both means the slot can offer "Open in
+   * Drive" instead of handing someone our copy - the Drive file is the one
+   * that gets updated, so linking to it is what people actually want.
+   *
+   * docSourceUrls is an object, and updateOrder merges mainComponent key by
+   * key rather than deeply, so writing {docSourceUrls: {hangTagUrl: ...}}
+   * would drop the slots recorded by earlier items in this same import. Read,
+   * merge, write.
+   */
+  const setSlot = (slot, url, sourceUrl) => {
+    if (!slot || !url) return;
+    const patch = { [slot]: url };
+    if (sourceUrl) {
+      const current = orderManagementStore.getOrderById(order.id);
+      const existing = (current && current.mainComponent && current.mainComponent.docSourceUrls) || {};
+      patch.docSourceUrls = { ...existing, [slot]: sourceUrl };
     }
+    orderManagementStore.updateOrder(order.id, { mainComponent: patch }, IMPORT_TAG, 'Handoff import');
   };
 
   /**
@@ -2894,7 +3042,7 @@ async function runHandoffImport(order, driveToken, drive) {
           const meta = await driveClient.getFile(access, it.drvFile[1]);
           const url = await saveDriveFile(access, meta, 'Design document');
           const slot = docSlotFor(it.label);
-          setSlot(slot, url);
+          setSlot(slot, url, it.url);
           recordOnDefinition(it.label, url);
           results.push({ label: it.label, status: 'imported', files: 1, as: slot ? `Product Documentation - ${it.label}` : 'PO file (slot already filled)' });
         } else {
@@ -2948,7 +3096,7 @@ async function runHandoffImport(order, driveToken, drive) {
             }
           }
           const slot = docSlotFor(it.label);
-          setSlot(slot, url);
+          setSlot(slot, url, it.url);
           recordOnDefinition(it.label, url);
           results.push({ label: it.label, status: 'imported', files: listed.length,
             as: slot ? `Product Documentation - ${it.label}${listed.length > 1 ? ' (zip)' : ''}` : 'PO file (slot already filled)' });
@@ -3551,7 +3699,7 @@ app.get('/api/order-management/file-categories', (req, res) => {
  * throw the original away. When no link is supplied we keep the file as before,
  * because discarding the only copy of something would be indefensible.
  */
-async function storeAsPreviewOnly(orderId, uploaded, sourceUrl) {
+async function storeAsPreviewOnly(orderId, uploaded, sourceUrl, keepIfUnrenderable) {
   const srcPath = uploaded.path;
   const key = path.parse(uploaded.filename).name;
   const dir = path.join(orderManagementStore.ORDER_FILES_DIR, orderId);
@@ -3566,8 +3714,16 @@ async function storeAsPreviewOnly(orderId, uploaded, sourceUrl) {
   }
 
   if (!storedName) {
-    // Nothing renderable (a .zip, a .xlsx). There is no preview to keep, so
-    // the link is all we store - the file itself lives in Drive.
+    /* Nothing renderable (a .zip, a .xlsx). With a Drive link the file still
+     * exists somewhere, so the link is all we keep. Without one, deleting it
+     * would destroy the only copy - keep the original instead. */
+    if (!sourceUrl && keepIfUnrenderable) {
+      return {
+        storedName: uploaded.filename,
+        url: `/order-management-files/${encodeURIComponent(orderId)}/${encodeURIComponent(uploaded.filename)}`,
+        previewOnly: false
+      };
+    }
     try { fs.unlinkSync(srcPath); } catch (e) { /* already gone */ }
     return { storedName: null, url: null, previewOnly: true };
   }
@@ -3592,12 +3748,21 @@ app.post('/api/order-management/orders/:id/files', uploadOrderFile.single('file'
       ? req.body.category : 'Other';
     const sourceUrl = String(req.body.sourceUrl || '').trim();
 
+    /* Sub-component attachments are reference images, not deliverables: the
+     * factory already holds the production files. So they are always reduced to
+     * a preview, with no Drive link required - a 5 MB artwork file becomes a
+     * ~100 KB image. Product Documentation still keeps the original unless a
+     * Drive link is supplied. */
+    const previewOnlyRequested = String(req.body.previewOnly || '') === 'true';
+
     let stored = {
       storedName: req.file.filename,
       url: `/order-management-files/${encodeURIComponent(req.params.id)}/${encodeURIComponent(req.file.filename)}`,
       previewOnly: false
     };
-    if (sourceUrl) stored = await storeAsPreviewOnly(req.params.id, req.file, sourceUrl);
+    if (sourceUrl || previewOnlyRequested) {
+      stored = await storeAsPreviewOnly(req.params.id, req.file, sourceUrl, previewOnlyRequested);
+    }
 
     const file = {
       id: uuidv4(),
@@ -3666,8 +3831,13 @@ app.get('/api/approval/:poNumber', (req, res) => {
     const approval = approvalStore.getOrCreateByPoNumber(po.poNumber, po.sku);
     const priorSampleApproval = approvalStore.getPriorSampleApprovalForSku(po.sku, po.poNumber);
     const reportingHistory = submissionLog.findPriorReportsBySku(po.sku);
+    /* Revised unit reports for this PO. Without them the approval page showed
+     * only the original failing inspection, so a PO whose units had since been
+     * repaired still presented to Product Development as a plain FAIL with no
+     * sign the issue had been dealt with. */
+    const revisedReports = submissionLog.findRevisedReports(po.poNumber) || [];
 
-    res.json({ po, photoSet, approval, priorSampleApproval, reportingHistory });
+    res.json({ po, photoSet, approval, priorSampleApproval, reportingHistory, revisedReports });
   } catch (err) {
     console.error('Failed to load approval record:', err);
     res.status(500).json({ error: 'Failed to load approval record', detail: String(err.message || err) });
@@ -4184,7 +4354,11 @@ migrateFactoryCodesToSuppliers();
 // don't nest inside each other and balloon in size over time.
 const SCHEDULED_BACKUP_DIR = path.join(submissionLog.DATA_DIR, 'scheduled-backups');
 const BACKUP_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
-const MAX_SCHEDULED_BACKUPS = 8; // ~2 months of weekly snapshots
+/* Each weekly zip now contains both the SQLite databases and the legacy JSON
+ * files kept as migration rollbacks, so snapshots are roughly twice the size
+ * they used to be. Eight of those is a lot of a per-GB disk; four is still a
+ * month of history. */
+const MAX_SCHEDULED_BACKUPS = 4; // ~1 month of weekly snapshots
 
 function listScheduledBackups() {
   if (!fs.existsSync(SCHEDULED_BACKUP_DIR)) return [];
@@ -4217,7 +4391,10 @@ async function runScheduledBackupIfDue() {
      * WAL-mode database without this captures the .db without its pending
      * -wal, producing a backup that restores short of recent writes or won't
      * open at all - and that only surfaces when someone actually needs it. */
-    orderManagementStore.checkpointDatabase();
+    // Every SQLite store must be checkpointed, not just orders - a backup that
+    // copies a live WAL database restores short of recent writes or won't open.
+    [orderManagementStore, approvalStore, submissionLog, componentDefinitions]
+      .forEach((st) => { try { st.checkpointDatabase && st.checkpointDatabase(); } catch (e) { console.error('Checkpoint failed:', e.message || e); } });
     const archive = archiver('zip', { zlib: { level: 9 } });
     await new Promise((resolve, reject) => {
       output.on('close', resolve);
