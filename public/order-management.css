@@ -1732,25 +1732,6 @@ html {
   font-weight: 600;
 }
 
-/* ---- Check-in column widths (single source) ----
- * Totals 100%. QA/QC is sized from the measured "Schedule QA" button (98px of
- * content plus 24px of cell padding), not guessed - at 9% the button was
- * clipped mid-word.
- *
- * NOTE: these rules have been duplicated by later appends twice in this file.
- * If a width refuses to change, search for a second nth-child block below this
- * one rather than editing this one again.
- */
-.om-checkin-table th:nth-child(1),  .om-checkin-table td:nth-child(1)  { width: 9%; }
-.om-checkin-table th:nth-child(2),  .om-checkin-table td:nth-child(2)  { width: 6%; }
-.om-checkin-table th:nth-child(3),  .om-checkin-table td:nth-child(3)  { width: 12%; }
-.om-checkin-table th:nth-child(4),  .om-checkin-table td:nth-child(4)  { width: 5%; }
-.om-checkin-table th:nth-child(5),  .om-checkin-table td:nth-child(5)  { width: 10%; }
-.om-checkin-table th:nth-child(6),  .om-checkin-table td:nth-child(6)  { width: 13%; }
-.om-checkin-table th:nth-child(7),  .om-checkin-table td:nth-child(7)  { width: 15%; }
-.om-checkin-table th:nth-child(8),  .om-checkin-table td:nth-child(8)  { width: 15%; }
-.om-checkin-table th:nth-child(9),  .om-checkin-table td:nth-child(9)  { width: 10%; }
-.om-checkin-table th:nth-child(10), .om-checkin-table td:nth-child(10) { width: 5%; }
 
 
 /* A button sitting in a section heading, right-aligned against it. */
@@ -1884,3 +1865,31 @@ html {
 .om-checkin-table.is-custom-cols td[data-col="prodNotes"],
 .om-checkin-table.is-custom-cols td[data-col="lastUpdate"],
 .om-checkin-table.is-custom-cols td[data-col="product"] { white-space: normal; min-width: 150px; }
+
+/* ---- Check-in column widths ----
+ * Keyed by data-col, not nth-child: columns can now be reordered, and
+ * position-based rules would apply the wrong width the moment they were.
+ * These are the default ten; a custom selection sizes itself.
+ */
+.om-checkin-table [data-col="po"]         { width: 9%; }
+.om-checkin-table [data-col="photo"]      { width: 6%; }
+.om-checkin-table [data-col="product"]    { width: 12%; }
+.om-checkin-table [data-col="qty"]        { width: 5%; }
+.om-checkin-table [data-col="status"]     { width: 10%; }
+.om-checkin-table [data-col="qa"]         { width: 13%; }
+.om-checkin-table [data-col="lastUpdate"] { width: 15%; }
+.om-checkin-table [data-col="update"]     { width: 15%; }
+.om-checkin-table [data-col="followUp"]   { width: 10%; }
+.om-checkin-table [data-col="done"]       { width: 5%; }
+.om-checkin-table.is-custom-cols [data-col] { width: auto; }
+
+/* Drag handles in the picker. */
+.om-cols-row { user-select: none; }
+.om-cols-row.is-draggable { cursor: grab; }
+.om-cols-row.is-dragging { opacity: 0.45; }
+.om-cols-row.is-drop-target { border-top: 2px solid var(--jc-teal); }
+.om-cols-handle {
+  color: var(--jc-muted); font-size: 15px; line-height: 1;
+  cursor: grab; padding: 0 2px;
+}
+.om-cols-order-note { font-size: 11.5px; color: var(--jc-muted); margin-top: 2px; }

@@ -5290,5 +5290,17 @@
   "columnsReset2": {
     "en": "Reset to default",
     "zh": "恢复默认"
+  },
+  "columnsHelp2": {
+    "en": "Tick what you want to see, and drag to put them in the order you read them. This is saved for you.",
+    "zh": "勾选需要显示的列，并拖动调整顺序。设置会为你保存。"
+  },
+  "columnsGroupShown": {
+    "en": "Shown, in order",
+    "zh": "已显示（可拖动排序）"
+  },
+  "columnsGroupAvailable": {
+    "en": "Available to add",
+    "zh": "可添加的列"
   }
 }

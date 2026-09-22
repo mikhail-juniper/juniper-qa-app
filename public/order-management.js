@@ -6201,9 +6201,14 @@ function loadCheckInColumns() {
   }
   /* Keep the canonical order and drop anything unknown, so a preference saved
    * before a column was added or renamed cannot produce a broken table. */
-  checkInColumns = CHECKIN_COLUMNS
-    .filter((c) => c.locked || saved.includes(c.key))
-    .map((c) => c.key);
+  /* Honour the SAVED order - re-sorting into catalogue order here would throw
+     away the arrangement she dragged into place. Unknown keys are dropped, and
+     a locked column is reinstated if it somehow went missing. */
+  const known = new Set(CHECKIN_COLUMNS.map((c) => c.key));
+  checkInColumns = saved.filter((k) => known.has(k));
+  CHECKIN_COLUMNS.filter((c) => c.locked).forEach((c) => {
+    if (!checkInColumns.includes(c.key)) checkInColumns.unshift(c.key);
+  });
 }
 
 async function saveCheckInColumns() {
@@ -6222,89 +6227,172 @@ async function saveCheckInColumns() {
 }
 
 function openColumnPicker() {
+  /* Working copy: the chosen columns in their chosen order, then everything
+   * else. Reordering happens in this array, not in the DOM, so what is saved
+   * is exactly what the list shows. */
+  let working = checkInColumns.slice();
+  const rest = CHECKIN_COLUMNS.map((c) => c.key).filter((k) => !working.includes(k));
+
   const backdrop = document.createElement('div');
   backdrop.className = 'om-panel-backdrop om-cols-backdrop';
-  backdrop.innerHTML = `
-    <div class="om-cols-dialog">
-      <div class="om-section-title">${escapeHtml(i18t('columnsTitle', 'Choose columns'))}</div>
-      <div class="section-help">${escapeHtml(i18t('columnsHelp', 'Pick what you want to see while working down the list. This is saved for you.'))}</div>
-      ${[['core', i18t('columnsGroupCore', 'Standard')],
-         ['more', i18t('columnsGroupMore', 'Add from the order record')]].map(([g, title]) => `
-        <div class="om-cols-group">${escapeHtml(title)}</div>
-        <div class="om-cols-list">
-          ${CHECKIN_COLUMNS.filter((c) => (c.group || 'core') === g).map((c) => `
-            <label class="om-cols-row ${c.locked ? 'is-locked' : ''}">
-              <input type="checkbox" data-col="${c.key}" ${columnOn(c.key) ? 'checked' : ''} ${c.locked ? 'disabled' : ''} />
-              <span>${escapeHtml(i18t(c.labelKey, c.fallback))}</span>
-              ${c.locked ? `<em>${escapeHtml(i18t('columnsAlways', 'always shown'))}</em>` : ''}
-            </label>
-          `).join('')}
-        </div>
-      `).join('')}
-      <div class="om-cols-actions">
-        <button type="button" class="btn btn-secondary" id="omColsReset" style="width:auto;">${escapeHtml(i18t('columnsReset2', 'Reset to default'))}</button>
-        <button type="button" class="btn btn-secondary" id="omColsCancel" style="width:auto;">${escapeHtml(i18t('btnCancel', 'Cancel'))}</button>
-        <button type="button" class="btn btn-primary" id="omColsSave" style="width:auto;">${escapeHtml(i18t('btnSave', 'Save'))}</button>
-      </div>
-    </div>
-  `;
   document.body.appendChild(backdrop);
 
+  const rowHtml = (key, on) => {
+    const c = CHECKIN_COLUMNS.find((x) => x.key === key);
+    if (!c) return '';
+    return `
+      <label class="om-cols-row ${c.locked ? 'is-locked' : ''} ${on && !c.locked ? 'is-draggable' : ''}"
+             data-row-key="${c.key}" ${on && !c.locked ? 'draggable="true"' : ''}>
+        ${on ? `<span class="om-cols-handle" aria-hidden="true">${c.locked ? '' : '&#8942;&#8942;'}</span>` : ''}
+        <input type="checkbox" data-col="${c.key}" ${on ? 'checked' : ''} ${c.locked ? 'disabled' : ''} />
+        <span>${escapeHtml(i18t(c.labelKey, c.fallback))}</span>
+        ${c.locked ? `<em>${escapeHtml(i18t('columnsAlways', 'always shown'))}</em>` : ''}
+      </label>`;
+  };
+
+  const draw = () => {
+    backdrop.innerHTML = `
+      <div class="om-cols-dialog">
+        <div class="om-section-title">${escapeHtml(i18t('columnsTitle', 'Choose columns'))}</div>
+        <div class="section-help">${escapeHtml(i18t('columnsHelp2', 'Tick what you want to see, and drag to put them in the order you read them. This is saved for you.'))}</div>
+
+        <div class="om-cols-group">${escapeHtml(i18t('columnsGroupShown', 'Shown, in order'))}</div>
+        <div class="om-cols-list" id="omColsShown">
+          ${working.map((k) => rowHtml(k, true)).join('')}
+        </div>
+
+        <div class="om-cols-group">${escapeHtml(i18t('columnsGroupAvailable', 'Available to add'))}</div>
+        <div class="om-cols-list" id="omColsAvailable">
+          ${rest.map((k) => rowHtml(k, false)).join('')}
+        </div>
+
+        <div class="om-cols-actions">
+          <button type="button" class="btn btn-secondary" id="omColsReset" style="width:auto;">${escapeHtml(i18t('columnsReset2', 'Reset to default'))}</button>
+          <button type="button" class="btn btn-secondary" id="omColsCancel" style="width:auto;">${escapeHtml(i18t('btnCancel', 'Cancel'))}</button>
+          <button type="button" class="btn btn-primary" id="omColsSave" style="width:auto;">${escapeHtml(i18t('btnSave', 'Save'))}</button>
+        </div>
+      </div>`;
+    wire();
+  };
+
   const close = () => backdrop.remove();
-  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(); });
-  backdrop.querySelector('#omColsCancel').addEventListener('click', close);
-  backdrop.querySelector('#omColsReset').addEventListener('click', () => {
-    // Back to the default working set, not every column that exists - with 27
-    // available, "all" is not a state anyone wants.
-    backdrop.querySelectorAll('[data-col]').forEach((el) => {
-      el.checked = CHECKIN_COLUMNS_DEFAULT.includes(el.dataset.col);
+
+  function wire() {
+    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(); });
+    backdrop.querySelector('#omColsCancel').addEventListener('click', close);
+
+    backdrop.querySelector('#omColsReset').addEventListener('click', () => {
+      working = CHECKIN_COLUMNS_DEFAULT.slice();
+      rest.length = 0;
+      CHECKIN_COLUMNS.map((c) => c.key).filter((k) => !working.includes(k)).forEach((k) => rest.push(k));
+      draw();
     });
-  });
-  backdrop.querySelector('#omColsSave').addEventListener('click', async () => {
-    const picked = [...backdrop.querySelectorAll('[data-col]')]
-      .filter((el) => el.checked || el.disabled)
-      .map((el) => el.dataset.col);
-    checkInColumns = CHECKIN_COLUMNS.filter((c) => picked.includes(c.key)).map((c) => c.key);
-    await saveCheckInColumns();
-    close();
-    render();
-  });
+
+    // Ticking moves a column between the two lists, keeping order sensible:
+    // newly added columns go to the end, where she can then drag them.
+    backdrop.querySelectorAll('[data-col]').forEach((el) => {
+      el.addEventListener('change', () => {
+        const key = el.dataset.col;
+        if (el.checked) {
+          if (!working.includes(key)) working.push(key);
+          const i = rest.indexOf(key); if (i >= 0) rest.splice(i, 1);
+        } else {
+          const i = working.indexOf(key); if (i >= 0) working.splice(i, 1);
+          if (!rest.includes(key)) rest.push(key);
+        }
+        draw();
+      });
+    });
+
+    /* Drag to reorder. Plain HTML5 drag and drop rather than a library: the
+     * list is short and this keeps the dialog dependency-free. */
+    let draggingKey = null;
+    backdrop.querySelectorAll('#omColsShown .om-cols-row[draggable="true"]').forEach((row) => {
+      row.addEventListener('dragstart', (e) => {
+        draggingKey = row.dataset.rowKey;
+        row.classList.add('is-dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        // Firefox needs data set for a drag to start at all.
+        try { e.dataTransfer.setData('text/plain', draggingKey); } catch (err) { /* ignore */ }
+      });
+      row.addEventListener('dragend', () => { row.classList.remove('is-dragging'); draggingKey = null; });
+      row.addEventListener('dragover', (e) => {
+        if (!draggingKey || draggingKey === row.dataset.rowKey) return;
+        e.preventDefault();
+        row.classList.add('is-drop-target');
+      });
+      row.addEventListener('dragleave', () => row.classList.remove('is-drop-target'));
+      row.addEventListener('drop', (e) => {
+        e.preventDefault();
+        row.classList.remove('is-drop-target');
+        const target = row.dataset.rowKey;
+        if (!draggingKey || draggingKey === target) return;
+        const from = working.indexOf(draggingKey);
+        const to = working.indexOf(target);
+        if (from < 0 || to < 0) return;
+        working.splice(from, 1);
+        working.splice(to, 0, draggingKey);
+        draw();
+      });
+    });
+
+    backdrop.querySelector('#omColsSave').addEventListener('click', async () => {
+      /* A locked column must survive however the list was rearranged. */
+      CHECKIN_COLUMNS.filter((c) => c.locked).forEach((c) => {
+        if (!working.includes(c.key)) working.unshift(c.key);
+      });
+      checkInColumns = working.slice();
+      await saveCheckInColumns();
+      close();
+      render();
+    });
+  }
+
+  draw();
 }
 
 /* One header and one row renderer for both check-in sections. They started as
  * separate markup and immediately disagreed - PO Requests had six columns
  * where In Production had ten - so both now come from here. */
 function checkInHeaderHtml() {
-  return `<tr>${CHECKIN_COLUMNS.filter((c) => columnOn(c.key))
-    .map((c) => `<th data-col="${c.key}">${escapeHtml(i18t(c.labelKey, c.fallback))}</th>`).join('')}</tr>`;
+  return `<tr>${checkInColumns.map((k) => {
+    const c = CHECKIN_COLUMNS.find((x) => x.key === k);
+    return c ? `<th data-col="${c.key}">${escapeHtml(i18t(c.labelKey, c.fallback))}</th>` : '';
+  }).join('')}</tr>`;
 }
 
-function checkInRowHtml(r) {
-  return `              <tr data-checkin-row="${escapeHtml(r.id)}" data-row-po="${escapeHtml(r.id)}"
-                  class="om-row-clickable ${checkedInToday(r) ? 'om-row-done' : ''}">
-                <td data-col="po" data-label="${escapeHtml(i18t('thPoNumber', 'PO Number'))}"><strong>${escapeHtml(r.poNumber)}</strong></td>
-                <td data-col="photo" data-label="${escapeHtml(i18t('thPhoto', 'Photo'))}" class="om-checkin-photo">
+/* One renderer per column.
+ *
+ * The header and the row are both built by walking `checkInColumns` through
+ * this map, so they cannot disagree about which cells exist or what order they
+ * are in. The previous approach - emit every cell, hide the unwanted ones with
+ * CSS - kept them in step but made reordering impossible, since CSS cannot
+ * reorder table cells.
+ */
+const CHECKIN_CELLS = {
+  po: (r) => `<td data-col="po" data-label="${escapeHtml(i18t('thPoNumber', 'PO Number'))}"><strong>${escapeHtml(r.poNumber)}</strong></td>`,
+  photo: (r) => `<td data-col="photo" data-label="${escapeHtml(i18t('thPhoto', 'Photo'))}" class="om-checkin-photo">
                   ${r.photo ? `<img src="${escapeHtml(r.photo)}" alt="" class="js-lightbox" />` : '<span class="om-sub">-</span>'}
-                </td>
-                <td data-col="product" data-label="${escapeHtml(i18t('thProduct', 'Product'))}">${escapeHtml(r.productName || '')}<div class="om-sub">${escapeHtml(r.sku || '')}</div></td>
-                <td data-col="qty" data-label="${escapeHtml(i18t('thQty', 'Qty'))}">${r.quantity != null ? Number(r.quantity).toLocaleString() : '-'}</td>
-                <td data-col="status" data-label="${escapeHtml(i18t('thStatus', 'Status'))}"><span class="om-pill om-pill-${statusSlug(r.status)}">${tStatusInline(r.status)}</span></td>
-                <td data-col="qa" data-label="${escapeHtml(i18t('thQaQc', 'QA/QC'))}" class="om-checkin-qacol">
+                </td>`,
+  product: (r) => `<td data-col="product" data-label="${escapeHtml(i18t('thProduct', 'Product'))}">${escapeHtml(r.productName || '')}<div class="om-sub">${escapeHtml(r.sku || '')}</div></td>`,
+  qty: (r) => `<td data-col="qty" data-label="${escapeHtml(i18t('thQty', 'Qty'))}">${r.quantity != null ? Number(r.quantity).toLocaleString() : '-'}</td>`,
+  status: (r) => `<td data-col="status" data-label="${escapeHtml(i18t('thStatus', 'Status'))}"><span class="om-pill om-pill-${statusSlug(r.status)}">${tStatusInline(r.status)}</span></td>`,
+  qa: (r) => `<td data-col="qa" data-label="${escapeHtml(i18t('thQaQc', 'QA/QC'))}" class="om-checkin-qacol">
                   ${/* Scheduling happens during the call, so it belongs here
                        rather than on a page of its own. */ ''}
                   <button type="button" class="om-table-upload-btn om-row-btn-lg" data-schedule-qa="${escapeHtml(r.id)}">${escapeHtml(i18t('btnScheduleQa', 'Schedule QA'))}</button>
-                </td>
-                <td data-col="lastUpdate" data-label="${escapeHtml(i18t('thLastUpdate', 'Last update'))}" class="om-checkin-lastcol">
+                </td>`,
+  lastUpdate: (r) => `<td data-col="lastUpdate" data-label="${escapeHtml(i18t('thLastUpdate', 'Last update'))}" class="om-checkin-lastcol">
                   ${r.lastNote
                     ? `<div class="om-sub">${escapeHtml(fmtDate(r.lastNote.at))} &middot; ${escapeHtml(r.lastNote.by || '')}</div>${escapeHtml(r.lastNote.text || '')}`
                     : `<span class="om-sub">${escapeHtml(i18t('noUpdatesYet', 'No updates yet'))}</span>`}
-                </td>
-                <td data-col="update" data-label="${escapeHtml(i18t('thNewUpdate', 'Update'))}">
+                </td>`,
+  update: (r) => `<td data-col="update" data-label="${escapeHtml(i18t('thNewUpdate', 'Update'))}">
                   <textarea rows="1" class="om-checkin-note" data-note-for="${escapeHtml(r.id)}"
                     placeholder="${escapeHtml(i18t('checkInNotePlaceholder2', 'Production update'))}"></textarea>
                   <div class="om-row-saved" data-saved-for="${escapeHtml(r.id)}"></div>
-                </td>
-                <td data-col="followUp" data-label="${escapeHtml(i18t('thFollowUp', 'Follow up'))}" class="om-checkin-fucol">
+                </td>`,
+  followUp: (r) => `<td data-col="followUp" data-label="${escapeHtml(i18t('thFollowUp', 'Follow up'))}" class="om-checkin-fucol">
                   ${/* Compact: a calendar glyph when empty, "Oct 28" when set.
                        A full mm/dd/yyyy control in every row is a lot of
                        furniture for a field that is usually blank. The real
@@ -6317,8 +6405,8 @@ function checkInRowHtml(r) {
                   </label>
                   <button type="button" class="om-datechip-clear ${r.followUpDate ? '' : 'is-hidden'}" data-fu-clear="${escapeHtml(r.id)}" title="${escapeHtml(i18t('clearLabel', 'Clear'))}">&times;</button>
                   <div class="om-row-saved" data-saved-fu="${escapeHtml(r.id)}"></div>
-                </td>
-                <td data-col="done" data-label="${escapeHtml(i18t('thDone', 'Done'))}" class="om-checkin-donecol">
+                </td>`,
+  done: (r) => `<td data-col="done" data-label="${escapeHtml(i18t('thDone', 'Done'))}" class="om-checkin-donecol">
                   ${/* Ticking this is how she keeps her place in a list of 20.
                        Saving an update ticks it automatically, because having
                        just written a note IS having covered the order. */ ''}
@@ -6327,39 +6415,38 @@ function checkInRowHtml(r) {
                     <span></span>
                   </label>
                   <div class="om-sub" data-done-when="${escapeHtml(r.id)}">${checkedInToday(r) ? escapeHtml(i18t('doneToday', 'Today')) : ''}</div>
-                </td>
-                ${/* Optional columns. Rendered always and hidden by CSS, so the
-                     header and the row can never disagree about cell count. */ ''}
-                <td data-col="sku" data-label="${escapeHtml(i18t('thSku', 'SKU'))}">${escapeHtml(r.sku || '-')}</td>
-                <td data-col="supplier" data-label="${escapeHtml(i18t('thSupplier', 'Supplier'))}">${escapeHtml(r.supplierName || '-')}</td>
-                <td data-col="orderDate" data-label="${escapeHtml(i18t('supOrderDate', 'Order Date'))}">${escapeHtml(r.orderDate ? fmtDate(r.orderDate) : '-')}</td>
-                <td data-col="delivery" data-label="${escapeHtml(i18t('fldRequiredManufacturerDelivery', 'Required Delivery'))}">${escapeHtml(r.manufacturerDeliveryDate ? fmtDate(r.manufacturerDeliveryDate) : '-')}</td>
-                <td data-col="shipDate" data-label="${escapeHtml(i18t('supActualShipDate', 'Actual Ship Date'))}">${escapeHtml(r.actualShipDate ? fmtDate(r.actualShipDate) : '-')}</td>
-                <td data-col="warehouseDate" data-label="${escapeHtml(i18t('fldRequiredWarehouseArrival', 'Warehouse Arrival'))}">${escapeHtml(r.warehouseArrivalDate ? fmtDate(r.warehouseArrivalDate) : '-')}</td>
-                <td data-col="fulfilDate" data-label="${escapeHtml(i18t('fldFulfillmentRequestDate', 'Fulfillment Request'))}">${escapeHtml(r.fulfillmentRequestDate ? fmtDate(r.fulfillmentRequestDate) : '-')}</td>
-                <td data-col="ppSample" data-label="${escapeHtml(i18t('supPreProdSample', 'Pre-Production Sample'))}">${escapeHtml(r.preProductionSampleDate ? fmtDate(r.preProductionSampleDate) : '-')}</td>
-                <td data-col="bulkSample" data-label="${escapeHtml(i18t('supBulkSample', 'Bulk Sample'))}">${escapeHtml(r.bulkSampleDate ? fmtDate(r.bulkSampleDate) : '-')}</td>
-                <td data-col="prodNotes" data-label="${escapeHtml(i18t('fldProductionNotes', 'Production Notes'))}">${escapeHtml(r.productionNotes || '-')}</td>
-                <td data-col="qtyReceived" data-label="${escapeHtml(i18t('fldQuantityReceived', 'Quantity Received'))}">${r.quantityReceived != null ? Number(r.quantityReceived).toLocaleString() : '-'}</td>
-                <td data-col="warehouse" data-label="${escapeHtml(i18t('fldWarehouseAddress', 'Warehouse Address'))}">${escapeHtml(r.warehouseAddress || '-')}</td>
-                <td data-col="creator" data-label="${escapeHtml(i18t('fldCreator', 'Creator'))}">${escapeHtml(r.creator || '-')}</td>
-                <td data-col="sourcer" data-label="${escapeHtml(i18t('fldSourcer', 'Sourcer'))}">${escapeHtml(r.sourcer || '-')}</td>
-                <td data-col="specialist" data-label="${escapeHtml(i18t('fldOrderManagementSpecialist', 'OM Specialist'))}">${escapeHtml(r.orderManagementSpecialist || '-')}</td>
-                <td data-col="channel" data-label="${escapeHtml(i18t('fldFulfillmentChannel', 'Fulfillment Channel'))}">${escapeHtml(r.fulfillmentChannel || '-')}</td>
-                <td data-col="approvals" data-label="${escapeHtml(i18t('thApprovals', 'Approvals'))}">${approvalStagesHtml(r.approvalStages)}</td>
-              </tr>
-            `;
+                </td>`,
+  sku: (r) => `<td data-col="sku" data-label="${escapeHtml(i18t('thSku', 'SKU'))}">${escapeHtml(r.sku || '-')}</td>`,
+  supplier: (r) => `<td data-col="supplier" data-label="${escapeHtml(i18t('thSupplier', 'Supplier'))}">${escapeHtml(r.supplierName || '-')}</td>`,
+  orderDate: (r) => `<td data-col="orderDate" data-label="${escapeHtml(i18t('supOrderDate', 'Order Date'))}">${escapeHtml(r.orderDate ? fmtDate(r.orderDate) : '-')}</td>`,
+  delivery: (r) => `<td data-col="delivery" data-label="${escapeHtml(i18t('fldRequiredManufacturerDelivery', 'Required Delivery'))}">${escapeHtml(r.manufacturerDeliveryDate ? fmtDate(r.manufacturerDeliveryDate) : '-')}</td>`,
+  shipDate: (r) => `<td data-col="shipDate" data-label="${escapeHtml(i18t('supActualShipDate', 'Actual Ship Date'))}">${escapeHtml(r.actualShipDate ? fmtDate(r.actualShipDate) : '-')}</td>`,
+  warehouseDate: (r) => `<td data-col="warehouseDate" data-label="${escapeHtml(i18t('fldRequiredWarehouseArrival', 'Warehouse Arrival'))}">${escapeHtml(r.warehouseArrivalDate ? fmtDate(r.warehouseArrivalDate) : '-')}</td>`,
+  fulfilDate: (r) => `<td data-col="fulfilDate" data-label="${escapeHtml(i18t('fldFulfillmentRequestDate', 'Fulfillment Request'))}">${escapeHtml(r.fulfillmentRequestDate ? fmtDate(r.fulfillmentRequestDate) : '-')}</td>`,
+  ppSample: (r) => `<td data-col="ppSample" data-label="${escapeHtml(i18t('supPreProdSample', 'Pre-Production Sample'))}">${escapeHtml(r.preProductionSampleDate ? fmtDate(r.preProductionSampleDate) : '-')}</td>`,
+  bulkSample: (r) => `<td data-col="bulkSample" data-label="${escapeHtml(i18t('supBulkSample', 'Bulk Sample'))}">${escapeHtml(r.bulkSampleDate ? fmtDate(r.bulkSampleDate) : '-')}</td>`,
+  prodNotes: (r) => `<td data-col="prodNotes" data-label="${escapeHtml(i18t('fldProductionNotes', 'Production Notes'))}">${escapeHtml(r.productionNotes || '-')}</td>`,
+  qtyReceived: (r) => `<td data-col="qtyReceived" data-label="${escapeHtml(i18t('fldQuantityReceived', 'Quantity Received'))}">${r.quantityReceived != null ? Number(r.quantityReceived).toLocaleString() : '-'}</td>`,
+  warehouse: (r) => `<td data-col="warehouse" data-label="${escapeHtml(i18t('fldWarehouseAddress', 'Warehouse Address'))}">${escapeHtml(r.warehouseAddress || '-')}</td>`,
+  creator: (r) => `<td data-col="creator" data-label="${escapeHtml(i18t('fldCreator', 'Creator'))}">${escapeHtml(r.creator || '-')}</td>`,
+  sourcer: (r) => `<td data-col="sourcer" data-label="${escapeHtml(i18t('fldSourcer', 'Sourcer'))}">${escapeHtml(r.sourcer || '-')}</td>`,
+  specialist: (r) => `<td data-col="specialist" data-label="${escapeHtml(i18t('fldOrderManagementSpecialist', 'OM Specialist'))}">${escapeHtml(r.orderManagementSpecialist || '-')}</td>`,
+  channel: (r) => `<td data-col="channel" data-label="${escapeHtml(i18t('fldFulfillmentChannel', 'Fulfillment Channel'))}">${escapeHtml(r.fulfillmentChannel || '-')}</td>`,
+  approvals: (r) => `<td data-col="approvals" data-label="${escapeHtml(i18t('thApprovals', 'Approvals'))}">${approvalStagesHtml(r.approvalStages)}</td>`
+};
+
+function checkInRowHtml(r) {
+  const cls = `om-row-clickable ${checkedInToday(r) ? 'om-row-done' : ''}`;
+  return `<tr data-checkin-row="${escapeHtml(r.id)}" data-row-po="${escapeHtml(r.id)}" class="${cls}">`
+    + checkInColumns.map((k) => (CHECKIN_CELLS[k] ? CHECKIN_CELLS[k](r) : '')).join('')
+    + `</tr>`;
 }
 
 /** A style block hiding the columns she has turned off. Simpler and safer than
  *  conditionally emitting cells: the header and the rows can never disagree
  *  about how many cells there are, which would break the table outright. */
-function checkInColumnStyleHtml() {
-  const off = CHECKIN_COLUMNS.filter((c) => !columnOn(c.key)).map((c) => c.key);
-  if (!off.length) return '';
-  return `<style>${off.map((k) =>
-    `.om-checkin-table [data-col="${k}"]{display:none!important;}`).join('')}</style>`;
-}
+/* Columns are excluded by not rendering them, so no style block is needed. */
+function checkInColumnStyleHtml() { return ''; }
 
 async function renderCheckInView(root) {
   root.innerHTML = `${workViewTabsHtml()}<div class="om-empty">${i18('emptyLoading', 'Loading...')}</div>`;
