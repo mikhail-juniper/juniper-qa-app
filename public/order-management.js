@@ -5610,7 +5610,46 @@ function collectAccessoryRows(container) {
   if (window.JuniperI18n) await window.JuniperI18n.loadI18n();
   await Promise.all([loadStatuses(), loadAccessoryStatuses(), loadFileCategories()]);
   render();
+  await openPoFromUrl(params.get('po'));
 })();
+
+/**
+ * Deep link into a single PO.
+ *
+ * The link written back to Asana is /order-management.html?po=<id>, but the
+ * page ignored the parameter and simply showed the board - so every link from
+ * a handoff task landed someone on a list they then had to search. Anyone
+ * pasting a PO *number* should land in the same place, so both are accepted.
+ */
+async function openPoFromUrl(raw) {
+  const key = (raw || '').trim();
+  if (!key) return;
+  try {
+    let id = null;
+    /* Only ask for it by id when it actually looks like one. Probing first and
+       catching the 404 worked, but logged a failed request for every PO-number
+       link, which is noise in the console for a normal, expected case. */
+    const looksLikeId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(key);
+    if (looksLikeId) {
+      try {
+        const byId = await api(`/api/order-management/orders/${encodeURIComponent(key)}`);
+        if (byId && (byId.order || byId.id)) id = (byId.order || byId).id;
+      } catch (e) { /* deleted since the link was written */ }
+    }
+
+    if (!id) {
+      const data = await api(`/api/order-management/orders?search=${encodeURIComponent(key)}`);
+      const list = data.orders || data || [];
+      const hit = list.find((o) => String(o.poNumber || '').toLowerCase() === key.toLowerCase());
+      if (hit) id = hit.id;
+    }
+
+    if (!id) return showToast(i18t('poNotFound', 'Could not find that PO').replace('{po}', key), true);
+    openDetailPanel(id, 'full');
+  } catch (e) {
+    showToast(e.message, true);
+  }
+}
 
 /* ============================================================
  * Setup Report Link dialog
