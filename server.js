@@ -1961,19 +1961,26 @@ app.post('/api/submit-revised', (req, res) => {
  */
 /** Confirm that someone here has seen a PD approval, clearing it from the queue. */
 app.post('/api/order-management/orders/:id/approval-seen', requirePermission('orders:write'), (req, res) => {
+  /* A stage may be named, but the common case is "I have seen everything PD
+   * signed off on this PO", so omitting the stage confirms all of them. */
   const stage = req.body && req.body.stage;
-  if (!['sample', 'preProduction', 'bulk'].includes(stage)) {
+  const stages = stage ? [stage] : ['sample', 'preProduction', 'bulk'];
+  if (stages.some((k) => !['sample', 'preProduction', 'bulk'].includes(k))) {
     return res.status(400).json({ error: 'Unknown stage' });
   }
   try {
     const order = orderManagementStore.getOrderById(req.params.id);
     if (!order) return res.status(404).json({ error: 'Order not found' });
     const seen = { ...(order.approvalSeen || {}) };
-    if (req.body.undo) delete seen[stage];
-    else seen[stage] = new Date().toISOString();
+    const now = new Date().toISOString();
+    stages.forEach((k) => {
+      if (req.body.undo) delete seen[k];
+      else seen[k] = now;
+    });
     orderManagementStore.updateOrder(order.id, { approvalSeen: seen },
       (req.user && req.user.name) || 'Web user',
-      req.body.undo ? `Approval confirmation undone (${stage})` : `Approval confirmed (${stage})`);
+      req.body.undo ? `Approval confirmation undone (${stages.join(', ')})`
+                    : `Approval confirmed (${stages.join(', ')})`);
     res.json({ ok: true, approvalSeen: seen });
   } catch (err) {
     console.error('Confirming an approval failed:', err);

@@ -6760,7 +6760,6 @@ async function renderCheckInView(root) {
  * style change meant for PD Approval, which is why it is gone rather than
  * merely unrouted. */
 
-/* ---- PD Approval: who is it waiting on ---- */
 /* The three approval stages as compact pills. Showing where each stands means
  * the Action column no longer has to spell it out - "Bulk approval was
  * rejected" is redundant next to a Bulk pill reading Rejected. */
@@ -6799,6 +6798,17 @@ function shortActionLabel(action) {
   return map[action.kind] || action.label || '';
 }
 
+/* ---- PD Approval: two sides of one conversation ----
+ *
+ * Everything is either waiting on us or waiting on Product Development. The
+ * earlier version had a card per state, which made a simple back-and-forth
+ * look like four separate queues.
+ *
+ * Within our side, the three things we might owe are subsections, not cards:
+ * something to submit, a reply to give, or an approval to acknowledge. That
+ * last one exists because an approval used to simply vanish from the board -
+ * the one outcome the team is waiting for was the one it never showed.
+ */
 async function renderPdApprovalView(root) {
   root.innerHTML = `${workViewTabsHtml()}<div class="om-empty">${i18('emptyLoading', 'Loading...')}</div>`;
   bindWorkViewTabs();
@@ -6806,125 +6816,119 @@ async function renderPdApprovalView(root) {
   try { rows = await loadWorkQueue(); }
   catch (e) { root.innerHTML = workViewTabsHtml() + `<div class="om-empty">${escapeHtml(e.message)}</div>`; bindWorkViewTabs(); return; }
 
-  const pdRows = rows.filter((r) => ['pdNeedsStart', 'pdReview', 'pdReply'].includes(r.action.kind));
-  /* Approvals PD has granted that nobody here has acknowledged. Drawn from its
-   * own field rather than the next action, so an approval still surfaces on a
-   * PO that has other work outstanding. */
-  const approvedRows = rows.filter((r) => (r.approvalsToConfirm || []).length);
-  const groups = [
-    ['pdNeedsStart', i18t('pdNeedsStart2', 'To Submit'),
-      i18t('pdNeedsStartHelp', 'Nothing has been submitted yet. A new PO needs its approved sample images; a finished inspection needs submitting for approval. These sit in no other queue.')],
-    ['pdReply', i18t('pdWaitingOnYou2', 'Waiting on Juniper China'),
-      i18t('pdWaitingOnYouHelp', 'Product Development has asked for changes. Nothing moves until you reply.')],
-    ['pdReview', i18t('pdWaitingOnPd', 'Waiting on Product Development'),
-      i18t('pdWaitingOnPdHelp', 'Submitted and sitting with PD. Chase anything that has been here too long.')]
-  ];
-
   const stageName = (k) => ({
     sample: i18t('stageGolden', 'Golden'),
     preProduction: i18t('stagePp', 'PP'),
     bulk: i18t('stageBulkShort', 'Bulk')
   })[k] || k;
 
-  const approvedCard = `
-    <div class="card">
-      <div class="section-title">
-        ${escapeHtml(i18t('pdApproved', 'Approved - confirm and clear'))}
-        <span class="om-count">${approvedRows.reduce((n, r) => n + r.approvalsToConfirm.length, 0)}</span>
-      </div>
-      <div class="section-help">${escapeHtml(i18t('pdApprovedHelp', 'Product Development has signed these off. Tick one to confirm you have seen it and it leaves the list.'))}</div>
-      ${approvedRows.length ? `
-        <div class="om-table-wrap"><table class="om-table om-pd-table">
-          <thead><tr>
-            <th>${escapeHtml(i18t('thPoNumber', 'PO Number'))}</th>
-            <th>${escapeHtml(i18t('thProduct', 'Product'))}</th>
-            <th>${escapeHtml(i18t('thApprovals', 'Approvals'))}</th>
-            <th>${escapeHtml(i18t('thApprovedStage', 'Approved'))}</th>
-            <th>${escapeHtml(i18t('thActions', 'Actions'))}</th>
-          </tr></thead>
-          <tbody>
-            ${approvedRows.map((r) => `
-              <tr class="om-row-clickable" data-row-po="${escapeHtml(r.id)}">
-                <td data-label="${escapeHtml(i18t('thPoNumber', 'PO Number'))}"><strong>${escapeHtml(r.poNumber)}</strong></td>
-                <td data-label="${escapeHtml(i18t('thProduct', 'Product'))}">${escapeHtml(r.productName || '')}<div class="om-sub">${escapeHtml(r.sku || '')}</div></td>
-                <td data-label="${escapeHtml(i18t('thApprovals', 'Approvals'))}">${approvalStagesHtml(r.approvalStages)}</td>
-                <td data-label="${escapeHtml(i18t('thApprovedStage', 'Approved'))}">
-                  ${r.approvalsToConfirm.map((k) => `<div><strong>${escapeHtml(stageName(k))}</strong></div>`).join('')}
-                </td>
-                <td data-label="${escapeHtml(i18t('thActions', 'Actions'))}">
-                  <div class="om-row-actions">
-                    ${r.approvalsToConfirm.map((k) => `
-                      <button type="button" class="om-table-upload-btn om-row-btn-lg om-approval-seen-btn"
-                              data-seen-order="${escapeHtml(r.id)}" data-seen-stage="${k}">
-                        &#10003; ${escapeHtml(i18t('btnConfirmSeen', 'Confirm'))} ${escapeHtml(stageName(k))}
-                      </button>`).join('')}
-                  </div>
-                </td>
-              </tr>`).join('')}
-          </tbody>
-        </table></div>
-      ` : `<div class="om-empty">${escapeHtml(i18t('emptyNothingHere', 'Nothing here.'))}</div>`}
-    </div>`;
+  const toSubmit = rows.filter((r) => r.action.kind === 'pdNeedsStart');
+  const toReply = rows.filter((r) => r.action.kind === 'pdReply');
+  /* Independent of the next action: a PO can have a bulk inspection
+   * outstanding and a golden sample just approved, and the approval must not
+   * be hidden behind whichever ranks higher. */
+  const toConfirm = rows.filter((r) => (r.approvalsToConfirm || []).length);
+  const withPd = rows.filter((r) => r.action.kind === 'pdReview');
+
+  const tableFor = (list, opts) => {
+    if (!list.length) return `<div class="om-empty">${escapeHtml(i18t('emptyNothingHere', 'Nothing here.'))}</div>`;
+    return `
+      <div class="om-table-wrap"><table class="om-table om-pd-table">
+        <thead><tr>
+          <th>${escapeHtml(i18t('thPoNumber', 'PO Number'))}</th>
+          <th>${escapeHtml(i18t('thProduct', 'Product'))}</th>
+          <th>${escapeHtml(i18t('thApprovals', 'Approvals'))}</th>
+          <th>${escapeHtml(opts.lastLabel)}</th>
+          <th>${escapeHtml(i18t('thActions', 'Actions'))}</th>
+        </tr></thead>
+        <tbody>${list.map((r) => `
+          <tr class="om-row-clickable" data-row-po="${escapeHtml(r.id)}">
+            <td data-label="${escapeHtml(i18t('thPoNumber', 'PO Number'))}"><strong>${escapeHtml(r.poNumber)}</strong></td>
+            <td data-label="${escapeHtml(i18t('thProduct', 'Product'))}">${escapeHtml(r.productName || '')}<div class="om-sub">${escapeHtml(r.sku || '')}</div></td>
+            <td data-label="${escapeHtml(i18t('thApprovals', 'Approvals'))}">${approvalStagesHtml(r.approvalStages)}</td>
+            <td data-label="${escapeHtml(opts.lastLabel)}">${opts.lastCell(r)}</td>
+            <td data-label="${escapeHtml(i18t('thActions', 'Actions'))}">
+              <div class="om-row-actions">${opts.actions(r)}</div>
+            </td>
+          </tr>`).join('')}</tbody>
+      </table></div>`;
+  };
+
+  const linkActions = (r) => `
+    <a class="om-table-upload-btn om-row-btn-lg" href="/approval.html?po=${encodeURIComponent(r.id)}" target="_blank" rel="noopener">${escapeHtml(i18t('btnOpenApproval', 'Open approval'))}</a>
+    <button type="button" class="om-table-upload-btn om-row-btn-lg om-copy-link-btn" data-copy-url="${escapeHtml(location.origin + '/approval.html?po=' + encodeURIComponent(r.id))}">${escapeHtml(i18t('btnShareAccess', 'Share'))}</button>`;
+
+  const jcTotal = toSubmit.length + toReply.length + toConfirm.length;
 
   root.innerHTML = `
     ${workViewTabsHtml()}
-    ${approvedCard}
-    ${groups.map(([kind, title, help]) => {
-      const list = pdRows.filter((r) => r.action.kind === kind);
-      return `
-        <div class="card">
-          <div class="section-title">${escapeHtml(title)} <span class="om-count">${list.length}</span></div>
-          <div class="section-help">${escapeHtml(help)}</div>
-          ${list.length ? `
-            <div class="om-table-wrap"><table class="om-table om-pd-table">
-              <thead><tr>
-                <th>${escapeHtml(i18t('thPoNumber', 'PO Number'))}</th><th>${escapeHtml(i18t('thProduct', 'Product'))}</th>
-                ${/* Supplier dropped: it is not what these rows are worked by,
-                     and the space is better spent on the approval stages. */ ''}
-                <th>${escapeHtml(i18t('thApprovals', 'Approvals'))}</th>
-                <th>${escapeHtml(i18t('thAction', 'Next'))}</th>
-                <th>${escapeHtml(i18t('thActions', 'Actions'))}</th>
-              </tr></thead>
-              <tbody>${list.map((r) => `
-                ${/* The whole row opens the PO, so there is no separate Open
-                      button competing with the real actions. */ ''}
-                <tr class="om-row-clickable" data-row-po="${escapeHtml(r.id)}">
-                  <td data-label="${escapeHtml(i18t('thPoNumber', 'PO Number'))}"><strong>${escapeHtml(r.poNumber)}</strong></td>
-                  <td data-label="${escapeHtml(i18t('thProduct', 'Product'))}">${escapeHtml(r.productName || '')}<div class="om-sub">${escapeHtml(r.sku || '')}</div></td>
-                  <td data-label="${escapeHtml(i18t('thApprovals', 'Approvals'))}">${approvalStagesHtml(r.approvalStages)}</td>
-                  <td data-label="${escapeHtml(i18t('thAction', 'Next'))}">${escapeHtml(shortActionLabel(r.action))}${r.revisedSummary ? `<div class="om-sub">${escapeHtml(r.revisedSummary)}</div>` : ''}</td>
-                  <td data-label="${escapeHtml(i18t('thActions', 'Actions'))}">
-                    <div class="om-row-actions">
-                      ${/* Straight into the approval page for this PO - the whole
-                           point is not having to open the PO first. */ ''}
-                      <a class="om-table-upload-btn om-row-btn-lg" href="/approval.html?po=${encodeURIComponent(r.id)}" target="_blank" rel="noopener">${escapeHtml(i18t('btnOpenApproval', 'Open approval'))}</a>
-                      <button type="button" class="om-table-upload-btn om-row-btn-lg om-copy-link-btn" data-copy-url="${escapeHtml(location.origin + '/approval.html?po=' + encodeURIComponent(r.id))}">${escapeHtml(i18t('btnShareAccess', 'Share'))}</button>
-                    </div>
-                  </td>
-                </tr>`).join('')}</tbody>
-            </table></div>
-          ` : `<div class="om-empty">${escapeHtml(i18t('emptyNothingHere', 'Nothing here.'))}</div>`}
-        </div>
-      `;
-    }).join('')}
+
+    <div class="card">
+      <div class="section-title">
+        ${escapeHtml(i18t('pdWaitingOnYou2', 'Waiting on Juniper China'))} <span class="om-count">${jcTotal}</span>
+      </div>
+      <div class="section-help">${escapeHtml(i18t('pdJcHelp', 'Everything on our side: work to submit, replies Product Development is waiting for, and approvals to acknowledge.'))}</div>
+
+      <div class="om-subsection">${escapeHtml(i18t('pdSubToSubmit', 'To submit'))} <span class="om-count">${toSubmit.length}</span></div>
+      <div class="section-help">${escapeHtml(i18t('pdSubToSubmitHelp', 'Nothing has been sent to Product Development yet.'))}</div>
+      ${tableFor(toSubmit, {
+        lastLabel: i18t('thAction', 'Next'),
+        lastCell: (r) => escapeHtml(shortActionLabel(r.action)),
+        actions: linkActions
+      })}
+
+      <div class="om-subsection">${escapeHtml(i18t('pdSubReply', 'Product Development comments'))} <span class="om-count">${toReply.length}</span></div>
+      <div class="section-help">${escapeHtml(i18t('pdSubReplyHelp', 'They have asked for changes. Nothing moves until you reply.'))}</div>
+      ${tableFor(toReply, {
+        lastLabel: i18t('thAction', 'Next'),
+        lastCell: (r) => escapeHtml(shortActionLabel(r.action)) + (r.revisedSummary ? `<div class="om-sub">${escapeHtml(r.revisedSummary)}</div>` : ''),
+        actions: linkActions
+      })}
+
+      <div class="om-subsection">${escapeHtml(i18t('pdSubApproved', 'Approved - check off'))} <span class="om-count">${toConfirm.length}</span></div>
+      <div class="section-help">${escapeHtml(i18t('pdSubApprovedHelp', 'Signed off by Product Development. Tick to say you have seen it.'))}</div>
+      ${tableFor(toConfirm, {
+        lastLabel: i18t('thApprovedStage', 'Approved'),
+        lastCell: (r) => r.approvalsToConfirm.map((k) => `<div><strong>${escapeHtml(stageName(k))}</strong></div>`).join(''),
+        actions: (r) => `
+          <label class="om-done-check om-approval-check" title="${escapeHtml(i18t('btnConfirmSeen', 'Confirm'))}">
+            <input type="checkbox" class="om-approval-seen-box" data-seen-order="${escapeHtml(r.id)}" />
+          </label>`
+      })}
+    </div>
+
+    <div class="card">
+      <div class="section-title">
+        ${escapeHtml(i18t('pdWaitingOnPd', 'Waiting on Product Development'))} <span class="om-count">${withPd.length}</span>
+      </div>
+      <div class="section-help">${escapeHtml(i18t('pdWaitingOnPdHelp', 'Submitted and sitting with PD. Chase anything that has been here too long.'))}</div>
+      ${tableFor(withPd, {
+        lastLabel: i18t('thAction', 'Next'),
+        lastCell: (r) => escapeHtml(shortActionLabel(r.action)),
+        actions: linkActions
+      })}
+    </div>
   `;
   bindWorkViewTabs();
   bindWorkRowActions();
   makeDateFieldsClickable(root);
 
-  document.querySelectorAll('.om-approval-seen-btn').forEach((btn) => {
-    btn.addEventListener('click', async (e) => {
-      e.stopPropagation();          // the row itself opens the PO
-      btn.disabled = true;
+  document.querySelectorAll('.om-approval-seen-box').forEach((box) => {
+    // Clicks must not bubble: the row itself opens the PO.
+    box.closest('label').addEventListener('click', (e) => e.stopPropagation());
+    box.addEventListener('change', async () => {
+      box.disabled = true;
       try {
-        await api(`/api/order-management/orders/${encodeURIComponent(btn.dataset.seenOrder)}/approval-seen`,
-          { method: 'POST', body: JSON.stringify({ stage: btn.dataset.seenStage }) });
+        // No stage: confirm everything outstanding on this PO at once.
+        await api(`/api/order-management/orders/${encodeURIComponent(box.dataset.seenOrder)}/approval-seen`,
+          { method: 'POST', body: JSON.stringify({}) });
         showToast(i18t('approvalConfirmed', 'Confirmed'));
         workQueueCache = null;
         render();
       } catch (err) {
         showToast(err.message, true);
-        btn.disabled = false;
+        box.checked = false;
+        box.disabled = false;
       }
     });
   });

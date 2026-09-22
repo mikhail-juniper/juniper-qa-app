@@ -1893,3 +1893,15 @@ html {
   cursor: grab; padding: 0 2px;
 }
 .om-cols-order-note { font-size: 11.5px; color: var(--jc-muted); margin-top: 2px; }
+
+/* Subsection heading inside a card - the three things we might owe PD are
+   stages of one conversation, not three separate queues. */
+.om-subsection {
+  font-size: 12.5px; font-weight: 700; letter-spacing: 0.03em;
+  text-transform: uppercase; color: var(--jc-text);
+  margin: 20px 0 2px; padding-top: 14px; border-top: 1px solid var(--jc-border);
+  display: flex; align-items: center; gap: 8px;
+}
+.card > .om-subsection:first-of-type { border-top: 0; padding-top: 4px; margin-top: 14px; }
+.om-approval-check { display: inline-flex; }
+.om-approval-check input { width: 19px; height: 19px; accent-color: var(--jc-teal); cursor: pointer; }

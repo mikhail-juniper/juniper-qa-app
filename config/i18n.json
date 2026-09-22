@@ -5326,5 +5326,33 @@
   "approvalConfirmed": {
     "en": "Confirmed",
     "zh": "已确认"
+  },
+  "pdJcHelp": {
+    "en": "Everything on our side: work to submit, replies Product Development is waiting for, and approvals to acknowledge.",
+    "zh": "我们这边的全部事项：待提交、待回复、以及待确认的审批。"
+  },
+  "pdSubToSubmit": {
+    "en": "To submit",
+    "zh": "待提交"
+  },
+  "pdSubToSubmitHelp": {
+    "en": "Nothing has been sent to Product Development yet.",
+    "zh": "尚未提交给产品开发。"
+  },
+  "pdSubReply": {
+    "en": "Product Development comments",
+    "zh": "产品开发留言"
+  },
+  "pdSubReplyHelp": {
+    "en": "They have asked for changes. Nothing moves until you reply.",
+    "zh": "对方要求修改，需回复后才能推进。"
+  },
+  "pdSubApproved": {
+    "en": "Approved - check off",
+    "zh": "已批准 – 勾选确认"
+  },
+  "pdSubApprovedHelp": {
+    "en": "Signed off by Product Development. Tick to say you have seen it.",
+    "zh": "产品开发已批准。勾选表示已知悉。"
   }
 }
