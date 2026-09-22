@@ -1458,7 +1458,6 @@ html {
 .om-checkin-table th { overflow-wrap: normal; hyphens: none; }
 .om-checkin-table td:nth-child(4) { white-space: nowrap; }
 /* Column order: PO, Photo, Product, Qty, Status, QA/QC, Last update, Update,
-<<<<<<< HEAD
    Follow up, Done. Totals 100%. The QA/QC column has to hold the full
    "Schedule QA" button at body-text size - at 9% the button overflowed and sat
    on top of the Last update cell. */
@@ -1577,19 +1576,6 @@ html {
 .om-checkin-table td:nth-child(4) { white-space: nowrap; }
 /* Column order: PO, Photo, Product, Qty, Status, QA/QC, Last update, Update,
    Follow up, Done. Measured to fit 1065px of usable width on a 13" MacBook. */
-=======
-   Follow up, Done. Measured to fit 1065px of usable width on a 13" MacBook. */
-.om-checkin-table th:nth-child(1),  .om-checkin-table td:nth-child(1)  { width: 9%; }   /* PO */
-.om-checkin-table th:nth-child(2),  .om-checkin-table td:nth-child(2)  { width: 6%; }   /* Photo */
-.om-checkin-table th:nth-child(3),  .om-checkin-table td:nth-child(3)  { width: 13%; }  /* Product */
-.om-checkin-table th:nth-child(4),  .om-checkin-table td:nth-child(4)  { width: 5%; }   /* Qty */
-.om-checkin-table th:nth-child(5),  .om-checkin-table td:nth-child(5)  { width: 11%; }  /* Status */
-.om-checkin-table th:nth-child(6),  .om-checkin-table td:nth-child(6)  { width: 9%; }   /* QA/QC */
-.om-checkin-table th:nth-child(7),  .om-checkin-table td:nth-child(7)  { width: 17%; }  /* Last update */
-.om-checkin-table th:nth-child(8),  .om-checkin-table td:nth-child(8)  { width: 17%; }  /* Update */
-.om-checkin-table th:nth-child(9),  .om-checkin-table td:nth-child(9)  { width: 10%; }  /* Follow up */
-.om-checkin-table th:nth-child(10), .om-checkin-table td:nth-child(10) { width: 6%; }   /* Done */
->>>>>>> 0fd88c9b22eb0fbc9484ec0b8e34311ad9d0f1a2
 .om-checkin-table .om-checkin-note { min-height: 44px; }
 .om-checkin-lastcol { line-height: 1.35; }
 .om-checkin-dates-cell { line-height: 1.5; }
@@ -1737,7 +1723,6 @@ html {
 .om-stage-pill.is-waiting { background: #F3EAFB; color: #6B4A9E; }
 .om-stage-pill.is-ok { background: var(--jc-mint-light); color: var(--jc-teal-dark); }
 .om-stage-pill.is-bad { background: #FBEAEA; color: var(--jc-fail); }
-<<<<<<< HEAD
 
 /* Row actions people actually press: sized to the body text beside them rather
    than the 11.5px used for incidental table buttons, which read as captions. */
@@ -1776,5 +1761,3 @@ html {
 .om-requests-table th:nth-child(4), .om-requests-table td:nth-child(4) { width: 8%; }
 .om-requests-table th:nth-child(5), .om-requests-table td:nth-child(5) { width: 18%; }
 .om-requests-table th:nth-child(6), .om-requests-table td:nth-child(6) { width: 16%; }
-=======
->>>>>>> 0fd88c9b22eb0fbc9484ec0b8e34311ad9d0f1a2

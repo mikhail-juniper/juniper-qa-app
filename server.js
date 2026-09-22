@@ -1848,15 +1848,12 @@ app.get('/api/order-management/work-queue', (req, res) => {
         followUpDate: o.followUpDate || null,
         followUpNote: o.followUpNote || '',
         lastCheckedInAt: o.lastCheckedInAt || null,
-<<<<<<< HEAD
         /* Has anything actually been sent to the factory? The check-in view
          * splits on this rather than on the derived next action, because a PO
          * that has never been dispatched often has some other action ranked
          * higher (a missing Golden Sample, say) and would otherwise be filed
          * under work already in production. */
         dispatched: ((o.dispatchLog || []).length > 0),
-=======
->>>>>>> 0fd88c9b22eb0fbc9484ec0b8e34311ad9d0f1a2
         approvalStages,
         /* So the PD queue can show that a failed inspection was since cleared
            by a revised report, rather than only the original finding. */
