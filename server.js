@@ -296,6 +296,24 @@ function currentUser(req) {
       viaAccessLink: true
     };
   }
+  if (session.kind === 'reportLink') {
+    /* Scoped to one PO at one stage: fill in and submit that report, nothing
+     * else. The token is re-checked on every request, so revoking the link
+     * ends an in-progress session too. */
+    const order = orderManagementStore.getOrderById(session.orderId);
+    const stage = session.stage;
+    const live = order && ((order.qaReports || {})[stage] || {}).accessToken;
+    if (!live) return null;
+    return {
+      id: null,
+      name: 'QA report link',
+      role: 'qa',
+      active: true,
+      reportOrderId: order.id,
+      reportStage: stage,
+      viaAccessLink: true
+    };
+  }
   if (session.kind === 'supplierLink') {
     // A link-based visitor is a supplier with no account behind them. Read
     // scope only, resolved fresh each request so revoking the token or
@@ -479,6 +497,33 @@ app.get('/auth/google/callback', async (req, res) => {
  * PD approval link: /a/<token>. Opens the approval page for one PO with no
  * account. Grants approval access to that order only.
  */
+/**
+ * QA report link: /r/<token>. A factory QA contact with no account follows
+ * this and lands straight in the report for one PO at one stage.
+ *
+ * Outside the auth gate, like /s/ and /a/ - this IS the way in. The token is
+ * the credential, which is why it is per stage and revocable per stage rather
+ * than simply making reporting.html public: an open page would let anyone who
+ * guessed a PO number open any report on the system.
+ */
+app.get('/r/:token', (req, res) => {
+  const hit = supplierAccess.orderForReportToken(orderManagementStore, req.params.token);
+  if (!hit) {
+    return res.status(404).send(
+      '<html><body style="font-family:system-ui;padding:40px;text-align:center;">' +
+      '<h2>This link is no longer valid</h2>' +
+      '<p>Please ask your Juniper contact for an up-to-date link.</p>' +
+      '</body></html>'
+    );
+  }
+  const existing = currentUser(req);
+  if (!existing || existing.role === 'supplier') {
+    issueSession(res, { kind: 'reportLink', orderId: hit.order.id, stage: hit.stage });
+  }
+  const mode = hit.stage === 'bulk' ? 'production' : 'pre_production';
+  res.redirect(`/reporting.html?mode=${mode}&po=${encodeURIComponent(hit.order.poNumber)}`);
+});
+
 app.get('/a/:token', (req, res) => {
   const order = supplierAccess.orderForApprovalToken(orderManagementStore, req.params.token);
   if (!order) {
@@ -651,6 +696,78 @@ app.use((req, res, next) => {
   return next();
 });
 
+/**
+ * A report-link visitor is confined to their one PO, the same way an approval
+ * visitor is. Enforced centrally rather than per-route so a new reporting
+ * endpoint cannot accidentally be left reachable for every order.
+ */
+app.use((req, res, next) => {
+  const scopeId = req.user && req.user.reportOrderId;
+  if (!scopeId) return next();
+  if (!req.path.startsWith('/api/')) return next();
+
+  const own = orderManagementStore.getOrderById(scopeId);
+  if (!own) return res.status(404).json({ error: 'Not found' });
+  const ownPo = String(own.poNumber || '').toLowerCase();
+  const ownId = String(scopeId).toLowerCase();
+  const matchesOwn = (v) => {
+    const x = String(v || '').toLowerCase();
+    return x === ownPo || x === ownId;
+  };
+
+  /* Allowlist, not blocklist.
+   *
+   * Scoping by "does the path mention another order" leaked badly: a
+   * collection endpoint like /api/order-management/orders?search=OTHER-PO
+   * names no id at all, so it passed the check and returned every order on
+   * the system. These visitors get only the handful of endpoints the report
+   * page actually calls, and anything carrying an identifier still has to
+   * match their own PO.
+   */
+  const ALLOWED = [
+    /^\/api\/config$/,
+    /^\/api\/me$/,
+    /^\/api\/logout$/,
+    /* The report page looks a PO up by query string, not path segment - the
+       path-only pattern 404'd the very first call the page makes. The
+       poNumber query check below still confines it to their own order. */
+    /^\/api\/purchase-orders$/,
+    /^\/api\/purchase-orders\/[^/]+$/,
+    /^\/api\/order-management\/orders\/[^/]+$/,
+    /^\/api\/order-management\/orders\/[^/]+\/thumb$/,
+    /^\/api\/qa\/draft\//,
+    /^\/api\/submit$/,
+    /^\/api\/submit-revised$/,
+    /^\/api\/submission-history\//,
+    /^\/api\/submission-history-by-sku\//,
+    /^\/api\/sku-established-fit\//,
+    /^\/api\/approval\/[^/]+$/
+  ];
+  if (!ALLOWED.some((re) => re.test(req.path))) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+
+  /* req.params is empty in app.use - route matching has not happened yet - so
+   * the identifier has to be read from the path, the same trap the approval
+   * scope hit. */
+  const inPath = req.path.match(/\/api\/(?:order-management\/orders|purchase-orders|approval)\/([^/]+)/);
+  if (inPath && !matchesOwn(decodeURIComponent(inPath[1]))) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  for (const key of ['po', 'poNumber', 'orderId']) {
+    if (req.query && req.query[key] && !matchesOwn(req.query[key])) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+  }
+  const body = req.body || {};
+  for (const key of ['poNumber', 'orderId']) {
+    if (body[key] && !matchesOwn(body[key])) {
+      return res.status(403).json({ error: 'This link is for a different order' });
+    }
+  }
+  next();
+});
+
 // Page-level access. A role that can't open a page is redirected to its own
 // landing page rather than shown an error - a supplier following an old link
 // to the internal order page just ends up on their own order list.
@@ -663,6 +780,12 @@ app.use((req, res, next) => {
   // An approval-link visitor may only open the approval page itself.
   if (req.user.approvalOrderId) {
     return pageName === 'approval.html' ? next() : res.redirect(`/approval.html?po=${encodeURIComponent(req.user.approvalOrderId)}`);
+  }
+  if (req.user.reportOrderId) {
+    // One page and nothing else - no nav, no other PO, no other stage.
+    return pageName === 'reporting.html' ? next() : res.status(403).send(
+      '<html><body style="font-family:system-ui;padding:40px;text-align:center;">' +
+      '<h2>This link only opens one report</h2></body></html>');
   }
   // Staff previewing a supplier's view are allowed on the supplier page.
   if (pageName === 'supplier-orders.html' && req.query.preview
@@ -2180,6 +2303,29 @@ app.get('/api/order-management/statuses', (req, res) => {
 
 app.get('/api/order-management/accessory-statuses', (req, res) => {
   res.json({ statuses: orderManagementStore.ACCESSORY_STATUSES });
+});
+
+/* NOTE: this must sit AFTER the auth middleware. Registered up beside the
+ * /r/:token route it looked tidy, but Express runs middleware in registration
+ * order, so req.user was still undefined and requirePermission rejected every
+ * call with a 403. */
+/** Issue (or reuse) the shareable report link for one stage. */
+app.post('/api/order-management/orders/:id/report-link', requirePermission('orders:write'), (req, res) => {
+  const stage = req.body && req.body.stage;
+  if (stage !== 'preProduction' && stage !== 'bulk') {
+    return res.status(400).json({ error: 'stage must be preProduction or bulk' });
+  }
+  try {
+    const updated = supplierAccess.ensureReportToken(
+      orderManagementStore, req.params.id, stage,
+      (req.body && req.body.actor) || (req.user && req.user.name) || 'Web user');
+    if (!updated) return res.status(404).json({ error: 'Order or stage not found' });
+    const base = process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`;
+    res.json({ ok: true, link: supplierAccess.reportLinkFor(base, updated, stage) });
+  } catch (err) {
+    console.error('Issuing a report link failed:', err);
+    res.status(500).json({ error: 'Could not create the link' });
+  }
 });
 
 app.get('/api/order-management/orders', (req, res) => {

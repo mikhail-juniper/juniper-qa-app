@@ -2456,7 +2456,7 @@ async function openDetailPanel(id, scope, opts) {
               : 0;
             return `
               ${isSetUp ? `
-                <button type="button" class="btn btn-secondary om-copy-link-btn" style="width:100%;margin-top:10px;padding:9px 16px;" data-copy-url="${escapeHtml(url)}">${i18('btnCopyReportLink', 'Copy Report Link')}</button>
+                <button type="button" class="btn btn-secondary om-report-link-btn" style="width:100%;margin-top:10px;padding:9px 16px;" data-report-stage="${stage}" data-report-order="${escapeHtml(order.id)}">${i18('btnCopyReportLink', 'Copy Report Link')}</button>
                 ${/* Questions are fixed once the report is under way. Changing
                      the bank mid-inspection would mean the submitted report no
                      longer matches what was asked, and the inspector may
@@ -2716,6 +2716,28 @@ async function openDetailPanel(id, scope, opts) {
    * run simply has no additional questions. */
   panel.querySelectorAll('.om-setup-link-btn').forEach((btn) => {
     btn.addEventListener('click', () => openQaSetupDialog(order, btn.dataset.setupStage));
+  });
+
+  /* The shareable link is issued on demand rather than being minted for every
+   * PO up front: a token that exists is a token that can leak, so one is
+   * created the first time someone actually shares a stage. */
+  panel.querySelectorAll('.om-report-link-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const original = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = i18t('creatingLink', 'Creating link...');
+      try {
+        const data = await api(`/api/order-management/orders/${encodeURIComponent(btn.dataset.reportOrder)}/report-link`,
+          { method: 'POST', body: JSON.stringify({ stage: btn.dataset.reportStage }) });
+        await navigator.clipboard.writeText(data.link);
+        showToast(i18t('reportLinkCopied', 'Report link copied - the factory can open this without signing in'));
+      } catch (e) {
+        showToast(e.message, true);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = original;
+      }
+    });
   });
 
   panel.querySelectorAll('.om-copy-link-btn').forEach((btn) => {

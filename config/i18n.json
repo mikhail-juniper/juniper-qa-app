@@ -5302,5 +5302,13 @@
   "columnsGroupAvailable": {
     "en": "Available to add",
     "zh": "可添加的列"
+  },
+  "creatingLink": {
+    "en": "Creating link...",
+    "zh": "正在生成链接..."
+  },
+  "reportLinkCopied": {
+    "en": "Report link copied - the factory can open this without signing in",
+    "zh": "报告链接已复制，工厂无需登录即可打开"
   }
 }

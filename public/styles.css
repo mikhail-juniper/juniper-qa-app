@@ -1404,3 +1404,11 @@ td.reference-selectable { outline-offset: -2px; }
   background: var(--jc-teal); color: #fff; font-weight: 700; font-size: 12.5px;
   padding: 6px 14px; border-radius: var(--radius-sm);
 }
+
+/* Link-only visitors (a factory QA contact following a report link) see the
+   report and nothing else - no sidebar, no menu toggle, no nav to a page the
+   server would refuse them anyway. */
+body.is-link-only .app-sidebar,
+body.is-link-only .app-menu-toggle,
+body.is-link-only .app-nav { display: none !important; }
+body.is-link-only .app-main { margin-left: 0 !important; }

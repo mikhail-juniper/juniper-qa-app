@@ -137,6 +137,13 @@ function sidebarInnerHtml() {
       /* Share the signed-in user with the pages, so a per-user setting like
        * the check-in column choice can be read without a second round trip. */
       window.JuniperMe = me;
+      /* A link-only visitor gets the page and nothing around it: no sidebar,
+       * no menu button, nowhere to navigate. The server already refuses the
+       * other pages, but offering links that 403 is a poor welcome for a
+       * factory contact who was sent one URL. */
+      if (me.user && (me.user.reportOrderId || me.user.approvalOrderId)) {
+        document.body.classList.add('is-link-only');
+      }
       window.dispatchEvent(new CustomEvent('juniper:me', { detail: me }));
       if (me.pages) { allowedPages = me.pages; redraw(); }
     })
