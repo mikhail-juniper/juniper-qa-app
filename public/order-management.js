@@ -6074,11 +6074,24 @@ function shortDate(d) {
   return dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-/** Has this PO been worked through today? Today, not ever - the whole point is
- *  keeping her place in the call she is on right now. */
+/** Local calendar date as YYYY-MM-DD.
+ *
+ *  toISOString() gives the UTC date, which is the wrong day for most of the
+ *  working day outside UTC: ticking a PO at 9pm in Toronto stamped it with
+ *  tomorrow's UTC date, so it still read as "done today" the following
+ *  morning and never reset. */
+function localDateKey(d) {
+  const dt = d ? new Date(d) : new Date();
+  if (isNaN(dt)) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
+}
+
+/** Has this PO been worked through today, in the user's own day? Today, not
+ *  ever - the whole point is keeping her place in the call she is on now. */
 function checkedInToday(r) {
   if (!r.lastCheckedInAt) return false;
-  return String(r.lastCheckedInAt).slice(0, 10) === new Date().toISOString().slice(0, 10);
+  return localDateKey(r.lastCheckedInAt) === localDateKey();
 }
 
 /* Native date inputs only open the picker from the little calendar glyph,
@@ -6433,6 +6446,44 @@ async function renderQaSchedulingView(root) {
 }
 
 /* ---- PD Approval: who is it waiting on ---- */
+/* The three approval stages as compact pills. Showing where each stands means
+ * the Action column no longer has to spell it out - "Bulk approval was
+ * rejected" is redundant next to a Bulk pill reading Rejected. */
+const APPROVAL_STAGE_LABELS = [
+  ['sample', 'stageGolden', 'Golden'],
+  ['preProduction', 'stagePp', 'PP'],
+  ['bulk', 'stageBulkShort', 'Bulk']
+];
+
+const APPROVAL_STATE = {
+  notStarted: ['approvalNotStarted', 'Not started', 'is-none'],
+  waitingOnProductDev: ['approvalWaiting', 'With PD', 'is-waiting'],
+  approved: ['approvalApproved', 'Approved', 'is-ok'],
+  approvedWithIssues: ['approvalApprovedIssues', 'Approved*', 'is-ok'],
+  notApproved: ['approvalRejected', 'Rejected', 'is-bad'],
+  notApplicable: ['approvalSkipped', 'Skipped', 'is-none']
+};
+
+function approvalStagesHtml(stages) {
+  const st = stages || {};
+  return `<div class="om-stage-pills">${APPROVAL_STAGE_LABELS.map(([key, lk, lf]) => {
+    const [textKey, fallback, cls] = APPROVAL_STATE[st[key]] || APPROVAL_STATE.notStarted;
+    return `<span class="om-stage-pill ${cls}">
+      <em>${escapeHtml(i18t(lk, lf))}</em> ${escapeHtml(i18t(textKey, fallback))}
+    </span>`;
+  }).join('')}</div>`;
+}
+
+/* With the stage pills present, the action only needs to say what to DO. */
+function shortActionLabel(action) {
+  const map = {
+    pdNeedsStart: i18t('actionSubmitForApproval', 'Submit for approval'),
+    pdReview: i18t('actionAwaitingPd', 'Awaiting decision'),
+    pdReply: i18t('actionRespond', 'Respond to PD')
+  };
+  return map[action.kind] || action.label || '';
+}
+
 async function renderPdApprovalView(root) {
   root.innerHTML = `${workViewTabsHtml()}<div class="om-empty">${i18('emptyLoading', 'Loading...')}</div>`;
   bindWorkViewTabs();
@@ -6462,7 +6513,9 @@ async function renderPdApprovalView(root) {
             <div class="om-table-wrap"><table class="om-table">
               <thead><tr>
                 <th>${escapeHtml(i18t('thPoNumber', 'PO Number'))}</th><th>${escapeHtml(i18t('thProduct', 'Product'))}</th>
-                <th>${escapeHtml(i18t('thSupplier', 'Supplier'))}</th><th>${escapeHtml(i18t('thAction', 'Next'))}</th>
+                <th>${escapeHtml(i18t('thSupplier', 'Supplier'))}</th>
+                <th>${escapeHtml(i18t('thApprovals', 'Approvals'))}</th>
+                <th>${escapeHtml(i18t('thAction', 'Next'))}</th>
                 <th>${escapeHtml(i18t('thActions', 'Actions'))}</th>
               </tr></thead>
               <tbody>${list.map((r) => `
@@ -6472,7 +6525,8 @@ async function renderPdApprovalView(root) {
                   <td><strong>${escapeHtml(r.poNumber)}</strong></td>
                   <td>${escapeHtml(r.productName || '')}<div class="om-sub">${escapeHtml(r.sku || '')}</div></td>
                   <td>${escapeHtml(r.supplierName || '')}</td>
-                  <td>${escapeHtml(r.action.label || '')}${r.revisedSummary ? `<div class="om-sub">${escapeHtml(r.revisedSummary)}</div>` : ''}</td>
+                  <td>${approvalStagesHtml(r.approvalStages)}</td>
+                  <td>${escapeHtml(shortActionLabel(r.action))}${r.revisedSummary ? `<div class="om-sub">${escapeHtml(r.revisedSummary)}</div>` : ''}</td>
                   <td>
                     <div class="om-row-actions">
                       ${/* Straight into the approval page for this PO - the whole

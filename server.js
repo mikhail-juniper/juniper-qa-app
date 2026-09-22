@@ -1826,6 +1826,13 @@ app.get('/api/order-management/work-queue', (req, res) => {
       try { statuses = approvalStore.pdApprovalStatuses(o.poNumber) || {}; }
       catch (err) { /* an approval record that cannot be read must not hide the PO */ }
       const action = orderManagementStore.nextActionFor(o, statuses, today);
+      /* The three approval stages, so the PD view can show where each one
+       * stands instead of spelling it out in a sentence. */
+      const approvalStages = {
+        sample: statuses.sample || 'notStarted',
+        preProduction: statuses.preProduction || 'notStarted',
+        bulk: statuses.bulk || 'notStarted'
+      };
       return {
         id: o.id,
         poNumber: o.poNumber,
@@ -1841,6 +1848,7 @@ app.get('/api/order-management/work-queue', (req, res) => {
         followUpDate: o.followUpDate || null,
         followUpNote: o.followUpNote || '',
         lastCheckedInAt: o.lastCheckedInAt || null,
+        approvalStages,
         /* So the PD queue can show that a failed inspection was since cleared
            by a revised report, rather than only the original finding. */
         revisedSummary: (() => {
@@ -3817,8 +3825,13 @@ app.get('/api/approval/:poNumber', (req, res) => {
     const approval = approvalStore.getOrCreateByPoNumber(po.poNumber, po.sku);
     const priorSampleApproval = approvalStore.getPriorSampleApprovalForSku(po.sku, po.poNumber);
     const reportingHistory = submissionLog.findPriorReportsBySku(po.sku);
+    /* Revised unit reports for this PO. Without them the approval page showed
+     * only the original failing inspection, so a PO whose units had since been
+     * repaired still presented to Product Development as a plain FAIL with no
+     * sign the issue had been dealt with. */
+    const revisedReports = submissionLog.findRevisedReports(po.poNumber) || [];
 
-    res.json({ po, photoSet, approval, priorSampleApproval, reportingHistory });
+    res.json({ po, photoSet, approval, priorSampleApproval, reportingHistory, revisedReports });
   } catch (err) {
     console.error('Failed to load approval record:', err);
     res.status(500).json({ error: 'Failed to load approval record', detail: String(err.message || err) });

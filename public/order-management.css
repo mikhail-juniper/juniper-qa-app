@@ -1603,3 +1603,16 @@ html {
 
 /* Sub-component thumbnail enlarges on click, like the reference photo. */
 .om-acc-zoom { cursor: zoom-in; }
+
+/* The three approval stages, shown rather than described. Colour carries
+   meaning so the stage name is always present alongside it. */
+.om-stage-pills { display: flex; flex-direction: column; gap: 3px; }
+.om-stage-pill {
+  font-size: 11.5px; white-space: nowrap;
+  padding: 2px 8px; border-radius: 999px; display: inline-block;
+}
+.om-stage-pill em { font-style: normal; font-weight: 700; margin-right: 4px; }
+.om-stage-pill.is-none { background: var(--jc-bg); color: var(--jc-muted); }
+.om-stage-pill.is-waiting { background: #F3EAFB; color: #6B4A9E; }
+.om-stage-pill.is-ok { background: var(--jc-mint-light); color: var(--jc-teal-dark); }
+.om-stage-pill.is-bad { background: #FBEAEA; color: var(--jc-fail); }

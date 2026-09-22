@@ -5190,5 +5190,61 @@
   "clickToEnlarge": {
     "en": "Click to enlarge",
     "zh": "点击放大"
+  },
+  "thApprovals": {
+    "en": "Approvals",
+    "zh": "审批状态"
+  },
+  "stageGolden": {
+    "en": "Golden",
+    "zh": "金样"
+  },
+  "stagePp": {
+    "en": "PP",
+    "zh": "头样"
+  },
+  "stageBulkShort": {
+    "en": "Bulk",
+    "zh": "大货"
+  },
+  "approvalNotStarted": {
+    "en": "Not started",
+    "zh": "未开始"
+  },
+  "approvalWaiting": {
+    "en": "With PD",
+    "zh": "待审批"
+  },
+  "approvalApproved": {
+    "en": "Approved",
+    "zh": "已批准"
+  },
+  "approvalApprovedIssues": {
+    "en": "Approved*",
+    "zh": "有条件批准"
+  },
+  "approvalRejected": {
+    "en": "Rejected",
+    "zh": "未通过"
+  },
+  "approvalSkipped": {
+    "en": "Skipped",
+    "zh": "已跳过"
+  },
+  "actionSubmitForApproval": {
+    "en": "Submit for approval",
+    "zh": "提交审批"
+  },
+  "actionAwaitingPd": {
+    "en": "Awaiting decision",
+    "zh": "等待决策"
+  },
+  "actionRespond": {
+    "en": "Respond to PD",
+    "zh": "回复产品开发"
+  },
+  "revisedReportTitle": {
+    "en": "Revised Unit Report",
+    "zh": "修复单位报告"
   }
 }

@@ -50,6 +50,7 @@ const approvalState = {
   approval: null,
   priorSampleApproval: null,
   reportingHistory: null,
+  revisedReports: null,
   // working fields
   factoryCode: '', qaLead: '', productRisk: 'medium',
   fit: '', sizeRows: [], customSizeRows: [], customPoints: [], _fitForRows: null, chinaApprovalStatus: '', sampledSize: '',
@@ -411,6 +412,7 @@ async function loadApprovalForPo(poNumber) {
     }
   }
   approvalState.reportingHistory = data.reportingHistory;
+  approvalState.revisedReports = data.revisedReports || [];
   approvalState.stage = determineCurrentStage(data.approval);
 
   // Pre-fill the Sample-stage setup from what the Order Management
@@ -636,9 +638,58 @@ function renderLinkedReportCard(r, stage) {
       </div>
       ${spotCheckPct !== null ? `<div class="section-help">${escapeHtml(bi('spotCheckPercentLabel').en)} ${escapeHtml(bi('spotCheckPercentLabel').zh)}: <strong>${spotCheckPct}%</strong> (${r.actualUnitsChecked} / ${r.poQuantity})</div>` : ''}
       ${issuesHtml}
+      ${revisedReportsHtml(r)}
       <a href="/submissions/${encodeURIComponent(r.pdfFilename)}" target="_blank" rel="noopener" class="btn btn-secondary" style="display:block; text-decoration:none; text-align:center; margin-top:8px; max-width:220px;">${biBlockHtml('downloadFullReport', 'Download Full Report')}</a>
     </div>
   `;
+}
+
+/**
+ * Follow-up repairs against this inspection.
+ *
+ * A failing inspection that was later put right still displayed as a bare
+ * FAIL here, which is what Product Development was approving against. The
+ * repair is part of the story and belongs on the same card.
+ */
+function revisedReportsHtml(report) {
+  const qaType = report.qaType;
+  const revs = (approvalState.revisedReports || []).filter((r) => !r.qaType || r.qaType === qaType);
+  if (!revs.length) return '';
+
+  return revs.map((rev, idx) => {
+    const fixed = (rev.issues || []).reduce((n, i) => n + (parseInt(i.unitsFixed, 10) || 0), 0);
+    const flagged = (rev.issues || []).reduce((n, i) => n + (parseInt(i.unitsAffected, 10) || 0), 0);
+    const cleared = flagged > 0 && fixed >= flagged;
+    return `
+      <div class="defect-card ${cleared ? 'report-pass' : 'report-fail'}" style="margin-top:10px;">
+        <div class="section-photos-label">
+          ${escapeHtml(bi('revisedReportTitle', 'Revised Unit Report').en)} ${escapeHtml(bi('revisedReportTitle', 'Revised Unit Report').zh || '')}
+          ${revs.length > 1 ? ` #${idx + 1}` : ''}
+        </div>
+        <div class="section-help">
+          ${escapeHtml((rev.submittedAt || '').slice(0, 10))}
+          ${rev.qaLead ? ` &middot; ${escapeHtml(rev.qaLead)}` : ''} &middot;
+          <strong style="color:${cleared ? 'var(--jc-teal-dark)' : 'var(--jc-fail)'}">
+            ${fixed} / ${flagged} ${escapeHtml(bi('unitsRepairedLabel', 'units repaired').en)}
+          </strong>
+        </div>
+        ${(rev.issues || []).map((iss) => `
+          <div class="prior-issue">
+            <div class="prior-issue-desc">${escapeHtml(iss.description || '')}</div>
+            <div class="section-help">
+              ${escapeHtml(bi('unitsRepairedLabel', 'units repaired').en)}: ${iss.unitsFixed || 0} / ${iss.unitsAffected || 0}
+            </div>
+            ${iss.comment ? `<div class="section-help">${escapeHtml(iss.comment)}</div>` : ''}
+            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
+              ${(iss.photos || []).map((f) => f && f.url
+                ? `<img src="${escapeHtml(approvalPhotoSrc(f.url))}" class="prior-issue-photo js-lightbox" data-photo-target="${escapeHtml(f.url)}" />`
+                : '').join('')}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }).join('');
 }
 
 function renderLinkedReportForStage(stage) {
