@@ -4144,9 +4144,13 @@ async function openDetailPanel(id, scope, opts) {
   makeDateFieldsClickable(panel);
 
   if (opts && opts.scrollTo === 'qa') {
-    // After render, so the section exists and the panel has its height.
+    /* Scroll to the CARD, not the heading inside it. Targeting the heading put
+     * the card's own top edge and padding above the fold, so the section
+     * arrived looking clipped. scroll-margin-top adds a little breathing room
+     * under the sticky panel header. */
     setTimeout(() => {
-      const target = panel.querySelector('#omQaSection');
+      const heading = panel.querySelector('#omQaSection');
+      const target = (heading && heading.closest('.om-panel-card')) || heading;
       if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 120);
   }
@@ -6129,10 +6133,10 @@ async function renderCheckInView(root) {
             <th>${escapeHtml(i18t('thProduct', 'Product'))}</th>
             <th>${escapeHtml(i18t('thQty', 'Qty'))}</th>
             <th>${escapeHtml(i18t('thStatus', 'Status'))}</th>
+            <th>${escapeHtml(i18t('thQaQc', 'QA/QC'))}</th>
             <th>${escapeHtml(i18t('thLastUpdate', 'Last update'))}</th>
             <th>${escapeHtml(i18t('thNewUpdate', 'Update'))}</th>
             <th>${escapeHtml(i18t('thFollowUp', 'Follow up'))}</th>
-            <th>${escapeHtml(i18t('thQa', 'QA'))}</th>
             <th>${escapeHtml(i18t('thDone', 'Done'))}</th>
           </tr></thead>
           <tbody>
@@ -6146,6 +6150,11 @@ async function renderCheckInView(root) {
                 <td>${escapeHtml(r.productName || '')}<div class="om-sub">${escapeHtml(r.sku || '')}</div></td>
                 <td>${r.quantity != null ? Number(r.quantity).toLocaleString() : '-'}</td>
                 <td><span class="om-pill om-pill-${statusSlug(r.status)}">${tStatusInline(r.status)}</span></td>
+                <td class="om-checkin-qacol">
+                  ${/* Scheduling happens during the call, so it belongs here
+                       rather than on a page of its own. */ ''}
+                  <button type="button" class="om-table-upload-btn" data-schedule-qa="${escapeHtml(r.id)}">${escapeHtml(i18t('btnScheduleQa', 'Schedule QA'))}</button>
+                </td>
                 <td class="om-checkin-lastcol">
                   ${r.lastNote
                     ? `<div class="om-sub">${escapeHtml(fmtDate(r.lastNote.at))} &middot; ${escapeHtml(r.lastNote.by || '')}</div>${escapeHtml(r.lastNote.text || '')}`
@@ -6169,11 +6178,6 @@ async function renderCheckInView(root) {
                   </label>
                   <button type="button" class="om-datechip-clear ${r.followUpDate ? '' : 'is-hidden'}" data-fu-clear="${escapeHtml(r.id)}" title="${escapeHtml(i18t('clearLabel', 'Clear'))}">&times;</button>
                   <div class="om-row-saved" data-saved-fu="${escapeHtml(r.id)}"></div>
-                </td>
-                <td class="om-checkin-qacol">
-                  ${/* Scheduling happens during the call, so it belongs here
-                       rather than on a page of its own. */ ''}
-                  <button type="button" class="om-table-upload-btn" data-schedule-qa="${escapeHtml(r.id)}">${escapeHtml(i18t('btnScheduleQa', 'Schedule QA'))}</button>
                 </td>
                 <td class="om-checkin-donecol">
                   ${/* Ticking this is how she keeps her place in a list of 20.
