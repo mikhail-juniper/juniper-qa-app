@@ -1772,3 +1772,97 @@ html {
 .om-pd-table th:nth-child(3), .om-pd-table td:nth-child(3) { width: 18%; }
 .om-pd-table th:nth-child(4), .om-pd-table td:nth-child(4) { width: 24%; }
 .om-pd-table th:nth-child(5), .om-pd-table td:nth-child(5) { width: 18%; }
+
+/* ---- Phone layout for the working views ----
+ *
+ * Ten columns squeezed into ~350px is not a table, it is a word-per-line mess
+ * ("Que / en / Bee / + / Bee"). Below 820px each row becomes a card and each
+ * cell a labelled line, so nothing is truncated and nothing needs horizontal
+ * scrolling. The labels come from data-label on every cell, which mirrors the
+ * header text, so the two cannot disagree.
+ */
+@media (max-width: 820px) {
+  .om-checkin-table, .om-pd-table,
+  .om-checkin-table tbody, .om-pd-table tbody,
+  .om-checkin-table tr, .om-pd-table tr,
+  .om-checkin-table td, .om-pd-table td {
+    display: block;
+    width: auto !important;
+    min-width: 0;
+  }
+  .om-checkin-table thead, .om-pd-table thead { display: none; }
+
+  .om-checkin-table tr, .om-pd-table tr {
+    border: 1px solid var(--jc-border);
+    border-radius: var(--radius);
+    padding: 6px 12px 10px;
+    margin-bottom: 12px;
+    background: #fff;
+  }
+  /* Label above value, both full width. A two-column label/value split looked
+     tidier until a cell held more than one child - the SKU under a product
+     name, or the author line above an update - and those children then shared
+     the remaining 62% side by side, squeezing both into a few characters per
+     line. Stacking costs vertical space and never squeezes anything. */
+  .om-checkin-table td, .om-pd-table td {
+    display: block;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--jc-bg);
+    overflow: visible;
+    text-align: left;
+  }
+  .om-checkin-table tr td:last-child,
+  .om-pd-table tr td:last-child { border-bottom: 0; }
+
+  .om-checkin-table td::before, .om-pd-table td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 3px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--jc-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .om-checkin-table td > *, .om-pd-table td > * { max-width: 100%; }
+  .om-checkin-table .om-checkin-note,
+  .om-checkin-table .om-checkin-fu { width: 100%; }
+  .om-checkin-table .om-checkin-lastcol { display: block; }
+  /* A cell with nothing in it is noise on a phone. */
+  .om-checkin-table td:empty { display: none; }
+
+  /* A tapped row already opens the PO, so the whole card highlights. */
+  .om-row-clickable:hover { background: var(--jc-mint-light); }
+
+  /* The supplier bar stacks rather than squeezing the select. */
+  .om-checkin-bar { flex-direction: column; align-items: stretch; }
+  .om-checkin-bar select { min-width: 0; width: 100%; }
+  .section-title { flex-wrap: wrap; }
+  .om-section-action { margin-left: 0; width: 100%; }
+
+  /* Tabs scroll rather than wrapping into three rows. */
+  .om-view-tabs { flex-wrap: nowrap; overflow-x: auto; }
+  .om-view-tab { flex: 0 0 auto; }
+}
+
+/* Column picker. Small dialog rather than a page: the choice is a quick tweak
+   she makes mid-list, not a settings trip. */
+.om-cols-backdrop { display: flex; align-items: center; justify-content: center; }
+.om-cols-dialog {
+  background: #fff; border-radius: var(--radius); padding: 22px 24px;
+  width: min(420px, 92vw); max-height: 86vh; overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3); position: relative; z-index: 41;
+}
+.om-cols-list { margin: 14px 0 18px; }
+.om-cols-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 4px; border-bottom: 1px solid var(--jc-bg); font-size: 14px; cursor: pointer;
+}
+.om-cols-row input { width: 17px; height: 17px; accent-color: var(--jc-teal); }
+.om-cols-row.is-locked { color: var(--jc-muted); cursor: default; }
+.om-cols-row em { margin-left: auto; font-style: normal; font-size: 11.5px; color: var(--jc-muted); }
+.om-cols-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+
+/* Widths are set for the full ten columns; with a subset, let the browser size
+   them instead of applying rules meant for columns that are no longer there. */
+.om-checkin-table.is-custom-cols { table-layout: auto; }

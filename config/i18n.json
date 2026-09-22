@@ -5258,5 +5258,25 @@
   "batchNothingForSupplier": {
     "en": "Nothing to send for this supplier",
     "zh": "该供应商没有待发送的订单"
+  },
+  "btnColumns": {
+    "en": "Columns",
+    "zh": "列设置"
+  },
+  "columnsTitle": {
+    "en": "Choose columns",
+    "zh": "选择显示列"
+  },
+  "columnsHelp": {
+    "en": "Pick what you want to see while working down the list. This is saved for you.",
+    "zh": "选择跟进时需要显示的列。设置会为你保存。"
+  },
+  "columnsAlways": {
+    "en": "always shown",
+    "zh": "始终显示"
+  },
+  "columnsReset": {
+    "en": "Reset to all",
+    "zh": "恢复全部"
   }
 }

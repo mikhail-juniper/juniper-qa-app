@@ -6120,51 +6120,160 @@ function makeDateFieldsClickable(scope) {
   });
 }
 
+/* ---- Which columns the check-in table shows ----
+ *
+ * Chloe works this page differently at different times of the month, and what
+ * she wants on screen changes with it. Rather than guessing a fixed set, the
+ * columns are hers to choose.
+ *
+ * PO Number is deliberately not optional: without it a row cannot be
+ * identified, and every other column is meaningless next to an anonymous one.
+ */
+const CHECKIN_COLUMNS = [
+  { key: 'po',        labelKey: 'thPoNumber',   fallback: 'PO Number',   locked: true },
+  { key: 'photo',     labelKey: 'thPhoto',      fallback: 'Photo' },
+  { key: 'product',   labelKey: 'thProduct',    fallback: 'Product' },
+  { key: 'qty',       labelKey: 'thQty',        fallback: 'Qty' },
+  { key: 'status',    labelKey: 'thStatus',     fallback: 'Status' },
+  { key: 'qa',        labelKey: 'thQaQc',       fallback: 'QA/QC' },
+  { key: 'lastUpdate',labelKey: 'thLastUpdate', fallback: 'Last update' },
+  { key: 'update',    labelKey: 'thNewUpdate',  fallback: 'Update' },
+  { key: 'followUp',  labelKey: 'thFollowUp',   fallback: 'Follow up' },
+  { key: 'done',      labelKey: 'thDone',       fallback: 'Done' }
+];
+
+const CHECKIN_COLUMNS_DEFAULT = CHECKIN_COLUMNS.map((c) => c.key);
+
+/* Populated by app-shell once /api/me returns. It may not have arrived when a
+ * view first renders, so the columns are re-read on the event too. */
+let currentUserPrefs = ((window.JuniperMe || {}).user || {}).preferences || null;
+window.addEventListener('juniper:me', (e) => {
+  currentUserPrefs = ((e.detail || {}).user || {}).preferences || {};
+  loadCheckInColumns();
+  if (currentView === 'home' && omWorkView === 'checkin') render();
+});
+let checkInColumns = CHECKIN_COLUMNS_DEFAULT.slice();
+
+function columnOn(key) {
+  return checkInColumns.includes(key);
+}
+
+/* Preferences live on the user record so the choice follows her to another
+ * machine. A shared session has no user record, so it falls back to this
+ * browser - better than refusing to remember at all. */
+const CHECKIN_COLS_LOCAL_KEY = 'jqa.checkInColumns';
+
+function loadCheckInColumns() {
+  const fromUser = (currentUserPrefs && currentUserPrefs.checkInColumns) || null;
+  let saved = fromUser;
+  if (!saved) {
+    try {
+      const raw = window.localStorage.getItem(CHECKIN_COLS_LOCAL_KEY);
+      saved = raw ? JSON.parse(raw) : null;
+    } catch (e) { saved = null; }
+  }
+  if (!Array.isArray(saved) || !saved.length) {
+    checkInColumns = CHECKIN_COLUMNS_DEFAULT.slice();
+    return;
+  }
+  /* Keep the canonical order and drop anything unknown, so a preference saved
+   * before a column was added or renamed cannot produce a broken table. */
+  checkInColumns = CHECKIN_COLUMNS
+    .filter((c) => c.locked || saved.includes(c.key))
+    .map((c) => c.key);
+}
+
+async function saveCheckInColumns() {
+  try {
+    window.localStorage.setItem(CHECKIN_COLS_LOCAL_KEY, JSON.stringify(checkInColumns));
+  } catch (e) { /* private browsing; the server copy below still works */ }
+  try {
+    await api('/api/me/preferences', {
+      method: 'PUT',
+      body: JSON.stringify({ preferences: { checkInColumns } })
+    });
+    if (currentUserPrefs) currentUserPrefs.checkInColumns = checkInColumns.slice();
+  } catch (e) {
+    // A shared session has nowhere to save it; the browser copy still applies.
+  }
+}
+
+function openColumnPicker() {
+  const backdrop = document.createElement('div');
+  backdrop.className = 'om-panel-backdrop om-cols-backdrop';
+  backdrop.innerHTML = `
+    <div class="om-cols-dialog">
+      <div class="om-section-title">${escapeHtml(i18t('columnsTitle', 'Choose columns'))}</div>
+      <div class="section-help">${escapeHtml(i18t('columnsHelp', 'Pick what you want to see while working down the list. This is saved for you.'))}</div>
+      <div class="om-cols-list">
+        ${CHECKIN_COLUMNS.map((c) => `
+          <label class="om-cols-row ${c.locked ? 'is-locked' : ''}">
+            <input type="checkbox" data-col="${c.key}" ${columnOn(c.key) ? 'checked' : ''} ${c.locked ? 'disabled' : ''} />
+            <span>${escapeHtml(i18t(c.labelKey, c.fallback))}</span>
+            ${c.locked ? `<em>${escapeHtml(i18t('columnsAlways', 'always shown'))}</em>` : ''}
+          </label>
+        `).join('')}
+      </div>
+      <div class="om-cols-actions">
+        <button type="button" class="btn btn-secondary" id="omColsReset" style="width:auto;">${escapeHtml(i18t('columnsReset', 'Reset to all'))}</button>
+        <button type="button" class="btn btn-secondary" id="omColsCancel" style="width:auto;">${escapeHtml(i18t('btnCancel', 'Cancel'))}</button>
+        <button type="button" class="btn btn-primary" id="omColsSave" style="width:auto;">${escapeHtml(i18t('btnSave', 'Save'))}</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(backdrop);
+
+  const close = () => backdrop.remove();
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(); });
+  backdrop.querySelector('#omColsCancel').addEventListener('click', close);
+  backdrop.querySelector('#omColsReset').addEventListener('click', () => {
+    backdrop.querySelectorAll('[data-col]').forEach((el) => { el.checked = true; });
+  });
+  backdrop.querySelector('#omColsSave').addEventListener('click', async () => {
+    const picked = [...backdrop.querySelectorAll('[data-col]')]
+      .filter((el) => el.checked || el.disabled)
+      .map((el) => el.dataset.col);
+    checkInColumns = CHECKIN_COLUMNS.filter((c) => picked.includes(c.key)).map((c) => c.key);
+    await saveCheckInColumns();
+    close();
+    render();
+  });
+}
+
 /* One header and one row renderer for both check-in sections. They started as
  * separate markup and immediately disagreed - PO Requests had six columns
  * where In Production had ten - so both now come from here. */
 function checkInHeaderHtml() {
-  return `<tr>
-            <th>${escapeHtml(i18t('thPoNumber', 'PO Number'))}</th>
-            <th>${escapeHtml(i18t('thPhoto', 'Photo'))}</th>
-            <th>${escapeHtml(i18t('thProduct', 'Product'))}</th>
-            <th>${escapeHtml(i18t('thQty', 'Qty'))}</th>
-            <th>${escapeHtml(i18t('thStatus', 'Status'))}</th>
-            <th>${escapeHtml(i18t('thQaQc', 'QA/QC'))}</th>
-            <th>${escapeHtml(i18t('thLastUpdate', 'Last update'))}</th>
-            <th>${escapeHtml(i18t('thNewUpdate', 'Update'))}</th>
-            <th>${escapeHtml(i18t('thFollowUp', 'Follow up'))}</th>
-            <th>${escapeHtml(i18t('thDone', 'Done'))}</th>
-          </tr></thead>
-  </tr>`;
+  return `<tr>${CHECKIN_COLUMNS.filter((c) => columnOn(c.key))
+    .map((c) => `<th data-col="${c.key}">${escapeHtml(i18t(c.labelKey, c.fallback))}</th>`).join('')}</tr>`;
 }
 
 function checkInRowHtml(r) {
   return `              <tr data-checkin-row="${escapeHtml(r.id)}" data-row-po="${escapeHtml(r.id)}"
                   class="om-row-clickable ${checkedInToday(r) ? 'om-row-done' : ''}">
-                <td><strong>${escapeHtml(r.poNumber)}</strong></td>
-                <td class="om-checkin-photo">
+                <td data-col="po" data-label="${escapeHtml(i18t('thPoNumber', 'PO Number'))}"><strong>${escapeHtml(r.poNumber)}</strong></td>
+                <td data-col="photo" data-label="${escapeHtml(i18t('thPhoto', 'Photo'))}" class="om-checkin-photo">
                   ${r.photo ? `<img src="${escapeHtml(r.photo)}" alt="" class="js-lightbox" />` : '<span class="om-sub">-</span>'}
                 </td>
-                <td>${escapeHtml(r.productName || '')}<div class="om-sub">${escapeHtml(r.sku || '')}</div></td>
-                <td>${r.quantity != null ? Number(r.quantity).toLocaleString() : '-'}</td>
-                <td><span class="om-pill om-pill-${statusSlug(r.status)}">${tStatusInline(r.status)}</span></td>
-                <td class="om-checkin-qacol">
+                <td data-col="product" data-label="${escapeHtml(i18t('thProduct', 'Product'))}">${escapeHtml(r.productName || '')}<div class="om-sub">${escapeHtml(r.sku || '')}</div></td>
+                <td data-col="qty" data-label="${escapeHtml(i18t('thQty', 'Qty'))}">${r.quantity != null ? Number(r.quantity).toLocaleString() : '-'}</td>
+                <td data-col="status" data-label="${escapeHtml(i18t('thStatus', 'Status'))}"><span class="om-pill om-pill-${statusSlug(r.status)}">${tStatusInline(r.status)}</span></td>
+                <td data-col="qa" data-label="${escapeHtml(i18t('thQaQc', 'QA/QC'))}" class="om-checkin-qacol">
                   ${/* Scheduling happens during the call, so it belongs here
                        rather than on a page of its own. */ ''}
                   <button type="button" class="om-table-upload-btn om-row-btn-lg" data-schedule-qa="${escapeHtml(r.id)}">${escapeHtml(i18t('btnScheduleQa', 'Schedule QA'))}</button>
                 </td>
-                <td class="om-checkin-lastcol">
+                <td data-col="lastUpdate" data-label="${escapeHtml(i18t('thLastUpdate', 'Last update'))}" class="om-checkin-lastcol">
                   ${r.lastNote
                     ? `<div class="om-sub">${escapeHtml(fmtDate(r.lastNote.at))} &middot; ${escapeHtml(r.lastNote.by || '')}</div>${escapeHtml(r.lastNote.text || '')}`
                     : `<span class="om-sub">${escapeHtml(i18t('noUpdatesYet', 'No updates yet'))}</span>`}
                 </td>
-                <td>
+                <td data-col="update" data-label="${escapeHtml(i18t('thNewUpdate', 'Update'))}">
                   <textarea rows="1" class="om-checkin-note" data-note-for="${escapeHtml(r.id)}"
                     placeholder="${escapeHtml(i18t('checkInNotePlaceholder2', 'Production update'))}"></textarea>
                   <div class="om-row-saved" data-saved-for="${escapeHtml(r.id)}"></div>
                 </td>
-                <td class="om-checkin-fucol">
+                <td data-col="followUp" data-label="${escapeHtml(i18t('thFollowUp', 'Follow up'))}" class="om-checkin-fucol">
                   ${/* Compact: a calendar glyph when empty, "Oct 28" when set.
                        A full mm/dd/yyyy control in every row is a lot of
                        furniture for a field that is usually blank. The real
@@ -6178,7 +6287,7 @@ function checkInRowHtml(r) {
                   <button type="button" class="om-datechip-clear ${r.followUpDate ? '' : 'is-hidden'}" data-fu-clear="${escapeHtml(r.id)}" title="${escapeHtml(i18t('clearLabel', 'Clear'))}">&times;</button>
                   <div class="om-row-saved" data-saved-fu="${escapeHtml(r.id)}"></div>
                 </td>
-                <td class="om-checkin-donecol">
+                <td data-col="done" data-label="${escapeHtml(i18t('thDone', 'Done'))}" class="om-checkin-donecol">
                   ${/* Ticking this is how she keeps her place in a list of 20.
                        Saving an update ticks it automatically, because having
                        just written a note IS having covered the order. */ ''}
@@ -6192,9 +6301,21 @@ function checkInRowHtml(r) {
             `;
 }
 
+/** A style block hiding the columns she has turned off. Simpler and safer than
+ *  conditionally emitting cells: the header and the rows can never disagree
+ *  about how many cells there are, which would break the table outright. */
+function checkInColumnStyleHtml() {
+  const off = CHECKIN_COLUMNS.filter((c) => !columnOn(c.key)).map((c) => c.key);
+  if (!off.length) return '';
+  return `<style>${off.map((k) =>
+    `.om-checkin-table [data-col="${k}"]{display:none!important;}`).join('')}</style>`;
+}
+
 async function renderCheckInView(root) {
   root.innerHTML = `${workViewTabsHtml()}<div class="om-empty">${i18('emptyLoading', 'Loading...')}</div>`;
   bindWorkViewTabs();
+  loadCheckInColumns();
+
   let rows;
   try { rows = await loadWorkQueue(); }
   catch (e) { root.innerHTML = workViewTabsHtml() + `<div class="om-empty">${escapeHtml(e.message)}</div>`; bindWorkViewTabs(); return; }
@@ -6222,6 +6343,7 @@ async function renderCheckInView(root) {
 
   root.innerHTML = `
     ${workViewTabsHtml()}
+    ${checkInColumnStyleHtml()}
     <div class="om-checkin-bar">
       <label class="field-label" style="margin:0;">${escapeHtml(i18t('supplierLabel', 'Supplier'))}</label>
       <select id="omCheckInSupplier">
@@ -6234,6 +6356,9 @@ async function renderCheckInView(root) {
           </option>`).join('')}
       </select>
       <div class="om-checkin-counts" id="omCheckInProgress"></div>
+      <button type="button" class="om-table-upload-btn om-row-btn-lg" id="omCheckInColumns">
+        ${escapeHtml(i18t('btnColumns', 'Columns'))} (${checkInColumns.length}/${CHECKIN_COLUMNS.length})
+      </button>
 
     </div>
     <div class="om-section-intro">${escapeHtml(i18t('checkInIntro3', 'Work down the list. An update saves when you move off the box; a follow-up date saves as soon as you pick it.'))}</div>
@@ -6250,7 +6375,7 @@ async function renderCheckInView(root) {
         </div>
         <div class="section-help">${escapeHtml(i18t('checkInRequestsHelp', 'Not yet sent to this supplier. Send them before working through production.'))}</div>
         <div class="om-table-wrap">
-          <table class="om-table om-checkin-table">
+          <table class="om-table om-checkin-table ${checkInColumns.length === CHECKIN_COLUMNS.length ? '' : 'is-custom-cols'}">
             <thead>${checkInHeaderHtml()}</thead>
             <tbody>${requests.map(checkInRowHtml).join('')}</tbody>
           </table>
@@ -6263,7 +6388,7 @@ async function renderCheckInView(root) {
           ${escapeHtml(i18t('groupInProduction', 'In Production'))} <span class="om-count">${list.length}</span>
         </div>
         <div class="om-table-wrap">
-          <table class="om-table om-checkin-table">
+          <table class="om-table om-checkin-table ${checkInColumns.length === CHECKIN_COLUMNS.length ? '' : 'is-custom-cols'}">
             <thead>${checkInHeaderHtml()}</thead>
             <tbody>${list.map(checkInRowHtml).join('')}</tbody>
           </table>
@@ -6277,6 +6402,9 @@ async function renderCheckInView(root) {
   document.querySelectorAll('.om-checkin-photo img').forEach((img) => {
     img.addEventListener('click', (e) => { e.stopPropagation(); openImageLightbox(img.src); });
   });
+
+  const colsBtn = document.getElementById('omCheckInColumns');
+  if (colsBtn) colsBtn.addEventListener('click', openColumnPicker);
 
   const batchBtn = document.getElementById('omCheckInBatchSend');
   if (batchBtn) {
@@ -6512,11 +6640,11 @@ async function renderPdApprovalView(root) {
                 ${/* The whole row opens the PO, so there is no separate Open
                       button competing with the real actions. */ ''}
                 <tr class="om-row-clickable" data-row-po="${escapeHtml(r.id)}">
-                  <td><strong>${escapeHtml(r.poNumber)}</strong></td>
-                  <td>${escapeHtml(r.productName || '')}<div class="om-sub">${escapeHtml(r.sku || '')}</div></td>
-                  <td>${approvalStagesHtml(r.approvalStages)}</td>
-                  <td>${escapeHtml(shortActionLabel(r.action))}${r.revisedSummary ? `<div class="om-sub">${escapeHtml(r.revisedSummary)}</div>` : ''}</td>
-                  <td>
+                  <td data-label="${escapeHtml(i18t('thPoNumber', 'PO Number'))}"><strong>${escapeHtml(r.poNumber)}</strong></td>
+                  <td data-label="${escapeHtml(i18t('thProduct', 'Product'))}">${escapeHtml(r.productName || '')}<div class="om-sub">${escapeHtml(r.sku || '')}</div></td>
+                  <td data-label="${escapeHtml(i18t('thApprovals', 'Approvals'))}">${approvalStagesHtml(r.approvalStages)}</td>
+                  <td data-label="${escapeHtml(i18t('thAction', 'Next'))}">${escapeHtml(shortActionLabel(r.action))}${r.revisedSummary ? `<div class="om-sub">${escapeHtml(r.revisedSummary)}</div>` : ''}</td>
+                  <td data-label="${escapeHtml(i18t('thActions', 'Actions'))}">
                     <div class="om-row-actions">
                       ${/* Straight into the approval page for this PO - the whole
                            point is not having to open the PO first. */ ''}

@@ -681,6 +681,27 @@ function requirePermission(permission) {
 }
 
 // Who am I - drives what the front end shows.
+/** Save a UI preference for the signed-in user. Shared sessions have no user
+ *  record to hang it on, so they are told to keep it in the browser instead. */
+app.put('/api/me/preferences', (req, res) => {
+  const user = req.user;
+  if (!user || !user.id) {
+    return res.status(409).json({ error: 'No personal account for this session', local: true });
+  }
+  const patch = (req.body && req.body.preferences) || {};
+  if (typeof patch !== 'object' || Array.isArray(patch)) {
+    return res.status(400).json({ error: 'preferences must be an object' });
+  }
+  try {
+    const updated = userStore.setPreferences(user.id, patch);
+    if (!updated) return res.status(404).json({ error: 'User not found' });
+    res.json({ ok: true, preferences: updated.preferences || {} });
+  } catch (err) {
+    console.error('Saving preferences failed:', err);
+    res.status(500).json({ error: 'Could not save preferences' });
+  }
+});
+
 app.get('/api/me', (req, res) => {
   res.json({
     ok: true,

@@ -132,7 +132,14 @@ function sidebarInnerHtml() {
   // links to pages the server will just redirect them away from.
   fetch('/api/me')
     .then((r) => (r.ok ? r.json() : null))
-    .then((me) => { if (me && me.pages) { allowedPages = me.pages; redraw(); } })
+    .then((me) => {
+      if (!me) return;
+      /* Share the signed-in user with the pages, so a per-user setting like
+       * the check-in column choice can be read without a second round trip. */
+      window.JuniperMe = me;
+      window.dispatchEvent(new CustomEvent('juniper:me', { detail: me }));
+      if (me.pages) { allowedPages = me.pages; redraw(); }
+    })
     .catch(() => { /* nav stays unfiltered rather than empty */ });
 
   // ---- Mobile: collapse the sidebar behind a hamburger ----
