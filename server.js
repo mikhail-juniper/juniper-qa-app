@@ -1959,6 +1959,28 @@ app.post('/api/submit-revised', (req, res) => {
  * waiting on (PD approval) without three different endpoints computing three
  * slightly different versions of the same thing.
  */
+/** Confirm that someone here has seen a PD approval, clearing it from the queue. */
+app.post('/api/order-management/orders/:id/approval-seen', requirePermission('orders:write'), (req, res) => {
+  const stage = req.body && req.body.stage;
+  if (!['sample', 'preProduction', 'bulk'].includes(stage)) {
+    return res.status(400).json({ error: 'Unknown stage' });
+  }
+  try {
+    const order = orderManagementStore.getOrderById(req.params.id);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    const seen = { ...(order.approvalSeen || {}) };
+    if (req.body.undo) delete seen[stage];
+    else seen[stage] = new Date().toISOString();
+    orderManagementStore.updateOrder(order.id, { approvalSeen: seen },
+      (req.user && req.user.name) || 'Web user',
+      req.body.undo ? `Approval confirmation undone (${stage})` : `Approval confirmed (${stage})`);
+    res.json({ ok: true, approvalSeen: seen });
+  } catch (err) {
+    console.error('Confirming an approval failed:', err);
+    res.status(500).json({ error: 'Could not confirm' });
+  }
+});
+
 app.get('/api/order-management/work-queue', (req, res) => {
   try {
     const today = req.query.today || null;
@@ -1999,6 +2021,16 @@ app.get('/api/order-management/work-queue', (req, res) => {
          * under work already in production. */
         dispatched: ((o.dispatchLog || []).length > 0),
         approvalStages,
+        /* Stages PD has signed off that nobody here has confirmed seeing.
+         * Computed separately from the single next action on purpose: a PO can
+         * have a bulk inspection outstanding AND a golden sample just
+         * approved, and the approval must not be hidden by whatever ranks
+         * highest. */
+        approvalsToConfirm: ['sample', 'preProduction', 'bulk'].filter((k) => {
+          const st = approvalStages[k];
+          const approved = st === 'approved' || st === 'approvedWithIssues';
+          return approved && !((o.approvalSeen || {})[k]);
+        }),
         /* Everything the supplier-facing order table shows, so the check-in
          * column picker can offer the same fields. Sent for every row rather
          * than only the chosen ones: the choice is per user and changes at

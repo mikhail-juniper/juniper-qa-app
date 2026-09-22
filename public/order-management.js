@@ -6807,6 +6807,10 @@ async function renderPdApprovalView(root) {
   catch (e) { root.innerHTML = workViewTabsHtml() + `<div class="om-empty">${escapeHtml(e.message)}</div>`; bindWorkViewTabs(); return; }
 
   const pdRows = rows.filter((r) => ['pdNeedsStart', 'pdReview', 'pdReply'].includes(r.action.kind));
+  /* Approvals PD has granted that nobody here has acknowledged. Drawn from its
+   * own field rather than the next action, so an approval still surfaces on a
+   * PO that has other work outstanding. */
+  const approvedRows = rows.filter((r) => (r.approvalsToConfirm || []).length);
   const groups = [
     ['pdNeedsStart', i18t('pdNeedsStart2', 'To Submit'),
       i18t('pdNeedsStartHelp', 'Nothing has been submitted yet. A new PO needs its approved sample images; a finished inspection needs submitting for approval. These sit in no other queue.')],
@@ -6816,8 +6820,55 @@ async function renderPdApprovalView(root) {
       i18t('pdWaitingOnPdHelp', 'Submitted and sitting with PD. Chase anything that has been here too long.')]
   ];
 
+  const stageName = (k) => ({
+    sample: i18t('stageGolden', 'Golden'),
+    preProduction: i18t('stagePp', 'PP'),
+    bulk: i18t('stageBulkShort', 'Bulk')
+  })[k] || k;
+
+  const approvedCard = `
+    <div class="card">
+      <div class="section-title">
+        ${escapeHtml(i18t('pdApproved', 'Approved - confirm and clear'))}
+        <span class="om-count">${approvedRows.reduce((n, r) => n + r.approvalsToConfirm.length, 0)}</span>
+      </div>
+      <div class="section-help">${escapeHtml(i18t('pdApprovedHelp', 'Product Development has signed these off. Tick one to confirm you have seen it and it leaves the list.'))}</div>
+      ${approvedRows.length ? `
+        <div class="om-table-wrap"><table class="om-table om-pd-table">
+          <thead><tr>
+            <th>${escapeHtml(i18t('thPoNumber', 'PO Number'))}</th>
+            <th>${escapeHtml(i18t('thProduct', 'Product'))}</th>
+            <th>${escapeHtml(i18t('thApprovals', 'Approvals'))}</th>
+            <th>${escapeHtml(i18t('thApprovedStage', 'Approved'))}</th>
+            <th>${escapeHtml(i18t('thActions', 'Actions'))}</th>
+          </tr></thead>
+          <tbody>
+            ${approvedRows.map((r) => `
+              <tr class="om-row-clickable" data-row-po="${escapeHtml(r.id)}">
+                <td data-label="${escapeHtml(i18t('thPoNumber', 'PO Number'))}"><strong>${escapeHtml(r.poNumber)}</strong></td>
+                <td data-label="${escapeHtml(i18t('thProduct', 'Product'))}">${escapeHtml(r.productName || '')}<div class="om-sub">${escapeHtml(r.sku || '')}</div></td>
+                <td data-label="${escapeHtml(i18t('thApprovals', 'Approvals'))}">${approvalStagesHtml(r.approvalStages)}</td>
+                <td data-label="${escapeHtml(i18t('thApprovedStage', 'Approved'))}">
+                  ${r.approvalsToConfirm.map((k) => `<div><strong>${escapeHtml(stageName(k))}</strong></div>`).join('')}
+                </td>
+                <td data-label="${escapeHtml(i18t('thActions', 'Actions'))}">
+                  <div class="om-row-actions">
+                    ${r.approvalsToConfirm.map((k) => `
+                      <button type="button" class="om-table-upload-btn om-row-btn-lg om-approval-seen-btn"
+                              data-seen-order="${escapeHtml(r.id)}" data-seen-stage="${k}">
+                        &#10003; ${escapeHtml(i18t('btnConfirmSeen', 'Confirm'))} ${escapeHtml(stageName(k))}
+                      </button>`).join('')}
+                  </div>
+                </td>
+              </tr>`).join('')}
+          </tbody>
+        </table></div>
+      ` : `<div class="om-empty">${escapeHtml(i18t('emptyNothingHere', 'Nothing here.'))}</div>`}
+    </div>`;
+
   root.innerHTML = `
     ${workViewTabsHtml()}
+    ${approvedCard}
     ${groups.map(([kind, title, help]) => {
       const list = pdRows.filter((r) => r.action.kind === kind);
       return `
@@ -6860,6 +6911,23 @@ async function renderPdApprovalView(root) {
   bindWorkViewTabs();
   bindWorkRowActions();
   makeDateFieldsClickable(root);
+
+  document.querySelectorAll('.om-approval-seen-btn').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();          // the row itself opens the PO
+      btn.disabled = true;
+      try {
+        await api(`/api/order-management/orders/${encodeURIComponent(btn.dataset.seenOrder)}/approval-seen`,
+          { method: 'POST', body: JSON.stringify({ stage: btn.dataset.seenStage }) });
+        showToast(i18t('approvalConfirmed', 'Confirmed'));
+        workQueueCache = null;
+        render();
+      } catch (err) {
+        showToast(err.message, true);
+        btn.disabled = false;
+      }
+    });
+  });
 }
 
 /** Shared row-level handlers for the QA and PD views. */
