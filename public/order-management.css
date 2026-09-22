@@ -1459,11 +1459,26 @@ html {
 .om-checkin-table td:nth-child(4) { white-space: nowrap; }
 .om-checkin-table th:nth-child(1), .om-checkin-table td:nth-child(1) { width: 9%; }   /* PO */
 .om-checkin-table th:nth-child(2), .om-checkin-table td:nth-child(2) { width: 6%; }   /* Photo */
-.om-checkin-table th:nth-child(3), .om-checkin-table td:nth-child(3) { width: 14%; }  /* Product */
+.om-checkin-table th:nth-child(3), .om-checkin-table td:nth-child(3) { width: 13%; }  /* Product */
 .om-checkin-table th:nth-child(4), .om-checkin-table td:nth-child(4) { width: 5%; }   /* Qty */
 .om-checkin-table th:nth-child(5), .om-checkin-table td:nth-child(5) { width: 11%; }  /* Status */
-.om-checkin-table th:nth-child(6), .om-checkin-table td:nth-child(6) { width: 19%; }  /* Last update */
-.om-checkin-table th:nth-child(7), .om-checkin-table td:nth-child(7) { width: 19%; }  /* Update */
-.om-checkin-table th:nth-child(8), .om-checkin-table td:nth-child(8) { width: 11%; }  /* Follow up */
-.om-checkin-table th:nth-child(9), .om-checkin-table td:nth-child(9) { width: 6%; }   /* Done */
+.om-checkin-table th:nth-child(6), .om-checkin-table td:nth-child(6) { width: 17%; }  /* Last update */
+.om-checkin-table th:nth-child(7), .om-checkin-table td:nth-child(7) { width: 17%; }  /* Update */
+.om-checkin-table th:nth-child(8), .om-checkin-table td:nth-child(8) { width: 10%; }  /* Follow up */
+.om-checkin-table th:nth-child(9), .om-checkin-table td:nth-child(9) { width: 9%; }   /* QA */
+.om-checkin-table th:nth-child(10), .om-checkin-table td:nth-child(10) { width: 6%; }  /* Done */
 .om-checkin-table .om-checkin-note { width: 100%; min-width: 0; }
+
+/* Row click opens the PO, so it should look pressable. Controls inside the row
+   stop the click, which is handled in bindRowClickToOpen. */
+.om-row-clickable { cursor: pointer; }
+.om-row-clickable:hover { background: var(--jc-mint-light); }
+.om-row-clickable input, .om-row-clickable textarea,
+.om-row-clickable button, .om-row-clickable a,
+.om-row-clickable label { cursor: auto; }
+.om-row-clickable button, .om-row-clickable a, .om-row-clickable label { cursor: pointer; }
+
+/* 30% larger so the product is recognisable at a glance while she works down
+   the list. */
+.om-checkin-photo img { width: 52px; height: 52px; }
+.om-checkin-qacol { white-space: nowrap; }

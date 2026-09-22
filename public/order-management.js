@@ -179,7 +179,6 @@ function render() {
   /* The working views replace the page entirely rather than filtering the
      board - the call-down in particular wants the full width. */
   if (currentView === 'home' && omWorkView === 'checkin') return renderCheckInView(root);
-  if (currentView === 'home' && omWorkView === 'qa') return renderQaSchedulingView(root);
   if (currentView === 'home' && omWorkView === 'pd') return renderPdApprovalView(root);
   if (currentView === 'home') return renderHome(root);
   if (currentView === 'suppliers') return renderSuppliersShell(root);
@@ -2253,7 +2252,10 @@ function attachTypeahead(inputId, getOptions) {
   menu.dataset.typeaheadOwner = inputId;
 }
 
-async function openDetailPanel(id, scope) {
+/* opts.scrollTo names a section to jump to once the panel has rendered - the
+ * Schedule QA button lands her on the QA/QC block rather than the top of a
+ * long PO she then has to scroll through. */
+async function openDetailPanel(id, scope, opts) {
   scope = scope || 'full';
   let order;
   let supplierNamesShared = []; // populated once the async supplier fetch below resolves; typeahead callbacks read it lazily so timing doesn't matter
@@ -2422,7 +2424,7 @@ async function openDetailPanel(id, scope) {
     </div>
 
     <div class="om-panel-card">
-    <div class="om-section-title">${i18('secQaQcReporting', 'QA/QC Reporting')}</div>
+    <div class="om-section-title" id="omQaSection">${i18('secQaQcReporting', 'QA/QC Reporting')}</div>
     <div class="section-help" style="margin-bottom:14px;">${i18('helpQaReporting', 'Share a report link with a factory or QA contact.')}</div>
     <div class="om-qa-report-grid">
       ${[
@@ -2455,9 +2457,15 @@ async function openDetailPanel(id, scope) {
             return `
               ${isSetUp ? `
                 <button type="button" class="btn btn-secondary om-copy-link-btn" style="width:100%;margin-top:10px;padding:9px 16px;" data-copy-url="${escapeHtml(url)}">${i18('btnCopyReportLink', 'Copy Report Link')}</button>
-                <button type="button" class="btn btn-secondary om-setup-link-btn" style="width:100%;margin-top:8px;padding:7px 16px;font-size:12.5px;" data-setup-stage="${stage}">
-                  ${i18('btnEditReportSetup', 'Edit questions')} (${extras})
-                </button>
+                ${/* Questions are fixed once the report is under way. Changing
+                     the bank mid-inspection would mean the submitted report no
+                     longer matches what was asked, and the inspector may
+                     already be halfway through it. */ ''}
+                ${rep.status === 'Pending' ? `
+                  <button type="button" class="btn btn-secondary om-setup-link-btn" style="width:100%;margin-top:8px;padding:7px 16px;font-size:12.5px;" data-setup-stage="${stage}">
+                    ${i18('btnEditReportSetup', 'Edit questions')} (${extras})
+                  </button>` : `
+                  <div class="om-qa-report-meta" style="margin-top:8px;">${i18('questionsLocked', 'Questions locked')} (${extras})</div>`}
               ` : `
                 <button type="button" class="btn btn-secondary om-setup-link-btn" style="width:100%;margin-top:10px;padding:9px 16px;" data-setup-stage="${stage}">${i18('btnSetupReportLink', 'Setup Report Link')}</button>
               `}
@@ -2474,7 +2482,7 @@ async function openDetailPanel(id, scope) {
             ${rep.pdfUrl ? `
               <a href="${escapeHtml(rep.pdfUrl)}" target="_blank" rel="noopener" class="om-qa-report-link">${i18('btnDownloadReportPdf', 'Download report PDF')}</a>
               <div class="om-qa-report-meta">
-                ${rep.result ? `<span class="om-qa-result om-qa-result-${escapeHtml(String(rep.result).toLowerCase())}">${escapeHtml(rep.result)}</span>` : ''}
+                ${rep.result ? `<span class="om-qa-result om-qa-result-${escapeHtml(String(rep.result).toLowerCase())}">${i18('initialReportLabel', 'Initial report')}: ${escapeHtml(rep.result)}</span>` : ''}
                 ${rep.submittedAt ? `<span>${fmtDate(rep.submittedAt)}</span>` : ''}
               </div>
             ` : `<div class="om-qa-report-meta">${i18('emptyNoReportSubmitted', 'No report submitted yet.')}</div>`}
@@ -4134,6 +4142,14 @@ async function openDetailPanel(id, scope) {
   captureDocSlotBaseline();
   // Clicking anywhere in a date field opens the picker, not just the glyph.
   makeDateFieldsClickable(panel);
+
+  if (opts && opts.scrollTo === 'qa') {
+    // After render, so the section exists and the panel has its height.
+    setTimeout(() => {
+      const target = panel.querySelector('#omQaSection');
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 120);
+  }
 
   const setSaveStatus = (key, fallback) => {
     const el = document.getElementById('omSaveStatus');
@@ -5957,7 +5973,9 @@ function askForSourceLink(fileName) {
 const OM_WORK_VIEWS = [
   ['board', 'Default'],
   ['checkin', 'PO Check-In'],
-  ['qa', 'QA Scheduling'],
+  /* QA Scheduling was its own view, but in practice scheduling happens while
+   * working down the check-in list, not as a separate sitting. The Schedule QA
+   * button on each check-in row replaces it. */
   ['pd', 'PD Approval']
 ];
 
@@ -6114,12 +6132,14 @@ async function renderCheckInView(root) {
             <th>${escapeHtml(i18t('thLastUpdate', 'Last update'))}</th>
             <th>${escapeHtml(i18t('thNewUpdate', 'Update'))}</th>
             <th>${escapeHtml(i18t('thFollowUp', 'Follow up'))}</th>
+            <th>${escapeHtml(i18t('thQa', 'QA'))}</th>
             <th>${escapeHtml(i18t('thDone', 'Done'))}</th>
           </tr></thead>
           <tbody>
             ${list.map((r) => `
-              <tr data-checkin-row="${escapeHtml(r.id)}" class="${checkedInToday(r) ? 'om-row-done' : ''}">
-                <td><button type="button" class="om-linklike" data-open-po="${escapeHtml(r.id)}">${escapeHtml(r.poNumber)}</button></td>
+              <tr data-checkin-row="${escapeHtml(r.id)}" data-row-po="${escapeHtml(r.id)}"
+                  class="om-row-clickable ${checkedInToday(r) ? 'om-row-done' : ''}">
+                <td><strong>${escapeHtml(r.poNumber)}</strong></td>
                 <td class="om-checkin-photo">
                   ${r.photo ? `<img src="${escapeHtml(r.photo)}" alt="" class="js-lightbox" />` : '<span class="om-sub">-</span>'}
                 </td>
@@ -6149,6 +6169,11 @@ async function renderCheckInView(root) {
                   </label>
                   <button type="button" class="om-datechip-clear ${r.followUpDate ? '' : 'is-hidden'}" data-fu-clear="${escapeHtml(r.id)}" title="${escapeHtml(i18t('clearLabel', 'Clear'))}">&times;</button>
                   <div class="om-row-saved" data-saved-fu="${escapeHtml(r.id)}"></div>
+                </td>
+                <td class="om-checkin-qacol">
+                  ${/* Scheduling happens during the call, so it belongs here
+                       rather than on a page of its own. */ ''}
+                  <button type="button" class="om-table-upload-btn" data-schedule-qa="${escapeHtml(r.id)}">${escapeHtml(i18t('btnScheduleQa', 'Schedule QA'))}</button>
                 </td>
                 <td class="om-checkin-donecol">
                   ${/* Ticking this is how she keeps her place in a list of 20.
@@ -6223,6 +6248,16 @@ async function renderCheckInView(root) {
 
   document.querySelectorAll('.om-checkin-note').forEach((el) => {
     const id = el.dataset.noteFor;
+    /* Enter saves, because on a call the note is almost always one line and
+     * reaching for the mouse to commit it is the slow part. Ctrl+Enter adds a
+     * line for the occasional longer note - the reverse of the usual pairing,
+     * but it matches which one she does fifty times a morning. */
+    el.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      if (e.ctrlKey || e.metaKey) return;      // let the newline through
+      e.preventDefault();
+      el.blur();                                // blur is what saves
+    });
     el.addEventListener('blur', async () => {
       const text = el.value.trim();
       if (!text || noteInFlight.has(id)) return;
@@ -6280,6 +6315,12 @@ async function renderCheckInView(root) {
   document.querySelectorAll('.om-checkin-done').forEach((el) => {
     el.addEventListener('change', () => markDone(el.dataset.doneFor, el.checked));
   });
+
+  document.querySelectorAll('[data-schedule-qa]').forEach((el) => {
+    el.addEventListener('click', () => openDetailPanel(el.dataset.scheduleQa, 'full', { scrollTo: 'qa' }));
+  });
+
+  bindRowClickToOpen();
   refreshProgress();
   makeDateFieldsClickable(root);
 
@@ -6316,7 +6357,7 @@ function qaRowActionsHtml(r, stage) {
     <div class="om-row-actions">
       ${st.isSetUp ? `
         <button type="button" class="om-table-upload-btn om-copy-link-btn" data-copy-url="${escapeHtml(url)}">${escapeHtml(i18t('btnCopyReportLink', 'Copy Report Link'))}</button>
-        <button type="button" class="om-table-upload-btn om-setup-link-btn" data-setup-stage="${stage}" data-setup-order="${escapeHtml(r.id)}">${escapeHtml(i18t('btnEditReportSetup', 'Edit questions'))} (${st.extras || 0})</button>
+        ${st.status === 'Pending' ? `<button type="button" class="om-table-upload-btn om-setup-link-btn" data-setup-stage="${stage}" data-setup-order="${escapeHtml(r.id)}">${escapeHtml(i18t('btnEditReportSetup', 'Edit questions'))} (${st.extras || 0})</button>` : ''}
       ` : `
         <button type="button" class="om-table-upload-btn om-setup-link-btn" data-setup-stage="${stage}" data-setup-order="${escapeHtml(r.id)}">${escapeHtml(i18t('btnSetupReportLink', 'Setup Report Link'))}</button>
       `}
@@ -6414,18 +6455,19 @@ async function renderPdApprovalView(root) {
                 <th>${escapeHtml(i18t('thActions', 'Actions'))}</th>
               </tr></thead>
               <tbody>${list.map((r) => `
-                <tr>
-                  <td><button type="button" class="om-linklike" data-open-po="${escapeHtml(r.id)}">${escapeHtml(r.poNumber)}</button></td>
+                ${/* The whole row opens the PO, so there is no separate Open
+                      button competing with the real actions. */ ''}
+                <tr class="om-row-clickable" data-row-po="${escapeHtml(r.id)}">
+                  <td><strong>${escapeHtml(r.poNumber)}</strong></td>
                   <td>${escapeHtml(r.productName || '')}<div class="om-sub">${escapeHtml(r.sku || '')}</div></td>
                   <td>${escapeHtml(r.supplierName || '')}</td>
-                  <td>${escapeHtml(r.action.label || '')}</td>
+                  <td>${escapeHtml(r.action.label || '')}${r.revisedSummary ? `<div class="om-sub">${escapeHtml(r.revisedSummary)}</div>` : ''}</td>
                   <td>
                     <div class="om-row-actions">
                       ${/* Straight into the approval page for this PO - the whole
                            point is not having to open the PO first. */ ''}
                       <a class="om-table-upload-btn" href="/approval.html?po=${encodeURIComponent(r.id)}" target="_blank" rel="noopener">${escapeHtml(i18t('btnOpenApproval', 'Open approval'))}</a>
                       <button type="button" class="om-table-upload-btn om-copy-link-btn" data-copy-url="${escapeHtml(location.origin + '/approval.html?po=' + encodeURIComponent(r.id))}">${escapeHtml(i18t('btnShareAccess', 'Share'))}</button>
-                      <button type="button" class="om-table-upload-btn" data-open-po="${escapeHtml(r.id)}">${escapeHtml(i18t('openLabel', 'Open'))}</button>
                     </div>
                   </td>
                 </tr>`).join('')}</tbody>
@@ -6441,9 +6483,25 @@ async function renderPdApprovalView(root) {
 }
 
 /** Shared row-level handlers for the QA and PD views. */
+/* Clicking a row opens the PO. Clicks that land on a control are ignored -
+ * otherwise ticking Done, picking a date or typing an update would all yank
+ * the panel open over the top of what she is doing. */
+function bindRowClickToOpen() {
+  document.querySelectorAll('.om-row-clickable').forEach((row) => {
+    if (row.dataset.rowBound) return;
+    row.dataset.rowBound = '1';
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('button, a, input, textarea, select, label')) return;
+      if (window.getSelection && String(window.getSelection())) return;  // text being selected
+      openDetailPanel(row.dataset.rowPo, 'full');
+    });
+  });
+}
+
 function bindWorkRowActions() {
   document.querySelectorAll('[data-open-po]').forEach((el) =>
     el.addEventListener('click', () => openDetailPanel(el.dataset.openPo, 'full')));
+  bindRowClickToOpen();
 
   document.querySelectorAll('.om-copy-link-btn').forEach((el) =>
     el.addEventListener('click', async () => {

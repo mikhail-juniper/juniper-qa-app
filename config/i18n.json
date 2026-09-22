@@ -5162,5 +5162,21 @@
   "clearLabel": {
     "en": "Clear",
     "zh": "清除"
+  },
+  "btnScheduleQa": {
+    "en": "Schedule QA",
+    "zh": "安排质检"
+  },
+  "thQa": {
+    "en": "QA",
+    "zh": "质检"
+  },
+  "initialReportLabel": {
+    "en": "Initial report",
+    "zh": "初次报告"
+  },
+  "questionsLocked": {
+    "en": "Questions locked",
+    "zh": "问题已锁定"
   }
 }

@@ -1841,6 +1841,17 @@ app.get('/api/order-management/work-queue', (req, res) => {
         followUpDate: o.followUpDate || null,
         followUpNote: o.followUpNote || '',
         lastCheckedInAt: o.lastCheckedInAt || null,
+        /* So the PD queue can show that a failed inspection was since cleared
+           by a revised report, rather than only the original finding. */
+        revisedSummary: (() => {
+          try {
+            const revs = submissionLog.findRevisedReports(o.poNumber) || [];
+            if (!revs.length) return '';
+            const fixed = revs.reduce((n, r) => n + (r.issues || []).reduce((m, i) => m + (parseInt(i.unitsFixed, 10) || 0), 0), 0);
+            const flagged = revs.reduce((n, r) => n + (r.issues || []).reduce((m, i) => m + (parseInt(i.unitsAffected, 10) || 0), 0), 0);
+            return `Revised unit report: ${fixed} / ${flagged} units repaired`;
+          } catch (e) { return ''; }
+        })(),
         lastCheckedInBy: o.lastCheckedInBy || '',
         /* Enough of the QA stage state for the scheduling view to offer the
          * same buttons as the PO panel, rather than making her open the PO to
