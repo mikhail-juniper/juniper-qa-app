@@ -1876,6 +1876,25 @@ app.get('/api/order-management/work-queue', (req, res) => {
          * under work already in production. */
         dispatched: ((o.dispatchLog || []).length > 0),
         approvalStages,
+        /* Everything the supplier-facing order table shows, so the check-in
+         * column picker can offer the same fields. Sent for every row rather
+         * than only the chosen ones: the choice is per user and changes at
+         * will, and these are small scalars next to the photo URLs already
+         * here. */
+        orderDate: o.orderPlacementDate || null,
+        manufacturerDeliveryDate: o.manufacturerDeliveryDate || null,
+        actualShipDate: o.inTransportationAt || null,
+        warehouseArrivalDate: o.desiredEntryDate || null,
+        fulfillmentRequestDate: o.fulfillmentRequestDate || null,
+        productionNotes: o.productionNotes || '',
+        /* Same sources the supplier view uses: the warehouse is on the main
+           component, and quantity received lives under fulfillment. */
+        warehouseAddress: (o.mainComponent || {}).warehouse || '',
+        quantityReceived: (o.fulfillment || {}).quantityReceived ?? null,
+        creator: o.creator || '',
+        sourcer: o.sourcer || '',
+        orderManagementSpecialist: o.buyer || '',
+        fulfillmentChannel: o.fulfillmentChannel || '',
         /* So the PD queue can show that a failed inspection was since cleared
            by a revised report, rather than only the original finding. */
         revisedSummary: (() => {

@@ -6130,19 +6130,42 @@ function makeDateFieldsClickable(scope) {
  * identified, and every other column is meaningless next to an anonymous one.
  */
 const CHECKIN_COLUMNS = [
-  { key: 'po',        labelKey: 'thPoNumber',   fallback: 'PO Number',   locked: true },
-  { key: 'photo',     labelKey: 'thPhoto',      fallback: 'Photo' },
-  { key: 'product',   labelKey: 'thProduct',    fallback: 'Product' },
-  { key: 'qty',       labelKey: 'thQty',        fallback: 'Qty' },
-  { key: 'status',    labelKey: 'thStatus',     fallback: 'Status' },
-  { key: 'qa',        labelKey: 'thQaQc',       fallback: 'QA/QC' },
-  { key: 'lastUpdate',labelKey: 'thLastUpdate', fallback: 'Last update' },
-  { key: 'update',    labelKey: 'thNewUpdate',  fallback: 'Update' },
-  { key: 'followUp',  labelKey: 'thFollowUp',   fallback: 'Follow up' },
-  { key: 'done',      labelKey: 'thDone',       fallback: 'Done' }
+  // Shown by default: the working set for a supplier call.
+  { key: 'po',         labelKey: 'thPoNumber',    fallback: 'PO Number',   locked: true, group: 'core' },
+  { key: 'photo',      labelKey: 'thPhoto',       fallback: 'Photo',       on: true, group: 'core' },
+  { key: 'product',    labelKey: 'thProduct',     fallback: 'Product',     on: true, group: 'core' },
+  { key: 'qty',        labelKey: 'thQty',         fallback: 'Qty',         on: true, group: 'core' },
+  { key: 'status',     labelKey: 'thStatus',      fallback: 'Status',      on: true, group: 'core' },
+  { key: 'qa',         labelKey: 'thQaQc',        fallback: 'QA/QC',       on: true, group: 'core' },
+  { key: 'lastUpdate', labelKey: 'thLastUpdate',  fallback: 'Last update', on: true, group: 'core' },
+  { key: 'update',     labelKey: 'thNewUpdate',   fallback: 'Update',      on: true, group: 'core' },
+  { key: 'followUp',   labelKey: 'thFollowUp',    fallback: 'Follow up',   on: true, group: 'core' },
+  { key: 'done',       labelKey: 'thDone',        fallback: 'Done',        on: true, group: 'core' },
+
+  /* Off by default, available to add: the rest of what the supplier-facing
+   * order table shows, plus the PO fields alongside them. Ten columns is
+   * already the width of a laptop screen, so these are opt-in - she turns on
+   * what a given week needs rather than carrying all of it. */
+  { key: 'sku',            labelKey: 'thSku',                       fallback: 'SKU',                    group: 'more' },
+  { key: 'supplier',       labelKey: 'thSupplier',                  fallback: 'Supplier',               group: 'more' },
+  { key: 'orderDate',      labelKey: 'supOrderDate',                fallback: 'Order Date',             group: 'more' },
+  { key: 'delivery',       labelKey: 'fldRequiredManufacturerDelivery', fallback: 'Required Delivery',  group: 'more' },
+  { key: 'shipDate',       labelKey: 'supActualShipDate',           fallback: 'Actual Ship Date',       group: 'more' },
+  { key: 'warehouseDate',  labelKey: 'fldRequiredWarehouseArrival',  fallback: 'Warehouse Arrival',     group: 'more' },
+  { key: 'fulfilDate',     labelKey: 'fldFulfillmentRequestDate',   fallback: 'Fulfillment Request',    group: 'more' },
+  { key: 'ppSample',       labelKey: 'supPreProdSample',            fallback: 'Pre-Production Sample',  group: 'more' },
+  { key: 'bulkSample',     labelKey: 'supBulkSample',               fallback: 'Bulk Sample',            group: 'more' },
+  { key: 'prodNotes',      labelKey: 'fldProductionNotes',          fallback: 'Production Notes',       group: 'more' },
+  { key: 'qtyReceived',    labelKey: 'fldQuantityReceived',         fallback: 'Quantity Received',      group: 'more' },
+  { key: 'warehouse',      labelKey: 'fldWarehouseAddress',         fallback: 'Warehouse Address',      group: 'more' },
+  { key: 'creator',        labelKey: 'fldCreator',                  fallback: 'Creator',                group: 'more' },
+  { key: 'sourcer',        labelKey: 'fldSourcer',                  fallback: 'Sourcer',                group: 'more' },
+  { key: 'specialist',     labelKey: 'fldOrderManagementSpecialist', fallback: 'OM Specialist',         group: 'more' },
+  { key: 'channel',        labelKey: 'fldFulfillmentChannel',       fallback: 'Fulfillment Channel',    group: 'more' },
+  { key: 'approvals',      labelKey: 'thApprovals',                 fallback: 'Approvals',              group: 'more' }
 ];
 
-const CHECKIN_COLUMNS_DEFAULT = CHECKIN_COLUMNS.map((c) => c.key);
+const CHECKIN_COLUMNS_DEFAULT = CHECKIN_COLUMNS.filter((c) => c.locked || c.on).map((c) => c.key);
 
 /* Populated by app-shell once /api/me returns. It may not have arrived when a
  * view first renders, so the columns are re-read on the event too. */
@@ -6205,17 +6228,21 @@ function openColumnPicker() {
     <div class="om-cols-dialog">
       <div class="om-section-title">${escapeHtml(i18t('columnsTitle', 'Choose columns'))}</div>
       <div class="section-help">${escapeHtml(i18t('columnsHelp', 'Pick what you want to see while working down the list. This is saved for you.'))}</div>
-      <div class="om-cols-list">
-        ${CHECKIN_COLUMNS.map((c) => `
-          <label class="om-cols-row ${c.locked ? 'is-locked' : ''}">
-            <input type="checkbox" data-col="${c.key}" ${columnOn(c.key) ? 'checked' : ''} ${c.locked ? 'disabled' : ''} />
-            <span>${escapeHtml(i18t(c.labelKey, c.fallback))}</span>
-            ${c.locked ? `<em>${escapeHtml(i18t('columnsAlways', 'always shown'))}</em>` : ''}
-          </label>
-        `).join('')}
-      </div>
+      ${[['core', i18t('columnsGroupCore', 'Standard')],
+         ['more', i18t('columnsGroupMore', 'Add from the order record')]].map(([g, title]) => `
+        <div class="om-cols-group">${escapeHtml(title)}</div>
+        <div class="om-cols-list">
+          ${CHECKIN_COLUMNS.filter((c) => (c.group || 'core') === g).map((c) => `
+            <label class="om-cols-row ${c.locked ? 'is-locked' : ''}">
+              <input type="checkbox" data-col="${c.key}" ${columnOn(c.key) ? 'checked' : ''} ${c.locked ? 'disabled' : ''} />
+              <span>${escapeHtml(i18t(c.labelKey, c.fallback))}</span>
+              ${c.locked ? `<em>${escapeHtml(i18t('columnsAlways', 'always shown'))}</em>` : ''}
+            </label>
+          `).join('')}
+        </div>
+      `).join('')}
       <div class="om-cols-actions">
-        <button type="button" class="btn btn-secondary" id="omColsReset" style="width:auto;">${escapeHtml(i18t('columnsReset', 'Reset to all'))}</button>
+        <button type="button" class="btn btn-secondary" id="omColsReset" style="width:auto;">${escapeHtml(i18t('columnsReset2', 'Reset to default'))}</button>
         <button type="button" class="btn btn-secondary" id="omColsCancel" style="width:auto;">${escapeHtml(i18t('btnCancel', 'Cancel'))}</button>
         <button type="button" class="btn btn-primary" id="omColsSave" style="width:auto;">${escapeHtml(i18t('btnSave', 'Save'))}</button>
       </div>
@@ -6227,7 +6254,11 @@ function openColumnPicker() {
   backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(); });
   backdrop.querySelector('#omColsCancel').addEventListener('click', close);
   backdrop.querySelector('#omColsReset').addEventListener('click', () => {
-    backdrop.querySelectorAll('[data-col]').forEach((el) => { el.checked = true; });
+    // Back to the default working set, not every column that exists - with 27
+    // available, "all" is not a state anyone wants.
+    backdrop.querySelectorAll('[data-col]').forEach((el) => {
+      el.checked = CHECKIN_COLUMNS_DEFAULT.includes(el.dataset.col);
+    });
   });
   backdrop.querySelector('#omColsSave').addEventListener('click', async () => {
     const picked = [...backdrop.querySelectorAll('[data-col]')]
@@ -6297,6 +6328,25 @@ function checkInRowHtml(r) {
                   </label>
                   <div class="om-sub" data-done-when="${escapeHtml(r.id)}">${checkedInToday(r) ? escapeHtml(i18t('doneToday', 'Today')) : ''}</div>
                 </td>
+                ${/* Optional columns. Rendered always and hidden by CSS, so the
+                     header and the row can never disagree about cell count. */ ''}
+                <td data-col="sku" data-label="${escapeHtml(i18t('thSku', 'SKU'))}">${escapeHtml(r.sku || '-')}</td>
+                <td data-col="supplier" data-label="${escapeHtml(i18t('thSupplier', 'Supplier'))}">${escapeHtml(r.supplierName || '-')}</td>
+                <td data-col="orderDate" data-label="${escapeHtml(i18t('supOrderDate', 'Order Date'))}">${escapeHtml(r.orderDate ? fmtDate(r.orderDate) : '-')}</td>
+                <td data-col="delivery" data-label="${escapeHtml(i18t('fldRequiredManufacturerDelivery', 'Required Delivery'))}">${escapeHtml(r.manufacturerDeliveryDate ? fmtDate(r.manufacturerDeliveryDate) : '-')}</td>
+                <td data-col="shipDate" data-label="${escapeHtml(i18t('supActualShipDate', 'Actual Ship Date'))}">${escapeHtml(r.actualShipDate ? fmtDate(r.actualShipDate) : '-')}</td>
+                <td data-col="warehouseDate" data-label="${escapeHtml(i18t('fldRequiredWarehouseArrival', 'Warehouse Arrival'))}">${escapeHtml(r.warehouseArrivalDate ? fmtDate(r.warehouseArrivalDate) : '-')}</td>
+                <td data-col="fulfilDate" data-label="${escapeHtml(i18t('fldFulfillmentRequestDate', 'Fulfillment Request'))}">${escapeHtml(r.fulfillmentRequestDate ? fmtDate(r.fulfillmentRequestDate) : '-')}</td>
+                <td data-col="ppSample" data-label="${escapeHtml(i18t('supPreProdSample', 'Pre-Production Sample'))}">${escapeHtml(r.preProductionSampleDate ? fmtDate(r.preProductionSampleDate) : '-')}</td>
+                <td data-col="bulkSample" data-label="${escapeHtml(i18t('supBulkSample', 'Bulk Sample'))}">${escapeHtml(r.bulkSampleDate ? fmtDate(r.bulkSampleDate) : '-')}</td>
+                <td data-col="prodNotes" data-label="${escapeHtml(i18t('fldProductionNotes', 'Production Notes'))}">${escapeHtml(r.productionNotes || '-')}</td>
+                <td data-col="qtyReceived" data-label="${escapeHtml(i18t('fldQuantityReceived', 'Quantity Received'))}">${r.quantityReceived != null ? Number(r.quantityReceived).toLocaleString() : '-'}</td>
+                <td data-col="warehouse" data-label="${escapeHtml(i18t('fldWarehouseAddress', 'Warehouse Address'))}">${escapeHtml(r.warehouseAddress || '-')}</td>
+                <td data-col="creator" data-label="${escapeHtml(i18t('fldCreator', 'Creator'))}">${escapeHtml(r.creator || '-')}</td>
+                <td data-col="sourcer" data-label="${escapeHtml(i18t('fldSourcer', 'Sourcer'))}">${escapeHtml(r.sourcer || '-')}</td>
+                <td data-col="specialist" data-label="${escapeHtml(i18t('fldOrderManagementSpecialist', 'OM Specialist'))}">${escapeHtml(r.orderManagementSpecialist || '-')}</td>
+                <td data-col="channel" data-label="${escapeHtml(i18t('fldFulfillmentChannel', 'Fulfillment Channel'))}">${escapeHtml(r.fulfillmentChannel || '-')}</td>
+                <td data-col="approvals" data-label="${escapeHtml(i18t('thApprovals', 'Approvals'))}">${approvalStagesHtml(r.approvalStages)}</td>
               </tr>
             `;
 }
@@ -6375,7 +6425,7 @@ async function renderCheckInView(root) {
         </div>
         <div class="section-help">${escapeHtml(i18t('checkInRequestsHelp', 'Not yet sent to this supplier. Send them before working through production.'))}</div>
         <div class="om-table-wrap">
-          <table class="om-table om-checkin-table ${checkInColumns.length === CHECKIN_COLUMNS.length ? '' : 'is-custom-cols'}">
+          <table class="om-table om-checkin-table ${checkInColumns.join(',') === CHECKIN_COLUMNS_DEFAULT.join(',') ? '' : 'is-custom-cols'}">
             <thead>${checkInHeaderHtml()}</thead>
             <tbody>${requests.map(checkInRowHtml).join('')}</tbody>
           </table>
@@ -6388,7 +6438,7 @@ async function renderCheckInView(root) {
           ${escapeHtml(i18t('groupInProduction', 'In Production'))} <span class="om-count">${list.length}</span>
         </div>
         <div class="om-table-wrap">
-          <table class="om-table om-checkin-table ${checkInColumns.length === CHECKIN_COLUMNS.length ? '' : 'is-custom-cols'}">
+          <table class="om-table om-checkin-table ${checkInColumns.join(',') === CHECKIN_COLUMNS_DEFAULT.join(',') ? '' : 'is-custom-cols'}">
             <thead>${checkInHeaderHtml()}</thead>
             <tbody>${list.map(checkInRowHtml).join('')}</tbody>
           </table>

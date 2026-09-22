@@ -5278,5 +5278,17 @@
   "columnsReset": {
     "en": "Reset to all",
     "zh": "恢复全部"
+  },
+  "columnsGroupCore": {
+    "en": "Standard",
+    "zh": "常规列"
+  },
+  "columnsGroupMore": {
+    "en": "Add from the order record",
+    "zh": "从订单记录中添加"
+  },
+  "columnsReset2": {
+    "en": "Reset to default",
+    "zh": "恢复默认"
   }
 }

@@ -1866,3 +1866,21 @@ html {
 /* Widths are set for the full ten columns; with a subset, let the browser size
    them instead of applying rules meant for columns that are no longer there. */
 .om-checkin-table.is-custom-cols { table-layout: auto; }
+
+/* Column picker groups. With 27 columns a flat list is a wall, so the
+   standard set and the optional additions are separated. */
+.om-cols-group {
+  font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--jc-muted);
+  margin: 14px 0 4px;
+}
+.om-cols-list { margin: 0 0 6px; }
+
+/* Any custom selection sizes itself: the fixed percentages were measured for
+   the default ten and mean nothing for an arbitrary subset. */
+.om-checkin-table.is-custom-cols { table-layout: auto; }
+.om-checkin-table.is-custom-cols td,
+.om-checkin-table.is-custom-cols th { white-space: nowrap; }
+.om-checkin-table.is-custom-cols td[data-col="prodNotes"],
+.om-checkin-table.is-custom-cols td[data-col="lastUpdate"],
+.om-checkin-table.is-custom-cols td[data-col="product"] { white-space: normal; min-width: 150px; }
