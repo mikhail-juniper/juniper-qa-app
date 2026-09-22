@@ -1596,3 +1596,10 @@ html {
 /* Breathing room when Schedule QA scrolls this card into view, so it does not
    sit flush against the panel header. */
 .om-panel-card { scroll-margin-top: 16px; }
+
+/* Outcome of a revised unit report, beside its title. */
+.om-qa-revised-result.is-pass { color: var(--jc-teal-dark); font-weight: 700; }
+.om-qa-revised-result.is-open { color: var(--jc-warn); font-weight: 700; }
+
+/* Sub-component thumbnail enlarges on click, like the reference photo. */
+.om-acc-zoom { cursor: zoom-in; }

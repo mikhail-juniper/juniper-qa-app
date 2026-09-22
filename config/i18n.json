@@ -5178,5 +5178,17 @@
   "questionsLocked": {
     "en": "Questions locked",
     "zh": "问题已锁定"
+  },
+  "resultOpen": {
+    "en": "Outstanding",
+    "zh": "尚未完成"
+  },
+  "btnReplace": {
+    "en": "Replace",
+    "zh": "替换"
+  },
+  "clickToEnlarge": {
+    "en": "Click to enlarge",
+    "zh": "点击放大"
   }
 }

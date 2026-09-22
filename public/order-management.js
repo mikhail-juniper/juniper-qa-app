@@ -2859,6 +2859,10 @@ async function openDetailPanel(id, scope, opts) {
         openAccessoryDetailPanel(order.id, viewPoBtn.dataset.viewAccessory);
       });
     }
+    row.querySelectorAll('.om-acc-zoom').forEach((img) => {
+      img.addEventListener('click', (e) => { e.stopPropagation(); openImageLightbox(img.src); });
+    });
+
     const relinkBtn = row.querySelector('.om-acc-image-relink-btn');
     if (relinkBtn) relinkBtn.addEventListener('click', () => openAccessoryRelinkPicker(order, row));
 
@@ -2866,35 +2870,12 @@ async function openDetailPanel(id, scope, opts) {
     row.querySelector('.om-acc-image-upload-btn').addEventListener('click', () => imageInput.click());
     imageInput.addEventListener('change', () => {
       if (!imageInput.files[0]) return;
+      /* One redraw path. This callback used to rebuild the cell itself, with
+       * its own PDF-link branch, and drifted out of step with the markup the
+       * row renders from - so an uploaded file looked different before and
+       * after a refresh, and kept the old Upload/Link pair. */
       uploadAccessoryFile(row, imageInput.files[0], 'Style picture', '.om-acc-image-url', (url) => {
-        const cell = row.querySelector('.om-acc-image-cell');
-        if (isPdfFile(url) || isPdfFile(imageInput.files[0].name)) {
-          // PDFs get a link in place of the thumbnail, since this cell also
-          // accepts drawings/spec sheets that aren't images.
-          const oldImg = cell.querySelector('img');
-          if (oldImg) oldImg.remove();
-          let link = cell.querySelector('a.om-acc-image-link');
-          if (!link) {
-            link = document.createElement('a');
-            link.className = 'om-acc-image-link';
-            link.target = '_blank';
-            link.rel = 'noopener';
-            link.style.cssText = 'display:block;font-size:11.5px;margin-bottom:4px;';
-            link.textContent = i18t('btnViewFile', 'View file');
-            cell.insertBefore(link, cell.firstChild);
-          }
-          link.href = url;
-          return;
-        }
-        const oldLink = cell.querySelector('a.om-acc-image-link');
-        if (oldLink) oldLink.remove();
-        let img = cell.querySelector('img');
-        if (!img) {
-          img = document.createElement('img');
-          img.className = 'om-table-thumb';
-          cell.insertBefore(img, cell.firstChild);
-        }
-        img.src = url;
+        applyAccessoryImageUrl(row, url, order);
       });
     });
     const docInput = row.querySelector('.om-acc-doc-file');
@@ -4144,15 +4125,28 @@ async function openDetailPanel(id, scope, opts) {
   makeDateFieldsClickable(panel);
 
   if (opts && opts.scrollTo === 'qa') {
-    /* Scroll to the CARD, not the heading inside it. Targeting the heading put
-     * the card's own top edge and padding above the fold, so the section
-     * arrived looking clipped. scroll-margin-top adds a little breathing room
-     * under the sticky panel header. */
-    setTimeout(() => {
+    /* Land on the QA card.
+     *
+     * Deliberately instant rather than smooth, and re-asserted twice. A smooth
+     * scroll over ~1500px takes about a second, during which anything that
+     * moves focus - a field autofocusing, an image finishing, another render
+     * pass - hijacks it and leaves the panel parked somewhere arbitrary. An
+     * instant jump cannot be interrupted, and the repeats cover content above
+     * the card still settling.
+     *
+     * The card, not the heading inside it: targeting the heading put the
+     * card's own top edge and padding above the fold. */
+    const goToQa = () => {
       const heading = panel.querySelector('#omQaSection');
       const target = (heading && heading.closest('.om-panel-card')) || heading;
-      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 120);
+      if (!target) return;
+      const panelRect = panel.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      panel.scrollTop += (targetRect.top - panelRect.top) - 16;
+    };
+    requestAnimationFrame(goToQa);
+    setTimeout(goToQa, 200);
+    setTimeout(goToQa, 700);
   }
 
   const setSaveStatus = (key, fallback) => {
@@ -5295,7 +5289,13 @@ function revisedReportsHtml(order, stage) {
     return `
       <div class="om-qa-revised">
         <div class="om-qa-revised-title">
-          ${i18('revisedReportLabel', 'Revised Unit Report')}${all.length > 1 ? ` #${idx + 1}` : ''}
+          ${i18('revisedReportLabel', 'Revised Unit Report')}${all.length > 1 ? ` #${idx + 1}` : ''}${(() => {
+            /* The outcome, not just that a revision happened. A revision that
+               repaired everything is what turns the PO's result around, and
+               reading "Revised Unit Report" alone gave no clue either way. */
+            const cleared = flagged > 0 && fixed >= flagged;
+            return `: <span class="om-qa-revised-result ${cleared ? 'is-pass' : 'is-open'}">${cleared ? i18('resultPass', 'Pass') : i18('resultOpen', 'Outstanding')}</span>`;
+          })()}
         </div>
         <div class="om-qa-report-meta">
           <span>${fixed} / ${flagged} ${escapeHtml(i18('unitsRepairedShort', 'units repaired'))}</span>
@@ -5503,21 +5503,26 @@ function accessoryRowHtml(idx, data, mainAddress, order) {
           if (!data.imageUrl) return '';
           /* New uploads are already a preview image, so they render directly.
              accessoryThumbSrc covers anything older that is still a PDF by
-             pointing at the server's rasteriser. */
+             pointing at the server's rasteriser.
+
+             Clicking the thumbnail enlarges it, the same as the reference
+             photo elsewhere, so the separate "View larger" link is gone. */
           const thumb = accessoryThumbSrc(order, data.imageUrl);
-          return `
-            ${thumb ? `<img class="om-table-thumb js-lightbox" src="${escapeHtml(thumb)}" alt="" />` : ''}
-            <a class="om-acc-image-link" href="${escapeHtml(data.imageUrl)}" target="_blank" rel="noopener" style="display:block;font-size:11.5px;margin-bottom:4px;">${i18('btnViewLarger', 'View larger')}</a>
-          `;
+          return thumb ? `<img class="om-table-thumb om-acc-zoom" src="${escapeHtml(thumb)}" alt="" title="${escapeHtml(i18('clickToEnlarge', 'Click to enlarge'))}" />` : '';
         })()}
         <input type="hidden" class="om-acc-image-url" value="${escapeHtml(data.imageUrl || '')}" />
         <input type="file" class="om-acc-image-file" accept="image/*,application/pdf" style="display:none;" />
-        <button type="button" class="om-table-upload-btn om-acc-image-upload-btn">${i18('btnUpload', 'Upload')}</button>
-        <!-- Most sub-component photos already exist as Product Documentation on
-             the PO: the hang tag artwork, the washing tag, the packaging
-             layout. Re-uploading them was duplicating the same file per row and
-             letting the copies drift apart when one was replaced. -->
-        <button type="button" class="om-table-upload-btn om-acc-image-relink-btn">${i18('btnLinkExisting', 'Link')}</button>
+        ${data.imageUrl ? `
+          ${/* One button once there is an image. Upload and Link side by side
+               was two choices for what is really one action. */ ''}
+          <button type="button" class="om-table-upload-btn om-acc-image-upload-btn">${i18('btnReplace', 'Replace')}</button>
+        ` : `
+          <button type="button" class="om-table-upload-btn om-acc-image-upload-btn">${i18('btnUpload', 'Upload')}</button>
+          <!-- Most sub-component photos already exist as Product Documentation
+               on the PO: the hang tag artwork, the washing tag, the packaging
+               layout. Re-uploading them duplicated the same file per row. -->
+          <button type="button" class="om-table-upload-btn om-acc-image-relink-btn">${i18('btnLinkExisting', 'Link')}</button>
+        `}
       </td>
       <td class="om-acc-viewpo-cell">
         ${data.id
@@ -5891,27 +5896,29 @@ function applyAccessoryImageUrl(row, url, order) {
   const urlInput = row.querySelector('.om-acc-image-url');
   urlInput.value = url || '';
   if (requestPanelSave) requestPanelSave();
+
   cell.querySelectorAll('img.om-table-thumb, a.om-acc-image-link').forEach((el) => el.remove());
   if (!url) return;
-  const first = cell.firstChild;
 
-  /* Same shape as the initial render: a thumbnail where one can be produced,
-     and always the link. Keeping the two in step matters - they diverged once
-     already, so an uploaded PDF looked different from the same PDF after a
-     page refresh. */
+  /* Same shape as the initial render: a click-to-enlarge thumbnail, and the
+     two setup buttons collapsed to a single Replace. Keeping the two in step
+     matters - they diverged once already, so an uploaded file looked different
+     before and after a page refresh. */
   const thumb = accessoryThumbSrc(order, url);
   if (thumb) {
     const img = document.createElement('img');
-    img.className = 'om-table-thumb js-lightbox';
-    img.src = thumb; img.alt = '';
-    cell.insertBefore(img, first);
+    img.className = 'om-table-thumb om-acc-zoom';
+    img.src = thumb;
+    img.alt = '';
+    img.title = i18t('clickToEnlarge', 'Click to enlarge');
+    img.addEventListener('click', (e) => { e.stopPropagation(); openImageLightbox(img.src); });
+    cell.insertBefore(img, cell.firstChild);
   }
-  const link = document.createElement('a');
-  link.className = 'om-acc-image-link';
-  link.href = url; link.target = '_blank'; link.rel = 'noopener';
-  link.style.cssText = 'display:block;font-size:11.5px;margin-bottom:4px;';
-  link.textContent = i18t('btnViewFile', 'View file');
-  cell.insertBefore(link, first);
+
+  const relink = cell.querySelector('.om-acc-image-relink-btn');
+  if (relink) relink.remove();
+  const uploadBtn = cell.querySelector('.om-acc-image-upload-btn');
+  if (uploadBtn) uploadBtn.textContent = i18t('btnReplace', 'Replace');
 }
 
 /* ============================================================
