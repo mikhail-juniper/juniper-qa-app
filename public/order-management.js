@@ -6636,10 +6636,10 @@ async function renderCheckInView(root) {
    * note should be prefixed with. */
   const rowIndex = {};
   [...requests, ...list].forEach((r) => {
-    rowIndex[r.rowKey || r.id] = { id: r.id, part: r.isAccessory ? (r.partName || '') : '' };
+    rowIndex[r.rowKey || r.id] = { id: r.id, accessoryId: r.isAccessory ? r.accessoryId : null };
   });
   const orderFor = (key) => (rowIndex[key] || {}).id || key;
-  const partFor = (key) => (rowIndex[key] || {}).part || '';
+  const accessoryFor = (key) => (rowIndex[key] || {}).accessoryId || null;
 
   const refreshProgress = () => {
     const done = document.querySelectorAll('.om-checkin-done:checked').length;
@@ -6688,12 +6688,14 @@ async function renderCheckInView(root) {
       if (!text || noteInFlight.has(id)) return;
       noteInFlight.add(id);
       try {
-        /* Notes live on the PO, not the component - there is one production
-         * conversation per order. A note left against a sub-component is
-         * prefixed with the part so the context survives. */
-        const part = partFor(id);
-        await api(`/api/order-management/orders/${encodeURIComponent(orderFor(id))}/progress-note`,
-          { method: 'POST', body: JSON.stringify({ text: part ? `${part}: ${text}` : text }) });
+        /* A sub-component's notes belong to that component: it is made by its
+         * own factory on its own schedule, and folding those notes into the
+         * parent PO's log lost the thread. */
+        const accessoryId = accessoryFor(id);
+        const url = accessoryId
+          ? `/api/order-management/orders/${encodeURIComponent(orderFor(id))}/accessories/${encodeURIComponent(accessoryId)}/progress-note`
+          : `/api/order-management/orders/${encodeURIComponent(orderFor(id))}/progress-note`;
+        await api(url, { method: 'POST', body: JSON.stringify({ text }) });
         el.value = '';                    // nothing left to resend
         flash(`[data-saved-for="${id}"]`, i18t('savedLabel', 'Saved'));
         /* Writing an update IS covering the order, so tick it rather than

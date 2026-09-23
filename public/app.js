@@ -1230,7 +1230,7 @@ function renderNewPoScreen() {
       ${textField2('newPoNumber', 'poNumber', newPoState.poNumber, { required: true, placeholderKey: 'poNumberPlaceholder' })}
       <div class="section-help" style="margin-top:-4px;">${escapeHtml(bi('syncFromAsanaHelp', 'Enter the PO number, then sync to pull details from Asana.').en)}</div>
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0 14px 0;">
-        <button type="button" class="btn btn-secondary" id="btnSyncAsana" style="flex:none;width:auto;padding:9px 16px;">${escapeHtml(bi('syncFromAsana', 'Sync from Asana').en)}</button>
+        <button type="button" class="btn btn-secondary" id="btnSyncAsana" style="flex:none;width:auto;padding:9px 16px;">${escapeHtml(bi('syncPo', 'Sync PO').en)}</button>
         <span id="asanaSyncStatus" class="section-help" style="margin:0;"></span>
       </div>
       ${textField2('newPoSku', 'productSku', newPoState.sku, { required: true, placeholderKey: 'productSkuPlaceholder' })}
@@ -1244,7 +1244,6 @@ function renderNewPoScreen() {
       ${newPoSelectFieldWithOther('newPoCreator', 'creator', newPoState.creator, OPTIONS.creators || [], newPoState.creatorOtherMode)}
       ${textField2('newPoProductTitle', 'productTitle', newPoState.productTitle, {})}
       ${newPoSelectFieldWithOther('newPoPdLead', 'productDevelopmentLead', newPoState.productDevelopmentLead, OPTIONS.productDevelopmentLeads || [], newPoState.pdLeadOtherMode)}
-      ${textField2('newPoAsanaLink', 'asanaTaskLink', newPoState.asanaTaskLink, { placeholderKey: 'asanaTaskLinkPlaceholder' })}
     </div>
 
     <div id="newPoSizesBlock">${renderNewPoSizesBlock()}</div>
@@ -1423,7 +1422,6 @@ function attachNewPoHandlers() {
   bindText('newPoFulfillmentRequestDate', 'fulfillmentRequestDate');
   bindText('newPoQuantity', 'orderQuantity');
   bindText('newPoProductTitle', 'productTitle');
-  bindText('newPoAsanaLink', 'asanaTaskLink');
 
   // ---- "Sync from Asana": one lookup by PO number fills in everything
   // Asana owns, so the requester only types the PO number. Values already

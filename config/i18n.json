@@ -3156,8 +3156,8 @@
     "zh": "从 Asana 同步"
   },
   "syncFromAsanaHelp": {
-    "en": "Enter the PO number, then sync to pull the Creator, PD, Sourcer, SKU, quantity, fulfil date and warehouse straight from Asana.",
-    "zh": "输入采购订单号后点击同步，可直接从 Asana 拉取创作者、PD、采购负责人、SKU、数量、交付日期和仓库信息。"
+    "en": "Enter the PO number and sync. The order details come from Asana; for a repeat order everything else - photos, drawings, sub-components and costs - carries over from the previous PO for this SKU.",
+    "zh": "输入订单号并同步。订单信息来自 Asana；返单时，其余内容（图片、图纸、子部件、成本）会从该 SKU 的上一张订单继承。"
   },
   "syncingFromAsana": {
     "en": "Syncing...",
@@ -5358,5 +5358,9 @@
   "subComponentLabel": {
     "en": "Sub-component",
     "zh": "子部件"
+  },
+  "syncPo": {
+    "en": "Sync PO",
+    "zh": "同步订单"
   }
 }

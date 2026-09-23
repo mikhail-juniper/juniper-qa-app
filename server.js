@@ -2113,6 +2113,7 @@ app.get('/api/order-management/work-queue', (req, res) => {
           quantity: a.quantity ?? parent.quantity,
           photo: a.imageUrl || '',
           supplierName: name,
+          lastNote: (a.progressLog || []).slice(-1)[0] || null,
           dispatched: ((o.dispatchLog || []).some((d) => d && d.targetKey === a.id))
         });
       });
@@ -3674,6 +3675,17 @@ app.post('/api/order-management/orders/:id/dispatch', requirePermission('dispatc
 
 // Append a bulk shipment progress note. Internal only - the supplier page
 // shows these read-only.
+/** A progress note against one sub-component, kept on that component. */
+app.post('/api/order-management/orders/:id/accessories/:accessoryId/progress-note',
+  requirePermission('orders:write'), (req, res) => {
+    const text = (req.body && req.body.text) || '';
+    const updated = orderManagementStore.addAccessoryProgressNote(
+      req.params.id, req.params.accessoryId, text,
+      (req.body && req.body.actor) || req.get('X-Actor') || (req.user && req.user.name) || 'Web user');
+    if (!updated) return res.status(404).json({ error: 'Order or sub-component not found' });
+    res.json({ ok: true, order: updated });
+  });
+
 app.post('/api/order-management/orders/:id/progress-note', requirePermission('orders:write'), (req, res) => {
   const body = req.body || {};
   if (!body.text || !String(body.text).trim()) {
