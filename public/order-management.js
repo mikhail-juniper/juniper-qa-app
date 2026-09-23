@@ -5162,12 +5162,76 @@ async function openAccessoryDetailPanel(orderId, accessoryId) {
     </div>
     </div>
 
+    <div class="om-panel-card">
+      ${/* This component's own production log. It is made by its own factory
+           on its own schedule, so its updates belong here rather than in the
+           parent PO's log where the thread was lost. */ ''}
+      <div class="om-section-title">${i18('secProductionProgress', 'Production Progress')}</div>
+      <div class="section-help">${i18('accNotesHelp', 'Updates for this component and its supplier. The main product has its own log on the PO.')}</div>
+      <textarea id="accNoteText" rows="2" placeholder="${escapeHtml(i18('checkInNotePlaceholder2', 'Production update'))}"></textarea>
+      <button type="button" class="btn btn-secondary" id="accAddNote" style="width:auto;padding:8px 16px;margin-top:8px;">
+        ${i18('btnAddNote', 'Add note')}
+      </button>
+      <div id="accNoteList" style="margin-top:14px;">
+        ${(accessory.progressLog || []).length
+          ? [...accessory.progressLog].reverse().map((n) => `
+              <div class="om-checkin-lastnote" style="margin-bottom:8px;">
+                <div class="om-checkin-lastnote-head">${escapeHtml(fmtDate(n.at))} &middot; ${escapeHtml(n.by || '')}</div>
+                ${escapeHtml(n.text || '')}
+              </div>`).join('')
+          : `<div class="om-sub">${i18('noUpdatesYet', 'No updates yet')}</div>`}
+      </div>
+    </div>
+
    </div>
   `;
 
   mountPanel(panel);
   bindPanelEscape();
   document.getElementById('omClosePanel').addEventListener('click', closePanel);
+  const addNoteBtn = document.getElementById('accAddNote');
+  if (addNoteBtn) {
+    addNoteBtn.addEventListener('click', async () => {
+      const box = document.getElementById('accNoteText');
+      const text = (box.value || '').trim();
+      if (!text) return;
+      addNoteBtn.disabled = true;
+      try {
+        const res = await api(`/api/order-management/orders/${encodeURIComponent(order.id)}/accessories/${encodeURIComponent(accessory.id)}/progress-note`,
+          { method: 'POST', body: JSON.stringify({ text }) });
+
+        /* Update the list in place rather than reopening the panel. Closing and
+         * reopening worked, but it blinked and threw away anything else edited
+         * in the panel that had not been saved yet. */
+        const saved = (((res.order || {}).accessories || [])
+          .find((a) => a.id === accessory.id) || {}).progressLog || [];
+        const latest = saved[saved.length - 1]
+          || { text, at: new Date().toISOString(), by: '' };
+
+        const list = document.getElementById('accNoteList');
+        if (list) {
+          const placeholder = list.querySelector('.om-sub');
+          if (placeholder) placeholder.remove();
+          const el = document.createElement('div');
+          el.className = 'om-checkin-lastnote';
+          el.style.marginBottom = '8px';
+          el.innerHTML = `<div class="om-checkin-lastnote-head">${escapeHtml(fmtDate(latest.at))} &middot; ${escapeHtml(latest.by || '')}</div>${escapeHtml(latest.text || '')}`;
+          list.insertBefore(el, list.firstChild);   // newest first
+        }
+        // Keep the panel's own copy current, so a later save does not
+        // resurrect the list as it was when the panel opened.
+        accessory.progressLog = saved;
+
+        box.value = '';
+        showToast(i18t('savedLabel', 'Saved'));
+      } catch (e) {
+        showToast(e.message, true);
+      } finally {
+        addNoteBtn.disabled = false;
+      }
+    });
+  }
+
   const viewMainBtn = document.getElementById('omViewFullPoFromAccessoryBody');
   if (viewMainBtn) {
     viewMainBtn.addEventListener('click', () => {
@@ -6433,7 +6497,18 @@ function checkInHeaderHtml() {
 const CHECKIN_CELLS = {
   po: (r) => `<td data-col="po" data-label="${escapeHtml(i18t('thPoNumber', 'PO Number'))}"><strong>${escapeHtml(r.poNumber)}</strong></td>`,
   photo: (r) => `<td data-col="photo" data-label="${escapeHtml(i18t('thPhoto', 'Photo'))}" class="om-checkin-photo">
-                  ${r.photo ? `<img src="${escapeHtml(r.photo)}" alt="" class="js-lightbox" />` : '<span class="om-sub">-</span>'}
+                  ${/* Sub-component artwork is often a PDF or AI file, which
+                       cannot render in an <img> - those rows showed a broken
+                       icon. Route anything that is not already an image through
+                       the server's rasteriser, the same as the sub-component
+                       cell in the PO panel. */ ''}
+                  ${(() => {
+                    if (!r.photo) return '<span class="om-sub">-</span>';
+                    const src = accessoryThumbSrc({ id: r.id }, r.photo);
+                    return src
+                      ? `<img src="${escapeHtml(src)}" alt="" class="om-acc-zoom" />`
+                      : '<span class="om-sub">-</span>';
+                  })()}
                 </td>`,
   product: (r) => `<td data-col="product" data-label="${escapeHtml(i18t('thProduct', 'Product'))}">${escapeHtml(r.productName || '')}<div class="om-sub">${escapeHtml(r.isAccessory ? i18t('subComponentLabel', 'Sub-component') : (r.sku || ''))}</div></td>`,
   qty: (r) => `<td data-col="qty" data-label="${escapeHtml(i18t('thQty', 'Qty'))}">${r.quantity != null ? Number(r.quantity).toLocaleString() : '-'}</td>`,
@@ -6501,7 +6576,8 @@ function checkInRowHtml(r) {
   /* An accessory row shares its parent PO's id, so the DOM key has to be the
      rowKey or two rows for the same order would collide - the second would
      silently receive the first one's note. */
-  return `<tr data-checkin-row="${escapeHtml(r.rowKey || r.id)}" data-row-po="${escapeHtml(r.id)}" class="${cls}">`
+  return `<tr data-checkin-row="${escapeHtml(r.rowKey || r.id)}" data-row-po="${escapeHtml(r.id)}"`
+    + `${r.isAccessory ? ` data-row-accessory="${escapeHtml(r.accessoryId)}"` : ''} class="${cls}">`
     + checkInColumns.map((k) => (CHECKIN_CELLS[k] ? CHECKIN_CELLS[k](r) : '')).join('')
     + `</tr>`;
 }
@@ -6965,7 +7041,14 @@ function bindRowClickToOpen() {
     row.addEventListener('click', (e) => {
       if (e.target.closest('button, a, input, textarea, select, label')) return;
       if (window.getSelection && String(window.getSelection())) return;  // text being selected
-      openDetailPanel(row.dataset.rowPo, 'full');
+      /* A sub-component row opens the component's own panel. Opening the
+       * parent PO instead meant the row she clicked and the panel she got were
+       * about different things. */
+      if (row.dataset.rowAccessory) {
+        openAccessoryDetailPanel(row.dataset.rowPo, row.dataset.rowAccessory);
+      } else {
+        openDetailPanel(row.dataset.rowPo, 'full');
+      }
     });
   });
 }

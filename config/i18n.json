@@ -5362,5 +5362,9 @@
   "syncPo": {
     "en": "Sync PO",
     "zh": "同步订单"
+  },
+  "accNotesHelp": {
+    "en": "Updates for this component and its supplier. The main product has its own log on the PO.",
+    "zh": "该部件及其供应商的更新。主产品在订单上有单独的记录。"
   }
 }
