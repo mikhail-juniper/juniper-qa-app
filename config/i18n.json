@@ -5354,5 +5354,9 @@
   "pdSubApprovedHelp": {
     "en": "Signed off by Product Development. Tick to say you have seen it.",
     "zh": "产品开发已批准。勾选表示已知悉。"
+  },
+  "subComponentLabel": {
+    "en": "Sub-component",
+    "zh": "子部件"
   }
 }

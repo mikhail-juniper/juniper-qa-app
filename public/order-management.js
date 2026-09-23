@@ -6435,7 +6435,7 @@ const CHECKIN_CELLS = {
   photo: (r) => `<td data-col="photo" data-label="${escapeHtml(i18t('thPhoto', 'Photo'))}" class="om-checkin-photo">
                   ${r.photo ? `<img src="${escapeHtml(r.photo)}" alt="" class="js-lightbox" />` : '<span class="om-sub">-</span>'}
                 </td>`,
-  product: (r) => `<td data-col="product" data-label="${escapeHtml(i18t('thProduct', 'Product'))}">${escapeHtml(r.productName || '')}<div class="om-sub">${escapeHtml(r.sku || '')}</div></td>`,
+  product: (r) => `<td data-col="product" data-label="${escapeHtml(i18t('thProduct', 'Product'))}">${escapeHtml(r.productName || '')}<div class="om-sub">${escapeHtml(r.isAccessory ? i18t('subComponentLabel', 'Sub-component') : (r.sku || ''))}</div></td>`,
   qty: (r) => `<td data-col="qty" data-label="${escapeHtml(i18t('thQty', 'Qty'))}">${r.quantity != null ? Number(r.quantity).toLocaleString() : '-'}</td>`,
   status: (r) => `<td data-col="status" data-label="${escapeHtml(i18t('thStatus', 'Status'))}"><span class="om-pill om-pill-${statusSlug(r.status)}">${tStatusInline(r.status)}</span></td>`,
   qa: (r) => `<td data-col="qa" data-label="${escapeHtml(i18t('thQaQc', 'QA/QC'))}" class="om-checkin-qacol">
@@ -6449,9 +6449,9 @@ const CHECKIN_CELLS = {
                     : `<span class="om-sub">${escapeHtml(i18t('noUpdatesYet', 'No updates yet'))}</span>`}
                 </td>`,
   update: (r) => `<td data-col="update" data-label="${escapeHtml(i18t('thNewUpdate', 'Update'))}">
-                  <textarea rows="1" class="om-checkin-note" data-note-for="${escapeHtml(r.id)}"
+                  <textarea rows="1" class="om-checkin-note" data-note-for="${escapeHtml(r.rowKey || r.id)}"
                     placeholder="${escapeHtml(i18t('checkInNotePlaceholder2', 'Production update'))}"></textarea>
-                  <div class="om-row-saved" data-saved-for="${escapeHtml(r.id)}"></div>
+                  <div class="om-row-saved" data-saved-for="${escapeHtml(r.rowKey || r.id)}"></div>
                 </td>`,
   followUp: (r) => `<td data-col="followUp" data-label="${escapeHtml(i18t('thFollowUp', 'Follow up'))}" class="om-checkin-fucol">
                   ${/* Compact: a calendar glyph when empty, "Oct 28" when set.
@@ -6461,21 +6461,21 @@ const CHECKIN_CELLS = {
                        keyboard entry both still work. */ ''}
                   <label class="om-datechip ${r.followUpDate ? 'is-set' : ''}">
                     <span class="om-datechip-icon">&#128197;</span>
-                    <span class="om-datechip-text" data-chip-for="${escapeHtml(r.id)}">${escapeHtml(r.followUpDate ? shortDate(r.followUpDate) : i18t('noDueDate', 'No date'))}</span>
-                    <input type="date" class="om-checkin-fu" data-fu-for="${escapeHtml(r.id)}" value="${escapeHtml(r.followUpDate || '')}" />
+                    <span class="om-datechip-text" data-chip-for="${escapeHtml(r.rowKey || r.id)}">${escapeHtml(r.followUpDate ? shortDate(r.followUpDate) : i18t('noDueDate', 'No date'))}</span>
+                    <input type="date" class="om-checkin-fu" data-fu-for="${escapeHtml(r.rowKey || r.id)}" value="${escapeHtml(r.followUpDate || '')}" />
                   </label>
-                  <button type="button" class="om-datechip-clear ${r.followUpDate ? '' : 'is-hidden'}" data-fu-clear="${escapeHtml(r.id)}" title="${escapeHtml(i18t('clearLabel', 'Clear'))}">&times;</button>
-                  <div class="om-row-saved" data-saved-fu="${escapeHtml(r.id)}"></div>
+                  <button type="button" class="om-datechip-clear ${r.followUpDate ? '' : 'is-hidden'}" data-fu-clear="${escapeHtml(r.rowKey || r.id)}" title="${escapeHtml(i18t('clearLabel', 'Clear'))}">&times;</button>
+                  <div class="om-row-saved" data-saved-fu="${escapeHtml(r.rowKey || r.id)}"></div>
                 </td>`,
   done: (r) => `<td data-col="done" data-label="${escapeHtml(i18t('thDone', 'Done'))}" class="om-checkin-donecol">
                   ${/* Ticking this is how she keeps her place in a list of 20.
                        Saving an update ticks it automatically, because having
                        just written a note IS having covered the order. */ ''}
                   <label class="om-done-check">
-                    <input type="checkbox" class="om-checkin-done" data-done-for="${escapeHtml(r.id)}" ${checkedInToday(r) ? 'checked' : ''} />
+                    <input type="checkbox" class="om-checkin-done" data-done-for="${escapeHtml(r.rowKey || r.id)}" ${checkedInToday(r) ? 'checked' : ''} />
                     <span></span>
                   </label>
-                  <div class="om-sub" data-done-when="${escapeHtml(r.id)}">${checkedInToday(r) ? escapeHtml(i18t('doneToday', 'Today')) : ''}</div>
+                  <div class="om-sub" data-done-when="${escapeHtml(r.rowKey || r.id)}">${checkedInToday(r) ? escapeHtml(i18t('doneToday', 'Today')) : ''}</div>
                 </td>`,
   sku: (r) => `<td data-col="sku" data-label="${escapeHtml(i18t('thSku', 'SKU'))}">${escapeHtml(r.sku || '-')}</td>`,
   supplier: (r) => `<td data-col="supplier" data-label="${escapeHtml(i18t('thSupplier', 'Supplier'))}">${escapeHtml(r.supplierName || '-')}</td>`,
@@ -6498,7 +6498,10 @@ const CHECKIN_CELLS = {
 
 function checkInRowHtml(r) {
   const cls = `om-row-clickable ${checkedInToday(r) ? 'om-row-done' : ''}`;
-  return `<tr data-checkin-row="${escapeHtml(r.id)}" data-row-po="${escapeHtml(r.id)}" class="${cls}">`
+  /* An accessory row shares its parent PO's id, so the DOM key has to be the
+     rowKey or two rows for the same order would collide - the second would
+     silently receive the first one's note. */
+  return `<tr data-checkin-row="${escapeHtml(r.rowKey || r.id)}" data-row-po="${escapeHtml(r.id)}" class="${cls}">`
     + checkInColumns.map((k) => (CHECKIN_CELLS[k] ? CHECKIN_CELLS[k](r) : '')).join('')
     + `</tr>`;
 }
@@ -6627,6 +6630,17 @@ async function renderCheckInView(root) {
    */
   const noteInFlight = new Set();
 
+  /* Controls are keyed by row, because an accessory row shares its parent
+   * PO's id and two rows keyed the same would fight over one element. This
+   * maps a row key back to the order it belongs to, and to the part name a
+   * note should be prefixed with. */
+  const rowIndex = {};
+  [...requests, ...list].forEach((r) => {
+    rowIndex[r.rowKey || r.id] = { id: r.id, part: r.isAccessory ? (r.partName || '') : '' };
+  });
+  const orderFor = (key) => (rowIndex[key] || {}).id || key;
+  const partFor = (key) => (rowIndex[key] || {}).part || '';
+
   const refreshProgress = () => {
     const done = document.querySelectorAll('.om-checkin-done:checked').length;
     const el = document.getElementById('omCheckInProgress');
@@ -6636,7 +6650,7 @@ async function renderCheckInView(root) {
 
   const markDone = async (id, done) => {
     try {
-      await api(`/api/order-management/orders/${encodeURIComponent(id)}`, {
+      await api(`/api/order-management/orders/${encodeURIComponent(orderFor(id))}`, {
         method: 'PATCH',
         body: JSON.stringify({ patch: { lastCheckedInAt: done ? new Date().toISOString() : null } })
       });
@@ -6674,8 +6688,12 @@ async function renderCheckInView(root) {
       if (!text || noteInFlight.has(id)) return;
       noteInFlight.add(id);
       try {
-        await api(`/api/order-management/orders/${encodeURIComponent(id)}/progress-note`,
-          { method: 'POST', body: JSON.stringify({ text }) });
+        /* Notes live on the PO, not the component - there is one production
+         * conversation per order. A note left against a sub-component is
+         * prefixed with the part so the context survives. */
+        const part = partFor(id);
+        await api(`/api/order-management/orders/${encodeURIComponent(orderFor(id))}/progress-note`,
+          { method: 'POST', body: JSON.stringify({ text: part ? `${part}: ${text}` : text }) });
         el.value = '';                    // nothing left to resend
         flash(`[data-saved-for="${id}"]`, i18t('savedLabel', 'Saved'));
         /* Writing an update IS covering the order, so tick it rather than
@@ -6714,7 +6732,7 @@ async function renderCheckInView(root) {
       const input = document.querySelector(`[data-fu-for="${id}"]`);
       if (input) input.value = '';
       try {
-        await api(`/api/order-management/orders/${encodeURIComponent(id)}`,
+        await api(`/api/order-management/orders/${encodeURIComponent(orderFor(id))}`,
           { method: 'PATCH', body: JSON.stringify({ patch: { followUpDate: null } }) });
         paintDateChip(id, '');
         flash(`[data-saved-fu="${id}"]`, i18t('savedLabel', 'Saved'));
@@ -6741,7 +6759,7 @@ async function renderCheckInView(root) {
     el.addEventListener('change', async () => {
       if (el.value === original) return;
       try {
-        await api(`/api/order-management/orders/${encodeURIComponent(id)}`,
+        await api(`/api/order-management/orders/${encodeURIComponent(orderFor(id))}`,
           { method: 'PATCH', body: JSON.stringify({ patch: { followUpDate: el.value || null } }) });
         flash(`[data-saved-fu="${id}"]`, i18t('savedLabel', 'Saved'));
         paintDateChip(id, el.value);

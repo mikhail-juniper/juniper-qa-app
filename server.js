@@ -2089,7 +2089,36 @@ app.get('/api/order-management/work-queue', (req, res) => {
         action
       };
     });
-    res.json({ ok: true, rows });
+    /* Sub-components are often made by a different factory from the main
+     * product, and Chloe calls those factories too. Emit a row per accessory
+     * that has its own supplier, so that supplier appears in the check-in
+     * picker with just their parts rather than being invisible. Notes and
+     * follow-ups still belong to the parent PO - there is one conversation per
+     * order, not one per component. */
+    const accessoryRows = [];
+    orders.forEach((o) => {
+      const parentSupplier = (o.supplier && o.supplier.name) || '';
+      (o.accessories || []).forEach((a) => {
+        const name = (a.supplierName || '').trim();
+        if (!name || name === parentSupplier) return;
+        const parent = rows.find((r) => r.id === o.id);
+        if (!parent) return;
+        accessoryRows.push({
+          ...parent,
+          rowKey: `${o.id}:${a.id}`,
+          isAccessory: true,
+          accessoryId: a.id,
+          partName: a.partName || '',
+          productName: a.partName || parent.productName,
+          quantity: a.quantity ?? parent.quantity,
+          photo: a.imageUrl || '',
+          supplierName: name,
+          dispatched: ((o.dispatchLog || []).some((d) => d && d.targetKey === a.id))
+        });
+      });
+    });
+
+    res.json({ ok: true, rows: rows.concat(accessoryRows) });
   } catch (err) {
     console.error('Work queue failed:', err);
     res.status(500).json({ error: 'Could not build the work queue' });
@@ -2458,10 +2487,18 @@ function resolveSender(req, body) {
 /** Fire-and-forget push of ERP-owned fields to Asana after an order changes.
  *  Deliberately not awaited: Asana latency should never slow down a save,
  *  and a failure there is logged inside the client rather than surfaced. */
-function syncOrderToAsana(order, req) {
+/**
+ * Push an order to Asana in the background.
+ *
+ * Pass `previous` - the order as it was before this edit - wherever it is
+ * available. Without it every save rewrites every field, and Asana rules that
+ * trigger on "field is changed" fire on identical writes, which is how one
+ * editing session produced three copies of the same automated comment.
+ */
+function syncOrderToAsana(order, req, previous) {
   if (!order || !order.asanaTaskGid) return;
   Promise.resolve()
-    .then(() => asanaPoSync.pushToAsana(order, buildAsanaExtras(order, req)))
+    .then(() => asanaPoSync.pushToAsana(order, buildAsanaExtras(order, req), previous || null))
     .catch((err) => console.error('Background Asana sync failed:', err.message || err));
 }
 
@@ -2481,9 +2518,11 @@ app.patch('/api/order-management/orders/:id', requirePermission('orders:write'),
   if (body.patch && body.patch.mainComponent && body.patch.mainComponent.warehouse) {
     warehouseStore.ensureWarehouseByName(body.patch.mainComponent.warehouse);
   }
+  // Snapshot before the write so the Asana push can tell what actually moved.
+  const before = orderManagementStore.getOrderById(req.params.id);
   const updated = orderManagementStore.updateOrder(req.params.id, body.patch || {}, actor);
   if (!updated) return res.status(404).json({ error: 'Order not found' });
-  syncOrderToAsana(updated, req);
+  syncOrderToAsana(updated, req, before);
   res.json({ ok: true, order: updated });
 });
 
